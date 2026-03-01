@@ -505,6 +505,7 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [filterAccount, setFilterAccount] = useState('All');
   const [filterType, setFilterType] = useState('All');
+  const [filterCategory, setFilterCategory] = useState('All');
   const [datePreset, setDatePreset] = useState('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -586,13 +587,14 @@ export default function TransactionsPage() {
     if (search) params.set('search', search);
     if (filterAccount !== 'All') params.set('accountId', filterAccount);
     if (filterType !== 'All') params.set('type', filterType.toLowerCase());
+    if (filterCategory !== 'All') params.set('groupName', filterCategory);
     params.set('sortBy', sortBy);
     params.set('sortOrder', sortOrder);
 
     const res = await apiFetch<{ data: Transaction[]; total: number }>(`/transactions?${params.toString()}`);
     setTransactions(res.data);
     setTotal(res.total);
-  }, [getDateRange, search, filterAccount, filterType, page, pageSize, sortBy, sortOrder]);
+  }, [getDateRange, search, filterAccount, filterType, filterCategory, page, pageSize, sortBy, sortOrder]);
 
   const loadMeta = useCallback(async () => {
     const [acctRes, catRes] = await Promise.all([
@@ -614,7 +616,7 @@ export default function TransactionsPage() {
   };
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
-  useEffect(() => { setPage(1); }, [datePreset, customStart, customEnd, search, filterAccount, filterType]);
+  useEffect(() => { setPage(1); }, [datePreset, customStart, customEnd, search, filterAccount, filterType, filterCategory]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
   const handleSave = async (data: Record<string, unknown>) => {
@@ -729,12 +731,13 @@ export default function TransactionsPage() {
     catGroupsForBulk.get(c.group_name)!.push(c);
   }
 
-  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || datePreset !== 'all';
+  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || filterCategory !== 'All' || datePreset !== 'all';
 
   const resetFilters = () => {
     setSearch('');
     setFilterAccount('All');
     setFilterType('All');
+    setFilterCategory('All');
     setDatePreset('all');
     setCustomStart('');
     setCustomEnd('');
@@ -803,7 +806,7 @@ export default function TransactionsPage() {
               </select>
               <button onClick={() => setShowMobileFilters(!showMobileFilters)}
                 className={`px-3 py-2 border rounded-lg text-[13px] font-medium cursor-pointer ${
-                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All'
+                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All' || filterCategory !== 'All'
                     ? 'border-[#3b82f6] text-[#3b82f6] bg-[var(--bg-input)]'
                     : 'border-[var(--table-border)] text-[var(--text-secondary)] bg-[var(--bg-input)]'
                 }`}>
@@ -840,6 +843,13 @@ export default function TransactionsPage() {
                   <option value="Income">Income</option>
                   <option value="Expense">Expense</option>
                 </select>
+                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
+                  <option value="All">All Categories</option>
+                  {allGroupNames.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
               </div>
             )}
           </>
@@ -857,6 +867,13 @@ export default function TransactionsPage() {
               <option value="All">All</option>
               <option value="Income">Income</option>
               <option value="Expense">Expense</option>
+            </select>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
+              <option value="All">All Categories</option>
+              {allGroupNames.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
             </select>
             <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)}
               className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">

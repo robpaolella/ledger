@@ -102,10 +102,39 @@ router.get('/', (req: Request, res: Response) => {
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));
     if (accountId) conditions.push(eq(transactions.account_id, parseInt(accountId, 10)));
-    if (categoryId) conditions.push(eq(transactions.category_id, parseInt(categoryId, 10)));
-    if (groupName) conditions.push(eq(categories.group_name, groupName));
-    if (type === 'income') conditions.push(eq(categories.type, 'income'));
-    if (type === 'expense') conditions.push(eq(categories.type, 'expense'));
+    if (categoryId) {
+      const catId = parseInt(categoryId, 10);
+      conditions.push(
+        or(
+          eq(transactions.category_id, catId),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = ${transactions.id} AND ts.category_id = ${catId})`
+        )!
+      );
+    }
+    if (groupName) {
+      conditions.push(
+        or(
+          eq(categories.group_name, groupName),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.group_name = ${groupName})`
+        )!
+      );
+    }
+    if (type === 'income') {
+      conditions.push(
+        or(
+          eq(categories.type, 'income'),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.type = 'income')`
+        )!
+      );
+    }
+    if (type === 'expense') {
+      conditions.push(
+        or(
+          eq(categories.type, 'expense'),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.type = 'expense')`
+        )!
+      );
+    }
     if (owner) conditions.push(sql`EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = ${accounts.id} AND u.display_name = ${owner})`);
     if (search) {
       conditions.push(
