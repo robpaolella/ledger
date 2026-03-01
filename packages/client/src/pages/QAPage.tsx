@@ -55,6 +55,7 @@ function loadStateLocal(storageKey: string): SavedState {
       return { checks: parsed.checks || {}, notes: parsed.notes || {} };
     }
   } catch { /* ignore parse errors */ }
+  return { checks: {}, notes: {} };
 }
 
 function saveStateLocal(storageKey: string, state: SavedState) {
@@ -69,6 +70,7 @@ async function loadStateFromServer(storageKey: string): Promise<SavedState | nul
       return { checks: parsed.checks || {}, notes: parsed.notes || {} };
     }
   } catch { /* ignore */ }
+  return null;
 }
 
 async function saveStateToServer(storageKey: string, state: SavedState): Promise<void> {
