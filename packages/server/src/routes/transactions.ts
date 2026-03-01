@@ -169,6 +169,7 @@ router.get('/', (req: Request, res: Response) => {
       sortBy === 'description' ? transactions.description :
       sortBy === 'account' ? accounts.name :
       sortBy === 'category' ? categories.group_name :
+      sortBy === 'subcategory' ? categories.sub_name :
       transactions.date;
     const orderFn = sortOrder === 'asc' ? asc : desc;
 

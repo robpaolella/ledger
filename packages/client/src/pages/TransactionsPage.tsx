@@ -1103,7 +1103,7 @@ export default function TransactionsPage() {
                 <SortableHeader label="Description" sortKey="description" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
                 <SortableHeader label="Account" sortKey="account" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
                 <SortableHeader label="Category" sortKey="category" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Sub-Category</th>
+                <SortableHeader label="Sub-Category" sortKey="subcategory" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
                 <SortableHeader label="Amount" sortKey="amount" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} align="right" />
               </tr>
             </thead>
