@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import CurrencyInput from './CurrencyInput';
 
 export interface SplitRow {
@@ -19,6 +19,7 @@ interface SplitEditorProps {
   categories: SplitCategory[];
   onApply: (splits: SplitRow[]) => void;
   onCancel: () => void;
+  onChange?: (splits: SplitRow[]) => void;
   compact?: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function SplitEditor({
   categories,
   onApply,
   onCancel,
+  onChange,
   compact = false,
 }: SplitEditorProps) {
   const [mode, setMode] = useState<'$' | '%'>('$');
@@ -51,6 +53,11 @@ export default function SplitEditor({
   );
   const remaining = +((Math.abs(totalAmount) - allocated).toFixed(2));
   const absTotalAmount = Math.abs(totalAmount);
+
+  // Keep parent in sync with current split state
+  useEffect(() => {
+    onChange?.(splits);
+  }, [splits, onChange]);
 
   const isValid =
     Math.abs(remaining) < 0.01 &&

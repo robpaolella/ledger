@@ -211,7 +211,12 @@ function TransactionForm({
 
   // Validation
   const parsedAmount = parseFloat(amount);
-  const hasCategoryOrSplits = splitMode ? !!(splits && splits.length >= 2) : categoryId > 0;
+  const splitsValid = splitMode && splits
+    ? splits.length >= 2 &&
+      splits.every(s => s.categoryId && s.amount !== 0) &&
+      Math.abs(Math.abs(parsedAmount) - splits.reduce((sum, s) => sum + s.amount, 0)) < 0.01
+    : false;
+  const hasCategoryOrSplits = splitMode ? splitsValid : categoryId > 0;
   const isValid = !!(
     date &&
     accountId > 0 &&
@@ -403,6 +408,7 @@ function TransactionForm({
             categories={filteredCategories}
             onApply={handleSplitApply}
             onCancel={handleCancelSplit}
+            onChange={(current) => setSplits(current.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount) })))}
           />
         )}
         {splitNotification && (
