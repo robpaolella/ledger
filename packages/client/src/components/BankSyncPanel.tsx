@@ -5,9 +5,7 @@ import { fmt } from '../lib/formatters';
 import { getCategoryColor } from '../lib/categoryColors';
 import { useToast } from '../context/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
-import DuplicateBadge from '../components/DuplicateBadge';
 import DuplicateComparison from '../components/DuplicateComparison';
-import TransferBadge from '../components/TransferBadge';
 import SortableHeader from '../components/SortableHeader';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
@@ -589,9 +587,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--badge-account-bg)] text-[var(--badge-account-text)] font-mono truncate max-w-[120px]">
                                 {t.accountName}
                               </span>
-                              <DuplicateBadge status={t.duplicateStatus}
-                                onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                              <TransferBadge isLikelyTransfer={t.isLikelyTransfer} />
                               <span className={`text-[10px] font-semibold font-mono ${
                                 t.confidence > 0.9 ? 'text-[#10b981]' : t.confidence > 0.6 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
                               }`}>
@@ -650,6 +645,21 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                   </div>
                                 </>
                               )}
+                              {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  {t.duplicateStatus !== 'none' && (
+                                    <button
+                                      onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                      className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
+                                      style={{ color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                      ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                                    </button>
+                                  )}
+                                  {t.isLikelyTransfer && (
+                                    <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -703,7 +713,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                     <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Account</th>
                     <SortableHeader label="Amount" sortKey="amount" activeSortKey={reviewSortBy} sortDir={reviewSortDir} onSort={handleReviewSort} align="right" />
                     <SortableHeader label="Category" sortKey="category" activeSortKey={reviewSortBy} sortDir={reviewSortDir} onSort={handleReviewSort} />
-                    <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Status</th>
                     <SortableHeader label="Conf." sortKey="confidence" activeSortKey={reviewSortBy} sortDir={reviewSortDir} onSort={handleReviewSort} align="center" />
                   </tr>
                 </thead>
@@ -791,13 +800,21 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               </div>
                             </>
                           )}
-                        </td>
-                        <td className="px-2.5 py-1.5">
-                          <div className="flex flex-wrap gap-1">
-                            <DuplicateBadge status={t.duplicateStatus}
-                              onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                            <TransferBadge isLikelyTransfer={t.isLikelyTransfer} />
-                          </div>
+                          {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              {t.duplicateStatus !== 'none' && (
+                                <button
+                                  onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                  className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
+                                  style={{ color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                  ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                                </button>
+                              )}
+                              {t.isLikelyTransfer && (
+                                <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2.5 py-2 text-center">
                           <span className={`text-[11px] font-semibold font-mono ${
@@ -809,7 +826,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                       </tr>
                       {expandedDupeRow === i && t.duplicateMatchId && (
                         <tr>
-                          <td colSpan={9} className="px-2.5 py-1">
+                          <td colSpan={8} className="px-2.5 py-1">
                             <DuplicateComparison
                               incoming={{ date: t.date, description: t.description, amount: t.amount, accountName: t.accountName }}
                               existing={{ date: t.duplicateMatchDate || t.date, description: t.duplicateMatchDescription || '', amount: t.duplicateMatchAmount ?? t.amount, accountName: t.duplicateMatchAccountName || null }}

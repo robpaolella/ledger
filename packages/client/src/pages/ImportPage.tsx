@@ -5,9 +5,7 @@ import { fmt } from '../lib/formatters';
 import { getCategoryColor } from '../lib/categoryColors';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import DuplicateBadge from '../components/DuplicateBadge';
 import DuplicateComparison from '../components/DuplicateComparison';
-import TransferBadge from '../components/TransferBadge';
 import BankSyncPanel from '../components/BankSyncPanel';
 import SortableHeader from '../components/SortableHeader';
 import InlineNotification from '../components/InlineNotification';
@@ -816,12 +814,9 @@ export default function ImportPage() {
                               {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
                             </span>
                           </div>
-                          {/* Date + Badges + Confidence */}
+                          {/* Date + Confidence */}
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             <span className="text-[11px] font-mono text-[var(--text-muted)]">{r.date}</span>
-                            <DuplicateBadge status={r.duplicateStatus}
-                              onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                            <TransferBadge isLikelyTransfer={r.isLikelyTransfer} tooltipText={r.transferTooltip} />
                             <span className={`text-[10px] font-semibold font-mono ml-auto ${
                               r.confidence > 0.9 ? 'text-[#10b981]' : r.confidence > 0.6 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
                             }`}>
@@ -882,6 +877,21 @@ export default function ImportPage() {
                                 </div>
                               </>
                             )}
+                            {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                {r.duplicateStatus !== 'none' && (
+                                  <button
+                                    onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                    className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
+                                    style={{ color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                    ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                                  </button>
+                                )}
+                                {r.isLikelyTransfer && (
+                                  <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -935,7 +945,6 @@ export default function ImportPage() {
                   <SortableHeader label="Date" sortKey="date" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
                   <SortableHeader label="Description" sortKey="description" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
                   <SortableHeader label="Amount" sortKey="amount" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} align="right" />
-                  <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Status</th>
                   <SortableHeader label="Category" sortKey="category" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
                   <SortableHeader label="Conf." sortKey="confidence" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} align="center" />
                 </tr>
@@ -961,13 +970,6 @@ export default function ImportPage() {
                       <td className="px-2.5 py-2 font-medium text-[var(--text-primary)] truncate">{r.description}</td>
                       <td className={`px-2.5 py-2 text-right font-mono font-semibold ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                         {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
-                      </td>
-                      <td className="px-2.5 py-1.5">
-                        <div className="flex flex-wrap gap-1">
-                          <DuplicateBadge status={r.duplicateStatus}
-                            onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                          <TransferBadge isLikelyTransfer={r.isLikelyTransfer} tooltipText={r.transferTooltip} />
-                        </div>
                       </td>
                       <td className="px-2.5 py-1.5">
                         {r.splits && r.splits.length >= 2 ? (
@@ -1022,6 +1024,21 @@ export default function ImportPage() {
                             </div>
                           </>
                         )}
+                        {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {r.duplicateStatus !== 'none' && (
+                              <button
+                                onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
+                                style={{ color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                              </button>
+                            )}
+                            {r.isLikelyTransfer && (
+                              <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2.5 py-2 text-center">
                         <span className={`text-[11px] font-semibold font-mono ${
@@ -1033,7 +1050,7 @@ export default function ImportPage() {
                     </tr>
                     {expandedDupeRow === i && r.duplicateMatch && (
                       <tr>
-                        <td colSpan={7} className="px-2.5 py-1">
+                        <td colSpan={6} className="px-2.5 py-1">
                           <DuplicateComparison
                             incoming={{ date: r.date, description: r.description, amount: r.amount,
                               accountName: accounts.find(a => a.id === selectedAccountId)?.name || null }}
