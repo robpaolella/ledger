@@ -206,7 +206,10 @@ export default function SplitEditor({
                     inputMode="decimal"
                     value={
                       absTotalAmount
-                        ? ((s.amount / absTotalAmount) * 100).toFixed(1)
+                        ? (() => {
+                            const pct = (s.amount / absTotalAmount) * 100;
+                            return Number.isInteger(Math.round(pct * 10) / 10) ? Math.round(pct).toString() : pct.toFixed(1);
+                          })()
                         : ''
                     }
                     onChange={(e) =>
@@ -215,7 +218,7 @@ export default function SplitEditor({
                         e.target.value.replace(/[^0-9.]/g, '')
                       )
                     }
-                    placeholder="0.0"
+                    placeholder="0"
                     className={`${inputCls} font-mono text-right pr-5 ${compact ? 'text-[11px]' : ''}`}
                   />
                   <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)] font-mono pointer-events-none">
