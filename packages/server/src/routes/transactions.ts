@@ -89,7 +89,7 @@ router.get('/', (req: Request, res: Response) => {
   try {
     const {
       startDate, endDate,
-      accountId, categoryId, groupName,
+      accountId, categoryId, groupName, categoryIds, groupNames,
       type, owner, search,
       limit: limitStr, offset: offsetStr,
       sortBy = 'date', sortOrder = 'desc',
@@ -118,6 +118,23 @@ router.get('/', (req: Request, res: Response) => {
           sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.group_name = ${groupName})`
         )!
       );
+    }
+    // Multi-value category filters (comma-separated)
+    if (categoryIds || groupNames) {
+      const catIdList = categoryIds ? categoryIds.split(',').map(Number).filter(n => !isNaN(n)) : [];
+      const groupList = groupNames ? groupNames.split(',') : [];
+      const orParts = [];
+      if (catIdList.length) {
+        const idPlaceholders = catIdList.map(id => sql`${id}`);
+        orParts.push(sql`${transactions.category_id} IN (${sql.join(idPlaceholders, sql`, `)})`);
+        orParts.push(sql`EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = ${transactions.id} AND ts.category_id IN (${sql.join(idPlaceholders, sql`, `)}))`);
+      }
+      if (groupList.length) {
+        const groupPlaceholders = groupList.map(g => sql`${g}`);
+        orParts.push(sql`${categories.group_name} IN (${sql.join(groupPlaceholders, sql`, `)})`);
+        orParts.push(sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.group_name IN (${sql.join(groupPlaceholders, sql`, `)}))`);
+      }
+      conditions.push(sql`(${sql.join(orParts, sql` OR `)})`);
     }
     if (type === 'income') {
       conditions.push(

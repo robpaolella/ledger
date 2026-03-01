@@ -498,6 +498,17 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const allGroupNames = useMemo(() => [...new Set(categories.map(c => c.group_name))], [categories]);
+  const categoryGroups = useMemo(() => {
+    const groups: { group: string; subs: { id: number; sub: string }[] }[] = [];
+    const seen = new Set<string>();
+    for (const c of categories) {
+      if (!seen.has(c.group_name)) {
+        seen.add(c.group_name);
+        groups.push({ group: c.group_name, subs: categories.filter(x => x.group_name === c.group_name).map(x => ({ id: x.id, sub: x.sub_name })) });
+      }
+    }
+    return groups;
+  }, [categories]);
   const [pendingSave, setPendingSave] = useState<Record<string, unknown> | null>(null);
   const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(null);
 
@@ -505,7 +516,34 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [filterAccount, setFilterAccount] = useState('All');
   const [filterType, setFilterType] = useState('All');
-  const [filterCategory, setFilterCategory] = useState('All');
+  const [filterCategory, setFilterCategory] = useState<string[]>([]);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  const toggleCategoryFilter = (value: string) => {
+    setFilterCategory(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+  };
+
+  const categoryFilterLabel = useMemo(() => {
+    if (filterCategory.length === 0) return 'All Categories';
+    if (filterCategory.length === 1) {
+      const v = filterCategory[0];
+      if (v.startsWith('group:')) return v.slice(6);
+      const cat = categories.find(c => c.id === parseInt(v.slice(4), 10));
+      return cat?.sub_name ?? v;
+    }
+    return `${filterCategory.length} categories`;
+  }, [filterCategory, categories]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setShowCategoryDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   const [datePreset, setDatePreset] = useState('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -587,7 +625,12 @@ export default function TransactionsPage() {
     if (search) params.set('search', search);
     if (filterAccount !== 'All') params.set('accountId', filterAccount);
     if (filterType !== 'All') params.set('type', filterType.toLowerCase());
-    if (filterCategory !== 'All') params.set('groupName', filterCategory);
+    if (filterCategory.length > 0) {
+      const groupNames = filterCategory.filter(v => v.startsWith('group:')).map(v => v.slice(6));
+      const catIds = filterCategory.filter(v => v.startsWith('sub:')).map(v => v.slice(4));
+      if (groupNames.length) params.set('groupNames', groupNames.join(','));
+      if (catIds.length) params.set('categoryIds', catIds.join(','));
+    }
     params.set('sortBy', sortBy);
     params.set('sortOrder', sortOrder);
 
@@ -731,13 +774,13 @@ export default function TransactionsPage() {
     catGroupsForBulk.get(c.group_name)!.push(c);
   }
 
-  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || filterCategory !== 'All' || datePreset !== 'all';
+  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || filterCategory.length > 0 || datePreset !== 'all';
 
   const resetFilters = () => {
     setSearch('');
     setFilterAccount('All');
     setFilterType('All');
-    setFilterCategory('All');
+    setFilterCategory([]);
     setDatePreset('all');
     setCustomStart('');
     setCustomEnd('');
@@ -806,7 +849,7 @@ export default function TransactionsPage() {
               </select>
               <button onClick={() => setShowMobileFilters(!showMobileFilters)}
                 className={`px-3 py-2 border rounded-lg text-[13px] font-medium cursor-pointer ${
-                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All' || filterCategory !== 'All'
+                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All' || filterCategory.length > 0
                     ? 'border-[#3b82f6] text-[#3b82f6] bg-[var(--bg-input)]'
                     : 'border-[var(--table-border)] text-[var(--text-secondary)] bg-[var(--bg-input)]'
                 }`}>
@@ -843,13 +886,33 @@ export default function TransactionsPage() {
                   <option value="Income">Income</option>
                   <option value="Expense">Expense</option>
                 </select>
-                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-                  <option value="All">All Categories</option>
-                  {allGroupNames.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
+                <div className="relative" ref={isMobile ? categoryDropdownRef : undefined}>
+                  <button type="button" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)] cursor-pointer">
+                    <span className="truncate">{categoryFilterLabel}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`ml-2 flex-shrink-0 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {showCategoryDropdown && (
+                    <div className="absolute z-50 mt-1 left-0 right-0 bg-[var(--bg-card)] border border-[var(--table-border)] rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                      {categoryGroups.map((g) => (
+                        <div key={g.group}>
+                          <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                            <input type="checkbox" checked={filterCategory.includes(`group:${g.group}`)} onChange={() => toggleCategoryFilter(`group:${g.group}`)}
+                              className="accent-[var(--color-accent)]" />
+                            {g.group}
+                          </label>
+                          {g.subs.map((s) => (
+                            <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 pl-7 text-[13px] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                              <input type="checkbox" checked={filterCategory.includes(`sub:${s.id}`)} onChange={() => toggleCategoryFilter(`sub:${s.id}`)}
+                                className="accent-[var(--color-accent)]" />
+                              {s.sub}
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </>
@@ -868,13 +931,33 @@ export default function TransactionsPage() {
               <option value="Income">Income</option>
               <option value="Expense">Expense</option>
             </select>
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-              <option value="All">All Categories</option>
-              {allGroupNames.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
+            <div className="relative" ref={!isMobile ? categoryDropdownRef : undefined}>
+              <button type="button" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                className="flex items-center justify-between px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)] cursor-pointer min-w-[160px]">
+                <span className="truncate">{categoryFilterLabel}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`ml-2 flex-shrink-0 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              {showCategoryDropdown && (
+                <div className="absolute z-50 mt-1 left-0 bg-[var(--bg-card)] border border-[var(--table-border)] rounded-lg shadow-lg max-h-72 overflow-y-auto min-w-[220px]">
+                  {categoryGroups.map((g) => (
+                    <div key={g.group}>
+                      <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                        <input type="checkbox" checked={filterCategory.includes(`group:${g.group}`)} onChange={() => toggleCategoryFilter(`group:${g.group}`)}
+                          className="accent-[var(--color-accent)]" />
+                        {g.group}
+                      </label>
+                      {g.subs.map((s) => (
+                        <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 pl-7 text-[13px] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                          <input type="checkbox" checked={filterCategory.includes(`sub:${s.id}`)} onChange={() => toggleCategoryFilter(`sub:${s.id}`)}
+                            className="accent-[var(--color-accent)]" />
+                          {s.sub}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)}
               className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
               <option value="all">All Time</option>
