@@ -691,7 +691,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
               <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: '40px' }} />
-                  <col style={{ width: '90px' }} />
+                  <col style={{ width: '110px' }} />
                   <col style={{ width: '20%' }} />
                   <col />
                   <col style={{ width: '15%' }} />
