@@ -58,26 +58,22 @@ export default function DashboardPage() {
   const [spending, setSpending] = useState<SpendingGroup[]>([]);
   const [monthlyChart, setMonthlyChart] = useState<MonthlyData[]>([]);
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
-  const allGroupNames = useMemo(() => {
-    const groups = spending.map(s => s.groupName);
-    for (const t of recentTxns) {
-      if (t.category) groups.push(t.category.groupName);
-      if (t.splits) t.splits.forEach(s => groups.push(s.groupName));
-    }
-    return [...new Set(groups)];
-  }, [spending, recentTxns]);
+  const [categories, setCategories] = useState<{ group_name: string }[]>([]);
+  const allGroupNames = useMemo(() => [...new Set(categories.map(c => c.group_name))], [categories]);
 
   const loadData = useCallback(async () => {
-    const [sumRes, spendRes, chartRes, txnRes] = await Promise.all([
+    const [sumRes, spendRes, chartRes, txnRes, catRes] = await Promise.all([
       apiFetch<{ data: Summary }>(`/dashboard/summary?month=${currentMonth}`),
       apiFetch<{ data: SpendingGroup[] }>(`/dashboard/spending-by-category?month=${currentMonth}`),
       apiFetch<{ data: MonthlyData[] }>(`/dashboard/income-vs-expenses?year=${currentYear}`),
       apiFetch<{ data: Transaction[] }>('/dashboard/recent-transactions?limit=8'),
+      apiFetch<{ data: { group_name: string }[] }>('/categories'),
     ]);
     setSummary(sumRes.data);
     setSpending(spendRes.data);
     setMonthlyChart(chartRes.data);
     setRecentTxns(txnRes.data);
+    setCategories(catRes.data);
   }, [currentMonth, currentYear]);
 
   useEffect(() => { loadData(); }, [loadData]);
