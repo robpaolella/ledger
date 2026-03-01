@@ -458,6 +458,13 @@ router.post('/bulk-update', requirePermission('transactions.bulk_edit'), (req: R
     if (updates.categoryId) setFields.category_id = updates.categoryId;
 
     if (Object.keys(setFields).length > 0) {
+      // If changing category, clear any existing splits on these transactions
+      if (updates.categoryId) {
+        db.delete(transactionSplits)
+          .where(inArray(transactionSplits.transaction_id, ids))
+          .run();
+      }
+
       const result = db.update(transactions)
         .set(setFields)
         .where(inArray(transactions.id, ids))
