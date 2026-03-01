@@ -791,7 +791,7 @@ export default function ImportPage() {
                   <React.Fragment key={i}>
                     <div className={`rounded-xl border px-3 py-2.5 transition-opacity ${
                       !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' :
-                      !r.categoryId ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
+                      !r.categoryId && !(r.splits && r.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
                       'border-[var(--bg-card-border)] bg-[var(--bg-card)]'
                     }`}>
                       <div className="flex items-start gap-2.5">
@@ -957,7 +957,7 @@ export default function ImportPage() {
                   const r = categorizedRows[i];
                   return (
                   <React.Fragment key={i}>
-                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!r.categoryId && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
+                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!r.categoryId && !(r.splits && r.splits.length >= 2) && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
                       <td className="px-2 py-2 text-center">
                         <input type="checkbox" checked={selectedImportRows.has(i)}
                           onChange={() => {
