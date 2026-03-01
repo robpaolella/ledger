@@ -58,7 +58,14 @@ export default function DashboardPage() {
   const [spending, setSpending] = useState<SpendingGroup[]>([]);
   const [monthlyChart, setMonthlyChart] = useState<MonthlyData[]>([]);
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
-  const allGroupNames = useMemo(() => spending.map(s => s.groupName), [spending]);
+  const allGroupNames = useMemo(() => {
+    const groups = spending.map(s => s.groupName);
+    for (const t of recentTxns) {
+      if (t.category) groups.push(t.category.groupName);
+      if (t.splits) t.splits.forEach(s => groups.push(s.groupName));
+    }
+    return [...new Set(groups)];
+  }, [spending, recentTxns]);
 
   const loadData = useCallback(async () => {
     const [sumRes, spendRes, chartRes, txnRes] = await Promise.all([
