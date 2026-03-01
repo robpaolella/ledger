@@ -878,17 +878,21 @@ export default function ImportPage() {
                               </>
                             )}
                             {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
-                              <div className="flex items-center gap-1.5 mt-1">
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 {r.duplicateStatus !== 'none' && (
                                   <button
                                     onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
-                                    className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
-                                    style={{ color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                    style={{
+                                      background: r.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                      color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                    }}>
                                     ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
                                   </button>
                                 )}
                                 {r.isLikelyTransfer && (
-                                  <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                    style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
                                 )}
                               </div>
                             )}
@@ -927,7 +931,6 @@ export default function ImportPage() {
                 <col style={{ width: '100px' }} />
                 <col />
                 <col style={{ width: '100px' }} />
-                <col style={{ width: '140px' }} />
                 <col style={{ width: '200px' }} />
                 <col style={{ width: '55px' }} />
               </colgroup>
@@ -1025,17 +1028,21 @@ export default function ImportPage() {
                           </>
                         )}
                         {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
-                          <div className="flex items-center gap-1.5 mt-1">
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                             {r.duplicateStatus !== 'none' && (
                               <button
                                 onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
-                                className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
-                                style={{ color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                style={{
+                                  background: r.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                  color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                }}>
                                 ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
                               </button>
                             )}
                             {r.isLikelyTransfer && (
-                              <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
                             )}
                           </div>
                         )}

@@ -646,17 +646,21 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                 </>
                               )}
                               {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
-                                <div className="flex items-center gap-1.5 mt-1">
+                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                   {t.duplicateStatus !== 'none' && (
                                     <button
                                       onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
-                                      className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
-                                      style={{ color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                      className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                      style={{
+                                        background: t.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                        color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                      }}>
                                       ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
                                     </button>
                                   )}
                                   {t.isLikelyTransfer && (
-                                    <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                      style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
                                   )}
                                 </div>
                               )}
@@ -693,7 +697,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   <col style={{ width: '15%' }} />
                   <col style={{ width: '95px' }} />
                   <col style={{ width: '150px' }} />
-                  <col style={{ width: '110px' }} />
                   <col style={{ width: '50px' }} />
                 </colgroup>
                 <thead>
@@ -801,17 +804,21 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                             </>
                           )}
                           {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
-                            <div className="flex items-center gap-1.5 mt-1">
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                               {t.duplicateStatus !== 'none' && (
                                 <button
                                   onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
-                                  className="text-[10px] font-medium border-none bg-transparent cursor-pointer p-0 hover:underline"
-                                  style={{ color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)' }}>
+                                  className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                  style={{
+                                    background: t.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                    color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                  }}>
                                   ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
                                 </button>
                               )}
                               {t.isLikelyTransfer && (
-                                <span className="text-[10px] font-medium text-[var(--color-accent)]">↔ Transfer</span>
+                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                  style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
                               )}
                             </div>
                           )}
