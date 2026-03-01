@@ -925,14 +925,14 @@ export default function ImportPage() {
             </div>
           ) : (
             /* Desktop: table layout */
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: '40px' }} />
-                <col style={{ width: '100px' }} />
+                <col style={{ width: '90px' }} />
                 <col />
-                <col style={{ width: '100px' }} />
-                <col style={{ minWidth: '220px' }} />
-                <col style={{ width: '60px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '250px' }} />
+                <col style={{ width: '55px' }} />
               </colgroup>
               <thead>
                 <tr>
@@ -974,7 +974,7 @@ export default function ImportPage() {
                       <td className={`px-2.5 py-2 text-right font-mono font-semibold ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                         {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
                       </td>
-                      <td className="px-2.5 py-1.5">
+                      <td className="px-2.5 py-1.5 overflow-hidden">
                         {r.splits && r.splits.length >= 2 ? (
                           <div className="flex items-center gap-1.5">
                             <span className="inline-flex items-center gap-1">
@@ -1002,7 +1002,7 @@ export default function ImportPage() {
                             )}
                             <div className="flex items-center gap-1">
                               <select
-                                className="flex-1 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
+                                className="flex-1 min-w-0 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
                                 value={r.categoryId || ''}
                                 onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
                               >

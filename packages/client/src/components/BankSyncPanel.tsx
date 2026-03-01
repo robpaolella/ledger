@@ -688,7 +688,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   })}
                 </div>
               ) : (
-              <table className="w-full border-collapse text-[13px]">
+              <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: '40px' }} />
                   <col style={{ width: '90px' }} />
@@ -696,7 +696,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   <col />
                   <col style={{ width: '15%' }} />
                   <col style={{ width: '95px' }} />
-                  <col style={{ minWidth: '180px' }} />
+                  <col style={{ width: '200px' }} />
                   <col style={{ width: '50px' }} />
                 </colgroup>
                 <thead>
@@ -751,7 +751,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                         <td className={`px-2.5 py-2 text-right font-mono font-semibold ${t.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                           {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
                         </td>
-                        <td className="px-2.5 py-1.5">
+                        <td className="px-2.5 py-1.5 overflow-hidden">
                           {t.splits && t.splits.length >= 2 ? (
                             <div className="flex items-center gap-1.5">
                               <span className="inline-flex items-center gap-1">
@@ -779,7 +779,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               )}
                               <div className="flex items-center gap-1">
                                 <select
-                                  className="flex-1 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
+                                  className="flex-1 min-w-0 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
                                   value={t.categoryId || ''}
                                   onChange={(e) => updateTxnCategory(i, parseInt(e.target.value))}>
                                   <option value="">Select...</option>
