@@ -892,7 +892,7 @@ export default function ImportPage() {
                                 )}
                                 {r.isLikelyTransfer && (
                                   <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                    style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
                                 )}
                               </div>
                             )}
@@ -925,14 +925,14 @@ export default function ImportPage() {
             </div>
           ) : (
             /* Desktop: table layout */
-            <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
+            <table className="w-full border-collapse text-[13px]">
               <colgroup>
                 <col style={{ width: '40px' }} />
                 <col style={{ width: '100px' }} />
                 <col />
                 <col style={{ width: '100px' }} />
-                <col style={{ width: '200px' }} />
-                <col style={{ width: '55px' }} />
+                <col style={{ minWidth: '220px' }} />
+                <col style={{ width: '60px' }} />
               </colgroup>
               <thead>
                 <tr>
@@ -1042,7 +1042,7 @@ export default function ImportPage() {
                             )}
                             {r.isLikelyTransfer && (
                               <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
+                                style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
                             )}
                           </div>
                         )}

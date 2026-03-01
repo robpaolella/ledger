@@ -660,7 +660,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                   )}
                                   {t.isLikelyTransfer && (
                                     <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                      style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
+                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
                                   )}
                                 </div>
                               )}
@@ -688,7 +688,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   })}
                 </div>
               ) : (
-              <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
+              <table className="w-full border-collapse text-[13px]">
                 <colgroup>
                   <col style={{ width: '40px' }} />
                   <col style={{ width: '90px' }} />
@@ -696,7 +696,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   <col />
                   <col style={{ width: '15%' }} />
                   <col style={{ width: '95px' }} />
-                  <col style={{ width: '150px' }} />
+                  <col style={{ minWidth: '180px' }} />
                   <col style={{ width: '50px' }} />
                 </colgroup>
                 <thead>
@@ -818,7 +818,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               )}
                               {t.isLikelyTransfer && (
                                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                  style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)' }}>↔ Transfer</span>
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
                               )}
                             </div>
                           )}
