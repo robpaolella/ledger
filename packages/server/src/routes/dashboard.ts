@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
 import { transactions, accounts, categories, budgets, balanceSnapshots, assets } from '../db/schema.js';
-import { eq, and, gte, lte, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { calculateCurrentValue } from '../utils/depreciation.js';
 
 const router = Router();
@@ -91,23 +91,43 @@ router.get('/summary', (req: Request, res: Response) => {
 
     const netWorth = totalBalances + totalAssetValue - liabilityTotal;
 
-    // Month income/expenses
-    const [monthTotals] = db.select({
-      income: sql<number>`coalesce(sum(case when ${categories.type} = 'income' then abs(${transactions.amount}) else 0 end), 0)`,
-      expenses: sql<number>`coalesce(sum(case when ${categories.type} = 'expense' then ${transactions.amount} else 0 end), 0)`,
-    }).from(transactions)
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
-      .where(and(gte(transactions.date, startDate), lte(transactions.date, endDate)))
-      .all();
+    // Month income/expenses — includes split transactions
+    const monthRows = sqlite.prepare(`
+      SELECT
+        coalesce(sum(CASE WHEN c.type = 'income' THEN abs(amt) ELSE 0 END), 0) as income,
+        coalesce(sum(CASE WHEN c.type = 'expense' THEN amt ELSE 0 END), 0) as expenses
+      FROM (
+        SELECT t.category_id as cat_id, t.amount as amt
+        FROM transactions t
+        WHERE t.category_id IS NOT NULL AND t.date >= ? AND t.date <= ?
+        UNION ALL
+        SELECT ts.category_id as cat_id, ts.amount as amt
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        WHERE t.category_id IS NULL AND t.date >= ? AND t.date <= ?
+      ) combined
+      JOIN categories c ON combined.cat_id = c.id
+    `).get(startDate, endDate, startDate, endDate) as { income: number; expenses: number };
+    const monthTotals = monthRows ?? { income: 0, expenses: 0 };
 
-    // Prior month income/expenses
-    const [priorTotals] = db.select({
-      income: sql<number>`coalesce(sum(case when ${categories.type} = 'income' then abs(${transactions.amount}) else 0 end), 0)`,
-      expenses: sql<number>`coalesce(sum(case when ${categories.type} = 'expense' then ${transactions.amount} else 0 end), 0)`,
-    }).from(transactions)
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
-      .where(and(gte(transactions.date, priorStart), lte(transactions.date, priorEnd)))
-      .all();
+    // Prior month income/expenses — includes split transactions
+    const priorRows = sqlite.prepare(`
+      SELECT
+        coalesce(sum(CASE WHEN c.type = 'income' THEN abs(amt) ELSE 0 END), 0) as income,
+        coalesce(sum(CASE WHEN c.type = 'expense' THEN amt ELSE 0 END), 0) as expenses
+      FROM (
+        SELECT t.category_id as cat_id, t.amount as amt
+        FROM transactions t
+        WHERE t.category_id IS NOT NULL AND t.date >= ? AND t.date <= ?
+        UNION ALL
+        SELECT ts.category_id as cat_id, ts.amount as amt
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        WHERE t.category_id IS NULL AND t.date >= ? AND t.date <= ?
+      ) combined
+      JOIN categories c ON combined.cat_id = c.id
+    `).get(priorStart, priorEnd, priorStart, priorEnd) as { income: number; expenses: number };
+    const priorTotals = priorRows ?? { income: 0, expenses: 0 };
 
     // Total budgeted expenses for month
     const [budgetTotal] = db.select({
@@ -139,18 +159,22 @@ router.get('/spending-by-category', (req: Request, res: Response) => {
     const month = (req.query.month as string) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     const { startDate, endDate } = monthRange(month);
 
-    const spending = db.select({
-      groupName: categories.group_name,
-      totalSpent: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-    }).from(transactions)
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
-      .where(and(
-        gte(transactions.date, startDate),
-        lte(transactions.date, endDate),
-        eq(categories.type, 'expense'),
-      ))
-      .groupBy(categories.group_name)
-      .all();
+    const spending = sqlite.prepare(`
+      SELECT c.group_name as groupName, coalesce(sum(amt), 0) as totalSpent
+      FROM (
+        SELECT t.category_id as cat_id, t.amount as amt
+        FROM transactions t
+        WHERE t.category_id IS NOT NULL AND t.date >= ? AND t.date <= ?
+        UNION ALL
+        SELECT ts.category_id as cat_id, ts.amount as amt
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        WHERE t.category_id IS NULL AND t.date >= ? AND t.date <= ?
+      ) combined
+      JOIN categories c ON combined.cat_id = c.id
+      WHERE c.type = 'expense'
+      GROUP BY c.group_name
+    `).all(startDate, endDate, startDate, endDate) as { groupName: string; totalSpent: number }[];
 
     // Get budgets for each group
     const groupBudgets = db.select({
@@ -185,15 +209,23 @@ router.get('/income-vs-expenses', (req: Request, res: Response) => {
   try {
     const year = (req.query.year as string) || String(new Date().getFullYear());
 
-    const monthly = db.select({
-      month: sql<number>`cast(substr(${transactions.date}, 6, 2) as integer)`,
-      totalIncome: sql<number>`coalesce(sum(case when ${categories.type} = 'income' then abs(${transactions.amount}) else 0 end), 0)`,
-      totalExpenses: sql<number>`coalesce(sum(case when ${categories.type} = 'expense' then ${transactions.amount} else 0 end), 0)`,
-    }).from(transactions)
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
-      .where(sql`substr(${transactions.date}, 1, 4) = ${year}`)
-      .groupBy(sql`cast(substr(${transactions.date}, 6, 2) as integer)`)
-      .all();
+    const monthly = sqlite.prepare(`
+      SELECT cast(substr(date, 6, 2) as integer) as month,
+        coalesce(sum(CASE WHEN c.type = 'income' THEN abs(amt) ELSE 0 END), 0) as totalIncome,
+        coalesce(sum(CASE WHEN c.type = 'expense' THEN amt ELSE 0 END), 0) as totalExpenses
+      FROM (
+        SELECT t.category_id as cat_id, t.date, t.amount as amt
+        FROM transactions t
+        WHERE t.category_id IS NOT NULL AND substr(t.date, 1, 4) = ?
+        UNION ALL
+        SELECT ts.category_id as cat_id, t.date, ts.amount as amt
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        WHERE t.category_id IS NULL AND substr(t.date, 1, 4) = ?
+      ) combined
+      JOIN categories c ON combined.cat_id = c.id
+      GROUP BY month
+    `).all(year, year) as { month: number; totalIncome: number; totalExpenses: number }[];
 
     const monthMap = new Map(monthly.map((m) => [m.month, m]));
     const data = Array.from({ length: 12 }, (_, i) => ({
@@ -231,15 +263,40 @@ router.get('/recent-transactions', (req: Request, res: Response) => {
       category_type: categories.type,
     }).from(transactions)
       .innerJoin(accounts, eq(transactions.account_id, accounts.id))
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
+      .leftJoin(categories, eq(transactions.category_id, categories.id))
       .orderBy(desc(transactions.date), desc(transactions.id))
       .limit(limit)
       .all();
 
     const ownerMap = getAccountOwnersDash([...new Set(rows.map((r) => r.account_id))]);
 
+    // Fetch splits for any split transactions
+    const splitTxnIds = rows.filter(r => !r.category_id).map(r => r.id);
+    const splitsMap = new Map<number, { categoryId: number; groupName: string; subName: string; displayName: string; type: string; amount: number }[]>();
+    if (splitTxnIds.length > 0) {
+      const splitRows = sqlite.prepare(`
+        SELECT ts.transaction_id, ts.category_id, ts.amount,
+               c.group_name, c.sub_name, c.display_name, c.type
+        FROM transaction_splits ts
+        JOIN categories c ON ts.category_id = c.id
+        WHERE ts.transaction_id IN (${splitTxnIds.map(() => '?').join(',')})
+        ORDER BY ts.id
+      `).all(...splitTxnIds) as {
+        transaction_id: number; category_id: number; amount: number;
+        group_name: string; sub_name: string; display_name: string; type: string;
+      }[];
+      for (const sr of splitRows) {
+        if (!splitsMap.has(sr.transaction_id)) splitsMap.set(sr.transaction_id, []);
+        splitsMap.get(sr.transaction_id)!.push({
+          categoryId: sr.category_id, groupName: sr.group_name, subName: sr.sub_name,
+          displayName: sr.display_name, type: sr.type, amount: sr.amount,
+        });
+      }
+    }
+
     const data = rows.map((r) => {
       const owners = ownerMap.get(r.account_id) || [];
+      const splits = splitsMap.get(r.id) || null;
       return {
         id: r.id,
         date: r.date,
@@ -247,7 +304,8 @@ router.get('/recent-transactions', (req: Request, res: Response) => {
         note: r.note,
         amount: r.amount,
         account: { id: r.account_id, name: r.account_name, lastFour: r.account_last_four, owner: r.account_owner, owners, isShared: owners.length > 1 },
-        category: { id: r.category_id, groupName: r.category_group_name, subName: r.category_sub_name, displayName: r.category_display_name, type: r.category_type },
+        category: r.category_id ? { id: r.category_id, groupName: r.category_group_name, subName: r.category_sub_name, displayName: r.category_display_name, type: r.category_type } : null,
+        splits,
       };
     });
 

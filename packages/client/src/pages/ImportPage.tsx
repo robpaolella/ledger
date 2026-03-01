@@ -2,15 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fmt } from '../lib/formatters';
+import { getCategoryColor } from '../lib/categoryColors';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import DuplicateBadge from '../components/DuplicateBadge';
 import DuplicateComparison from '../components/DuplicateComparison';
-import TransferBadge from '../components/TransferBadge';
 import BankSyncPanel from '../components/BankSyncPanel';
 import SortableHeader from '../components/SortableHeader';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
+import SplitEditor from '../components/SplitEditor';
+import type { SplitRow } from '../components/SplitEditor';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Account {
@@ -51,6 +52,8 @@ interface CategorizedRow {
   categoryId: number | null;
   groupName: string | null;
   subName: string | null;
+  // Split support
+  splits: SplitRow[] | null;
   // Duplicate detection
   duplicateStatus: 'exact' | 'possible' | 'none';
   duplicateMatch: {
@@ -307,6 +310,7 @@ export default function ImportPage() {
         duplicateStatus: 'none' as CategorizedRow['duplicateStatus'],
         duplicateMatch: null as CategorizedRow['duplicateMatch'],
         isLikelyTransfer: false,
+        splits: null,
       };
     });
 
@@ -362,7 +366,7 @@ export default function ImportPage() {
 
   const handleImport = async () => {
     if (!selectedAccountId) return;
-    const validRows = categorizedRows.filter((r, i) => selectedImportRows.has(i) && r.categoryId != null);
+    const validRows = categorizedRows.filter((r, i) => selectedImportRows.has(i) && (r.categoryId != null || (r.splits && r.splits.length >= 2)));
     if (validRows.length === 0) { setNotification({ type: 'error', message: 'No transactions with assigned categories to import.' }); return; }
 
     setImporting(true);
@@ -375,8 +379,9 @@ export default function ImportPage() {
           transactions: validRows.map((r) => ({
             date: r.date,
             description: r.description,
-            categoryId: r.categoryId,
+            categoryId: r.splits ? null : r.categoryId,
             amount: r.amount,
+            ...(r.splits ? { splits: r.splits } : {}),
           })),
         }),
       });
@@ -412,7 +417,40 @@ export default function ImportPage() {
     catGroups.get(c.group_name)!.push(c);
   }
 
-  const validImportCount = categorizedRows.filter((r, i) => selectedImportRows.has(i) && r.categoryId != null).length;
+  const allGroupNames = [...new Set(categories.map(c => c.group_name))];
+  const getSplitColors = (splits: SplitRow[]) =>
+    splits.map(s => {
+      const cat = categories.find(c => c.id === s.categoryId);
+      return getCategoryColor(cat?.group_name ?? '', allGroupNames);
+    });
+
+  const validImportCount = categorizedRows.filter((r, i) => selectedImportRows.has(i) && (r.categoryId != null || (r.splits && r.splits.length >= 2))).length;
+
+  // Split editor modal state for import rows
+  const [splitEditingIdx, setSplitEditingIdx] = useState<number | null>(null);
+
+  const handleSplitApply = (idx: number, appliedSplits: SplitRow[]) => {
+    setCategorizedRows((prev) => prev.map((r, i) => i === idx ? {
+      ...r,
+      categoryId: null,
+      groupName: null,
+      subName: null,
+      splits: appliedSplits,
+    } : r));
+    setSelectedImportRows(prev => { const next = new Set(prev); next.add(idx); return next; });
+    setSplitEditingIdx(null);
+    addToast(`Split applied across ${appliedSplits.length} categories`, 'success');
+  };
+
+  const handleSplitCancel = (idx: number) => {
+    // If there were already splits, keep them; otherwise just close modal
+    setSplitEditingIdx(null);
+    // If row has no category and no splits, keep it unchecked
+    const row = categorizedRows[idx];
+    if (!row.categoryId && (!row.splits || row.splits.length < 2)) {
+      setSelectedImportRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
+    }
+  };
 
   const switchTab = (tab: 'csv' | 'sync') => {
     setActiveTab(tab);
@@ -753,7 +791,7 @@ export default function ImportPage() {
                   <React.Fragment key={i}>
                     <div className={`rounded-xl border px-3 py-2.5 transition-opacity ${
                       !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' :
-                      !r.categoryId ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
+                      !r.categoryId && !(r.splits && r.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
                       'border-[var(--bg-card-border)] bg-[var(--bg-card)]'
                     }`}>
                       <div className="flex items-start gap-2.5">
@@ -776,12 +814,9 @@ export default function ImportPage() {
                               {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
                             </span>
                           </div>
-                          {/* Date + Badges + Confidence */}
+                          {/* Date + Confidence */}
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             <span className="text-[11px] font-mono text-[var(--text-muted)]">{r.date}</span>
-                            <DuplicateBadge status={r.duplicateStatus}
-                              onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                            <TransferBadge isLikelyTransfer={r.isLikelyTransfer} tooltipText={r.transferTooltip} />
                             <span className={`text-[10px] font-semibold font-mono ml-auto ${
                               r.confidence > 0.9 ? 'text-[#10b981]' : r.confidence > 0.6 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
                             }`}>
@@ -790,24 +825,76 @@ export default function ImportPage() {
                           </div>
                           {/* Category dropdown */}
                           <div className="mt-2">
-                            {r.groupName && r.categoryId && (
-                              <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{r.groupName}</div>
+                            {r.splits && r.splits.length >= 2 ? (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="inline-flex" style={{ gap: 0 }}>
+                                    {getSplitColors(r.splits).map((color, ci) => (
+                                      <span key={ci} style={{
+                                        width: 8, height: 8, borderRadius: '50%',
+                                        background: color,
+                                        border: '1.5px solid var(--bg-card)',
+                                        marginLeft: ci > 0 ? -3 : 0,
+                                        zIndex: r.splits!.length - ci,
+                                        display: 'inline-block',
+                                      }} />
+                                    ))}
+                                  </span>
+                                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Split ({r.splits.length})</span>
+                                </span>
+                                <button onClick={() => setSplitEditingIdx(i)}
+                                  className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">Edit</button>
+                              </div>
+                            ) : (
+                              <>
+                                {r.groupName && r.categoryId && (
+                                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{r.groupName}</div>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <select
+                                    className="flex-1 text-[12px] border border-[var(--table-border)] rounded-md px-2 py-1.5 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
+                                    value={r.categoryId || ''}
+                                    onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
+                                  >
+                                    <option value="">Select category...</option>
+                                    {Array.from(catGroups.entries()).map(([group, cats]) => (
+                                      <optgroup key={group} label={group}>
+                                        {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                      </optgroup>
+                                    ))}
+                                    <optgroup label="Income">
+                                      {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                    </optgroup>
+                                  </select>
+                                  <button onClick={() => setSplitEditingIdx(i)}
+                                    title="Split"
+                                    className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)]">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M12 4v8m0 0l-6 8m6-8l6 8" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </>
                             )}
-                            <select
-                              className="w-full text-[12px] border border-[var(--table-border)] rounded-md px-2 py-1.5 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
-                              value={r.categoryId || ''}
-                              onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
-                            >
-                              <option value="">Select category...</option>
-                              {Array.from(catGroups.entries()).map(([group, cats]) => (
-                                <optgroup key={group} label={group}>
-                                  {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                </optgroup>
-                              ))}
-                              <optgroup label="Income">
-                                {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                              </optgroup>
-                            </select>
+                            {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                {r.duplicateStatus !== 'none' && (
+                                  <button
+                                    onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                    style={{
+                                      background: r.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                      color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                    }}>
+                                    ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                                  </button>
+                                )}
+                                {r.isLikelyTransfer && (
+                                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -840,11 +927,10 @@ export default function ImportPage() {
             <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: '40px' }} />
-                <col style={{ width: '100px' }} />
+                <col style={{ width: '90px' }} />
                 <col />
-                <col style={{ width: '100px' }} />
-                <col style={{ width: '140px' }} />
-                <col style={{ width: '200px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '250px' }} />
                 <col style={{ width: '55px' }} />
               </colgroup>
               <thead>
@@ -861,7 +947,6 @@ export default function ImportPage() {
                   <SortableHeader label="Date" sortKey="date" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
                   <SortableHeader label="Description" sortKey="description" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
                   <SortableHeader label="Amount" sortKey="amount" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} align="right" />
-                  <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Status</th>
                   <SortableHeader label="Category" sortKey="category" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
                   <SortableHeader label="Conf." sortKey="confidence" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} align="center" />
                 </tr>
@@ -871,7 +956,7 @@ export default function ImportPage() {
                   const r = categorizedRows[i];
                   return (
                   <React.Fragment key={i}>
-                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!r.categoryId && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
+                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!r.categoryId && !(r.splits && r.splits.length >= 2) && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
                       <td className="px-2 py-2 text-center">
                         <input type="checkbox" checked={selectedImportRows.has(i)}
                           onChange={() => {
@@ -888,32 +973,77 @@ export default function ImportPage() {
                       <td className={`px-2.5 py-2 text-right font-mono font-semibold ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                         {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
                       </td>
-                      <td className="px-2.5 py-1.5">
-                        <div className="flex flex-wrap gap-1">
-                          <DuplicateBadge status={r.duplicateStatus}
-                            onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                          <TransferBadge isLikelyTransfer={r.isLikelyTransfer} tooltipText={r.transferTooltip} />
-                        </div>
-                      </td>
-                      <td className="px-2.5 py-1.5">
-                        {r.groupName && r.categoryId && (
-                          <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{r.groupName}</div>
+                      <td className="px-2.5 py-1.5 overflow-hidden">
+                        {r.splits && r.splits.length >= 2 ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-flex" style={{ gap: 0 }}>
+                                {getSplitColors(r.splits).map((color, ci) => (
+                                  <span key={ci} style={{
+                                    width: 10, height: 10, borderRadius: '50%',
+                                    background: color,
+                                    border: '1.5px solid var(--bg-card)',
+                                    marginLeft: ci > 0 ? -3 : 0,
+                                    zIndex: r.splits!.length - ci,
+                                    display: 'inline-block',
+                                  }} />
+                                ))}
+                              </span>
+                              <span className="text-[10px] font-semibold text-[var(--text-secondary)] px-1.5 py-0.5 rounded bg-[var(--bg-hover)] whitespace-nowrap">Split ({r.splits.length})</span>
+                            </span>
+                            <button onClick={() => setSplitEditingIdx(i)}
+                              className="ml-1 text-[10px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">Edit</button>
+                          </div>
+                        ) : (
+                          <>
+                            {r.groupName && r.categoryId && (
+                              <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{r.groupName}</div>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <select
+                                className="flex-1 min-w-0 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
+                                value={r.categoryId || ''}
+                                onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
+                              >
+                                <option value="">Select...</option>
+                                {Array.from(catGroups.entries()).map(([group, cats]) => (
+                                  <optgroup key={group} label={group}>
+                                    {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                  </optgroup>
+                                ))}
+                                <optgroup label="Income">
+                                  {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                </optgroup>
+                              </select>
+                              <button onClick={() => setSplitEditingIdx(i)}
+                                title="Split across categories"
+                                className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 4v8m0 0l-6 8m6-8l6 8" />
+                                </svg>
+                              </button>
+                            </div>
+                          </>
                         )}
-                        <select
-                          className="w-full text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
-                          value={r.categoryId || ''}
-                          onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
-                        >
-                          <option value="">Select...</option>
-                          {Array.from(catGroups.entries()).map(([group, cats]) => (
-                            <optgroup key={group} label={group}>
-                              {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                            </optgroup>
-                          ))}
-                          <optgroup label="Income">
-                            {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                          </optgroup>
-                        </select>
+                        {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {r.duplicateStatus !== 'none' && (
+                              <button
+                                onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                style={{
+                                  background: r.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                  color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                }}>
+                                ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                              </button>
+                            )}
+                            {r.isLikelyTransfer && (
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2.5 py-2 text-center">
                         <span className={`text-[11px] font-semibold font-mono ${
@@ -925,7 +1055,7 @@ export default function ImportPage() {
                     </tr>
                     {expandedDupeRow === i && r.duplicateMatch && (
                       <tr>
-                        <td colSpan={7} className="px-2.5 py-1">
+                        <td colSpan={6} className="px-2.5 py-1">
                           <DuplicateComparison
                             incoming={{ date: r.date, description: r.description, amount: r.amount,
                               accountName: accounts.find(a => a.id === selectedAccountId)?.name || null }}
@@ -983,6 +1113,24 @@ export default function ImportPage() {
             </div>
       </ResponsiveModal>
       </>
+      )}
+
+      {/* Split Editor Modal */}
+      {splitEditingIdx !== null && (
+        <ResponsiveModal isOpen={true} onClose={() => handleSplitCancel(splitEditingIdx)} maxWidth="32rem">
+          <h3 className="text-[15px] font-bold text-[var(--text-primary)] mb-3">Split Transaction</h3>
+          <div className="text-[12px] text-[var(--text-muted)] mb-3 font-mono">
+            {categorizedRows[splitEditingIdx].description} — {fmt(Math.abs(categorizedRows[splitEditingIdx].amount))}
+          </div>
+          <SplitEditor
+            totalAmount={categorizedRows[splitEditingIdx].amount}
+            initialSplits={categorizedRows[splitEditingIdx].splits ?? undefined}
+            categories={categories}
+            onApply={(splits) => handleSplitApply(splitEditingIdx, splits)}
+            onCancel={() => handleSplitCancel(splitEditingIdx)}
+            compact
+          />
+        </ResponsiveModal>
       )}
     </div>
     )}

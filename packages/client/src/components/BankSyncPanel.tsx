@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fmt } from '../lib/formatters';
+import { getCategoryColor } from '../lib/categoryColors';
 import { useToast } from '../context/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
-import DuplicateBadge from '../components/DuplicateBadge';
 import DuplicateComparison from '../components/DuplicateComparison';
-import TransferBadge from '../components/TransferBadge';
 import SortableHeader from '../components/SortableHeader';
 import InlineNotification from '../components/InlineNotification';
+import ResponsiveModal from '../components/ResponsiveModal';
+import SplitEditor from '../components/SplitEditor';
+import type { SplitRow } from '../components/SplitEditor';
 
 interface Category {
   id: number;
@@ -55,6 +57,8 @@ interface SyncTransaction {
   categoryId: number | null;
   groupName: string | null;
   subName: string | null;
+  // Split support
+  splits: SplitRow[] | null;
 }
 
 interface SyncBalanceUpdate {
@@ -128,6 +132,13 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
     if (!catGroups.has(c.group_name)) catGroups.set(c.group_name, []);
     catGroups.get(c.group_name)!.push(c);
   }
+
+  const allGroupNames = [...new Set(categories.map(c => c.group_name))];
+  const getSplitColors = (splits: SplitRow[]) =>
+    splits.map(s => {
+      const cat = categories.find(c => c.id === s.categoryId);
+      return getCategoryColor(cat?.group_name ?? '', allGroupNames);
+    });
 
   const handleReviewSort = (key: string) => {
     if (key === reviewSortBy) setReviewSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -206,6 +217,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
         categoryId: t.suggestedCategoryId,
         groupName: t.suggestedGroupName,
         subName: t.suggestedSubName,
+        splits: null,
       }));
 
       setSyncTxns(txns);
@@ -239,7 +251,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
   };
 
   const handleImport = async () => {
-    const selectedTxns = syncTxns.filter((_, i) => selectedTxnRows.has(i) && syncTxns[i].categoryId != null);
+    const selectedTxns = syncTxns.filter((_, i) => selectedTxnRows.has(i) && (syncTxns[i].categoryId != null || (syncTxns[i].splits && syncTxns[i].splits!.length >= 2)));
     const selectedBalances = balanceUpdates.filter((b) => b.selected);
     const selectedHoldings = holdingsUpdates.filter((h) => h.selected);
 
@@ -259,7 +271,8 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
               description: t.description,
               rawDescription: t.rawDescription,
               amount: t.amount,
-              categoryId: t.categoryId,
+              categoryId: t.splits ? null : t.categoryId,
+              ...(t.splits ? { splits: t.splits } : {}),
             })),
             balanceUpdates: selectedBalances.map((b) => ({
               accountId: b.accountId,
@@ -288,6 +301,30 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
     }
   };
 
+  // Split editor modal state
+  const [splitEditingIdx, setSplitEditingIdx] = useState<number | null>(null);
+
+  const handleSplitApply = (idx: number, appliedSplits: SplitRow[]) => {
+    setSyncTxns((prev) => prev.map((t, i) => i === idx ? {
+      ...t,
+      categoryId: null,
+      groupName: null,
+      subName: null,
+      splits: appliedSplits,
+    } : t));
+    setSelectedTxnRows(prev => { const next = new Set(prev); next.add(idx); return next; });
+    setSplitEditingIdx(null);
+    addToast(`Split applied across ${appliedSplits.length} categories`, 'success');
+  };
+
+  const handleSplitCancel = (idx: number) => {
+    setSplitEditingIdx(null);
+    const row = syncTxns[idx];
+    if (!row.categoryId && (!row.splits || row.splits.length < 2)) {
+      setSelectedTxnRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
+    }
+  };
+
   if (loading) return null;
 
   // No linked accounts — not configured
@@ -312,11 +349,12 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
     );
   }
 
-  const validTxnCount = syncTxns.filter((t, i) => selectedTxnRows.has(i) && t.categoryId != null).length;
+  const validTxnCount = syncTxns.filter((t, i) => selectedTxnRows.has(i) && (t.categoryId != null || (t.splits && t.splits.length >= 2))).length;
   const selectedBalanceCount = balanceUpdates.filter((b) => b.selected).length;
   const selectedHoldingsCount = holdingsUpdates.filter((h) => h.selected).length;
 
   return (
+    <>
     <div>
       {/* Step Indicator */}
       <div className="flex gap-1 mb-6">
@@ -522,7 +560,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   {sortedTxnIndices.map((i) => {
                     const t = syncTxns[i];
                     return (
-                      <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !t.categoryId ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}>
+                      <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !t.categoryId && !(t.splits && t.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}>
                         <div className="flex items-start gap-2.5">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
@@ -549,9 +587,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--badge-account-bg)] text-[var(--badge-account-text)] font-mono truncate max-w-[120px]">
                                 {t.accountName}
                               </span>
-                              <DuplicateBadge status={t.duplicateStatus}
-                                onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                              <TransferBadge isLikelyTransfer={t.isLikelyTransfer} />
                               <span className={`text-[10px] font-semibold font-mono ${
                                 t.confidence > 0.9 ? 'text-[#10b981]' : t.confidence > 0.6 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
                               }`}>
@@ -559,23 +594,75 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               </span>
                             </div>
                             <div className="mt-2">
-                              {t.groupName && t.categoryId && (
-                                <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{t.groupName}</div>
+                              {t.splits && t.splits.length >= 2 ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1">
+                                    <span className="inline-flex" style={{ gap: 0 }}>
+                                      {getSplitColors(t.splits).map((color, ci) => (
+                                        <span key={ci} style={{
+                                          width: 8, height: 8, borderRadius: '50%',
+                                          background: color,
+                                          border: '1.5px solid var(--bg-card)',
+                                          marginLeft: ci > 0 ? -3 : 0,
+                                          zIndex: t.splits!.length - ci,
+                                          display: 'inline-block',
+                                        }} />
+                                      ))}
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Split ({t.splits.length})</span>
+                                  </span>
+                                  <button onClick={() => setSplitEditingIdx(i)}
+                                    className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">Edit</button>
+                                </div>
+                              ) : (
+                                <>
+                                  {t.groupName && t.categoryId && (
+                                    <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{t.groupName}</div>
+                                  )}
+                                  <div className="flex items-center gap-1">
+                                    <select
+                                      className="flex-1 text-[12px] border border-[var(--table-border)] rounded-md px-2 py-1.5 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
+                                      value={t.categoryId || ''}
+                                      onChange={(e) => updateTxnCategory(i, parseInt(e.target.value))}>
+                                      <option value="">Select category...</option>
+                                      {Array.from(catGroups.entries()).map(([group, cats]) => (
+                                        <optgroup key={group} label={group}>
+                                          {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                        </optgroup>
+                                      ))}
+                                      <optgroup label="Income">
+                                        {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                      </optgroup>
+                                    </select>
+                                    <button onClick={() => setSplitEditingIdx(i)}
+                                      title="Split"
+                                      className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)]">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 4v8m0 0l-6 8m6-8l6 8" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </>
                               )}
-                              <select
-                                className="w-full text-[12px] border border-[var(--table-border)] rounded-md px-2 py-1.5 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
-                                value={t.categoryId || ''}
-                                onChange={(e) => updateTxnCategory(i, parseInt(e.target.value))}>
-                                <option value="">Select category...</option>
-                                {Array.from(catGroups.entries()).map(([group, cats]) => (
-                                  <optgroup key={group} label={group}>
-                                    {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                  </optgroup>
-                                ))}
-                                <optgroup label="Income">
-                                  {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                </optgroup>
-                              </select>
+                              {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
+                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                  {t.duplicateStatus !== 'none' && (
+                                    <button
+                                      onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                      className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                      style={{
+                                        background: t.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                        color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                      }}>
+                                      ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                                    </button>
+                                  )}
+                                  {t.isLikelyTransfer && (
+                                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -603,13 +690,12 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
               <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: '40px' }} />
-                  <col style={{ width: '90px' }} />
+                  <col style={{ width: '110px' }} />
                   <col style={{ width: '20%' }} />
                   <col />
                   <col style={{ width: '15%' }} />
                   <col style={{ width: '95px' }} />
-                  <col style={{ width: '150px' }} />
-                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '200px' }} />
                   <col style={{ width: '50px' }} />
                 </colgroup>
                 <thead>
@@ -629,7 +715,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                     <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Account</th>
                     <SortableHeader label="Amount" sortKey="amount" activeSortKey={reviewSortBy} sortDir={reviewSortDir} onSort={handleReviewSort} align="right" />
                     <SortableHeader label="Category" sortKey="category" activeSortKey={reviewSortBy} sortDir={reviewSortDir} onSort={handleReviewSort} />
-                    <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Status</th>
                     <SortableHeader label="Conf." sortKey="confidence" activeSortKey={reviewSortBy} sortDir={reviewSortDir} onSort={handleReviewSort} align="center" />
                   </tr>
                 </thead>
@@ -638,7 +723,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                     const t = syncTxns[i];
                     return (
                     <React.Fragment key={i}>
-                      <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!t.categoryId && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
+                      <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!t.categoryId && !(t.splits && t.splits.length >= 2) && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
                         <td className="px-2 py-2 text-center">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
@@ -665,31 +750,76 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                         <td className={`px-2.5 py-2 text-right font-mono font-semibold ${t.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                           {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
                         </td>
-                        <td className="px-2.5 py-1.5">
-                          {t.groupName && t.categoryId && (
-                            <div className="text-[10px] text-[var(--text-muted)] mb-0.5 truncate">{t.groupName}</div>
+                        <td className="px-2.5 py-1.5 overflow-hidden">
+                          {t.splits && t.splits.length >= 2 ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="inline-flex" style={{ gap: 0 }}>
+                                  {getSplitColors(t.splits).map((color, ci) => (
+                                    <span key={ci} style={{
+                                      width: 10, height: 10, borderRadius: '50%',
+                                      background: color,
+                                      border: '1.5px solid var(--bg-card)',
+                                      marginLeft: ci > 0 ? -3 : 0,
+                                      zIndex: t.splits!.length - ci,
+                                      display: 'inline-block',
+                                    }} />
+                                  ))}
+                                </span>
+                                <span className="text-[10px] font-semibold text-[var(--text-secondary)] px-1.5 py-0.5 rounded bg-[var(--bg-hover)] whitespace-nowrap">Split ({t.splits.length})</span>
+                              </span>
+                              <button onClick={() => setSplitEditingIdx(i)}
+                                className="ml-1 text-[10px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">Edit</button>
+                            </div>
+                          ) : (
+                            <>
+                              {t.groupName && t.categoryId && (
+                                <div className="text-[10px] text-[var(--text-muted)] mb-0.5 truncate">{t.groupName}</div>
+                              )}
+                              <div className="flex items-center gap-1">
+                                <select
+                                  className="flex-1 min-w-0 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
+                                  value={t.categoryId || ''}
+                                  onChange={(e) => updateTxnCategory(i, parseInt(e.target.value))}>
+                                  <option value="">Select...</option>
+                                  {Array.from(catGroups.entries()).map(([group, cats]) => (
+                                    <optgroup key={group} label={group}>
+                                      {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                    </optgroup>
+                                  ))}
+                                  <optgroup label="Income">
+                                    {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                                  </optgroup>
+                                </select>
+                                <button onClick={() => setSplitEditingIdx(i)}
+                                  title="Split across categories"
+                                  className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 4v8m0 0l-6 8m6-8l6 8" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </>
                           )}
-                          <select
-                            className="w-full text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
-                            value={t.categoryId || ''}
-                            onChange={(e) => updateTxnCategory(i, parseInt(e.target.value))}>
-                            <option value="">Select...</option>
-                            {Array.from(catGroups.entries()).map(([group, cats]) => (
-                              <optgroup key={group} label={group}>
-                                {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                              </optgroup>
-                            ))}
-                            <optgroup label="Income">
-                              {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                            </optgroup>
-                          </select>
-                        </td>
-                        <td className="px-2.5 py-1.5">
-                          <div className="flex flex-wrap gap-1">
-                            <DuplicateBadge status={t.duplicateStatus}
-                              onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)} />
-                            <TransferBadge isLikelyTransfer={t.isLikelyTransfer} />
-                          </div>
+                          {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              {t.duplicateStatus !== 'none' && (
+                                <button
+                                  onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
+                                  className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                  style={{
+                                    background: t.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                    color: t.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
+                                  }}>
+                                  ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
+                                </button>
+                              )}
+                              {t.isLikelyTransfer && (
+                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2.5 py-2 text-center">
                           <span className={`text-[11px] font-semibold font-mono ${
@@ -701,7 +831,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                       </tr>
                       {expandedDupeRow === i && t.duplicateMatchId && (
                         <tr>
-                          <td colSpan={9} className="px-2.5 py-1">
+                          <td colSpan={8} className="px-2.5 py-1">
                             <DuplicateComparison
                               incoming={{ date: t.date, description: t.description, amount: t.amount, accountName: t.accountName }}
                               existing={{ date: t.duplicateMatchDate || t.date, description: t.duplicateMatchDescription || '', amount: t.duplicateMatchAmount ?? t.amount, accountName: t.duplicateMatchAccountName || null }}
@@ -894,5 +1024,24 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
         </div>
       )}
     </div>
+
+    {/* Split Editor Modal */}
+    {splitEditingIdx !== null && (
+      <ResponsiveModal isOpen={true} onClose={() => handleSplitCancel(splitEditingIdx)} maxWidth="32rem">
+        <h3 className="text-[15px] font-bold text-[var(--text-primary)] mb-3">Split Transaction</h3>
+        <div className="text-[12px] text-[var(--text-muted)] mb-3 font-mono">
+          {syncTxns[splitEditingIdx].description} — {fmt(Math.abs(syncTxns[splitEditingIdx].amount))}
+        </div>
+        <SplitEditor
+          totalAmount={syncTxns[splitEditingIdx].amount}
+          initialSplits={syncTxns[splitEditingIdx].splits ?? undefined}
+          categories={categories}
+          onApply={(splits) => handleSplitApply(splitEditingIdx, splits)}
+          onCancel={() => handleSplitCancel(splitEditingIdx)}
+          compact
+        />
+      </ResponsiveModal>
+    )}
+    </>
   );
 }

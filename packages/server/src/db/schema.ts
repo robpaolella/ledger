@@ -77,9 +77,18 @@ export const transactions = sqliteTable('transactions', {
   date: text('date').notNull(),
   description: text('description').notNull(),
   note: text('note'),
-  category_id: integer('category_id').notNull().references(() => categories.id),
+  category_id: integer('category_id').references(() => categories.id),
   amount: real('amount').notNull(),
   simplefin_transaction_id: text('simplefin_transaction_id').unique(),
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+});
+
+// === Transaction Splits ===
+export const transactionSplits = sqliteTable('transaction_splits', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  transaction_id: integer('transaction_id').notNull().references(() => transactions.id, { onDelete: 'cascade' }),
+  category_id: integer('category_id').notNull().references(() => categories.id),
+  amount: real('amount').notNull(),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 

@@ -773,6 +773,12 @@ Form Input → Storage → Display:
 **Resolution:** After creating a new mockup file, run `touch packages/client/src/pages/MockupPage.tsx` to trigger Vite's HMR to re-evaluate the glob and pick up the new file.
 **Rule going forward:** Always run `touch packages/client/src/pages/MockupPage.tsx` immediately after creating a new mockup file in `.github/mockups/`. This ensures the mockup appears in the viewer without requiring a full dev server restart.
 
+### Functions Must Have Explicit Fallback Returns (2026-03-01)
+**Context:** QA checklist page showed white screen for any checklist never opened before in that browser
+**Problem:** `loadStateLocal()` and `loadStateFromServer()` had no explicit `return` at the end of the function body. When no localStorage/server entry existed (first visit), the functions returned `undefined`. Since `useState(() => loadStateLocal(...))` initialized state as `undefined`, any access to `state.checks` crashed React with an unhandled error. The file had `@ts-nocheck` so TypeScript didn't catch the missing return.
+**Resolution:** Added `return { checks: {}, notes: {} }` as fallback at end of `loadStateLocal()` and `return null` at end of `loadStateFromServer()`.
+**Rule going forward:** Every function with a declared return type must have an explicit return on every code path, including the "nothing matched" fallback. Pay special attention to files with `@ts-nocheck` — they silently swallow type errors. When initializing React state from a loader function, always ensure the loader cannot return `undefined`.
+
 ## Development Workflow
 
 ### Environments

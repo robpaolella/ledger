@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/index.js';
-import { budgets, categories, transactions, accounts } from '../db/schema.js';
-import { eq, and, asc, sql } from 'drizzle-orm';
+import { db, sqlite } from '../db/index.js';
+import { budgets, categories } from '../db/schema.js';
+import { eq, and, asc } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 
 const router = Router();
@@ -141,18 +141,33 @@ router.get('/summary', (req: Request, res: Response) => {
     const budgetMap = new Map(monthBudgets.map((b) => [b.category_id, b]));
 
     // Get actuals from transactions — optionally filtered by owner
-    const ownerFilter = owner !== 'all'
-      ? sql`AND EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = ${accounts.id} AND u.display_name = ${owner})`
-      : sql``;
+    // Uses UNION to combine non-split transactions with split amounts
+    const ownerClause = owner !== 'all'
+      ? `AND EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = a.id AND u.display_name = ?)`
+      : '';
+    const params: (string)[] = [startDate, endDate];
+    if (owner !== 'all') params.push(owner);
+    params.push(startDate, endDate);
+    if (owner !== 'all') params.push(owner);
 
-    const actuals = db.select({
-      category_id: transactions.category_id,
-      total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-    }).from(transactions)
-      .innerJoin(accounts, eq(transactions.account_id, accounts.id))
-      .where(sql`${transactions.date} >= ${startDate} AND ${transactions.date} <= ${endDate} ${ownerFilter}`)
-      .groupBy(transactions.category_id)
-      .all();
+    const actuals = sqlite.prepare(`
+      SELECT category_id, coalesce(sum(amount), 0) as total
+      FROM (
+        SELECT t.category_id, t.amount
+        FROM transactions t
+        JOIN accounts a ON t.account_id = a.id
+        WHERE t.category_id IS NOT NULL
+          AND t.date >= ? AND t.date <= ? ${ownerClause}
+        UNION ALL
+        SELECT ts.category_id, ts.amount
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        JOIN accounts a ON t.account_id = a.id
+        WHERE t.category_id IS NULL
+          AND t.date >= ? AND t.date <= ? ${ownerClause}
+      )
+      GROUP BY category_id
+    `).all(...params) as { category_id: number; total: number }[];
     const actualMap = new Map(actuals.map((a) => [a.category_id, a.total]));
 
     // Build income summary (group_name = "Income")

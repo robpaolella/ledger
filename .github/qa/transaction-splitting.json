@@ -1,0 +1,246 @@
+{
+  "title": "Transaction Splitting QA",
+  "storageKey": "qa-transaction-splitting",
+  "testingOrder": "Start with Section 1 to verify basic split creation. Then test display (Section 2), aggregation (Section 3), import flows (Section 4), edge cases (Section 5), and mobile (Section 6).",
+  "sections": [
+    {
+      "title": "1. Creating & Editing Splits",
+      "groups": [
+        {
+          "name": "Split Mode Entry",
+          "items": [
+            "Click 'Split across categories' link below category dropdown → split editor appears",
+            "Category dropdown and Type toggle become disabled in split mode",
+            "If a category was already selected, it pre-fills as the first split row with full amount",
+            "If no category was selected, two empty rows appear with first row having full amount"
+          ]
+        },
+        {
+          "name": "Split Editor — Dollar Mode",
+          "items": [
+            "Can type dollar amounts with decimal places (e.g. $50.25) without the decimal being eaten",
+            "Allocated total updates in real-time as amounts change",
+            "Shows green checkmark and 'Allocated: $X.XX' when splits sum to total",
+            "Shows warning with remaining amount when splits don't sum to total",
+            "Shows red 'over' warning when splits exceed total",
+            "'Apply Split' button is disabled when splits don't sum correctly",
+            "'Apply Split' button is disabled when any split has no category selected",
+            "'Apply Split' button is disabled when any split has $0 amount"
+          ]
+        },
+        {
+          "name": "Split Editor — Percentage Mode",
+          "items": [
+            "Click '$ → %' toggle → inputs switch to percentage mode with % suffix",
+            "Entering 50% on a $100 transaction fills $50.00",
+            "Two rows at 50% each → allocated shows green, Apply enabled",
+            "Switching back to '% → $' preserves the calculated dollar amounts"
+          ]
+        },
+        {
+          "name": "Split Row Management",
+          "items": [
+            "'+ Add Split' adds a new row pre-filled with the remaining amount",
+            "Remove (×) button appears only when there are more than 2 splits",
+            "Removing a split row updates the allocated total",
+            "Can add up to at least 5 split rows"
+          ]
+        },
+        {
+          "name": "Applying & Canceling",
+          "items": [
+            "Click 'Apply Split' → inline success notification appears: 'Split applied across N categories'",
+            "Success notification is dismissible (× button)",
+            "Category area shows '✓ N categories assigned' with a 'Remove split' link",
+            "Click 'Remove split' → returns to single category mode, notification clears",
+            "Click 'Cancel' in split editor → returns to single category mode",
+            "Save the transaction with splits → success toast appears",
+            "Re-open the split transaction → split editor shows with previously saved splits"
+          ]
+        },
+        {
+          "name": "Editing Existing Splits",
+          "items": [
+            "Open a split transaction → split mode active with saved splits pre-populated",
+            "Can modify split amounts and re-apply",
+            "Can add/remove split rows on an existing split transaction",
+            "Can switch from split back to single category and save"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "2. Transaction List Display",
+      "groups": [
+        {
+          "name": "Desktop Table — Category Column",
+          "items": [
+            "Non-split: colored dot appears next to the group name",
+            "Dot color matches the category's group color from the spending chart palette",
+            "Split transaction: shows one colored dot + group name per unique group involved",
+            "If split spans 2 groups (e.g. Groceries + Auto), both appear stacked with their dots"
+          ]
+        },
+        {
+          "name": "Desktop Table — Sub-Category Column",
+          "items": [
+            "Non-split: CategoryBadge shows sub-category name with colored tint matching group color",
+            "Badge background is a subtle tint of the group color, text is the full color",
+            "Split transaction: SplitBadge shows overlapping colored dots + 'Split (N)' label",
+            "Each dot in the SplitBadge corresponds to a split's category group color",
+            "Uncategorized transaction: shows '—' dash"
+          ]
+        },
+        {
+          "name": "Mobile Cards",
+          "items": [
+            "Non-split: colored CategoryBadge appears after the date",
+            "Split transaction: SplitBadge with compact colored dots appears after the date",
+            "Colors are consistent between mobile and desktop views"
+          ]
+        },
+        {
+          "name": "Dashboard — Recent Transactions",
+          "items": [
+            "Desktop table: Category column shows colored dot next to group name",
+            "Desktop table: Sub-category column shows colored CategoryBadge",
+            "Mobile cards: colored CategoryBadge appears after date"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "3. Aggregation & Calculations",
+      "groups": [
+        {
+          "name": "Budget Page",
+          "items": [
+            "Split transaction amounts appear under correct categories (e.g. $60 Groceries + $40 Household from a $100 Costco trip)",
+            "Category totals include split amounts",
+            "Group totals sum correctly including splits",
+            "Overall budget total is correct (no double-counting)"
+          ]
+        },
+        {
+          "name": "Reports Page",
+          "items": [
+            "Annual report shows split amounts distributed to correct category columns",
+            "Monthly totals include split transaction amounts",
+            "No double-counting of split transactions in totals"
+          ]
+        },
+        {
+          "name": "Dashboard KPIs",
+          "items": [
+            "Spending by category chart includes split amounts per category",
+            "Total expenses KPI includes full amount of split transactions (counted once)",
+            "Income vs Expenses chart is accurate with split transactions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "4. Import & Bank Sync Splits",
+      "groups": [
+        {
+          "name": "CSV Import — Split Flow",
+          "items": [
+            "Split icon (fork) appears next to category dropdown in review table",
+            "Click split icon → modal opens with SplitEditor",
+            "Apply split → toast 'Split applied across N categories'",
+            "Category cell shows colored dots + 'Split (N)' with Edit link",
+            "Click Edit → re-opens split modal with saved splits",
+            "Row is auto-checked when split is applied",
+            "Import completes successfully with split rows"
+          ]
+        },
+        {
+          "name": "Bank Sync — Split Flow",
+          "items": [
+            "Split icon appears next to category dropdown in sync review",
+            "Apply split → toast notification",
+            "Category cell shows colored dots + 'Split (N)' with Edit link",
+            "Sync completes successfully with split rows"
+          ]
+        },
+        {
+          "name": "Import Split Display",
+          "items": [
+            "Desktop: split display in import table shows colored category dots",
+            "Mobile: split display in import cards shows colored category dots",
+            "Desktop: split display in bank sync table shows colored category dots",
+            "Mobile: split display in bank sync cards shows colored category dots"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "5. Edge Cases",
+      "groups": [
+        {
+          "name": "Data Integrity",
+          "items": [
+            "Delete a split transaction → splits are cascade-deleted (no orphaned split rows)",
+            "Bulk edit category on a selection that includes split transactions → split is removed, single category applied",
+            "Split transaction with income categories → amounts display with correct sign/color"
+          ]
+        },
+        {
+          "name": "Validation Guardrails",
+          "items": [
+            "Cannot save a split with only 1 row (minimum 2)",
+            "Cannot save a split where any row has $0",
+            "Cannot save a split where any row has no category selected",
+            "Cannot save a split where amounts don't sum to transaction total",
+            "Server rejects invalid splits with appropriate error message"
+          ]
+        },
+        {
+          "name": "Migration",
+          "items": [
+            "App starts cleanly on a database that has never had splits (fresh migration)",
+            "Existing transactions are unaffected — all have category_id set, no nulls introduced"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "6. Mobile Specific",
+      "groups": [
+        {
+          "name": "Transaction Form Bottom Sheet",
+          "items": [
+            "Split editor renders correctly inside the bottom sheet",
+            "Can scroll within the split editor when many rows are added",
+            "'Split across categories' link is tappable",
+            "Split editor inputs have decimal keyboard (inputMode='decimal')",
+            "Apply/Cancel buttons are reachable without keyboard covering them"
+          ]
+        },
+        {
+          "name": "Import/Sync Bottom Sheet",
+          "items": [
+            "Split icon is tappable in mobile import review cards",
+            "Split modal opens as bottom sheet with SplitEditor",
+            "Can complete a split and return to the import review"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "7. Dark Mode",
+      "groups": [
+        {
+          "name": "Visual Consistency",
+          "items": [
+            "Category dots are visible and vibrant in dark mode",
+            "CategoryBadge tinted backgrounds are visible but subtle in dark mode",
+            "SplitBadge dot borders (var(--bg-card)) blend with card background in dark mode",
+            "Split editor panel background is distinguishable from card background in dark mode",
+            "Inline success notification for split applied is readable in dark mode"
+          ]
+        }
+      ]
+    }
+  ]
+}

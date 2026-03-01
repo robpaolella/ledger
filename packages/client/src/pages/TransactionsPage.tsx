@@ -2,14 +2,18 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fmt, fmtTransaction } from '../lib/formatters';
+import { getCategoryColor } from '../lib/categoryColors';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
 import PermissionGate from '../components/PermissionGate';
 import SortableHeader from '../components/SortableHeader';
-import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge } from '../components/badges';
+import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge, SplitBadge } from '../components/badges';
+import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
+import SplitEditor from '../components/SplitEditor';
+import type { SplitRow } from '../components/SplitEditor';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface DuplicateMatch {
@@ -39,6 +43,16 @@ interface TransactionCategory {
   type: string;
 }
 
+interface TransactionSplit {
+  id: number;
+  categoryId: number;
+  groupName: string;
+  subName: string;
+  displayName: string;
+  type: string;
+  amount: number;
+}
+
 interface Transaction {
   id: number;
   date: string;
@@ -46,7 +60,8 @@ interface Transaction {
   note: string | null;
   amount: number;
   account: TransactionAccount;
-  category: TransactionCategory;
+  category: TransactionCategory | null;
+  splits: TransactionSplit[] | null;
 }
 
 interface Account {
@@ -107,25 +122,31 @@ function TransactionForm({
   const [accountId, setAccountId] = useState<number>(transaction?.account.id ?? (accounts[0]?.id ?? 0));
   const [description, setDescription] = useState(transaction?.description ?? '');
   const [note, setNote] = useState(transaction?.note ?? '');
-  const [categoryId, setCategoryId] = useState<number>(transaction?.category.id ?? 0);
+  const [categoryId, setCategoryId] = useState<number>(transaction?.category?.id ?? 0);
+  const [splitMode, setSplitMode] = useState<boolean>(!!(transaction?.splits && transaction.splits.length > 0));
+  const [splits, setSplits] = useState<SplitRow[] | null>(
+    transaction?.splits?.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount) })) ?? null
+  );
   // Show user-facing amount: for income, negate stored value (stored -5000 → show 5000)
   // For reversals (positive+income or negative+expense), show as negative to indicate reversal
   const [amount, setAmount] = useState(() => {
     if (!transaction) return '';
-    const catType = transaction.category.type;
+    // For split transactions, determine type from first split's category
+    const catType = transaction.category?.type ?? (transaction.splits?.[0]?.type) ?? 'expense';
     const stored = transaction.amount;
     if (catType === 'income') {
-      // Regular income is stored negative → show positive; reversal is stored positive → show negative
       return (-stored).toString();
     }
-    // Regular expense is stored positive → show positive; refund is stored negative → show negative
     return stored.toString();
   });
-  const [txType, setTxType] = useState<'expense' | 'income'>(
-    transaction?.category.type === 'income' ? 'income' : 'expense'
-  );
+  const [txType, setTxType] = useState<'expense' | 'income'>(() => {
+    if (transaction?.category?.type === 'income') return 'income';
+    if (transaction?.splits?.[0]?.type === 'income') return 'income';
+    return 'expense';
+  });
   const [showErrors, setShowErrors] = useState(false);
   const [dupeExpanded, setDupeExpanded] = useState(false);
+  const [splitNotification, setSplitNotification] = useState<string | null>(null);
 
   // Refs for focusing first invalid field
   const dateRef = useRef<HTMLInputElement>(null);
@@ -190,11 +211,17 @@ function TransactionForm({
 
   // Validation
   const parsedAmount = parseFloat(amount);
+  const splitsValid = splitMode && splits
+    ? splits.length >= 2 &&
+      splits.every(s => s.categoryId && s.amount !== 0) &&
+      Math.abs(Math.abs(parsedAmount) - splits.reduce((sum, s) => sum + s.amount, 0)) < 0.01
+    : false;
+  const hasCategoryOrSplits = splitMode ? splitsValid : categoryId > 0;
   const isValid = !!(
     date &&
     accountId > 0 &&
     description.trim() &&
-    categoryId > 0 &&
+    hasCategoryOrSplits &&
     amount !== '' &&
     !isNaN(parsedAmount)
   );
@@ -203,7 +230,7 @@ function TransactionForm({
     if (!date) return dateRef;
     if (accountId <= 0) return accountRef;
     if (!description.trim()) return descRef;
-    if (categoryId <= 0) return categoryRef;
+    if (!splitMode && categoryId <= 0) return categoryRef;
     if (amount === '' || isNaN(parsedAmount)) return amountRef;
     return null;
   };
@@ -219,22 +246,55 @@ function TransactionForm({
     // Sign logic: explicit negative takes priority and reverses the default
     let finalAmount: number;
     if (parsedAmount < 0) {
-      // User explicitly typed a negative number — reverse the default sign
-      // For income: default is negative, so reversed = positive (income reversal)
-      // For expense: default is positive, so reversed = negative (refund)
       finalAmount = txType === 'income' ? Math.abs(parsedAmount) : parsedAmount;
     } else {
-      // Toggle determines sign
       finalAmount = txType === 'income' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
     }
 
-    onSave({ accountId, date, description, note: note || null, categoryId, amount: finalAmount });
+    if (splitMode && splits) {
+      // Splits are stored with absolute amounts in editor; apply sign from finalAmount
+      const sign = finalAmount < 0 ? -1 : 1;
+      const finalSplits = splits.map(s => ({
+        categoryId: s.categoryId,
+        amount: +(s.amount * sign).toFixed(2),
+      }));
+      onSave({ accountId, date, description, note: note || null, splits: finalSplits, amount: finalAmount });
+    } else {
+      onSave({ accountId, date, description, note: note || null, categoryId, amount: finalAmount });
+    }
+  };
+
+  const handleSplitApply = (appliedSplits: SplitRow[]) => {
+    const stored = appliedSplits.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount) }));
+    setSplits(stored);
+    setSplitNotification(`Split applied across ${stored.length} categories`);
+  };
+
+  const handleCancelSplit = () => {
+    setSplitMode(false);
+    setSplits(null);
+    setSplitNotification(null);
+    // Restore category if we had one before
+    if (transaction?.category?.id) {
+      setCategoryId(transaction.category.id);
+    }
+  };
+
+  const handleEnterSplitMode = () => {
+    const amt = parseFloat(amount) || 0;
+    setSplitMode(true);
+    if (!splits) {
+      const initialSplits: SplitRow[] = categoryId > 0
+        ? [{ categoryId, amount: Math.abs(amt) }, { categoryId: null, amount: 0 }]
+        : [{ categoryId: null, amount: Math.abs(amt) }, { categoryId: null, amount: 0 }];
+      setSplits(initialSplits);
+    }
   };
 
   const errDate = showErrors && !date;
   const errAccount = showErrors && accountId <= 0;
   const errDesc = showErrors && !description.trim();
-  const errCategory = showErrors && categoryId <= 0;
+  const errCategory = showErrors && !splitMode && categoryId <= 0;
   const errAmount = showErrors && (amount === '' || isNaN(parsedAmount));
 
   const inputCls = (hasError: boolean) =>
@@ -282,33 +342,83 @@ function TransactionForm({
             <div className="flex gap-2">
               {(['expense', 'income'] as const).map((t) => (
                 <button key={t} onClick={() => handleTypeChange(t)}
+                  disabled={splitMode}
                   className={`flex-1 py-2 text-[12px] font-semibold rounded-lg border-none cursor-pointer capitalize ${
                     txType === t ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] btn-primary' : 'bg-[var(--btn-secondary-bg)] text-[var(--text-secondary)] btn-secondary'
-                  }`}>
+                  } ${splitMode ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   {t}
                 </button>
               ))}
             </div>
           </Field>
-          <Field label="Category" required error={errCategory}>
-            <select ref={categoryRef} value={categoryId} onChange={(e) => handleCategoryChange(parseInt(e.target.value, 10))}
-              className={inputCls(!!errCategory)}>
-              <option value={0} disabled>Select category</option>
-              {groupedCategories.map((g) => (
-                <optgroup key={g.group} label={g.group}>
-                  {g.cats.map((c) => (
-                    <option key={c.id} value={c.id}>{c.sub_name}</option>
+          {!splitMode ? (
+            <div>
+              <Field label="Category" required error={errCategory}>
+                <select ref={categoryRef} value={categoryId} onChange={(e) => handleCategoryChange(parseInt(e.target.value, 10))}
+                  className={inputCls(!!errCategory)}>
+                  <option value={0} disabled>Select category</option>
+                  {groupedCategories.map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.cats.map((c) => (
+                        <option key={c.id} value={c.id}>{c.sub_name}</option>
+                      ))}
+                    </optgroup>
                   ))}
-                </optgroup>
-              ))}
-            </select>
-          </Field>
+                </select>
+              </Field>
+              <button onClick={handleEnterSplitMode}
+                className="text-[11px] text-[var(--color-accent)] bg-transparent border-none cursor-pointer mt-1 p-0 hover:underline">
+                Split across categories
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] mb-1">
+                Category <span className="text-[var(--color-accent)] normal-case font-normal">(split mode)</span>
+              </div>
+              {splits && splits.length >= 2 ? (
+                <div className="text-[12px] text-[var(--color-positive)] font-medium">
+                  ✓ {splits.length} categories assigned
+                  <button onClick={handleCancelSplit}
+                    className="ml-2 text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">
+                    Remove split
+                  </button>
+                </div>
+              ) : (
+                <div className="text-[12px] text-[var(--text-muted)]">
+                  Configure splits below
+                  <button onClick={handleCancelSplit}
+                    className="ml-2 text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <Field label="Amount" required error={errAmount}>
           <CurrencyInput ref={amountRef} allowNegative value={amount}
             onChange={(val) => setAmount(val)}
             className={`${inputCls(!!errAmount)} font-mono`} />
         </Field>
+        {splitMode && (
+          <SplitEditor
+            totalAmount={parseFloat(amount) || 0}
+            initialSplits={splits ?? undefined}
+            categories={filteredCategories}
+            onApply={handleSplitApply}
+            onCancel={handleCancelSplit}
+            onChange={(current) => setSplits(current.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount) })))}
+          />
+        )}
+        {splitNotification && (
+          <InlineNotification
+            type="success"
+            message={splitNotification}
+            dismissible
+            onDismiss={() => setSplitNotification(null)}
+          />
+        )}
       </div>
 
       {/* Duplicate Warning */}
@@ -387,6 +497,18 @@ export default function TransactionsPage() {
   const [total, setTotal] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const allGroupNames = useMemo(() => [...new Set(categories.map(c => c.group_name))], [categories]);
+  const categoryGroups = useMemo(() => {
+    const groups: { group: string; subs: { id: number; sub: string }[] }[] = [];
+    const seen = new Set<string>();
+    for (const c of categories) {
+      if (!seen.has(c.group_name)) {
+        seen.add(c.group_name);
+        groups.push({ group: c.group_name, subs: categories.filter(x => x.group_name === c.group_name).map(x => ({ id: x.id, sub: x.sub_name })) });
+      }
+    }
+    return groups;
+  }, [categories]);
   const [pendingSave, setPendingSave] = useState<Record<string, unknown> | null>(null);
   const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(null);
 
@@ -394,6 +516,34 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [filterAccount, setFilterAccount] = useState('All');
   const [filterType, setFilterType] = useState('All');
+  const [filterCategory, setFilterCategory] = useState<string[]>([]);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  const toggleCategoryFilter = (value: string) => {
+    setFilterCategory(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+  };
+
+  const categoryFilterLabel = useMemo(() => {
+    if (filterCategory.length === 0) return 'All Categories';
+    if (filterCategory.length === 1) {
+      const v = filterCategory[0];
+      if (v.startsWith('group:')) return v.slice(6);
+      const cat = categories.find(c => c.id === parseInt(v.slice(4), 10));
+      return cat?.sub_name ?? v;
+    }
+    return `${filterCategory.length} categories`;
+  }, [filterCategory, categories]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setShowCategoryDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   const [datePreset, setDatePreset] = useState('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -475,13 +625,19 @@ export default function TransactionsPage() {
     if (search) params.set('search', search);
     if (filterAccount !== 'All') params.set('accountId', filterAccount);
     if (filterType !== 'All') params.set('type', filterType.toLowerCase());
+    if (filterCategory.length > 0) {
+      const groupNames = filterCategory.filter(v => v.startsWith('group:')).map(v => v.slice(6));
+      const catIds = filterCategory.filter(v => v.startsWith('sub:')).map(v => v.slice(4));
+      if (groupNames.length) params.set('groupNames', groupNames.join(','));
+      if (catIds.length) params.set('categoryIds', catIds.join(','));
+    }
     params.set('sortBy', sortBy);
     params.set('sortOrder', sortOrder);
 
     const res = await apiFetch<{ data: Transaction[]; total: number }>(`/transactions?${params.toString()}`);
     setTransactions(res.data);
     setTotal(res.total);
-  }, [getDateRange, search, filterAccount, filterType, page, pageSize, sortBy, sortOrder]);
+  }, [getDateRange, search, filterAccount, filterType, filterCategory, page, pageSize, sortBy, sortOrder]);
 
   const loadMeta = useCallback(async () => {
     const [acctRes, catRes] = await Promise.all([
@@ -503,7 +659,7 @@ export default function TransactionsPage() {
   };
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
-  useEffect(() => { setPage(1); }, [datePreset, customStart, customEnd, search, filterAccount, filterType]);
+  useEffect(() => { setPage(1); }, [datePreset, customStart, customEnd, search, filterAccount, filterType, filterCategory]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
   const handleSave = async (data: Record<string, unknown>) => {
@@ -618,12 +774,13 @@ export default function TransactionsPage() {
     catGroupsForBulk.get(c.group_name)!.push(c);
   }
 
-  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || datePreset !== 'all';
+  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || filterCategory.length > 0 || datePreset !== 'all';
 
   const resetFilters = () => {
     setSearch('');
     setFilterAccount('All');
     setFilterType('All');
+    setFilterCategory([]);
     setDatePreset('all');
     setCustomStart('');
     setCustomEnd('');
@@ -692,7 +849,7 @@ export default function TransactionsPage() {
               </select>
               <button onClick={() => setShowMobileFilters(!showMobileFilters)}
                 className={`px-3 py-2 border rounded-lg text-[13px] font-medium cursor-pointer ${
-                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All'
+                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All' || filterCategory.length > 0
                     ? 'border-[#3b82f6] text-[#3b82f6] bg-[var(--bg-input)]'
                     : 'border-[var(--table-border)] text-[var(--text-secondary)] bg-[var(--bg-input)]'
                 }`}>
@@ -729,6 +886,33 @@ export default function TransactionsPage() {
                   <option value="Income">Income</option>
                   <option value="Expense">Expense</option>
                 </select>
+                <div className="relative" ref={isMobile ? categoryDropdownRef : undefined}>
+                  <button type="button" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)] cursor-pointer">
+                    <span className="truncate">{categoryFilterLabel}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`ml-2 flex-shrink-0 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {showCategoryDropdown && (
+                    <div className="absolute z-50 mt-1 left-0 right-0 bg-[var(--bg-card)] border border-[var(--table-border)] rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                      {categoryGroups.map((g) => (
+                        <div key={g.group}>
+                          <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                            <input type="checkbox" checked={filterCategory.includes(`group:${g.group}`)} onChange={() => toggleCategoryFilter(`group:${g.group}`)}
+                              className="accent-[var(--color-accent)]" />
+                            {g.group}
+                          </label>
+                          {g.subs.map((s) => (
+                            <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 pl-7 text-[13px] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                              <input type="checkbox" checked={filterCategory.includes(`sub:${s.id}`)} onChange={() => toggleCategoryFilter(`sub:${s.id}`)}
+                                className="accent-[var(--color-accent)]" />
+                              {s.sub}
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </>
@@ -747,6 +931,33 @@ export default function TransactionsPage() {
               <option value="Income">Income</option>
               <option value="Expense">Expense</option>
             </select>
+            <div className="relative" ref={!isMobile ? categoryDropdownRef : undefined}>
+              <button type="button" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                className="flex items-center justify-between px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)] cursor-pointer min-w-[160px]">
+                <span className="truncate">{categoryFilterLabel}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`ml-2 flex-shrink-0 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              {showCategoryDropdown && (
+                <div className="absolute z-50 mt-1 left-0 bg-[var(--bg-card)] border border-[var(--table-border)] rounded-lg shadow-lg max-h-72 overflow-y-auto min-w-[220px]">
+                  {categoryGroups.map((g) => (
+                    <div key={g.group}>
+                      <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                        <input type="checkbox" checked={filterCategory.includes(`group:${g.group}`)} onChange={() => toggleCategoryFilter(`group:${g.group}`)}
+                          className="accent-[var(--color-accent)]" />
+                        {g.group}
+                      </label>
+                      {g.subs.map((s) => (
+                        <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 pl-7 text-[13px] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-hover)]">
+                          <input type="checkbox" checked={filterCategory.includes(`sub:${s.id}`)} onChange={() => toggleCategoryFilter(`sub:${s.id}`)}
+                            className="accent-[var(--color-accent)]" />
+                          {s.sub}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)}
               className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
               <option value="all">All Time</option>
@@ -844,7 +1055,8 @@ export default function TransactionsPage() {
         /* Mobile: Standalone cards */
         <div className="flex flex-col gap-1.5">
           {transactions.map((t) => {
-            const { text: amtText, className: amtClass } = fmtTransaction(t.amount, t.category.type);
+            const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
+            const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
             return (
               <div key={t.id}
                 onClick={() => { if (hasPermission('transactions.edit')) setEditing(t); }}
@@ -854,7 +1066,15 @@ export default function TransactionsPage() {
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     <span className="font-mono text-[10px] text-[var(--text-muted)]">{t.date}</span>
                     <span className="text-[var(--text-muted)]">·</span>
-                    <CategoryBadge name={t.category.subName} />
+                    {t.splits && t.splits.length > 0 ? (
+                      <SplitBadge
+                        colors={t.splits.map(s => getCategoryColor(s.groupName, allGroupNames))}
+                        count={t.splits.length}
+                        compact
+                      />
+                    ) : t.category ? (
+                      <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
+                    ) : null}
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
@@ -883,13 +1103,15 @@ export default function TransactionsPage() {
                 <SortableHeader label="Description" sortKey="description" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
                 <SortableHeader label="Account" sortKey="account" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
                 <SortableHeader label="Category" sortKey="category" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Sub-Category</th>
+                <SortableHeader label="Sub-Category" sortKey="subcategory" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
                 <SortableHeader label="Amount" sortKey="amount" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} align="right" />
               </tr>
             </thead>
             <tbody>
               {transactions.map((t) => {
-                const { text: amtText, className: amtClass } = fmtTransaction(t.amount, t.category.type);
+                const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
+                const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
+                const isSplit = t.splits && t.splits.length > 0;
                 return (
                   <tr key={t.id}
                     onClick={() => { if (!bulkMode && hasPermission('transactions.edit')) { setEditing(t); } }}
@@ -913,10 +1135,43 @@ export default function TransactionsPage() {
                       </span>
                     </td>
                     <td className="px-2.5 py-2">
-                      <span className="text-[11px] text-[var(--text-secondary)]">{t.category.groupName}</span>
+                      {isSplit ? (
+                        <div className="flex flex-col gap-0.5">
+                          {[...new Map(t.splits!.map(s => [s.groupName, s])).values()].map((s, gi) => (
+                            <div key={gi} className="flex items-center gap-1.5">
+                              <span style={{
+                                width: 7, height: 7, borderRadius: '50%',
+                                background: getCategoryColor(s.groupName, allGroupNames),
+                                display: 'inline-block', flexShrink: 0,
+                              }} />
+                              <span className="text-[11px] text-[var(--text-secondary)]">{s.groupName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          {t.category && (
+                            <span style={{
+                              width: 7, height: 7, borderRadius: '50%',
+                              background: getCategoryColor(t.category.groupName, allGroupNames),
+                              display: 'inline-block', flexShrink: 0,
+                            }} />
+                          )}
+                          <span className="text-[11px] text-[var(--text-secondary)]">{t.category?.groupName ?? '—'}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-2.5 py-2">
-                      <CategoryBadge name={t.category.subName} />
+                      {isSplit ? (
+                        <SplitBadge
+                          colors={t.splits!.map(s => getCategoryColor(s.groupName, allGroupNames))}
+                          count={t.splits!.length}
+                        />
+                      ) : t.category ? (
+                        <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-muted)]">—</span>
+                      )}
                     </td>
                     <td className={`px-2.5 py-2 text-right font-mono font-semibold ${amtClass}`}>
                       {amtText}

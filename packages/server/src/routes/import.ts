@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { db } from '../db/index.js';
-import { transactions, categories } from '../db/schema.js';
+import { transactions, categories, transactionSplits } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
@@ -122,11 +122,12 @@ router.post('/categorize', requirePermission('import.csv'), (req: Request, res: 
       const key = h.description.toLowerCase().trim();
       if (!descCatDist.has(key)) descCatDist.set(key, new Map());
       const catMap = descCatDist.get(key)!;
-      const existing = catMap.get(h.category_id);
+      const catId = h.category_id!;
+      const existing = catMap.get(catId);
       if (existing) {
         existing.count++;
       } else {
-        catMap.set(h.category_id, {
+        catMap.set(catId, {
           groupName: h.group_name,
           subName: h.sub_name,
           type: h.type,
@@ -299,7 +300,11 @@ router.post('/commit', requirePermission('import.csv'), (req: Request, res: Resp
   try {
     const { accountId, transactions: txns } = req.body as {
       accountId: number;
-      transactions: { date: string; description: string; note?: string; categoryId: number; amount: number }[];
+      transactions: {
+        date: string; description: string; note?: string;
+        categoryId?: number; amount: number;
+        splits?: { categoryId: number; amount: number }[];
+      }[];
     };
 
     if (!accountId || !txns || !Array.isArray(txns) || txns.length === 0) {
@@ -309,23 +314,46 @@ router.post('/commit', requirePermission('import.csv'), (req: Request, res: Resp
 
     // Validate all required fields
     for (const t of txns) {
-      if (!t.date || !t.description || !t.categoryId || t.amount == null) {
-        res.status(400).json({ error: 'Each transaction requires date, description, categoryId, and amount' });
+      if (!t.date || !t.description || t.amount == null) {
+        res.status(400).json({ error: 'Each transaction requires date, description, and amount' });
         return;
+      }
+      if (!t.categoryId && (!t.splits || t.splits.length < 2)) {
+        res.status(400).json({ error: 'Each transaction requires categoryId or splits' });
+        return;
+      }
+      if (t.splits && t.splits.length >= 2) {
+        const splitSum = t.splits.reduce((s, r) => s + r.amount, 0);
+        if (Math.abs(splitSum - t.amount) > 0.01) {
+          res.status(400).json({ error: `Split amounts must equal transaction amount for "${t.description}"` });
+          return;
+        }
       }
     }
 
     // Insert all transactions
     let count = 0;
     for (const t of txns) {
-      db.insert(transactions).values({
+      const hasSplits = t.splits && t.splits.length >= 2;
+      const result = db.insert(transactions).values({
         account_id: accountId,
-        category_id: t.categoryId,
+        category_id: hasSplits ? null : t.categoryId!,
         date: t.date,
         description: t.description,
         note: t.note || null,
         amount: t.amount,
       }).run();
+
+      if (hasSplits) {
+        const txnId = Number(result.lastInsertRowid);
+        for (const s of t.splits!) {
+          db.insert(transactionSplits).values({
+            transaction_id: txnId,
+            category_id: s.categoryId,
+            amount: s.amount,
+          }).run();
+        }
+      }
       count++;
     }
 

@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/api';
 import { fmtWhole, fmtTransaction } from '../lib/formatters';
 import KPICard from '../components/KPICard';
 import Spinner from '../components/Spinner';
-import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge } from '../components/badges';
+import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge, SplitBadge } from '../components/badges';
 import { getCategoryColor } from '../lib/categoryColors';
 import PermissionGate from '../components/PermissionGate';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -40,7 +40,8 @@ interface Transaction {
   description: string;
   amount: number;
   account: { id: number; name: string; lastFour: string | null; owner: string; owners?: { id: number; displayName: string }[]; isShared?: boolean };
-  category: { id: number; groupName: string; subName: string; displayName: string; type: string };
+  category: { id: number; groupName: string; subName: string; displayName: string; type: string } | null;
+  splits?: { categoryId: number; groupName: string; subName: string; displayName: string; type: string; amount: number }[];
 }
 
 export default function DashboardPage() {
@@ -57,18 +58,22 @@ export default function DashboardPage() {
   const [spending, setSpending] = useState<SpendingGroup[]>([]);
   const [monthlyChart, setMonthlyChart] = useState<MonthlyData[]>([]);
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<{ group_name: string }[]>([]);
+  const allGroupNames = useMemo(() => [...new Set(categories.map(c => c.group_name))], [categories]);
 
   const loadData = useCallback(async () => {
-    const [sumRes, spendRes, chartRes, txnRes] = await Promise.all([
+    const [sumRes, spendRes, chartRes, txnRes, catRes] = await Promise.all([
       apiFetch<{ data: Summary }>(`/dashboard/summary?month=${currentMonth}`),
       apiFetch<{ data: SpendingGroup[] }>(`/dashboard/spending-by-category?month=${currentMonth}`),
       apiFetch<{ data: MonthlyData[] }>(`/dashboard/income-vs-expenses?year=${currentYear}`),
       apiFetch<{ data: Transaction[] }>('/dashboard/recent-transactions?limit=8'),
+      apiFetch<{ data: { group_name: string }[] }>('/categories'),
     ]);
     setSummary(sumRes.data);
     setSpending(spendRes.data);
     setMonthlyChart(chartRes.data);
     setRecentTxns(txnRes.data);
+    setCategories(catRes.data);
   }, [currentMonth, currentYear]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -220,7 +225,8 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col gap-1.5">
             {(recentTxns.length > 5 ? recentTxns.slice(0, 5) : recentTxns).map((t) => {
-              const { text: amtText, className: amtClass } = fmtTransaction(t.amount, t.category.type);
+              const catType = t.category?.type || t.splits?.[0]?.type || 'expense';
+              const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
               return (
                 <div key={t.id} className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] px-3.5 py-2.5 flex justify-between items-center">
                   <div className="flex-1 min-w-0 mr-3">
@@ -228,7 +234,13 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--text-muted)]">
                       <span className="font-mono text-[10px]">{t.date}</span>
                       <span>·</span>
-                      <CategoryBadge name={t.category.subName} />
+                      {t.splits && t.splits.length > 0 ? (
+                        <SplitBadge colors={t.splits.map(s => getCategoryColor(s.groupName, allGroupNames))} count={t.splits.length} compact />
+                      ) : t.category ? (
+                        <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-muted)]">—</span>
+                      )}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -265,7 +277,8 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {recentTxns.map((t) => {
-                const { text: amtText, className: amtClass } = fmtTransaction(t.amount, t.category.type);
+                const catType = t.category?.type || t.splits?.[0]?.type || 'expense';
+                const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
                 return (
                   <tr key={t.id} className="border-b border-[var(--table-row-border)]">
                     <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-body)]">{t.date}</td>
@@ -281,10 +294,29 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td className="px-2.5 py-2">
-                      <span className="text-[11px] text-[var(--text-secondary)]">{t.category.groupName}</span>
+                      {t.splits && t.splits.length > 0 ? (
+                        <span className="text-[11px] text-[var(--text-muted)] italic">Split</span>
+                      ) : t.category ? (
+                        <div className="flex items-center gap-1.5">
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: getCategoryColor(t.category.groupName, allGroupNames),
+                            display: 'inline-block', flexShrink: 0,
+                          }} />
+                          <span className="text-[11px] text-[var(--text-secondary)]">{t.category.groupName}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-muted)]">—</span>
+                      )}
                     </td>
                     <td className="px-2.5 py-2">
-                      <CategoryBadge name={t.category.subName} />
+                      {t.splits && t.splits.length > 0 ? (
+                        <SplitBadge colors={t.splits.map(s => getCategoryColor(s.groupName, allGroupNames))} count={t.splits.length} compact />
+                      ) : t.category ? (
+                        <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-muted)]">—</span>
+                      )}
                     </td>
                     <td className={`px-2.5 py-2 text-right font-mono font-semibold ${amtClass}`}>{amtText}</td>
                   </tr>

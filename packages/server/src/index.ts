@@ -12,6 +12,7 @@ import { migrateRolesPermissions } from './db/migrate-roles-permissions.js';
 import { migrateDevStorage } from './db/migrate-dev-storage.js';
 import { migrate2FA } from './db/migrate-2fa.js';
 import { migrateCategorySortOrder } from './db/migrate-category-sort-order.js';
+import { migrateTransactionSplits } from './db/migrate-transaction-splits.js';
 import { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
@@ -48,6 +49,7 @@ migrateRolesPermissions(sqlite);
 migrateDevStorage(sqlite);
 migrate2FA(sqlite);
 migrateCategorySortOrder(sqlite);
+migrateTransactionSplits(sqlite);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));

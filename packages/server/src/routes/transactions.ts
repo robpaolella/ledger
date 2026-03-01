@@ -1,12 +1,72 @@
 import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
-import { transactions, accounts, categories } from '../db/schema.js';
+import { transactions, accounts, categories, transactionSplits } from '../db/schema.js';
 import { eq, and, gte, lte, like, or, sql, desc, asc, inArray } from 'drizzle-orm';
 import { sanitize } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 
 const router = Router();
+
+interface SplitInput {
+  categoryId: number;
+  amount: number;
+}
+
+function validateSplits(splits: SplitInput[], totalAmount: number): string | null {
+  if (splits.length < 2) return 'At least 2 splits are required';
+  for (const s of splits) {
+    if (!s.categoryId) return 'Each split must have a category';
+    if (s.amount === 0) return 'Split amounts cannot be zero';
+  }
+  const sum = splits.reduce((s, r) => s + r.amount, 0);
+  if (Math.abs(sum - totalAmount) > 0.01) {
+    return `Split amounts (${sum.toFixed(2)}) must equal transaction total (${totalAmount.toFixed(2)})`;
+  }
+  return null;
+}
+
+function saveSplits(transactionId: number, splits: SplitInput[]): void {
+  // Delete existing splits
+  db.delete(transactionSplits).where(eq(transactionSplits.transaction_id, transactionId)).run();
+  // Insert new splits
+  for (const s of splits) {
+    db.insert(transactionSplits).values({
+      transaction_id: transactionId,
+      category_id: s.categoryId,
+      amount: s.amount,
+    }).run();
+  }
+}
+
+function getSplitsForTransactions(transactionIds: number[]): Map<number, { id: number; categoryId: number; groupName: string; subName: string; displayName: string; type: string; amount: number }[]> {
+  if (transactionIds.length === 0) return new Map();
+  const rows = sqlite.prepare(`
+    SELECT ts.id, ts.transaction_id, ts.category_id, ts.amount,
+           c.group_name, c.sub_name, c.display_name, c.type
+    FROM transaction_splits ts
+    JOIN categories c ON ts.category_id = c.id
+    WHERE ts.transaction_id IN (${transactionIds.map(() => '?').join(',')})
+    ORDER BY ts.id
+  `).all(...transactionIds) as {
+    id: number; transaction_id: number; category_id: number; amount: number;
+    group_name: string; sub_name: string; display_name: string; type: string;
+  }[];
+  const map = new Map<number, { id: number; categoryId: number; groupName: string; subName: string; displayName: string; type: string; amount: number }[]>();
+  for (const r of rows) {
+    if (!map.has(r.transaction_id)) map.set(r.transaction_id, []);
+    map.get(r.transaction_id)!.push({
+      id: r.id,
+      categoryId: r.category_id,
+      groupName: r.group_name,
+      subName: r.sub_name,
+      displayName: r.display_name,
+      type: r.type,
+      amount: r.amount,
+    });
+  }
+  return map;
+}
 
 function getAccountOwners(accountIds: number[]): Map<number, { id: number; displayName: string }[]> {
   if (accountIds.length === 0) return new Map();
@@ -29,7 +89,7 @@ router.get('/', (req: Request, res: Response) => {
   try {
     const {
       startDate, endDate,
-      accountId, categoryId, groupName,
+      accountId, categoryId, groupName, categoryIds, groupNames,
       type, owner, search,
       limit: limitStr, offset: offsetStr,
       sortBy = 'date', sortOrder = 'desc',
@@ -42,10 +102,56 @@ router.get('/', (req: Request, res: Response) => {
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));
     if (accountId) conditions.push(eq(transactions.account_id, parseInt(accountId, 10)));
-    if (categoryId) conditions.push(eq(transactions.category_id, parseInt(categoryId, 10)));
-    if (groupName) conditions.push(eq(categories.group_name, groupName));
-    if (type === 'income') conditions.push(eq(categories.type, 'income'));
-    if (type === 'expense') conditions.push(eq(categories.type, 'expense'));
+    if (categoryId) {
+      const catId = parseInt(categoryId, 10);
+      conditions.push(
+        or(
+          eq(transactions.category_id, catId),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = ${transactions.id} AND ts.category_id = ${catId})`
+        )!
+      );
+    }
+    if (groupName) {
+      conditions.push(
+        or(
+          eq(categories.group_name, groupName),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.group_name = ${groupName})`
+        )!
+      );
+    }
+    // Multi-value category filters (comma-separated)
+    if (categoryIds || groupNames) {
+      const catIdList = categoryIds ? categoryIds.split(',').map(Number).filter(n => !isNaN(n)) : [];
+      const groupList = groupNames ? groupNames.split(',') : [];
+      const orParts = [];
+      if (catIdList.length) {
+        const idPlaceholders = catIdList.map(id => sql`${id}`);
+        orParts.push(sql`${transactions.category_id} IN (${sql.join(idPlaceholders, sql`, `)})`);
+        orParts.push(sql`EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = ${transactions.id} AND ts.category_id IN (${sql.join(idPlaceholders, sql`, `)}))`);
+      }
+      if (groupList.length) {
+        const groupPlaceholders = groupList.map(g => sql`${g}`);
+        orParts.push(sql`${categories.group_name} IN (${sql.join(groupPlaceholders, sql`, `)})`);
+        orParts.push(sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.group_name IN (${sql.join(groupPlaceholders, sql`, `)}))`);
+      }
+      conditions.push(sql`(${sql.join(orParts, sql` OR `)})`);
+    }
+    if (type === 'income') {
+      conditions.push(
+        or(
+          eq(categories.type, 'income'),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.type = 'income')`
+        )!
+      );
+    }
+    if (type === 'expense') {
+      conditions.push(
+        or(
+          eq(categories.type, 'expense'),
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND c2.type = 'expense')`
+        )!
+      );
+    }
     if (owner) conditions.push(sql`EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = ${accounts.id} AND u.display_name = ${owner})`);
     if (search) {
       conditions.push(
@@ -63,6 +169,7 @@ router.get('/', (req: Request, res: Response) => {
       sortBy === 'description' ? transactions.description :
       sortBy === 'account' ? accounts.name :
       sortBy === 'category' ? categories.group_name :
+      sortBy === 'subcategory' ? categories.sub_name :
       transactions.date;
     const orderFn = sortOrder === 'asc' ? asc : desc;
 
@@ -86,7 +193,7 @@ router.get('/', (req: Request, res: Response) => {
       })
       .from(transactions)
       .innerJoin(accounts, eq(transactions.account_id, accounts.id))
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
+      .leftJoin(categories, eq(transactions.category_id, categories.id))
       .where(where)
       .orderBy(orderFn(sortColumn), desc(transactions.id))
       .limit(limit)
@@ -98,14 +205,16 @@ router.get('/', (req: Request, res: Response) => {
       .select({ count: sql<number>`count(*)` })
       .from(transactions)
       .innerJoin(accounts, eq(transactions.account_id, accounts.id))
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
+      .leftJoin(categories, eq(transactions.category_id, categories.id))
       .where(where)
       .all();
 
     const ownerMap = getAccountOwners([...new Set(rows.map((r) => r.account_id))]);
+    const splitsMap = getSplitsForTransactions(rows.map(r => r.id));
 
     const data = rows.map((r) => {
       const owners = ownerMap.get(r.account_id) || [];
+      const splits = splitsMap.get(r.id) || null;
       return {
         id: r.id,
         date: r.date,
@@ -121,13 +230,14 @@ router.get('/', (req: Request, res: Response) => {
           owners,
           isShared: owners.length > 1,
         },
-        category: {
+        category: r.category_id ? {
           id: r.category_id,
           groupName: r.category_group_name,
           subName: r.category_sub_name,
           displayName: r.category_display_name,
           type: r.category_type,
-        },
+        } : null,
+        splits,
       };
     });
 
@@ -192,7 +302,7 @@ router.get('/:id', (req: Request, res: Response) => {
       })
       .from(transactions)
       .innerJoin(accounts, eq(transactions.account_id, accounts.id))
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
+      .leftJoin(categories, eq(transactions.category_id, categories.id))
       .where(eq(transactions.id, id))
       .all();
 
@@ -202,6 +312,7 @@ router.get('/:id', (req: Request, res: Response) => {
 
     const r = rows[0];
     const owners = getAccountOwners([r.account_id]).get(r.account_id) || [];
+    const splits = getSplitsForTransactions([id]).get(id) || null;
     res.json({
       data: {
         id: r.id,
@@ -211,7 +322,8 @@ router.get('/:id', (req: Request, res: Response) => {
         amount: r.amount,
         created_at: r.created_at,
         account: { id: r.account_id, name: r.account_name, lastFour: r.account_last_four, owner: r.account_owner, owners, isShared: owners.length > 1 },
-        category: { id: r.category_id, groupName: r.category_group_name, subName: r.category_sub_name, displayName: r.category_display_name, type: r.category_type },
+        category: r.category_id ? { id: r.category_id, groupName: r.category_group_name, subName: r.category_sub_name, displayName: r.category_display_name, type: r.category_type } : null,
+        splits,
       },
     });
   } catch (err) {
@@ -223,21 +335,45 @@ router.get('/:id', (req: Request, res: Response) => {
 // POST /api/transactions — create
 router.post('/', requirePermission('transactions.create'), (req: Request, res: Response) => {
   try {
-    const { accountId, date, description, note, categoryId, amount } = sanitize(req.body);
-    if (!accountId || !date || !description || !categoryId || amount === undefined) {
+    const { accountId, date, description, note, categoryId, amount, splits } = sanitize(req.body);
+    const parsedAmount = parseFloat(amount);
+
+    if (!accountId || !date || !description || amount === undefined) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const result = db.insert(transactions).values({
-      account_id: accountId,
-      date,
-      description,
-      note: note || null,
-      category_id: categoryId,
-      amount: parseFloat(amount),
-    }).run();
+    // Validate: must have either categoryId or splits, not both
+    if (splits && splits.length > 0) {
+      const err = validateSplits(splits, parsedAmount);
+      if (err) return res.status(400).json({ error: err });
 
-    res.status(201).json({ data: { id: result.lastInsertRowid } });
+      const result = db.insert(transactions).values({
+        account_id: accountId,
+        date,
+        description,
+        note: note || null,
+        category_id: null,
+        amount: parsedAmount,
+      }).run();
+
+      const txnId = Number(result.lastInsertRowid);
+      saveSplits(txnId, splits);
+      res.status(201).json({ data: { id: txnId } });
+    } else {
+      if (!categoryId) {
+        return res.status(400).json({ error: 'categoryId or splits required' });
+      }
+      const result = db.insert(transactions).values({
+        account_id: accountId,
+        date,
+        description,
+        note: note || null,
+        category_id: categoryId,
+        amount: parsedAmount,
+      }).run();
+
+      res.status(201).json({ data: { id: result.lastInsertRowid } });
+    }
   } catch (err) {
     console.error('POST /transactions error:', err);
     res.status(500).json({ error: 'Failed to create transaction' });
@@ -248,24 +384,62 @@ router.post('/', requirePermission('transactions.create'), (req: Request, res: R
 router.put('/:id', requirePermission('transactions.edit'), (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { accountId, date, description, note, categoryId, amount } = sanitize(req.body);
+    const { accountId, date, description, note, categoryId, amount, splits } = sanitize(req.body);
 
     const existing = db.select().from(transactions).where(eq(transactions.id, id)).all();
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    db.update(transactions)
-      .set({
-        account_id: accountId ?? existing[0].account_id,
-        date: date ?? existing[0].date,
-        description: description ?? existing[0].description,
-        note: note !== undefined ? note : existing[0].note,
-        category_id: categoryId ?? existing[0].category_id,
-        amount: amount !== undefined ? parseFloat(amount) : existing[0].amount,
-      })
-      .where(eq(transactions.id, id))
-      .run();
+    const newAmount = amount !== undefined ? parseFloat(amount) : existing[0].amount;
+
+    if (splits && splits.length > 0) {
+      // Switching to split mode
+      const err = validateSplits(splits, newAmount);
+      if (err) return res.status(400).json({ error: err });
+
+      db.update(transactions)
+        .set({
+          account_id: accountId ?? existing[0].account_id,
+          date: date ?? existing[0].date,
+          description: description ?? existing[0].description,
+          note: note !== undefined ? note : existing[0].note,
+          category_id: null,
+          amount: newAmount,
+        })
+        .where(eq(transactions.id, id))
+        .run();
+
+      saveSplits(id, splits);
+    } else if (categoryId) {
+      // Switching to single category (or staying single) — clear any existing splits
+      db.delete(transactionSplits).where(eq(transactionSplits.transaction_id, id)).run();
+
+      db.update(transactions)
+        .set({
+          account_id: accountId ?? existing[0].account_id,
+          date: date ?? existing[0].date,
+          description: description ?? existing[0].description,
+          note: note !== undefined ? note : existing[0].note,
+          category_id: categoryId,
+          amount: newAmount,
+        })
+        .where(eq(transactions.id, id))
+        .run();
+    } else {
+      // No category or splits change — just update other fields
+      db.update(transactions)
+        .set({
+          account_id: accountId ?? existing[0].account_id,
+          date: date ?? existing[0].date,
+          description: description ?? existing[0].description,
+          note: note !== undefined ? note : existing[0].note,
+          category_id: existing[0].category_id,
+          amount: newAmount,
+        })
+        .where(eq(transactions.id, id))
+        .run();
+    }
 
     res.json({ data: { id } });
   } catch (err) {
@@ -331,6 +505,13 @@ router.post('/bulk-update', requirePermission('transactions.bulk_edit'), (req: R
     if (updates.categoryId) setFields.category_id = updates.categoryId;
 
     if (Object.keys(setFields).length > 0) {
+      // If changing category, clear any existing splits on these transactions
+      if (updates.categoryId) {
+        db.delete(transactionSplits)
+          .where(inArray(transactionSplits.transaction_id, ids))
+          .run();
+      }
+
       const result = db.update(transactions)
         .set(setFields)
         .where(inArray(transactions.id, ids))

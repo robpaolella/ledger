@@ -80,10 +80,20 @@ sqlite.exec(`
     date TEXT NOT NULL,
     description TEXT NOT NULL,
     note TEXT,
+    category_id INTEGER REFERENCES categories(id),
+    amount REAL NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS transaction_splits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
     category_id INTEGER NOT NULL REFERENCES categories(id),
     amount REAL NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE INDEX IF NOT EXISTS idx_splits_txn ON transaction_splits(transaction_id);
+  CREATE INDEX IF NOT EXISTS idx_splits_cat ON transaction_splits(category_id);
 
   CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

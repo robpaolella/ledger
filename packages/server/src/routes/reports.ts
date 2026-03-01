@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/index.js';
-import { transactions, categories, accounts } from '../db/schema.js';
-import { eq, asc, sql } from 'drizzle-orm';
+import { db, sqlite } from '../db/index.js';
+import { transactions } from '../db/schema.js';
+import { sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -27,26 +27,40 @@ router.get('/annual', (req: Request, res: Response) => {
     const year = (req.query.year as string) || String(new Date().getFullYear());
     const owner = (req.query.owner as string) || 'all';
 
-    const ownerFilter = owner !== 'all'
-      ? sql`AND EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = ${accounts.id} AND u.display_name = ${owner})`
-      : sql``;
+    const ownerClause = owner !== 'all'
+      ? `AND EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = a.id AND u.display_name = ?)`
+      : '';
+    const params: string[] = [year];
+    if (owner !== 'all') params.push(owner);
+    params.push(year);
+    if (owner !== 'all') params.push(owner);
 
-    // Get monthly totals per category
-    const rows = db.select({
-      category_id: transactions.category_id,
-      group_name: categories.group_name,
-      sub_name: categories.sub_name,
-      type: categories.type,
-      sort_order: categories.sort_order,
-      month: sql<number>`cast(substr(${transactions.date}, 6, 2) as integer)`,
-      total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-    }).from(transactions)
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
-      .innerJoin(accounts, eq(transactions.account_id, accounts.id))
-      .where(sql`substr(${transactions.date}, 1, 4) = ${year} ${ownerFilter}`)
-      .groupBy(transactions.category_id, sql`cast(substr(${transactions.date}, 6, 2) as integer)`)
-      .orderBy(asc(categories.sort_order), asc(categories.sub_name))
-      .all();
+    // Get monthly totals per category — UNION of non-split + split transactions
+    const rows = sqlite.prepare(`
+      SELECT category_id, c.group_name, c.sub_name, c.type, c.sort_order,
+             cast(substr(date, 6, 2) as integer) as month,
+             coalesce(sum(amount), 0) as total
+      FROM (
+        SELECT t.category_id, t.date, t.amount
+        FROM transactions t
+        JOIN accounts a ON t.account_id = a.id
+        WHERE t.category_id IS NOT NULL
+          AND substr(t.date, 1, 4) = ? ${ownerClause}
+        UNION ALL
+        SELECT ts.category_id, t.date, ts.amount
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        JOIN accounts a ON t.account_id = a.id
+        WHERE t.category_id IS NULL
+          AND substr(t.date, 1, 4) = ? ${ownerClause}
+      ) combined
+      JOIN categories c ON combined.category_id = c.id
+      GROUP BY combined.category_id, month
+      ORDER BY c.sort_order, c.sub_name
+    `).all(...params) as {
+      category_id: number; group_name: string; sub_name: string; type: string;
+      sort_order: number; month: number; total: number;
+    }[];
 
     // Build income data: keyed by sub_name → 12 monthly totals
     // Income is stored as negative, so we take abs

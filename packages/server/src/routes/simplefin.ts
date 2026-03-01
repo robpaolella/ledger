@@ -602,7 +602,8 @@ router.post('/commit', requirePermission('import.bank_sync'), (req: Request, res
         description: string;
         rawDescription: string;
         amount: number;
-        categoryId: number;
+        categoryId?: number;
+        splits?: { categoryId: number; amount: number }[];
       }[];
       balanceUpdates: {
         accountId: number;
@@ -633,18 +634,29 @@ router.post('/commit', requirePermission('import.bank_sync'), (req: Request, res
           INSERT INTO transactions (account_id, date, description, note, category_id, amount, simplefin_transaction_id)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
+        const insertSplit = sqlite.prepare(`
+          INSERT INTO transaction_splits (transaction_id, category_id, amount)
+          VALUES (?, ?, ?)
+        `);
 
         for (const t of txns) {
+          const hasSplits = t.splits && t.splits.length >= 2;
           // Store payee as description, raw bank description as note
-          insertTxn.run(
+          const result = insertTxn.run(
             t.accountId,
             t.date,
             t.description,
             t.rawDescription !== t.description ? t.rawDescription : null,
-            t.categoryId,
+            hasSplits ? null : (t.categoryId ?? null),
             t.amount,
             t.simplefinId
           );
+          if (hasSplits) {
+            const txnId = Number(result.lastInsertRowid);
+            for (const s of t.splits!) {
+              insertSplit.run(txnId, s.categoryId, s.amount);
+            }
+          }
           txnCount++;
         }
       }
@@ -881,7 +893,7 @@ function autoCategorize(items: { description: string; payee?: string; amount: nu
     const existing = descCatMap.get(key);
     if (!existing || existing.count < 1) {
       descCatMap.set(key, {
-        categoryId: h.category_id,
+        categoryId: h.category_id!,
         groupName: h.group_name,
         subName: h.sub_name,
         count: (existing?.count || 0) + 1,

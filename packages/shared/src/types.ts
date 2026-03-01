@@ -54,9 +54,17 @@ export interface Transaction {
   date: string;
   description: string;
   note: string | null;
-  category_id: number;
+  category_id: number | null;
   amount: number;
   simplefin_transaction_id: string | null;
+  created_at: string;
+}
+
+export interface TransactionSplit {
+  id: number;
+  transaction_id: number;
+  category_id: number;
+  amount: number;
   created_at: string;
 }
 
