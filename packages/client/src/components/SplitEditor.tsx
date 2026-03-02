@@ -232,7 +232,6 @@ export default function SplitEditor({
                         </optgroup>
                       ))}
                     </select>
-                    {isReimb && <ReimbursementBadge />}
                   </div>
                 </div>
                 <div className={compact ? 'w-[80px]' : 'w-[100px]'}>
@@ -280,6 +279,18 @@ export default function SplitEditor({
                   </button>
                 )}
               </div>
+              {/* Reimbursement badge + reset below row */}
+              {isReimb && (
+                <div className="flex items-center gap-2 mt-1 ml-0.5">
+                  <ReimbursementBadge />
+                  <button
+                    onClick={() => updateSplit(i, 'isReimbursement', false)}
+                    className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 btn-ghost"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
               {/* Reimbursement link — only on last row when enabled and not already toggled */}
               {reimbursementEnabled && isLastRow && !isReimb && (
                 <button
