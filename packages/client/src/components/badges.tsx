@@ -123,3 +123,16 @@ export function ConnectedBadge() {
     </span>
   );
 }
+
+/* ------ ReimbursementBadge ------ */
+export function ReimbursementBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[var(--bg-inline-info)] text-[var(--text-inline-info)] border border-[var(--bg-inline-info-border)]">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1 4 1 10 7 10" />
+        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+      </svg>
+      Reimbursement
+    </span>
+  );
+}

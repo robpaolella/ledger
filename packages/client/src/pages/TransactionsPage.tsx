@@ -9,7 +9,7 @@ import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
 import PermissionGate from '../components/PermissionGate';
 import SortableHeader from '../components/SortableHeader';
-import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge, SplitBadge } from '../components/badges';
+import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge, SplitBadge, ReimbursementBadge } from '../components/badges';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
 import SplitEditor from '../components/SplitEditor';
@@ -125,7 +125,14 @@ function TransactionForm({
   const [categoryId, setCategoryId] = useState<number>(transaction?.category?.id ?? 0);
   const [splitMode, setSplitMode] = useState<boolean>(!!(transaction?.splits && transaction.splits.length > 0));
   const [splits, setSplits] = useState<SplitRow[] | null>(
-    transaction?.splits?.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount) })) ?? null
+    transaction?.splits?.map(s => ({
+      categoryId: s.categoryId,
+      amount: Math.abs(s.amount),
+      // Detect reimbursement: split category type differs from first split's type
+      isReimbursement: transaction?.splits && transaction.splits.length > 0
+        ? s.type !== transaction.splits[0].type
+        : false,
+    })) ?? null
   );
   // Show user-facing amount: for income, negate stored value (stored -5000 → show 5000)
   // For reversals (positive+income or negative+expense), show as negative to indicate reversal
@@ -406,9 +413,11 @@ function TransactionForm({
             totalAmount={parseFloat(amount) || 0}
             initialSplits={splits ?? undefined}
             categories={filteredCategories}
+            allCategories={categories}
+            txType={txType}
             onApply={handleSplitApply}
             onCancel={handleCancelSplit}
-            onChange={(current) => setSplits(current.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount) })))}
+            onChange={(current) => setSplits(current.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount), isReimbursement: s.isReimbursement })))}
           />
         )}
         {splitNotification && (
@@ -1057,6 +1066,8 @@ export default function TransactionsPage() {
           {transactions.map((t) => {
             const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
             const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
+            const isSplit = t.splits && t.splits.length > 0;
+            const hasReimbursement = isSplit && t.splits!.some(s => s.type !== t.splits![0].type);
             return (
               <div key={t.id}
                 onClick={() => { if (hasPermission('transactions.edit')) setEditing(t); }}
@@ -1066,12 +1077,15 @@ export default function TransactionsPage() {
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     <span className="font-mono text-[10px] text-[var(--text-muted)]">{t.date}</span>
                     <span className="text-[var(--text-muted)]">·</span>
-                    {t.splits && t.splits.length > 0 ? (
-                      <SplitBadge
-                        colors={t.splits.map(s => getCategoryColor(s.groupName, allGroupNames))}
-                        count={t.splits.length}
-                        compact
-                      />
+                    {isSplit ? (
+                      <>
+                        <SplitBadge
+                          colors={t.splits!.map(s => getCategoryColor(s.groupName, allGroupNames))}
+                          count={t.splits!.length}
+                          compact
+                        />
+                        {hasReimbursement && <ReimbursementBadge />}
+                      </>
                     ) : t.category ? (
                       <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
                     ) : null}
@@ -1112,6 +1126,7 @@ export default function TransactionsPage() {
                 const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
                 const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
                 const isSplit = t.splits && t.splits.length > 0;
+                const hasReimbursement = isSplit && t.splits!.some(s => s.type !== t.splits![0].type);
                 return (
                   <tr key={t.id}
                     onClick={() => { if (!bulkMode && hasPermission('transactions.edit')) { setEditing(t); } }}
@@ -1163,10 +1178,13 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-2.5 py-2">
                       {isSplit ? (
-                        <SplitBadge
-                          colors={t.splits!.map(s => getCategoryColor(s.groupName, allGroupNames))}
-                          count={t.splits!.length}
-                        />
+                        <span className="inline-flex items-center gap-1.5 flex-wrap">
+                          <SplitBadge
+                            colors={t.splits!.map(s => getCategoryColor(s.groupName, allGroupNames))}
+                            count={t.splits!.length}
+                          />
+                          {hasReimbursement && <ReimbursementBadge />}
+                        </span>
                       ) : t.category ? (
                         <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
                       ) : (
