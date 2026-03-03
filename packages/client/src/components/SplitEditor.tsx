@@ -1,9 +1,11 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import CurrencyInput from './CurrencyInput';
+import { ReimbursementBadge } from './badges';
 
 export interface SplitRow {
   categoryId: number | null;
   amount: number;
+  isReimbursement?: boolean;
 }
 
 export interface SplitCategory {
@@ -17,16 +19,34 @@ interface SplitEditorProps {
   totalAmount: number;
   initialSplits?: SplitRow[];
   categories: SplitCategory[];
+  allCategories?: SplitCategory[];
+  txType?: 'income' | 'expense';
   onApply: (splits: SplitRow[]) => void;
   onCancel: () => void;
   onChange?: (splits: SplitRow[]) => void;
   compact?: boolean;
 }
 
+function groupCategories(cats: SplitCategory[]) {
+  const groups: { group: string; cats: SplitCategory[] }[] = [];
+  const map = new Map<string, SplitCategory[]>();
+  for (const c of cats) {
+    if (!map.has(c.group_name)) {
+      const arr: SplitCategory[] = [];
+      map.set(c.group_name, arr);
+      groups.push({ group: c.group_name, cats: arr });
+    }
+    map.get(c.group_name)!.push(c);
+  }
+  return groups;
+}
+
 export default function SplitEditor({
   totalAmount,
   initialSplits,
   categories,
+  allCategories,
+  txType,
   onApply,
   onCancel,
   onChange,
@@ -47,6 +67,15 @@ export default function SplitEditor({
       .map(s => s.amount ? s.amount.toString() : '')
   );
 
+  // Reimbursement mode: enabled when txType is income and allCategories provided
+  const reimbursementEnabled = txType === 'income' && !!allCategories;
+
+  // Expense categories for reimbursement rows
+  const expenseCategories = useMemo(() => {
+    if (!allCategories) return [];
+    return allCategories.filter(c => c.type === 'expense');
+  }, [allCategories]);
+
   const allocated = useMemo(
     () => splits.reduce((s, r) => s + r.amount, 0),
     [splits]
@@ -64,25 +93,23 @@ export default function SplitEditor({
     splits.every((s) => s.categoryId && s.amount !== 0) &&
     splits.length >= 2;
 
-  // Group categories for dropdown
-  const groupedCategories = useMemo(() => {
-    const groups: { group: string; cats: SplitCategory[] }[] = [];
-    const map = new Map<string, SplitCategory[]>();
-    for (const c of categories) {
-      if (!map.has(c.group_name)) {
-        const arr: SplitCategory[] = [];
-        map.set(c.group_name, arr);
-        groups.push({ group: c.group_name, cats: arr });
-      }
-      map.get(c.group_name)!.push(c);
-    }
-    return groups;
-  }, [categories]);
+  // Group categories for dropdown (default — used for non-reimbursement rows)
+  const groupedCategories = useMemo(() => groupCategories(categories), [categories]);
+
+  // Grouped expense categories for reimbursement rows
+  const groupedExpenseCategories = useMemo(() => groupCategories(expenseCategories), [expenseCategories]);
 
   const updateSplit = useCallback(
-    (idx: number, field: keyof SplitRow, val: number | null) => {
+    (idx: number, field: keyof SplitRow, val: number | null | boolean) => {
       setSplits((prev) =>
-        prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s))
+        prev.map((s, i) => {
+          if (i !== idx) return s;
+          if (field === 'isReimbursement') {
+            // Clear category when toggling reimbursement since category set changes
+            return { ...s, isReimbursement: val as boolean, categoryId: null };
+          }
+          return { ...s, [field]: val };
+        })
       );
     },
     []
@@ -141,6 +168,7 @@ export default function SplitEditor({
     const finalSplits = splits.map((s) => ({
       categoryId: s.categoryId,
       amount: +(s.amount * sign).toFixed(2),
+      ...(s.isReimbursement ? { isReimbursement: true } : {}),
     }));
     onApply(finalSplits);
   };
@@ -174,76 +202,107 @@ export default function SplitEditor({
 
       {/* Split rows */}
       <div className="flex flex-col gap-1.5">
-        {splits.map((s, i) => (
-          <div key={i} className="flex gap-1.5 items-center">
-            <div className="flex-1 min-w-0">
-              <select
-                value={s.categoryId ?? ''}
-                onChange={(e) =>
-                  updateSplit(i, 'categoryId', parseInt(e.target.value))
-                }
-                className={`${inputCls} ${compact ? 'text-[11px]' : ''}`}
-              >
-                <option value="" disabled>
-                  Select category...
-                </option>
-                {groupedCategories.map((g) => (
-                  <optgroup key={g.group} label={g.group}>
-                    {g.cats.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.sub_name}
+        {splits.map((s, i) => {
+          const isReimb = !!s.isReimbursement;
+          const rowCategories = isReimb ? groupedExpenseCategories : groupedCategories;
+          const isLastRow = i === splits.length - 1;
+
+          return (
+            <div key={i}>
+              <div className="flex gap-1.5 items-center">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={s.categoryId ?? ''}
+                      onChange={(e) =>
+                        updateSplit(i, 'categoryId', parseInt(e.target.value))
+                      }
+                      className={`${inputCls} flex-1 ${compact ? 'text-[11px]' : ''}`}
+                    >
+                      <option value="" disabled>
+                        Select category...
                       </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-            <div className={compact ? 'w-[80px]' : 'w-[100px]'}>
-              {mode === '$' ? (
-                <CurrencyInput
-                  value={rawAmounts[i] ?? (s.amount ? s.amount.toString() : '')}
-                  onChange={(val) => handleAmountChange(i, val)}
-                  className={`${inputCls} font-mono text-right ${compact ? 'text-[11px]' : ''}`}
-                  placeholder="0.00"
-                />
-              ) : (
-                <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={
-                      absTotalAmount
-                        ? (() => {
-                            const pct = (s.amount / absTotalAmount) * 100;
-                            return Number.isInteger(Math.round(pct * 10) / 10) ? Math.round(pct).toString() : pct.toFixed(1);
-                          })()
-                        : ''
-                    }
-                    onChange={(e) =>
-                      handlePctChange(
-                        i,
-                        e.target.value.replace(/[^0-9.]/g, '')
-                      )
-                    }
-                    placeholder="0"
-                    className={`${inputCls} font-mono text-right pr-5 ${compact ? 'text-[11px]' : ''}`}
-                  />
-                  <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)] font-mono pointer-events-none">
-                    %
-                  </span>
+                      {rowCategories.map((g) => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.cats.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.sub_name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className={compact ? 'w-[80px]' : 'w-[100px]'}>
+                  {mode === '$' ? (
+                    <CurrencyInput
+                      value={rawAmounts[i] ?? (s.amount ? s.amount.toString() : '')}
+                      onChange={(val) => handleAmountChange(i, val)}
+                      className={`${inputCls} font-mono text-right ${compact ? 'text-[11px]' : ''}`}
+                      placeholder="0.00"
+                    />
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={
+                          absTotalAmount
+                            ? (() => {
+                                const pct = (s.amount / absTotalAmount) * 100;
+                                return Number.isInteger(Math.round(pct * 10) / 10) ? Math.round(pct).toString() : pct.toFixed(1);
+                              })()
+                            : ''
+                        }
+                        onChange={(e) =>
+                          handlePctChange(
+                            i,
+                            e.target.value.replace(/[^0-9.]/g, '')
+                          )
+                        }
+                        placeholder="0"
+                        className={`${inputCls} font-mono text-right pr-5 ${compact ? 'text-[11px]' : ''}`}
+                      />
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)] font-mono pointer-events-none">
+                        %
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {splits.length > 2 && (
+                  <button
+                    onClick={() => removeSplit(i)}
+                    className="w-6 h-6 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer text-[16px] flex-shrink-0 hover:text-[var(--color-negative)] hover:bg-[var(--bg-card)]"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              {/* Reimbursement badge + reset below row */}
+              {isReimb && (
+                <div className="flex items-center gap-2 mt-1 ml-0.5">
+                  <ReimbursementBadge />
+                  <button
+                    onClick={() => updateSplit(i, 'isReimbursement', false)}
+                    className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 btn-ghost"
+                  >
+                    Reset
+                  </button>
                 </div>
               )}
+              {/* Reimbursement link — only on last row when enabled and not already toggled */}
+              {reimbursementEnabled && isLastRow && !isReimb && (
+                <button
+                  onClick={() => updateSplit(i, 'isReimbursement', true)}
+                  className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer mt-1 ml-0.5 p-0 btn-ghost"
+                >
+                  Reimbursement
+                </button>
+              )}
             </div>
-            {splits.length > 2 && (
-              <button
-                onClick={() => removeSplit(i)}
-                className="w-6 h-6 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer text-[16px] flex-shrink-0 hover:text-[var(--color-negative)] hover:bg-[var(--bg-card)]"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add split */}
