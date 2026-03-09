@@ -902,7 +902,7 @@ function autoCategorize(items: { description: string; payee?: string; amount: nu
   }
 
   const RULES: { pattern: RegExp; groupName: string; subName: string }[] = [
-    { pattern: /shell|chevron|exxon|mobil|bp |sunoco|gas|fuel|wawa.*gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
+    { pattern: /shell|chevron|exxon|\bmobil\b|bp |sunoco|gas|fuel|wawa.*gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
     { pattern: /costco gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
     { pattern: /costco|giant|groceries|grocery|aldi|trader joe|whole foods|safeway|kroger|publix|wegmans|food lion|jimbo/i, groupName: 'Daily Living', subName: 'Groceries' },
     { pattern: /amazon|amzn/i, groupName: 'Daily Living', subName: 'Online Shopping' },
