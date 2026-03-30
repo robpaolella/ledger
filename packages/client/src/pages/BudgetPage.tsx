@@ -359,7 +359,7 @@ export default function BudgetPage() {
           label="Actual Income"
           value={fmtWhole(totals.actualIncome)}
           subtitle={totals.budgetedIncome > 0
-            ? (totals.actualIncome >= totals.budgetedIncome ? 'On track' : `${fmtWhole(totals.budgetedIncome - totals.actualIncome)} remaining`)
+            ? (totals.actualIncome >= totals.budgetedIncome ? 'On track' : `${fmtWhole(totals.budgetedIncome - totals.actualIncome)} under budget`)
             : undefined}
           trend={totals.actualIncome >= totals.budgetedIncome ? 'up' : 'down'}
         />
@@ -367,8 +367,10 @@ export default function BudgetPage() {
         <KPICard
           label="Actual Expenses"
           value={fmtWhole(totals.actualExpenses)}
-          subtitle={totals.budgetedExpenses > 0 ? `${fmtWhole(expRemaining)} remaining` : undefined}
-          trend="up"
+          subtitle={totals.budgetedExpenses > 0
+            ? (expRemaining >= 0 ? `${fmtWhole(expRemaining)} remaining` : `${fmtWhole(Math.abs(expRemaining))} over budget`)
+            : undefined}
+          trend={expRemaining >= 0 ? 'up' : 'down'}
         />
       </div>
 
