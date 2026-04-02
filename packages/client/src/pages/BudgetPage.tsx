@@ -371,6 +371,7 @@ export default function BudgetPage() {
             ? (expRemaining >= 0 ? `${fmtWhole(expRemaining)} remaining` : `${fmtWhole(Math.abs(expRemaining))} over budget`)
             : undefined}
           trend={expRemaining >= 0 ? 'up' : 'down'}
+          trendDirection={expRemaining >= 0 ? 'down' : 'up'}
         />
       </div>
 
