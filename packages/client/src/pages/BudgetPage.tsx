@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fmt, fmtWhole } from '../lib/formatters';
 import KPICard from '../components/KPICard';
@@ -8,6 +7,7 @@ import Spinner from '../components/Spinner';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
 import PermissionGate from '../components/PermissionGate';
+import BudgetTemplateModal from '../components/BudgetTemplateModal';
 import { getCategoryColor } from '../lib/categoryColors';
 import ScrollableList from '../components/ScrollableList';
 import { useAuth } from '../context/AuthContext';
@@ -107,6 +107,7 @@ export default function BudgetPage() {
   const [templateRows, setTemplateRows] = useState<TemplateImportRow[]>([]);
   const [recurringRows, setRecurringRows] = useState<RecurringImportRow[]>([]);
   const [importing, setImporting] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
   useEffect(() => {
     apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((res) =>
@@ -270,11 +271,20 @@ export default function BudgetPage() {
               →
             </button>
           </div>
-          {/* Nav links */}
-          <div className="flex justify-center items-center gap-3 mb-3">
-            <Link to="/budget/template" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Template</Link>
-            <span className="text-[var(--text-muted)]">·</span>
-            <Link to="/budget/recurring" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Recurring</Link>
+          {/* Action buttons */}
+          <div className="flex gap-2 mb-2">
+            <PermissionGate permission="budgets.edit" fallback="disabled">
+              <button onClick={() => setTemplateModalOpen(true)}
+                className="flex-1 text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-secondary min-h-[44px]">
+                Budget Template
+              </button>
+            </PermissionGate>
+            <PermissionGate permission="budgets.edit" fallback="disabled">
+              <button onClick={openImportWizard}
+                className="flex-1 text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-primary min-h-[44px]">
+                Import from Template
+              </button>
+            </PermissionGate>
           </div>
           {/* Scrollable owner chip row */}
           <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -291,28 +301,22 @@ export default function BudgetPage() {
               </button>
             ))}
           </div>
-          {/* Import from Template button */}
-          <PermissionGate permission="budgets.edit" fallback="disabled">
-            <button
-              onClick={openImportWizard}
-              className="w-full mt-2 text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-primary min-h-[44px]"
-            >
-              Import from Template
-            </button>
-          </PermissionGate>
         </div>
       ) : (
       <div className="flex justify-between items-center mb-6 flex-shrink-0">
         <div>
           <h1 className="page-title text-[22px] font-bold text-[var(--text-primary)] m-0">Monthly Budget</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="page-subtitle text-[var(--text-secondary)] text-[13px] m-0">{monthLabel(month)}</p>
-            <span className="text-[var(--text-muted)]">·</span>
-            <Link to="/budget/template" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Template</Link>
-            <Link to="/budget/recurring" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Recurring</Link>
-          </div>
+          <p className="page-subtitle text-[var(--text-secondary)] text-[13px] m-0 mt-1">{monthLabel(month)}</p>
         </div>
         <div className="flex gap-3 items-center">
+          <PermissionGate permission="budgets.edit" fallback="disabled">
+            <button
+              onClick={() => setTemplateModalOpen(true)}
+              className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-3 py-1.5 cursor-pointer font-semibold btn-secondary"
+            >
+              Budget Template
+            </button>
+          </PermissionGate>
           <PermissionGate permission="budgets.edit" fallback="disabled">
             <button
               onClick={openImportWizard}
@@ -654,10 +658,10 @@ export default function BudgetPage() {
             {templateRows.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-[13px] text-[var(--text-muted)] mb-2">No template entries found.</p>
-                <Link to="/budget/template" className="text-[13px] text-[var(--color-accent)] hover:underline no-underline"
-                  onClick={() => setImportOpen(false)}>
+                <button className="text-[13px] text-[var(--color-accent)] hover:underline bg-transparent border-none cursor-pointer p-0"
+                  onClick={() => { setImportOpen(false); setTemplateModalOpen(true); }}>
                   Set up your template first →
-                </Link>
+                </button>
               </div>
             ) : (
               <>
@@ -761,10 +765,10 @@ export default function BudgetPage() {
             {recurringRows.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-[13px] text-[var(--text-muted)] mb-2">No recurring items for {month.toLocaleString('en-US', { month: 'long' })}.</p>
-                <Link to="/budget/recurring" className="text-[13px] text-[var(--color-accent)] hover:underline no-underline"
-                  onClick={() => setImportOpen(false)}>
+                <button className="text-[13px] text-[var(--color-accent)] hover:underline bg-transparent border-none cursor-pointer p-0"
+                  onClick={() => { setImportOpen(false); setTemplateModalOpen(true); }}>
                   Set up recurring items →
-                </Link>
+                </button>
               </div>
             ) : (
               <div className="flex flex-col gap-1">
@@ -921,6 +925,7 @@ export default function BudgetPage() {
           );
         })()}
       </ResponsiveModal>
+      <BudgetTemplateModal isOpen={templateModalOpen} onClose={() => setTemplateModalOpen(false)} />
     </div>
   );
 }

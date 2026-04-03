@@ -7,8 +7,6 @@ import TwoFASetupPage from './pages/TwoFASetupPage';
 import DashboardPage from './pages/DashboardPage';
 import TransactionsPage from './pages/TransactionsPage';
 import BudgetPage from './pages/BudgetPage';
-import BudgetTemplatePage from './pages/BudgetTemplatePage';
-import RecurringPlannerPage from './pages/RecurringPlannerPage';
 import ReportsPage from './pages/ReportsPage';
 import NetWorthPage from './pages/NetWorthPage';
 import ImportPage from './pages/ImportPage';
@@ -252,8 +250,6 @@ function AppShell() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/budget" element={<BudgetPage />} />
-            <Route path="/budget/template" element={<BudgetTemplatePage />} />
-            <Route path="/budget/recurring" element={<RecurringPlannerPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/net-worth" element={<NetWorthPage />} />
             <Route path="/import" element={<ImportPage />} />
