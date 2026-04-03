@@ -4,14 +4,17 @@ interface KPICardProps {
   valueColor?: string;
   subtitle?: string;
   trend?: 'up' | 'down' | 'neutral';
+  trendDirection?: 'up' | 'down';
   onClick?: () => void;
 }
 
-export default function KPICard({ label, value, valueColor, subtitle, trend, onClick }: KPICardProps) {
+export default function KPICard({ label, value, valueColor, subtitle, trend, trendDirection, onClick }: KPICardProps) {
   const trendColor =
     trend === 'up' ? 'text-[#10b981]' :
     trend === 'down' ? 'text-[#ef4444]' :
     'text-[var(--text-secondary)]';
+
+  const arrowDir = trendDirection ?? trend;
 
   return (
     <div
@@ -29,10 +32,10 @@ export default function KPICard({ label, value, valueColor, subtitle, trend, onC
       </p>
       {subtitle && (
         <p className={`text-[11px] mt-1 m-0 flex items-center gap-0.5 ${trendColor}`}>
-          {trend === 'up' && (
+          {arrowDir === 'up' && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="18 15 12 9 6 15"/></svg>
           )}
-          {trend === 'down' && (
+          {arrowDir === 'down' && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
           )}
           {subtitle}
