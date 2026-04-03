@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fmt, fmtWhole } from '../lib/formatters';
 import KPICard from '../components/KPICard';
 import OwnerFilter from '../components/OwnerFilter';
 import Spinner from '../components/Spinner';
 import InlineNotification from '../components/InlineNotification';
+import ResponsiveModal from '../components/ResponsiveModal';
+import PermissionGate from '../components/PermissionGate';
 import { getCategoryColor } from '../lib/categoryColors';
 import ScrollableList from '../components/ScrollableList';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface IncomeRow {
@@ -44,6 +48,29 @@ interface BudgetSummary {
   totals: Totals;
 }
 
+type ConflictAction = 'skip' | 'overwrite' | 'add';
+
+interface TemplateImportRow {
+  categoryId: number;
+  subName: string;
+  groupName: string;
+  categoryType: string;
+  templateAmount: number;
+  existingAmount: number | null;
+  hasConflict: boolean;
+  action: ConflictAction;
+}
+
+interface RecurringImportRow {
+  id: number;
+  label: string;
+  categoryId: number;
+  subName: string;
+  presetAmount: number | null;
+  importAmount: string;
+  included: boolean;
+}
+
 function monthStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -67,12 +94,19 @@ function nextMonth(d: Date): Date {
 export default function BudgetPage() {
   const { hasPermission } = useAuth();
   const isMobile = useIsMobile();
+  const { addToast } = useToast();
   const canEditBudgets = hasPermission('budgets.edit');
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [owner, setOwner] = useState('All');
   const [data, setData] = useState<BudgetSummary | null>(null);
   const [editingCell, setEditingCell] = useState<{ categoryId: number; value: string } | null>(null);
   const [users, setUsers] = useState<{ id: number; displayName: string }[]>([]);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState(0);
+  const [templateRows, setTemplateRows] = useState<TemplateImportRow[]>([]);
+  const [recurringRows, setRecurringRows] = useState<RecurringImportRow[]>([]);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((res) =>
@@ -118,6 +152,97 @@ export default function BudgetPage() {
     setEditingCell(null);
   };
 
+  const openImportWizard = async () => {
+    try {
+      const currentMonth = monthStr(month);
+      const monthNum = month.getMonth() + 1;
+
+      const [tplRes, recurRes, budgetRes] = await Promise.all([
+        apiFetch<{ data: any[] }>('/budget-templates'),
+        apiFetch<{ data: any[] }>(`/budget-recurring?month=${monthNum}`),
+        apiFetch<{ data: any[] }>(`/budgets?month=${currentMonth}`),
+      ]);
+
+      const existingMap = new Map<number, number>();
+      for (const b of budgetRes.data) {
+        existingMap.set(b.category_id, b.amount);
+      }
+
+      const tRows: TemplateImportRow[] = tplRes.data.map((t: any) => {
+        const existing = existingMap.get(t.category_id) ?? null;
+        return {
+          categoryId: t.category_id,
+          subName: t.sub_name,
+          groupName: t.type === 'income' ? 'Income' : t.group_name,
+          categoryType: t.type,
+          templateAmount: t.amount,
+          existingAmount: existing,
+          hasConflict: existing !== null,
+          action: 'skip' as ConflictAction,
+        };
+      });
+
+      const rRows: RecurringImportRow[] = recurRes.data.map((r: any) => ({
+        id: r.id,
+        label: r.label,
+        categoryId: r.category_id,
+        subName: r.sub_name,
+        presetAmount: r.amount,
+        importAmount: r.amount != null ? String(r.amount) : '',
+        included: true,
+      }));
+
+      setTemplateRows(tRows);
+      setRecurringRows(rRows);
+      setImportStep(0);
+      setImportOpen(true);
+    } catch {
+      addToast('Failed to load import data', 'error');
+    }
+  };
+
+  const handleApply = async () => {
+    setImporting(true);
+    try {
+      const items: { categoryId: number; amount: number; source: string; action: string }[] = [];
+
+      for (const row of templateRows) {
+        if (row.hasConflict && row.action === 'skip') continue;
+        items.push({
+          categoryId: row.categoryId,
+          amount: row.templateAmount,
+          source: 'template',
+          action: row.hasConflict ? row.action : 'overwrite',
+        });
+      }
+
+      for (const row of recurringRows) {
+        if (!row.included) continue;
+        const amt = parseFloat(row.importAmount);
+        if (isNaN(amt) || amt <= 0) continue;
+        items.push({
+          categoryId: row.categoryId,
+          amount: amt,
+          source: 'recurring',
+          action: 'add',
+        });
+      }
+
+      const res = await apiFetch<{ data: { created: number; updated: number; skipped: number } }>('/budgets/import', {
+        method: 'POST',
+        body: JSON.stringify({ month: monthStr(month), items }),
+      });
+
+      addToast(`Budget imported: ${res.data.created} created, ${res.data.updated} updated`, 'success');
+      setImportOpen(false);
+      await loadData();
+    } catch {
+      addToast('Failed to import budget', 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (!data) {
     return <Spinner />;
   }
@@ -145,6 +270,12 @@ export default function BudgetPage() {
               →
             </button>
           </div>
+          {/* Nav links */}
+          <div className="flex justify-center items-center gap-3 mb-3">
+            <Link to="/budget/template" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Template</Link>
+            <span className="text-[var(--text-muted)]">·</span>
+            <Link to="/budget/recurring" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Recurring</Link>
+          </div>
           {/* Scrollable owner chip row */}
           <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
             {[{ name: 'All', id: 0 }, ...users.map(u => ({ name: u.displayName, id: u.id }))].map((o) => (
@@ -160,14 +291,36 @@ export default function BudgetPage() {
               </button>
             ))}
           </div>
+          {/* Import from Template button */}
+          <PermissionGate permission="budgets.edit" fallback="disabled">
+            <button
+              onClick={openImportWizard}
+              className="w-full mt-2 text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-primary min-h-[44px]"
+            >
+              Import from Template
+            </button>
+          </PermissionGate>
         </div>
       ) : (
       <div className="flex justify-between items-center mb-6 flex-shrink-0">
         <div>
           <h1 className="page-title text-[22px] font-bold text-[var(--text-primary)] m-0">Monthly Budget</h1>
-          <p className="page-subtitle text-[var(--text-secondary)] text-[13px] mt-1">{monthLabel(month)}</p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="page-subtitle text-[var(--text-secondary)] text-[13px] m-0">{monthLabel(month)}</p>
+            <span className="text-[var(--text-muted)]">·</span>
+            <Link to="/budget/template" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Template</Link>
+            <Link to="/budget/recurring" className="text-[12px] text-[var(--color-accent)] hover:underline no-underline">Recurring</Link>
+          </div>
         </div>
         <div className="flex gap-3 items-center">
+          <PermissionGate permission="budgets.edit" fallback="disabled">
+            <button
+              onClick={openImportWizard}
+              className="text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-1.5 cursor-pointer font-semibold btn-primary"
+            >
+              Import from Template
+            </button>
+          </PermissionGate>
           <OwnerFilter value={owner} onChange={setOwner} users={users} />
           <div className="flex gap-2 items-center">
             <button
@@ -483,6 +636,291 @@ export default function BudgetPage() {
         </div>
       </div>
       )}
+
+      {/* Import Wizard Modal */}
+      <ResponsiveModal
+        title="Import Budget"
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        maxWidth="600px"
+      >
+        {importStep === 0 && (
+          <div>
+            <div className="mb-1">
+              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 1 of 3 — Import Monthly Template</p>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Importing into: {monthLabel(month)}</p>
+            </div>
+
+            {templateRows.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-[13px] text-[var(--text-muted)] mb-2">No template entries found.</p>
+                <Link to="/budget/template" className="text-[13px] text-[var(--color-accent)] hover:underline no-underline"
+                  onClick={() => setImportOpen(false)}>
+                  Set up your template first →
+                </Link>
+              </div>
+            ) : (
+              <>
+                {templateRows.some(r => r.hasConflict) && (
+                  <div className="bg-[var(--bg-inline-warning)] border border-[var(--bg-inline-warning-border)] rounded-lg px-3 py-2 mb-3 flex items-center justify-between">
+                    <span className="text-[12px] text-[var(--text-primary)]">
+                      {templateRows.filter(r => r.hasConflict).length} categories already have budget values
+                    </span>
+                    <select
+                      className="text-[12px] font-semibold rounded-md px-2 py-1 border border-[var(--bg-input-border)] bg-[var(--bg-input)] text-[var(--text-primary)] outline-none cursor-pointer"
+                      value=""
+                      onChange={(e) => {
+                        const action = e.target.value as ConflictAction;
+                        if (!action) return;
+                        setTemplateRows(prev => prev.map(r => r.hasConflict ? { ...r, action } : r));
+                      }}
+                    >
+                      <option value="">Set all conflicts…</option>
+                      <option value="skip">Skip</option>
+                      <option value="overwrite">Overwrite</option>
+                      <option value="add">Add to existing</option>
+                    </select>
+                  </div>
+                )}
+
+                {(() => {
+                  const groups = new Map<string, TemplateImportRow[]>();
+                  for (const row of templateRows) {
+                    const g = groups.get(row.groupName) || [];
+                    g.push(row);
+                    groups.set(row.groupName, g);
+                  }
+                  return Array.from(groups.entries()).map(([groupName, rows]) => (
+                    <div key={groupName} className="mb-3">
+                      <div className="bg-[var(--bg-hover)] px-3 py-1.5 rounded-md mb-1">
+                        <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em]">{groupName}</span>
+                      </div>
+                      <div className="grid grid-cols-[1fr_70px_70px_100px] gap-x-2 px-3 py-1 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-[0.04em]">
+                        <span>Category</span>
+                        <span className="text-right">Template</span>
+                        <span className="text-right">Current</span>
+                        <span className="text-right">Action</span>
+                      </div>
+                      {rows.map(row => (
+                        <div key={row.categoryId} className="grid grid-cols-[1fr_70px_70px_100px] gap-x-2 px-3 py-1.5 items-center border-b border-[var(--table-row-border)]">
+                          <span className="text-[12px] text-[var(--text-body)] truncate">{row.subName}</span>
+                          <span className="text-right text-[12px] font-mono text-[var(--text-primary)]">{fmt(row.templateAmount)}</span>
+                          <span className="text-right text-[12px] font-mono text-[var(--text-muted)]">
+                            {row.existingAmount !== null ? fmt(row.existingAmount) : '—'}
+                          </span>
+                          <div className="text-right">
+                            {row.hasConflict ? (
+                              <select
+                                className="text-[12px] font-semibold rounded-md px-2 py-1 border border-[var(--bg-input-border)] bg-[var(--bg-input)] text-[var(--text-primary)] outline-none cursor-pointer"
+                                value={row.action}
+                                onChange={(e) => setTemplateRows(prev => prev.map(r =>
+                                  r.categoryId === row.categoryId ? { ...r, action: e.target.value as ConflictAction } : r
+                                ))}
+                              >
+                                <option value="skip">Skip</option>
+                                <option value="overwrite">Overwrite</option>
+                                <option value="add">Add</option>
+                              </select>
+                            ) : (
+                              <span className="inline-block text-[11px] font-semibold text-[#10b981] bg-[#10b98118] rounded px-2 py-0.5">Add</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
+              </>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+              <button
+                onClick={() => setImportOpen(false)}
+                className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setImportStep(1)}
+                disabled={templateRows.length === 0}
+                className="text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {importStep === 1 && (
+          <div>
+            <div className="mb-1">
+              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 2 of 3 — Recurring Items for {month.toLocaleString('en-US', { month: 'long' })}</p>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Select recurring items to include in this month's budget.</p>
+            </div>
+
+            {recurringRows.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-[13px] text-[var(--text-muted)] mb-2">No recurring items for {month.toLocaleString('en-US', { month: 'long' })}.</p>
+                <Link to="/budget/recurring" className="text-[13px] text-[var(--color-accent)] hover:underline no-underline"
+                  onClick={() => setImportOpen(false)}>
+                  Set up recurring items →
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {recurringRows.map((row, idx) => (
+                  <div key={row.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg border-b border-[var(--table-row-border)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={row.included}
+                      onChange={() => setRecurringRows(prev => prev.map((r, i) =>
+                        i === idx ? { ...r, included: !r.included } : r
+                      ))}
+                      className="w-4 h-4 cursor-pointer flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[12px] font-medium text-[var(--text-primary)] block truncate">{row.label}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">{row.subName}</span>
+                    </div>
+                    <div className="w-[90px] flex-shrink-0">
+                      <div className="flex items-center rounded border border-[var(--bg-input-border)] bg-[var(--bg-input)]">
+                        <span className="pl-2 text-[12px] font-mono text-[var(--text-muted)] flex-shrink-0 select-none">$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Enter amount"
+                          value={row.importAmount}
+                          disabled={!row.included}
+                          onChange={(e) => setRecurringRows(prev => prev.map((r, i) =>
+                            i === idx ? { ...r, importAmount: e.target.value.replace(/[^0-9.]/g, '') } : r
+                          ))}
+                          className="flex-1 min-w-0 text-right text-[12px] font-mono py-1.5 pr-2 bg-transparent outline-none border-none text-[var(--text-body)] disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+              <button
+                onClick={() => setImportStep(0)}
+                className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => setImportStep(2)}
+                className="text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-primary"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {importStep === 2 && (() => {
+          const tplAdds = templateRows.filter(r => !r.hasConflict);
+          const tplOverwrites = templateRows.filter(r => r.hasConflict && r.action === 'overwrite');
+          const tplAddToExisting = templateRows.filter(r => r.hasConflict && r.action === 'add');
+          const tplSkips = templateRows.filter(r => r.hasConflict && r.action === 'skip');
+          const includedRecurring = recurringRows.filter(r => r.included && parseFloat(r.importAmount) > 0);
+          const excludedRecurring = recurringRows.filter(r => !r.included);
+          const totalChanges = tplAdds.length + tplOverwrites.length + tplAddToExisting.length + includedRecurring.length;
+
+          return (
+            <div>
+              <div className="mb-1">
+                <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 3 of 3 — Review Changes</p>
+                <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Review the changes that will be applied to {monthLabel(month)}.</p>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-[var(--bg-hover)] rounded-lg px-4 py-3 mb-4">
+                <div className="grid grid-cols-2 gap-2 text-[12px]">
+                  <span className="text-[var(--text-muted)]">Template — new entries:</span>
+                  <span className="text-right font-semibold text-[#10b981]">{tplAdds.length}</span>
+                  <span className="text-[var(--text-muted)]">Template — overwrites:</span>
+                  <span className="text-right font-semibold text-[#f59e0b]">{tplOverwrites.length + tplAddToExisting.length}</span>
+                  <span className="text-[var(--text-muted)]">Template — skipped:</span>
+                  <span className="text-right font-semibold text-[var(--text-muted)]">{tplSkips.length}</span>
+                  <span className="text-[var(--text-muted)]">Recurring — included:</span>
+                  <span className="text-right font-semibold text-[var(--text-primary)]">{includedRecurring.length}</span>
+                  <span className="text-[var(--text-muted)]">Recurring — excluded:</span>
+                  <span className="text-right font-semibold text-[var(--text-muted)]">{excludedRecurring.length}</span>
+                  <span className="text-[var(--text-primary)] font-semibold border-t border-[var(--bg-card-border)] pt-2 mt-1">Total changes:</span>
+                  <span className="text-right font-bold text-[var(--text-primary)] border-t border-[var(--bg-card-border)] pt-2 mt-1">{totalChanges}</span>
+                </div>
+              </div>
+
+              {/* Detail lists */}
+              {tplAdds.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-[#10b981] uppercase tracking-[0.04em] mb-1">New Entries</p>
+                  {tplAdds.map(row => (
+                    <div key={row.categoryId} className="flex justify-between px-3 py-1 text-[12px]">
+                      <span className="text-[var(--text-body)]">{row.subName}</span>
+                      <span className="font-mono text-[#10b981]">{fmt(row.templateAmount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(tplOverwrites.length > 0 || tplAddToExisting.length > 0) && (
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-[#f59e0b] uppercase tracking-[0.04em] mb-1">Overwrites / Additions</p>
+                  {[...tplOverwrites, ...tplAddToExisting].map(row => (
+                    <div key={row.categoryId} className="flex justify-between px-3 py-1 text-[12px]">
+                      <span className="text-[var(--text-body)]">
+                        {row.subName}
+                        <span className="text-[10px] text-[var(--text-muted)] ml-1">({row.action})</span>
+                      </span>
+                      <span className="font-mono text-[#f59e0b]">{fmt(row.templateAmount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {includedRecurring.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-[var(--color-accent)] uppercase tracking-[0.04em] mb-1">Recurring Items</p>
+                  {includedRecurring.map(row => (
+                    <div key={row.id} className="flex justify-between px-3 py-1 text-[12px]">
+                      <span className="text-[var(--text-body)]">{row.label}</span>
+                      <span className="font-mono text-[var(--color-accent)]">{fmt(parseFloat(row.importAmount))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {totalChanges === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-[13px] text-[var(--text-muted)]">No changes to apply. All template items were skipped and no recurring items were included.</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+                <button
+                  onClick={() => setImportStep(1)}
+                  className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleApply}
+                  disabled={importing || totalChanges === 0}
+                  className="text-[12px] text-white bg-[#10b981] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold hover:bg-[#059669] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {importing ? 'Applying…' : 'Apply Changes'}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </ResponsiveModal>
     </div>
   );
 }
