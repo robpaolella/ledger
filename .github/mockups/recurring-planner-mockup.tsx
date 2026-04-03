@@ -529,9 +529,9 @@ export default function RecurringPlannerMockup() {
                 {getCatSub(item.category_id)}
               </span>
               <span style={{
-                fontSize: 13, fontFamily: "'DM Mono', monospace", textAlign: 'right',
+                fontSize: item.amount != null ? 13 : 11, fontFamily: "'DM Mono', monospace", textAlign: 'right',
                 color: item.amount != null ? 'var(--text-primary)' : 'var(--color-warning)',
-                fontWeight: item.amount != null ? 500 : 600, fontSize: item.amount != null ? 13 : 11,
+                fontWeight: item.amount != null ? 500 : 600,
               }}>
                 {item.amount != null ? fmt(item.amount) : 'Set at import'}
               </span>
