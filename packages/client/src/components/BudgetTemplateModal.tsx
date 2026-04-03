@@ -620,7 +620,9 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
   const cardClass = 'bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] overflow-hidden';
 
   const renderTemplateTab = () => (
-    <ScrollableList maxHeight="60vh">
+    <div className="flex flex-col" style={{ maxHeight: '60vh' }}>
+    <div className="flex-1 min-h-0">
+    <ScrollableList maxHeight="100%">
       {/* Income Section */}
       <div className={`${cardClass} ${isMobile ? 'mb-3' : 'mb-4'}`}>
         <div
@@ -695,6 +697,8 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
         );
       })}
     </ScrollableList>
+    </div>
+    </div>
   );
 
   const renderRecurringTab = () => {
