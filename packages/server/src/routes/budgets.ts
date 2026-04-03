@@ -3,6 +3,7 @@ import { db, sqlite } from '../db/index.js';
 import { budgets, categories } from '../db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
+import type { BudgetImportItem } from '@ledger/shared/src/types.js';
 
 const router = Router();
 
@@ -239,6 +240,63 @@ router.get('/summary', (req: Request, res: Response) => {
   } catch (err) {
     console.error('GET /budgets/summary error:', err);
     res.status(500).json({ error: 'Failed to fetch budget summary' });
+  }
+});
+
+// POST /api/budgets/import — batch upsert from template/recurring
+router.post('/import', requirePermission('budgets.edit'), (req: Request, res: Response) => {
+  try {
+    const { month, items } = req.body as { month: string; items: BudgetImportItem[] };
+    if (!month || !items || !Array.isArray(items)) {
+      res.status(400).json({ error: 'month and items array are required' });
+      return;
+    }
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const importTxn = sqlite.transaction(() => {
+      for (const item of items) {
+        if (item.action === 'skip') {
+          skipped++;
+          continue;
+        }
+
+        const existing = db.select()
+          .from(budgets)
+          .where(and(eq(budgets.category_id, item.categoryId), eq(budgets.month, month)))
+          .get();
+
+        if (existing) {
+          if (item.action === 'overwrite') {
+            db.update(budgets)
+              .set({ amount: item.amount })
+              .where(eq(budgets.id, existing.id))
+              .run();
+            updated++;
+          } else if (item.action === 'add') {
+            db.update(budgets)
+              .set({ amount: existing.amount + item.amount })
+              .where(eq(budgets.id, existing.id))
+              .run();
+            updated++;
+          }
+        } else {
+          db.insert(budgets)
+            .values({ category_id: item.categoryId, month, amount: item.amount })
+            .run();
+          created++;
+        }
+      }
+    });
+
+    importTxn();
+
+    res.json({ data: { created, updated, skipped } });
+  } catch (err) {
+    console.error('POST /budgets/import error:', err);
+    res.status(500).json({ error: 'Failed to import budget' });
   }
 });
 

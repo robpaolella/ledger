@@ -157,3 +157,25 @@ export const assets = sqliteTable('assets', {
   declining_rate: real('declining_rate'),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
+
+// === Budget Templates ===
+export const budgetTemplates = sqliteTable('budget_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category_id: integer('category_id').notNull().references(() => categories.id),
+  amount: real('amount').notNull(),
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+  updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
+}, (table) => [
+  uniqueIndex('budget_templates_category_idx').on(table.category_id),
+]);
+
+// === Budget Recurring ===
+export const budgetRecurring = sqliteTable('budget_recurring', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  label: text('label').notNull(),
+  category_id: integer('category_id').notNull().references(() => categories.id),
+  amount: real('amount'),
+  months: text('months').notNull(), // JSON array of month numbers, e.g. '[1,7]'
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+  updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
+});
