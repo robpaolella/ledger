@@ -440,12 +440,14 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
     if (isOpen) loadData();
   }, [isOpen, loadData]);
 
-  // Focus input when editing template cell
+  // Focus and select input when starting to edit a template cell
+  const prevEditingId = useRef<number | null>(null);
   useEffect(() => {
-    if (editingCell && inputRef.current) {
+    if (editingCell && inputRef.current && editingCell.categoryId !== prevEditingId.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
+    prevEditingId.current = editingCell?.categoryId ?? null;
   }, [editingCell]);
 
   // Reset state when modal closes
