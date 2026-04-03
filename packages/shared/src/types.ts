@@ -234,3 +234,35 @@ export interface SyncHoldingsUpdate {
     marketValue: number;
   }[];
 }
+
+// === Budget Template Types ===
+
+export interface BudgetTemplate {
+  id: number;
+  category_id: number;
+  amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetRecurring {
+  id: number;
+  label: string;
+  category_id: number;
+  amount: number | null;
+  months: number[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetImportItem {
+  categoryId: number;
+  amount: number;
+  source: 'template' | 'recurring';
+  action: 'skip' | 'overwrite' | 'add';
+}
+
+export interface BudgetImportRequest {
+  month: string;
+  items: BudgetImportItem[];
+}
