@@ -8,7 +8,6 @@ import { getCategoryColor } from '../lib/categoryColors';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useToast } from '../context/ToastContext';
-import ScrollableList from './ScrollableList';
 
 /* ─── Types ─── */
 
@@ -401,6 +400,16 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
   // Template tab state
   const [editingCell, setEditingCell] = useState<{ categoryId: number; value: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const templateScrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollIndicator, setShowScrollIndicator] = useState(false);
+
+  const checkTemplateOverflow = useCallback(() => {
+    const el = templateScrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    const hasOverflow = el.scrollHeight > el.clientHeight + 4;
+    setShowScrollIndicator(hasOverflow && !atBottom);
+  }, []);
 
   // Recurring tab state
   const [recurringViewTab, setRecurringViewTab] = useState<'list' | 'calendar'>('list');
@@ -447,6 +456,13 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
       setShowItemForm(false);
     }
   }, [isOpen]);
+
+  // Detect template tab scroll overflow
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'template') return;
+    const frame = requestAnimationFrame(() => checkTemplateOverflow());
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, activeTab, templates, checkTemplateOverflow]);
 
   /* ─── Template tab logic ─── */
 
@@ -620,9 +636,13 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
   const cardClass = 'bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] overflow-hidden';
 
   const renderTemplateTab = () => (
-    <div className="flex flex-col" style={{ maxHeight: '60vh' }}>
-    <div className="flex-1 min-h-0">
-    <ScrollableList maxHeight="100%">
+    <div className="relative" style={{ maxHeight: '60vh' }}>
+      <div
+        ref={templateScrollRef}
+        onScroll={checkTemplateOverflow}
+        className="overflow-y-auto overflow-x-hidden hide-scrollbar"
+        style={{ maxHeight: '60vh' }}
+      >
       {/* Income Section */}
       <div className={`${cardClass} ${isMobile ? 'mb-3' : 'mb-4'}`}>
         <div
@@ -696,8 +716,25 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
           </div>
         );
       })}
-    </ScrollableList>
-    </div>
+      </div>
+
+      {showScrollIndicator && (
+        <>
+          <div
+            className="absolute bottom-0 left-0 right-0 h-[40px] pointer-events-none"
+            style={{ background: 'linear-gradient(to bottom, transparent, var(--bg-card))' }}
+          />
+          <button
+            onClick={() => templateScrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' })}
+            className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[28px] h-[28px] rounded-full flex items-center justify-center border border-[var(--bg-card-border)] cursor-pointer scroll-arrow"
+            style={{ background: 'var(--bg-card)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        </>
+      )}
     </div>
   );
 
