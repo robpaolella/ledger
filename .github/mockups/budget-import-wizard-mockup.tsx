@@ -128,29 +128,23 @@ function StepBar({ current, steps }: { current: number; steps: string[] }) {
   );
 }
 
-/* ─── Conflict Action Selector ─── */
-function ActionSelect({ value, onChange }: { value: ConflictAction; onChange: (a: ConflictAction) => void }) {
-  const options: { value: ConflictAction; label: string }[] = [
-    { value: 'skip', label: 'Skip' },
-    { value: 'overwrite', label: 'Overwrite' },
-    { value: 'add', label: 'Add' },
-  ];
+/* ─── Conflict Action Dropdown ─── */
+function ActionDropdown({ value, onChange }: { value: ConflictAction; onChange: (a: ConflictAction) => void }) {
+  const color = value === 'overwrite' ? 'var(--color-warning)' : value === 'add' ? 'var(--color-positive)' : 'var(--text-secondary)';
   return (
-    <div style={{ display: 'flex', gap: 2, background: 'var(--toggle-container-bg)', borderRadius: 6, padding: 2 }}>
-      {options.map(opt => (
-        <button key={opt.value} onClick={() => onChange(opt.value)} style={{
-          padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-          border: 'none', cursor: 'pointer',
-          background: value === opt.value ? 'var(--toggle-active-bg)' : 'transparent',
-          color: value === opt.value
-            ? opt.value === 'overwrite' ? 'var(--color-warning)' : opt.value === 'add' ? 'var(--color-positive)' : 'var(--text-primary)'
-            : 'var(--toggle-inactive-text)',
-          boxShadow: value === opt.value ? 'var(--toggle-active-shadow)' : 'none',
-        }}>
-          {opt.label}
-        </button>
-      ))}
-    </div>
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value as ConflictAction)}
+      style={{
+        padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+        border: '1px solid var(--bg-input-border)', background: 'var(--bg-input)',
+        color, cursor: 'pointer', outline: 'none',
+      }}
+    >
+      <option value="skip">Skip</option>
+      <option value="overwrite">Overwrite</option>
+      <option value="add">Add</option>
+    </select>
   );
 }
 
@@ -205,7 +199,20 @@ function Step1({ rows, setRows, onNext, onCancel, mobile }: {
           <span style={{ fontSize: 12, color: 'var(--text-inline-warning)', fontWeight: 600 }}>
             {conflicts.length} conflict{conflicts.length > 1 ? 's' : ''} found — default all to:
           </span>
-          <ActionSelect value="skip" onChange={setBulkAction} />
+          <select
+            onChange={e => setBulkAction(e.target.value as ConflictAction)}
+            defaultValue=""
+            style={{
+              padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              border: '1px solid var(--bg-inline-warning-border)', background: 'var(--bg-inline-warning)',
+              color: 'var(--text-inline-warning)', cursor: 'pointer', outline: 'none',
+            }}
+          >
+            <option value="" disabled>Choose…</option>
+            <option value="skip">Skip</option>
+            <option value="overwrite">Overwrite</option>
+            <option value="add">Add</option>
+          </select>
         </div>
       )}
 
@@ -215,6 +222,20 @@ function Step1({ rows, setRows, onNext, onCancel, mobile }: {
         border: '1px solid var(--bg-card-border)', overflow: 'hidden',
         marginBottom: 16,
       }}>
+        {/* Column headers (desktop only) */}
+        {!mobile && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1.5fr 0.8fr 0.8fr 0.7fr',
+            padding: '10px 16px', borderBottom: '1px solid var(--table-border)',
+            fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+            letterSpacing: '0.04em', color: 'var(--text-muted)',
+          }}>
+            <span>Category</span>
+            <span style={{ textAlign: 'right' }}>Template</span>
+            <span style={{ textAlign: 'right' }}>Current</span>
+            <span style={{ textAlign: 'right' }}>Action</span>
+          </div>
+        )}
         {[...grouped.entries()].map(([groupName, groupRows], gi) => (
           <div key={groupName}>
             {/* Group header */}
@@ -249,7 +270,7 @@ function Step1({ rows, setRows, onNext, onCancel, mobile }: {
                       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                         Current: <span style={{ fontFamily: "'DM Mono', monospace" }}>{fmt(row.existingAmount!)}</span>
                       </span>
-                      <ActionSelect value={row.action} onChange={a => setAction(row.categoryId, a)} />
+                      <ActionDropdown value={row.action} onChange={a => setAction(row.categoryId, a)} />
                     </div>
                   )}
                   {!row.hasConflict && (
@@ -265,7 +286,7 @@ function Step1({ rows, setRows, onNext, onCancel, mobile }: {
                 /* Desktop layout */
                 <div key={row.categoryId} style={{
                   display: 'grid',
-                  gridTemplateColumns: row.hasConflict ? '1.5fr 0.8fr 0.8fr 1fr' : '1.5fr 0.8fr 0.8fr 1fr',
+                  gridTemplateColumns: '1.5fr 0.8fr 0.8fr 0.7fr',
                   padding: '8px 16px', alignItems: 'center',
                   borderBottom: ri < groupRows.length - 1 ? '1px solid var(--table-row-border)' : 'none',
                 }}>
@@ -278,7 +299,7 @@ function Step1({ rows, setRows, onNext, onCancel, mobile }: {
                   </span>
                   <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     {row.hasConflict ? (
-                      <ActionSelect value={row.action} onChange={a => setAction(row.categoryId, a)} />
+                      <ActionDropdown value={row.action} onChange={a => setAction(row.categoryId, a)} />
                     ) : (
                       <span style={{
                         fontSize: 11, fontWeight: 600, color: 'var(--color-positive)',
@@ -293,8 +314,6 @@ function Step1({ rows, setRows, onNext, onCancel, mobile }: {
             })}
           </div>
         ))}
-
-        {/* Column headers for desktop */}
       </div>
 
       {/* Summary */}

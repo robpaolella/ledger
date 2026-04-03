@@ -295,67 +295,91 @@ function DeleteBtn({ onConfirm }: { onConfirm: () => void }) {
   );
 }
 
-/* ─── Calendar View ─── */
+/* ─── Calendar View (Vertical Ledger) ─── */
 function CalendarView({ items, mobile }: { items: RecurringItem[]; mobile: boolean }) {
+  // Only show months that have items
+  const monthsWithItems = MONTH_FULL.map((name, i) => {
+    const month = i + 1;
+    const monthItems = items.filter(item => item.months.includes(month));
+    const total = monthItems.reduce((s, it) => s + (it.amount ?? 0), 0);
+    return { month, name, shortName: MONTH_NAMES[i], monthItems, total };
+  }).filter(m => m.monthItems.length > 0);
+
+  if (monthsWithItems.length === 0) {
+    return (
+      <div style={{
+        padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13,
+        background: 'var(--bg-card)', borderRadius: 12,
+        border: '1px solid var(--bg-card-border)',
+      }}>
+        No recurring items yet.
+      </div>
+    );
+  }
+
   return (
     <div style={{
-      display: mobile ? 'flex' : 'grid',
-      gridTemplateColumns: mobile ? undefined : 'repeat(4, 1fr)',
-      flexDirection: mobile ? 'column' : undefined,
-      gap: mobile ? 10 : 12,
+      background: 'var(--bg-card)', borderRadius: 12,
+      border: '1px solid var(--bg-card-border)', overflow: 'hidden',
     }}>
-      {MONTH_FULL.map((name, i) => {
-        const month = i + 1;
-        const monthItems = items.filter(item => item.months.includes(month));
-        const total = monthItems.reduce((s, it) => s + (it.amount ?? 0), 0);
-        return (
-          <div key={month} style={{
-            background: 'var(--bg-card)', borderRadius: 10,
-            border: '1px solid var(--bg-card-border)',
-            padding: mobile ? '10px 14px' : '10px 12px',
-            minHeight: mobile ? undefined : 90,
-          }}>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              marginBottom: monthItems.length > 0 ? 8 : 0,
+      {monthsWithItems.map((m, mi) => (
+        <div key={m.month} style={{
+          borderBottom: mi < monthsWithItems.length - 1 ? '1px solid var(--table-border)' : 'none',
+        }}>
+          {m.monthItems.map((it, ii) => (
+            <div key={it.id} style={{
+              display: 'grid',
+              gridTemplateColumns: mobile ? '60px 1fr auto' : '80px 1fr auto',
+              padding: mobile ? '8px 12px' : '8px 16px',
+              alignItems: 'center',
+              borderBottom: ii < m.monthItems.length - 1 ? '1px solid var(--table-row-border)' : 'none',
             }}>
+              {/* Month label — only on first row of each month */}
               <span style={{
-                fontSize: 12, fontWeight: 700, color: 'var(--text-primary)',
+                fontSize: 13, fontWeight: 700,
+                color: ii === 0 ? 'var(--text-primary)' : 'transparent',
               }}>
-                {mobile ? name : MONTH_NAMES[i]}
+                {mobile ? m.shortName : m.name}
               </span>
-              {total > 0 && (
-                <span style={{
-                  fontSize: 11, fontWeight: 600, fontFamily: "'DM Mono', monospace",
-                  color: 'var(--text-secondary)',
-                }}>
-                  {fmt(total)}
+              {/* Item label + category */}
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-body)' }}>{it.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+                  {getCatSub(it.category_id)}
                 </span>
-              )}
-            </div>
-            {monthItems.length === 0 && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                No items
               </div>
-            )}
-            {monthItems.map(it => (
-              <div key={it.id} style={{
-                fontSize: 12, color: 'var(--text-body)', marginBottom: 4,
-                display: 'flex', justifyContent: 'space-between',
+              {/* Amount */}
+              <span style={{
+                fontSize: 13, fontWeight: 600, fontFamily: "'DM Mono', monospace",
+                color: it.amount != null ? 'var(--text-primary)' : 'var(--color-warning)',
+                textAlign: 'right', whiteSpace: 'nowrap',
               }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
-                  {it.label}
-                </span>
-                <span style={{
-                  fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text-secondary)',
-                }}>
-                  {it.amount != null ? fmt(it.amount) : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
-        );
-      })}
+                {it.amount != null ? fmt(it.amount) : '—'}
+              </span>
+            </div>
+          ))}
+          {/* Month total row if multiple items */}
+          {m.monthItems.length > 1 && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: mobile ? '60px 1fr auto' : '80px 1fr auto',
+              padding: mobile ? '6px 12px 8px' : '6px 16px 8px',
+              borderBottom: mi < monthsWithItems.length - 1 ? 'none' : 'none',
+            }}>
+              <span />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'right' }}>
+                Month total
+              </span>
+              <span style={{
+                fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace",
+                color: 'var(--text-secondary)', textAlign: 'right', whiteSpace: 'nowrap',
+              }}>
+                {fmt(m.total)}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
