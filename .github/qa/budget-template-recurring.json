@@ -1,108 +1,100 @@
 {
   "title": "Budget Template, Recurring Planner & Import Wizard QA",
   "storageKey": "qa-budget-template-recurring",
-  "testingOrder": "Start with Section 1 (Template page). Then test Recurring in Section 2. Finally test the Import Wizard in Section 3. Section 4 covers edge cases.",
+  "testingOrder": "Start with Section 1 (Budget Template modal). Test both tabs. Then test the Import Wizard in Section 2. Section 3 covers cross-feature and edge cases.",
   "sections": [
     {
-      "title": "1. Budget Template Page",
+      "title": "1. Budget Template Modal",
       "groups": [
         {
-          "name": "Navigation & Loading",
+          "name": "Opening & Tabs",
           "items": [
-            "Navigate to /budget/template — page loads with spinner, then shows categories",
-            "Page title shows 'Budget Template' with subtitle 'Your default monthly starting point'",
-            "All income categories appear in the Income section with green header",
-            "All expense categories appear grouped by group_name with colored square indicators",
-            "3 KPI cards show: Template Income (green), Template Expenses, Net (green if positive, red if negative)",
-            "Link from Budget page header → 'Template' navigates to /budget/template"
+            "Budget page shows 'Budget Template' button in header (desktop)",
+            "Budget page shows 'Budget Template' button in action row (mobile)",
+            "Click 'Budget Template' → modal opens with 'Monthly Amounts' tab active",
+            "Two tabs visible: 'Monthly Amounts' and 'Recurring Items'",
+            "Click 'Recurring Items' tab → switches content, tab styling updates",
+            "Click 'Monthly Amounts' tab → switches back",
+            "Modal renders as centered modal on desktop, bottom sheet on mobile",
+            "Close modal with X button → modal closes cleanly",
+            "Button is disabled for members without budgets.edit permission"
           ]
         },
         {
-          "name": "Inline Editing",
+          "name": "Monthly Amounts Tab — Display",
           "items": [
-            "Click an empty '—' amount → input appears with focus and selection",
-            "Type a number and press Enter → value saves, toast shows 'Template updated'",
-            "Type a number and click away (blur) → value saves",
-            "Press Escape while editing → edit cancels, no save",
-            "Edit an existing amount to 0 or clear it → template entry deleted, shows '—', toast shows 'Template entry removed'",
-            "KPI cards update immediately after editing",
-            "Group totals update immediately after editing"
+            "Loading spinner shows while data fetches, then categories appear",
+            "Summary line shows Income / Expenses / Net totals at top",
+            "Net total is green when positive, red when negative",
+            "All income categories appear under 'Income' group header",
+            "All expense categories appear grouped by group_name",
+            "Group headers show group name and group total",
+            "Categories with a template amount show the formatted amount",
+            "Categories without a template amount show '—'"
           ]
         },
         {
-          "name": "Permissions",
+          "name": "Monthly Amounts Tab — Inline Editing",
           "items": [
-            "As a member WITHOUT budgets.edit → amount cells are not clickable (disabled/dimmed)",
-            "As admin/owner → amount cells are clickable"
+            "Click an amount or '—' → inline input appears with current value selected",
+            "Type a number and press Enter → saves, toast shows confirmation",
+            "Type a number and blur (click away) → saves",
+            "Press Escape → cancels edit, no save",
+            "Set amount to 0 or clear → template entry deleted, shows '—'",
+            "Summary totals and group totals update immediately after save",
+            "Mobile: numeric keyboard appears for amount input (inputMode=decimal)"
           ]
         },
         {
-          "name": "Mobile",
+          "name": "Recurring Items Tab — List View",
           "items": [
-            "On mobile viewport: KPI grid shows 2 columns instead of 3",
-            "Income and expense cards have tighter padding on mobile",
-            "Inline editing works on mobile (inputMode=decimal shows numeric keyboard)"
-          ]
-        }
-      ]
-    },
-    {
-      "title": "2. Recurring Planner Page",
-      "groups": [
-        {
-          "name": "Navigation & Loading",
-          "items": [
-            "Navigate to /budget/recurring — page loads with list of recurring items (or empty state)",
-            "Page title shows 'Recurring Planner' with subtitle",
-            "Annual Recurring Total KPI shows sum of (amount × month count) across all items",
-            "Link from Budget page header → 'Recurring' navigates to /budget/recurring"
+            "If no recurring items → empty state message shown with '+ Add Item' button",
+            "Existing items shown in a list with label, category, amount, and month chips",
+            "Month chips show abbreviated month names (Jan, Feb, etc.)",
+            "Annual total shown (sum of amount × number of months per item)",
+            "Delete button uses ConfirmDeleteButton pattern",
+            "After delete → item removed, list refreshes, toast shown"
           ]
         },
         {
-          "name": "List View",
+          "name": "Recurring Items Tab — Add/Edit",
           "items": [
-            "Desktop: table with columns Label, Category, Amount, Months, Actions",
-            "Items sorted by next upcoming month",
-            "Month chips show abbreviated month names as blue pill badges",
-            "Edit button opens modal pre-filled with item data",
-            "Delete button uses ConfirmDeleteButton pattern (click once → 'Confirm Delete?', click again → deletes)",
-            "After delete: item removed, toast shown, total KPI updates"
-          ]
-        },
-        {
-          "name": "Calendar View",
-          "items": [
-            "Toggle to Calendar view — shows vertical ledger layout",
-            "Month header rows (uppercase name + total) with item rows indented below",
-            "Only months with items are shown (empty months hidden)",
-            "Each item row shows label, category sub_name, and amount"
-          ]
-        },
-        {
-          "name": "Add/Edit Modal",
-          "items": [
-            "Click '+ Add Item' → modal opens with empty form",
-            "Label field is required — submit without label shows error",
+            "Click '+ Add Item' → inline form replaces list content",
+            "Label field is required — submit without label shows validation",
             "Category dropdown groups options by group_name (optgroups)",
-            "Amount field is optional — can leave blank",
-            "Month selector: click month chips to toggle selection",
-            "At least one month required — submit without months shows error",
-            "Submit with valid data → item created, modal closes, list refreshes, toast shown",
-            "Edit existing item → modal pre-fills all fields, save updates item"
+            "Amount field accepts decimal values",
+            "Month selector: click month chips to toggle on/off",
+            "At least one month required — submit without months shows validation",
+            "Submit with valid data → item created, form closes, list refreshes, toast shown",
+            "Click edit on existing item → inline form pre-fills all fields",
+            "Save edited item → updates item, form closes, list refreshes",
+            "Cancel form → returns to list without saving"
+          ]
+        },
+        {
+          "name": "Recurring Items Tab — Calendar View",
+          "items": [
+            "Toggle between List and Calendar views",
+            "Calendar view shows vertical layout: month header rows with items underneath",
+            "Only months with items are shown (empty months hidden)",
+            "Each item row shows label, category, and amount",
+            "Month headers show month name and monthly total"
           ]
         },
         {
           "name": "Mobile",
           "items": [
-            "Mobile: list shows card-style layout instead of grid table",
-            "Add/edit modal renders as bottom sheet on mobile",
-            "Calendar view works on mobile with proper spacing"
+            "Modal renders as bottom sheet on mobile",
+            "Tab switching works on mobile",
+            "Scrollable content within the modal",
+            "Inline editing works on mobile with numeric keyboard",
+            "Add/edit form works within the bottom sheet (no nested modal)"
           ]
         }
       ]
     },
     {
-      "title": "3. Import Wizard",
+      "title": "2. Import Wizard",
       "groups": [
         {
           "name": "Opening & Data Loading",
@@ -110,7 +102,7 @@
             "'Import from Template' button visible on Budget page header (desktop and mobile)",
             "Button is disabled for members without budgets.edit permission",
             "Click button → wizard modal opens, data loaded from template + recurring + existing budget",
-            "If no template entries exist → Step 1 shows empty state with link to /budget/template"
+            "If no template entries exist → Step 1 shows empty state with link that opens Budget Template modal"
           ]
         },
         {
@@ -132,7 +124,7 @@
           "name": "Step 2 — Recurring Items",
           "items": [
             "Title shows 'Step 2 of 3 — Recurring Items for {month}'",
-            "If no recurring items for this month → shows empty state with link to /budget/recurring",
+            "If no recurring items for this month → shows empty state with link that opens Budget Template modal",
             "Each item has checkbox, label, category, amount input",
             "Items with preset amounts show pre-filled input",
             "Items without preset amounts show empty input with placeholder",
@@ -166,13 +158,13 @@
       ]
     },
     {
-      "title": "4. Cross-Feature & Edge Cases",
+      "title": "3. Cross-Feature & Edge Cases",
       "groups": [
         {
           "name": "Data Consistency",
           "items": [
-            "Template amounts persist across page reloads",
-            "Recurring items persist across page reloads",
+            "Template amounts persist after closing and reopening modal",
+            "Recurring items persist after closing and reopening modal",
             "Imported budget values show correctly on the main Budget page",
             "Budget summary KPIs (Budgeted Income, Budgeted Expenses) reflect imported values",
             "Owner filter on Budget page works correctly with imported values"
@@ -181,20 +173,19 @@
         {
           "name": "Dark Mode",
           "items": [
-            "Budget Template page renders correctly in dark mode",
-            "Recurring Planner page renders correctly in dark mode",
+            "Budget Template modal renders correctly in dark mode (both tabs)",
             "Import wizard modal renders correctly in dark mode",
-            "All text is readable, borders visible, inputs styled in dark mode"
+            "All text readable, borders visible, inputs styled correctly in dark mode",
+            "Tab styling correct in dark mode (active/inactive states)"
           ]
         },
         {
-          "name": "Navigation",
+          "name": "Permissions",
           "items": [
-            "Budget page → Template link works",
-            "Budget page → Recurring link works",
-            "Browser back button works correctly from Template/Recurring pages",
-            "Direct URL access to /budget/template works",
-            "Direct URL access to /budget/recurring works"
+            "As admin/owner → Budget Template button and Import button are enabled",
+            "As member WITH budgets.edit → buttons are enabled",
+            "As member WITHOUT budgets.edit → both buttons are disabled (not hidden)",
+            "Template modal editing works only when user has budgets.edit permission"
           ]
         }
       ]
