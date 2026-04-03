@@ -134,11 +134,12 @@ function MonthSelector({ selected, onChange }: { selected: number[]; onChange: (
 
 /* ─── Add/Edit Form (inline, replaces list content) ─── */
 
-function ItemForm({ item, categories, onSave, onCancel }: {
+function ItemForm({ item, categories, onSave, onCancel, isMobile }: {
   item: RecurringItem | null;
   categories: Category[];
   onSave: (data: { label: string; categoryId: number; amount: number | null; months: number[] }) => void;
   onCancel: () => void;
+  isMobile: boolean;
 }) {
   const [label, setLabel] = useState(item?.label ?? '');
   const [categoryId, setCategoryId] = useState<number>(item?.category_id ?? categories[0]?.id ?? 0);
@@ -200,54 +201,53 @@ function ItemForm({ item, categories, onSave, onCancel }: {
         />
       </div>
 
-      {/* Category */}
-      <div className="mb-3.5">
-        <label className="block text-[12px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-          Category
-        </label>
-        <select
-          value={categoryId}
-          onChange={e => setCategoryId(Number(e.target.value))}
-          className="w-full text-[13px] rounded-lg outline-none"
-          style={{
-            padding: '8px 12px',
-            border: '1px solid var(--bg-input-border)',
-            background: 'var(--bg-input)',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([group, cats]) => (
-            <optgroup key={group} label={group}>
-              {cats.map(c => (
-                <option key={c.id} value={c.id}>{c.sub_name}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
+      {/* Category + Amount */}
+      <div className={`mb-3.5 ${isMobile ? '' : 'flex gap-3'}`}>
+        <div className={isMobile ? 'mb-3.5' : 'flex-1'}>
+          <label className="block text-[12px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            Category
+          </label>
+          <select
+            value={categoryId}
+            onChange={e => setCategoryId(Number(e.target.value))}
+            className="w-full text-[13px] rounded-lg outline-none"
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--bg-input-border)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([group, cats]) => (
+              <optgroup key={group} label={group}>
+                {cats.map(c => (
+                  <option key={c.id} value={c.id}>{c.sub_name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
 
-      {/* Amount */}
-      <div className="mb-3.5">
-        <label className="block text-[12px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-          Amount{' '}
-          <span className="font-normal" style={{ color: 'var(--text-muted)' }}>
-            (optional — enter during import if blank)
-          </span>
-        </label>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={amount}
-          onChange={e => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-          placeholder="Leave blank to set at import"
-          className="w-full text-[13px] rounded-lg outline-none font-['DM_Mono',monospace]"
-          style={{
-            padding: '8px 12px',
-            border: '1px solid var(--bg-input-border)',
-            background: 'var(--bg-input)',
-            color: 'var(--text-primary)',
-          }}
-        />
+        <div style={isMobile ? undefined : { width: 140 }}>
+          <label className="block text-[12px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            Amount{' '}
+            <span className="font-normal" style={{ color: 'var(--text-muted)' }}>(opt.)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onChange={e => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+            placeholder="$0.00"
+            className={`${isMobile ? 'w-full' : 'w-full'} text-[13px] rounded-lg outline-none font-['DM_Mono',monospace]`}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--bg-input-border)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-primary)',
+            }}
+          />
+        </div>
       </div>
 
       {/* Months */}
@@ -751,6 +751,7 @@ export default function BudgetTemplateModal({ isOpen, onClose }: BudgetTemplateM
           <ItemForm
             item={editingItem}
             categories={categories}
+            isMobile={isMobile}
             onSave={handleRecurringSave}
             onCancel={() => { setShowItemForm(false); setEditingItem(null); }}
           />
