@@ -665,7 +665,7 @@ export default function BudgetPage() {
         maxWidth="600px"
       >
         {importStep === 0 && (
-          <div className="flex flex-col" style={{ maxHeight: 'calc(80vh - 48px)' }}>
+          <div className="flex flex-col min-h-0 flex-1">
             <div className="mb-1 flex-shrink-0">
               <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 1 of 3 — Import Monthly Template</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Importing into: {monthLabel(month)}</p>
@@ -783,7 +783,7 @@ export default function BudgetPage() {
         )}
 
         {importStep === 1 && (
-          <div className="flex flex-col" style={{ maxHeight: 'calc(80vh - 48px)' }}>
+          <div className="flex flex-col min-h-0 flex-1">
             <div className="mb-1 flex-shrink-0">
               <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 2 of 3 — Recurring Items for {month.toLocaleString('en-US', { month: 'long' })}</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Select recurring items to include in this month's budget.</p>
@@ -876,7 +876,7 @@ export default function BudgetPage() {
           const totalChanges = tplAdds.length + tplOverwrites.length + tplAddToExisting.length + includedRecurring.length;
 
           return (
-            <div className="flex flex-col" style={{ maxHeight: 'calc(80vh - 48px)' }}>
+            <div className="flex flex-col min-h-0 flex-1">
               <div className="mb-1 flex-shrink-0">
                 <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 3 of 3 — Review Changes</p>
                 <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Review the changes that will be applied to {monthLabel(month)}.</p>
