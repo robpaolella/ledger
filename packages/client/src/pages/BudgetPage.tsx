@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { fmt, fmtWhole } from '../lib/formatters';
 import KPICard from '../components/KPICard';
@@ -108,6 +108,22 @@ export default function BudgetPage() {
   const [recurringRows, setRecurringRows] = useState<RecurringImportRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const wizardScrollRef = useRef<HTMLDivElement>(null);
+  const [wizardScrollable, setWizardScrollable] = useState(false);
+
+  const checkWizardScroll = useCallback(() => {
+    const el = wizardScrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    const hasOverflow = el.scrollHeight > el.clientHeight + 4;
+    setWizardScrollable(hasOverflow && !atBottom);
+  }, []);
+
+  useEffect(() => {
+    if (!importOpen) return;
+    const frame = requestAnimationFrame(() => checkWizardScroll());
+    return () => cancelAnimationFrame(frame);
+  }, [importOpen, importStep, templateRows, recurringRows, checkWizardScroll]);
 
   useEffect(() => {
     apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((res) =>
@@ -652,8 +668,8 @@ export default function BudgetPage() {
         maxWidth="600px"
       >
         {importStep === 0 && (
-          <div>
-            <div className="mb-1">
+          <div className="flex flex-col" style={{ maxHeight: 'calc(80vh - 48px)' }}>
+            <div className="mb-1 flex-shrink-0">
               <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 1 of 3 — Import Monthly Template</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Importing into: {monthLabel(month)}</p>
             </div>
@@ -667,7 +683,8 @@ export default function BudgetPage() {
                 </button>
               </div>
             ) : (
-              <>
+              <div className="relative flex-1 min-h-0">
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar h-full">
                 {templateRows.some(r => r.hasConflict) && (
                   <div className="bg-[var(--bg-inline-warning)] border border-[var(--bg-inline-warning-border)] rounded-lg px-3 py-2 mb-3 flex items-center justify-between">
                     <span className="text-[12px] text-[var(--text-primary)]">
@@ -737,10 +754,20 @@ export default function BudgetPage() {
                     </div>
                   ));
                 })()}
-              </>
+                </div>
+
+                {wizardScrollable && (
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 h-[40px] pointer-events-none" style={{ background: 'linear-gradient(to bottom, transparent, var(--bg-card))' }} />
+                    <button onClick={() => wizardScrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' })} className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[28px] h-[28px] rounded-full flex items-center justify-center border border-[var(--bg-card-border)] cursor-pointer scroll-arrow" style={{ background: 'var(--bg-card)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  </>
+                )}
+              </div>
             )}
 
-            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)] flex-shrink-0">
               <button
                 onClick={() => setImportOpen(false)}
                 className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
@@ -759,8 +786,8 @@ export default function BudgetPage() {
         )}
 
         {importStep === 1 && (
-          <div>
-            <div className="mb-1">
+          <div className="flex flex-col" style={{ maxHeight: 'calc(80vh - 48px)' }}>
+            <div className="mb-1 flex-shrink-0">
               <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 2 of 3 — Recurring Items for {month.toLocaleString('en-US', { month: 'long' })}</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Select recurring items to include in this month's budget.</p>
             </div>
@@ -774,45 +801,58 @@ export default function BudgetPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-1">
-                {recurringRows.map((row, idx) => (
-                  <div key={row.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg border-b border-[var(--table-row-border)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={row.included}
-                      onChange={() => setRecurringRows(prev => prev.map((r, i) =>
-                        i === idx ? { ...r, included: !r.included } : r
-                      ))}
-                      className="w-4 h-4 cursor-pointer flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[12px] font-medium text-[var(--text-primary)] block truncate">{row.label}</span>
-                      <span className="text-[11px] text-[var(--text-muted)]">{row.subName}</span>
-                    </div>
-                    <div className="w-[90px] flex-shrink-0">
-                      <div className="flex items-center rounded border border-[var(--bg-input-border)] bg-[var(--bg-input)]">
-                        <span className="pl-2 text-[12px] font-mono text-[var(--text-muted)] flex-shrink-0 select-none">$</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="Enter amount"
-                          value={row.importAmount}
-                          disabled={!row.included}
-                          onChange={(e) => setRecurringRows(prev => prev.map((r, i) =>
-                            i === idx ? { ...r, importAmount: e.target.value.replace(/[^0-9.]/g, '') } : r
-                          ))}
-                          className="flex-1 min-w-0 text-right text-[12px] font-mono py-1.5 pr-2 bg-transparent outline-none border-none text-[var(--text-body)] disabled:opacity-50"
-                        />
+              <div className="relative flex-1 min-h-0">
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar h-full">
+                <div className="flex flex-col gap-1">
+                  {recurringRows.map((row, idx) => (
+                    <div key={row.id}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg border-b border-[var(--table-row-border)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={row.included}
+                        onChange={() => setRecurringRows(prev => prev.map((r, i) =>
+                          i === idx ? { ...r, included: !r.included } : r
+                        ))}
+                        className="w-4 h-4 cursor-pointer flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[12px] font-medium text-[var(--text-primary)] block truncate">{row.label}</span>
+                        <span className="text-[11px] text-[var(--text-muted)]">{row.subName}</span>
+                      </div>
+                      <div className="w-[90px] flex-shrink-0">
+                        <div className="flex items-center rounded border border-[var(--bg-input-border)] bg-[var(--bg-input)]">
+                          <span className="pl-2 text-[12px] font-mono text-[var(--text-muted)] flex-shrink-0 select-none">$</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Enter amount"
+                            value={row.importAmount}
+                            disabled={!row.included}
+                            onChange={(e) => setRecurringRows(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, importAmount: e.target.value.replace(/[^0-9.]/g, '') } : r
+                            ))}
+                            className="flex-1 min-w-0 text-right text-[12px] font-mono py-1.5 pr-2 bg-transparent outline-none border-none text-[var(--text-body)] disabled:opacity-50"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                </div>
+
+                {wizardScrollable && (
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 h-[40px] pointer-events-none" style={{ background: 'linear-gradient(to bottom, transparent, var(--bg-card))' }} />
+                    <button onClick={() => wizardScrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' })} className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[28px] h-[28px] rounded-full flex items-center justify-center border border-[var(--bg-card-border)] cursor-pointer scroll-arrow" style={{ background: 'var(--bg-card)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
-            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)] flex-shrink-0">
               <button
                 onClick={() => setImportStep(0)}
                 className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
@@ -839,12 +879,14 @@ export default function BudgetPage() {
           const totalChanges = tplAdds.length + tplOverwrites.length + tplAddToExisting.length + includedRecurring.length;
 
           return (
-            <div>
-              <div className="mb-1">
+            <div className="flex flex-col" style={{ maxHeight: 'calc(80vh - 48px)' }}>
+              <div className="mb-1 flex-shrink-0">
                 <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 3 of 3 — Review Changes</p>
                 <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Review the changes that will be applied to {monthLabel(month)}.</p>
               </div>
 
+              <div className="relative flex-1 min-h-0">
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar h-full">
               {/* Summary */}
               <div className="bg-[var(--bg-hover)] rounded-lg px-4 py-3 mb-4">
                 <div className="grid grid-cols-2 gap-2 text-[12px]">
@@ -908,8 +950,19 @@ export default function BudgetPage() {
                   <p className="text-[13px] text-[var(--text-muted)]">No changes to apply. All template items were skipped and no recurring items were included.</p>
                 </div>
               )}
+                </div>
 
-              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+                {wizardScrollable && (
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 h-[40px] pointer-events-none" style={{ background: 'linear-gradient(to bottom, transparent, var(--bg-card))' }} />
+                    <button onClick={() => wizardScrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' })} className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[28px] h-[28px] rounded-full flex items-center justify-center border border-[var(--bg-card-border)] cursor-pointer scroll-arrow" style={{ background: 'var(--bg-card)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)] flex-shrink-0">
                 <button
                   onClick={() => setImportStep(1)}
                   className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
