@@ -665,8 +665,8 @@ export default function BudgetPage() {
         maxWidth="600px"
       >
         {importStep === 0 && (
-          <div className="flex flex-col min-h-0 flex-1">
-            <div className="mb-1 flex-shrink-0">
+          <div>
+            <div className="mb-1">
               <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 1 of 3 — Import Monthly Template</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Importing into: {monthLabel(month)}</p>
             </div>
@@ -680,8 +680,8 @@ export default function BudgetPage() {
                 </button>
               </div>
             ) : (
-              <div className="relative flex-1 min-h-0">
-                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar h-full">
+              <div className="relative" style={{ maxHeight: '60vh' }}>
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar" style={{ maxHeight: '60vh' }}>
                 {templateRows.some(r => r.hasConflict) && (
                   <div className="bg-[var(--bg-inline-warning)] border border-[var(--bg-inline-warning-border)] rounded-lg px-3 py-2 mb-3 flex items-center justify-between">
                     <span className="text-[12px] text-[var(--text-primary)]">
@@ -764,7 +764,7 @@ export default function BudgetPage() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)] flex-shrink-0">
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
               <button
                 onClick={() => setImportOpen(false)}
                 className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
@@ -783,8 +783,8 @@ export default function BudgetPage() {
         )}
 
         {importStep === 1 && (
-          <div className="flex flex-col min-h-0 flex-1">
-            <div className="mb-1 flex-shrink-0">
+          <div>
+            <div className="mb-1">
               <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 2 of 3 — Recurring Items for {month.toLocaleString('en-US', { month: 'long' })}</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Select recurring items to include in this month's budget.</p>
             </div>
@@ -798,8 +798,8 @@ export default function BudgetPage() {
                 </button>
               </div>
             ) : (
-              <div className="relative flex-1 min-h-0">
-                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar h-full">
+              <div className="relative" style={{ maxHeight: '60vh' }}>
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar" style={{ maxHeight: '60vh' }}>
                 <div className="flex flex-col gap-1">
                   {recurringRows.map((row, idx) => (
                     <div key={row.id}
@@ -849,7 +849,7 @@ export default function BudgetPage() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)] flex-shrink-0">
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
               <button
                 onClick={() => setImportStep(0)}
                 className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
@@ -876,14 +876,14 @@ export default function BudgetPage() {
           const totalChanges = tplAdds.length + tplOverwrites.length + tplAddToExisting.length + includedRecurring.length;
 
           return (
-            <div className="flex flex-col min-h-0 flex-1">
-              <div className="mb-1 flex-shrink-0">
+            <div>
+              <div className="mb-1">
                 <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 3 of 3 — Review Changes</p>
                 <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Review the changes that will be applied to {monthLabel(month)}.</p>
               </div>
 
-              <div className="relative flex-1 min-h-0">
-                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar h-full">
+              <div className="relative" style={{ maxHeight: '60vh' }}>
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar" style={{ maxHeight: '60vh' }}>
               {/* Summary */}
               <div className="bg-[var(--bg-hover)] rounded-lg px-4 py-3 mb-4">
                 <div className="grid grid-cols-2 gap-2 text-[12px]">
@@ -959,7 +959,7 @@ export default function BudgetPage() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)] flex-shrink-0">
+              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
                 <button
                   onClick={() => setImportStep(1)}
                   className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"

@@ -26,8 +26,8 @@ export default function ResponsiveModal({ title, isOpen, onClose, children, maxW
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-[var(--bg-card)] rounded-xl p-6 w-full shadow-xl flex flex-col"
-        style={{ maxWidth: maxWidth || '28rem', maxHeight: '90vh' }}
+        className="bg-[var(--bg-card)] rounded-xl p-6 w-full shadow-xl"
+        style={{ maxWidth: maxWidth || '28rem' }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
