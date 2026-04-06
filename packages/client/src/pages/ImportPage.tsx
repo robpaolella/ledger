@@ -38,11 +38,13 @@ interface ParseResult {
   totalRows: number;
   detectedFormat: string;
   suggestedMapping: { date: number; description: number; amount: number };
+  headerRowIndex: number;
 }
 
 interface CategorizedRow {
   date: string;
   description: string;
+  note?: string;
   amount: number;
   suggestedCategoryId: number | null;
   suggestedGroupName: string | null;
@@ -204,39 +206,58 @@ export default function ImportPage() {
           note: h.findIndex(x => /note/i.test(x)),
         });
       }
+
+      // Store all rows (we'll need them for step 3)
+      // Re-parse locally to get all rows, using headerRowIndex from server
+      const text = await f.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      const hri = res.data.headerRowIndex ?? 0;
+      let parsedRows = lines.slice(hri + 1).map((line: string) => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+            else inQuotes = !inQuotes;
+          } else if (ch === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += ch;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      }).filter((r: string[]) => r.some((c) => c.trim()));
+
+      // For Venmo: filter out transfer rows and rows without valid dates
+      if (res.data.detectedFormat === 'venmo') {
+        const hLower = res.data.headers.map(x => x.toLowerCase());
+        const typeIdx = hLower.findIndex(x => /^type$/i.test(x));
+        const dateIdx = hLower.findIndex(x => /datetime|date/i.test(x));
+        parsedRows = parsedRows.filter((row: string[]) => {
+          if (typeIdx >= 0) {
+            const type = row[typeIdx]?.trim().toLowerCase() || '';
+            if (type.includes('transfer')) return false;
+          }
+          if (dateIdx >= 0) {
+            const dateVal = row[dateIdx]?.trim() || '';
+            if (!dateVal || isNaN(new Date(dateVal).getTime())) return false;
+          }
+          return true;
+        });
+      }
+
+      setAllRows(parsedRows);
+      setStep(1);
     } catch (err) {
       console.error('Failed to parse CSV:', err);
       setNotification({ type: 'error', message: 'Failed to parse CSV file. Check console for details.' });
       setFile(null);
       return;
     }
-
-    // Store all rows (we'll need them for step 3)
-    // Re-parse locally to get all rows
-    const text = await f.text();
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    const parsedRows = lines.slice(1).map((line) => {
-      const result: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') {
-          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-          else inQuotes = !inQuotes;
-        } else if (ch === ',' && !inQuotes) {
-          result.push(current.trim());
-          current = '';
-        } else {
-          current += ch;
-        }
-      }
-      result.push(current.trim());
-      return result;
-    }).filter((r) => r.some((c) => c.trim()));
-
-    setAllRows(parsedRows);
-    setStep(1);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -255,19 +276,22 @@ export default function ImportPage() {
 
     const items = allRows.map((row) => {
       let description = row[mapping.description] || '';
-      // Build Venmo description from From/To + Note
+      let venmoNote: string | undefined;
+      // Build Venmo description from From/To + Note, using amount sign for direction
       if (isVenmo && venmoMapping.from >= 0 && venmoMapping.to >= 0) {
         const from = row[venmoMapping.from]?.trim() || '';
         const to = row[venmoMapping.to]?.trim() || '';
         const note = venmoMapping.note >= 0 ? row[venmoMapping.note]?.trim() || '' : '';
-        const isOutbound = from.toLowerCase() === ownerName.toLowerCase();
-        const name = isOutbound ? to : from;
-        const prefix = isOutbound ? `To ${name}` : name;
-        description = note ? `${prefix}: "${note}"` : prefix;
+        venmoNote = note || undefined;
+        const rawAmt = normalizeAmount(row[mapping.amount] || '0');
+        const counterparty = from.toLowerCase() === ownerName.toLowerCase() ? to : from;
+        const prefix = rawAmt >= 0 ? `From ${counterparty}` : `To ${counterparty}`;
+        description = note ? `${prefix}: ${note}` : prefix;
       }
       return {
         description,
         amount: normalizeAmount(row[mapping.amount] || '0'),
+        venmoNote,
       };
     }).filter((item) => item.description.trim());
 
@@ -277,7 +301,7 @@ export default function ImportPage() {
       body: JSON.stringify({ items }),
     });
 
-    // Merge with row data (date + amount)
+    // Merge with row data (date + amount + note)
     const merged = res.data.map((cat, i) => {
       const row = allRows[i];
       const dateStr = row?.[mapping.date] || '';
@@ -299,6 +323,7 @@ export default function ImportPage() {
       return {
         date,
         description: cat.description,
+        note: items[i]?.venmoNote,
         amount,
         suggestedCategoryId: cat.suggestedCategoryId,
         suggestedGroupName: cat.suggestedGroupName,
@@ -379,6 +404,7 @@ export default function ImportPage() {
           transactions: validRows.map((r) => ({
             date: r.date,
             description: r.description,
+            note: r.note,
             categoryId: r.splits ? null : r.categoryId,
             amount: r.amount,
             ...(r.splits ? { splits: r.splits } : {}),
