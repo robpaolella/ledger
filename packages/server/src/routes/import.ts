@@ -10,37 +10,67 @@ import { detectTransfers } from '../services/transferDetector.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-function parseCSV(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length === 0) return { headers: [], rows: [] };
-
-  const parseLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === ',' && !inQuotes) {
-        result.push(current.trim());
-        current = '';
+function parseLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
       } else {
-        current += ch;
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+const HEADER_PATTERNS = [
+  /^date$/i, /datetime/i, /posting\s?date/i, /trans(action)?\s?date/i,
+  /^amount$/i, /amount.*total/i,
+  /description/i, /memo/i, /payee/i, /merchant/i,
+  /^type$/i, /^status$/i, /^note$/i,
+  /^from$/i, /^to$/i, /^category$/i,
+  /funding\s?source/i, /destination/i, /balance/i,
+];
+
+// Scan rows for the one most likely to be column headers
+function findHeaderRow(parsedLines: string[][]): number {
+  let bestIdx = 0;
+  let bestScore = 0;
+  const limit = Math.min(parsedLines.length, 20);
+  for (let i = 0; i < limit; i++) {
+    let score = 0;
+    for (const cell of parsedLines[i]) {
+      const lower = cell.toLowerCase().trim();
+      if (!lower) continue;
+      for (const pattern of HEADER_PATTERNS) {
+        if (pattern.test(lower)) { score++; break; }
       }
     }
-    result.push(current.trim());
-    return result;
-  };
+    if (score > bestScore) { bestScore = score; bestIdx = i; }
+  }
+  return bestIdx;
+}
 
-  const headers = parseLine(lines[0]);
-  const rows = lines.slice(1).map(parseLine).filter((r) => r.some((c) => c.trim()));
-  return { headers, rows };
+function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number } {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length === 0) return { headers: [], rows: [], headerRowIndex: 0 };
+
+  const parsedLines = lines.map(parseLine);
+  const headerRowIndex = findHeaderRow(parsedLines);
+  const headers = parsedLines[headerRowIndex];
+  const rows = parsedLines.slice(headerRowIndex + 1).filter((r) => r.some((c) => c.trim()));
+  return { headers, rows, headerRowIndex };
 }
 
 function detectFormat(headers: string[]): 'chase' | 'venmo' | 'generic' {
@@ -70,7 +100,7 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
     }
 
     const text = req.file.buffer.toString('utf-8');
-    const { headers, rows } = parseCSV(text);
+    const { headers, rows, headerRowIndex } = parseCSV(text);
 
     if (headers.length === 0) {
       res.status(400).json({ error: 'Could not parse CSV headers' });
@@ -87,6 +117,7 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
         totalRows: rows.length,
         detectedFormat,
         suggestedMapping: suggestedMappingResult,
+        headerRowIndex,
       },
     });
   } catch (err) {
