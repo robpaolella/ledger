@@ -966,7 +966,7 @@ export default function ImportPage() {
                                     title="Split across categories"
                                     className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
                                     <svg width="12" height="12" viewBox="0 0 512 512" fill="currentColor">
-                                      <path d="M169.4 57.4c12.5 12.5 12.5 32.8 0 45.3l-67.7 67.7H256c114.9 0 208 93.1 208 208c0 17.7-14.3 32-32 32s-32-14.3-32-32c0-79.5-64.5-144-144-144H101.5l67.7 67.7c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-120-120c-12.5-12.5-12.5-32.8 0-45.3l120-120c12.5-12.5 32.8-12.5 45.3 0z" />
+                                      <path d="M246.6 150.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0l96 96c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L352 109.3 352 384c0 35.3 28.7 64 64 64l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-70.7 0-128-57.3-128-128c0-35.3-28.7-64-64-64l-114.7 0 41.4 41.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-96-96c-12.5-12.5-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L109.3 256 224 256c23.3 0 45.2 6.2 64 17.1l0-163.9-41.4 41.4z" />
                                     </svg>
                                   </button>
                                   {!r.isLikelyTransfer && (
@@ -1121,7 +1121,7 @@ export default function ImportPage() {
                                 title="Split across categories"
                                 className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
                                 <svg width="11" height="11" viewBox="0 0 512 512" fill="currentColor">
-                                  <path d="M169.4 57.4c12.5 12.5 12.5 32.8 0 45.3l-67.7 67.7H256c114.9 0 208 93.1 208 208c0 17.7-14.3 32-32 32s-32-14.3-32-32c0-79.5-64.5-144-144-144H101.5l67.7 67.7c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-120-120c-12.5-12.5-12.5-32.8 0-45.3l120-120c12.5-12.5 32.8-12.5 45.3 0z" />
+                                  <path d="M246.6 150.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0l96 96c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L352 109.3 352 384c0 35.3 28.7 64 64 64l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-70.7 0-128-57.3-128-128c0-35.3-28.7-64-64-64l-114.7 0 41.4 41.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-96-96c-12.5-12.5-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L109.3 256 224 256c23.3 0 45.2 6.2 64 17.1l0-163.9-41.4 41.4z" />
                                 </svg>
                               </button>
                               {!r.isLikelyTransfer && (
