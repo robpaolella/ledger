@@ -967,7 +967,7 @@ export default function ImportPage() {
                                       title="Mark as transfer"
                                       className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M7 10l5-5 5 5" /><path d="M17 14l-5 5-5-5" />
+                                        <path d="M4 12h16m0 0l-5-5m5 5l-5 5M20 12H4m0 0l5-5m-5 5l5 5" />
                                       </svg>
                                     </button>
                                   )}
@@ -1124,7 +1124,7 @@ export default function ImportPage() {
                                   title="Mark as transfer"
                                   className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M7 10l5-5 5 5" /><path d="M17 14l-5 5-5-5" />
+                                    <path d="M4 12h16m0 0l-5-5m5 5l-5 5M20 12H4m0 0l5-5m-5 5l5 5" />
                                   </svg>
                                 </button>
                               )}
