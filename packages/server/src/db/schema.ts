@@ -179,3 +179,16 @@ export const budgetRecurring = sqliteTable('budget_recurring', {
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
   updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
 });
+
+// === Dismissed Transfers ===
+export const dismissedTransfers = sqliteTable('dismissed_transfers', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  account_id: integer('account_id').notNull().references(() => accounts.id),
+  signature: text('signature').notNull(),
+  date: text('date').notNull(),
+  amount: real('amount').notNull(),
+  description: text('description').notNull(),
+  dismissed_at: text('dismissed_at').default('CURRENT_TIMESTAMP'),
+}, (table) => [
+  uniqueIndex('dismissed_transfers_acct_sig_idx').on(table.account_id, table.signature),
+]);
