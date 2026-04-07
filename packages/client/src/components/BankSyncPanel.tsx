@@ -12,6 +12,13 @@ import ResponsiveModal from '../components/ResponsiveModal';
 import SplitEditor from '../components/SplitEditor';
 import type { SplitRow } from '../components/SplitEditor';
 
+const TRANSFER_ICON_PATH = "M32 176h370.8l-57.38 57.38c-12.5 12.5-12.5 32.75 0 45.25C351.6 284.9 359.8 288 368 288s16.38-3.125 22.62-9.375l112-112c12.5-12.5 12.5-32.75 0-45.25l-112-112c-12.5-12.5-32.75-12.5-45.25 0s-12.5 32.75 0 45.25L402.8 112H32c-17.69 0-32 14.31-32 32S14.31 176 32 176zM480 336H109.3l57.38-57.38c12.5-12.5 12.5-32.75 0-45.25s-32.75-12.5-45.25 0l-112 112c-12.5 12.5-12.5 32.75 0 45.25l112 112C127.6 508.9 135.8 512 144 512s16.38-3.125 22.62-9.375c12.5-12.5 12.5-32.75 0-45.25L109.3 400H480c17.69 0 32-14.31 32-32S497.7 336 480 336z";
+const TransferIcon = ({ size = 10 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" style={{ display: 'inline-block', verticalAlign: '-1px', marginRight: 4, flexShrink: 0 }}>
+    <path d={TRANSFER_ICON_PATH} />
+  </svg>
+);
+
 interface Category {
   id: number;
   group_name: string;
@@ -707,9 +714,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                       <button onClick={() => toggleTransferFlag(i)}
                                         title="Mark as transfer"
                                         className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M4 12h16m0 0l-5-5m5 5l-5 5M20 12H4m0 0l5-5m-5 5l5 5" />
-                                        </svg>
+                                        <TransferIcon size={12} />
                                       </button>
                                     )}
                                   </div>
@@ -730,7 +735,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                   {t.isLikelyTransfer && (
                                     <button onClick={() => toggleTransferFlag(i)}
                                       className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                                   )}
                                 </div>
                             </div>
@@ -875,9 +880,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                   <button onClick={() => toggleTransferFlag(i)}
                                     title="Mark as transfer"
                                     className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M4 12h16m0 0l-5-5m5 5l-5 5M20 12H4m0 0l5-5m-5 5l5 5" />
-                                    </svg>
+                                    <TransferIcon size={11} />
                                   </button>
                                 )}
                               </div>
@@ -898,7 +901,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               {t.isLikelyTransfer && (
                                 <button onClick={() => toggleTransferFlag(i)}
                                   className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                               )}
                             </div>
                         </td>
@@ -945,7 +948,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                 className="w-full flex items-center justify-between px-5 py-3 border-none bg-transparent cursor-pointer text-left"
               >
                 <span className="text-[13px] font-semibold text-[var(--text-secondary)]">
-                  ↔ Previously Seen Transfers ({dismissedTxnIndices.length})
+                  <TransferIcon />Previously Seen Transfers ({dismissedTxnIndices.length})
                 </span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
                   className={`text-[var(--text-muted)] transition-transform ${dismissedExpanded ? 'rotate-180' : ''}`}>
@@ -984,7 +987,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                 <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                   <button onClick={() => toggleTransferFlag(i)}
                                     className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                                 </div>
                               </div>
                             </div>
@@ -1033,7 +1036,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                 <div className="font-medium text-[var(--text-primary)] truncate">{t.description}</div>
                                 <button onClick={() => toggleTransferFlag(i)}
                                   className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80 mt-1"
-                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                               </td>
                               <td className="px-2.5 py-2">
                                 <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-[var(--badge-account-bg)] text-[var(--badge-account-text)] font-mono inline-block max-w-full truncate" title={t.accountName}>
