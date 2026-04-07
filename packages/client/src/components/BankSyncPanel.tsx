@@ -630,7 +630,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                     const hasCategory = t.categoryId || (t.splits && t.splits.length >= 2);
                     return (
                       <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !hasCategory ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}
-                        style={selectedTxnRows.has(i) && hasCategory && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
+                        style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                         <div className="flex items-start gap-2.5">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
@@ -804,7 +804,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                     return (
                     <React.Fragment key={i}>
                       <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!hasCategory && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}
-                        style={selectedTxnRows.has(i) && hasCategory && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
+                        style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                         <td className="px-2 py-2 text-center">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {

@@ -887,7 +887,7 @@ export default function ImportPage() {
                       !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' :
                       !r.categoryId && !(r.splits && r.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
                       'border-[var(--bg-card-border)]'
-                    }`} style={selectedImportRows.has(i) && (r.categoryId || (r.splits && r.splits.length >= 2)) && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
+                    }`} style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                       <div className="flex items-start gap-2.5">
                         <input type="checkbox" checked={selectedImportRows.has(i)}
                           onChange={() => {
@@ -1058,7 +1058,7 @@ export default function ImportPage() {
                   return (
                   <React.Fragment key={i}>
                     <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!hasCategory && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}
-                      style={selectedImportRows.has(i) && hasCategory && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
+                      style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                       <td className="px-2 py-2 text-center">
                         <input type="checkbox" checked={selectedImportRows.has(i)}
                           onChange={() => {
