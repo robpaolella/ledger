@@ -399,20 +399,18 @@ export default function ImportPage() {
       // Transfer detection failed — continue without it
     }
 
-    // Check which transfers were previously dismissed
-    const transferIndices = merged.map((r, i) => r.isLikelyTransfer ? i : -1).filter(i => i >= 0);
-    if (transferIndices.length > 0 && selectedAccountId) {
+    // Check ALL rows against dismissed list (catches both auto-detected and previously manually-flagged transfers)
+    if (merged.length > 0 && selectedAccountId) {
       try {
-        const dismissCheckItems = transferIndices.map(i => ({
-          date: merged[i].date, amount: merged[i].amount, description: merged[i].description,
-        }));
+        const allItems = merged.map(r => ({ date: r.date, amount: r.amount, description: r.description }));
         const dismissRes = await apiFetch<{ data: boolean[] }>(
           '/import/check-dismissed-transfers',
-          { method: 'POST', body: JSON.stringify({ accountId: selectedAccountId, items: dismissCheckItems }) }
+          { method: 'POST', body: JSON.stringify({ accountId: selectedAccountId, items: allItems }) }
         );
-        dismissRes.data.forEach((isDismissed, idx) => {
+        dismissRes.data.forEach((isDismissed, i) => {
           if (isDismissed) {
-            merged[transferIndices[idx]].isDismissedTransfer = true;
+            merged[i].isLikelyTransfer = true;
+            merged[i].isDismissedTransfer = true;
           }
         });
       } catch {
@@ -881,15 +879,15 @@ export default function ImportPage() {
           {isMobile ? (
             /* Mobile: card-based layout */
             <div className="flex flex-col gap-2">
-              {mainCsvIndices.map((i) => {
+              {mainCsvIndices.map((i, visualIdx) => {
                 const r = categorizedRows[i];
                 return (
                   <React.Fragment key={i}>
                     <div className={`rounded-xl border px-3 py-2.5 transition-opacity ${
                       !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' :
                       !r.categoryId && !(r.splits && r.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
-                      'border-[var(--bg-card-border)] bg-[var(--bg-card)]'
-                    }`}>
+                      'border-[var(--bg-card-border)]'
+                    }`} style={selectedImportRows.has(i) && (r.categoryId || (r.splits && r.splits.length >= 2)) && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                       <div className="flex items-start gap-2.5">
                         <input type="checkbox" checked={selectedImportRows.has(i)}
                           onChange={() => {
@@ -1054,11 +1052,13 @@ export default function ImportPage() {
                 </tr>
               </thead>
               <tbody>
-                {mainCsvIndices.map((i) => {
+                {mainCsvIndices.map((i, visualIdx) => {
                   const r = categorizedRows[i];
+                  const hasCategory = r.categoryId || (r.splits && r.splits.length >= 2);
                   return (
                   <React.Fragment key={i}>
-                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!r.categoryId && !(r.splits && r.splits.length >= 2) && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
+                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!hasCategory && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}
+                      style={selectedImportRows.has(i) && hasCategory && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                       <td className="px-2 py-2 text-center">
                         <input type="checkbox" checked={selectedImportRows.has(i)}
                           onChange={() => {

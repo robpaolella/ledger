@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 
 const TRANSFER_KEYWORDS = [
   /\bpayment\b/i,
+  /\bpayment(?=[A-Z])/,         // "PaymentROBERT" — no space after "Payment"
   /\btransfer\b/i,
   /\bthank you\b/i,
   /\bach pmt\b/i,
@@ -11,6 +12,9 @@ const TRANSFER_KEYWORDS = [
   /\bmobile payment\b/i,
   /\bonline.*transfer\b/i,
   /\bautopay\b/i,
+  /\brtp\b/i,                    // Real-Time Payment
+  /\bincoming payment/i,
+  /\boutgoing payment/i,
 ];
 
 const AMOUNT_THRESHOLD = 100;

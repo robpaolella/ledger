@@ -233,27 +233,26 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
         isDismissedTransfer: false,
       }));
 
-      // Check dismissed status for transfer-flagged rows
-      const transferIndices = txns.map((t, i) => t.isLikelyTransfer ? i : -1).filter(i => i >= 0);
-      if (transferIndices.length > 0) {
-        // Group by accountId for the check
-        const byAccount = new Map<number, { idx: number; date: string; amount: number; description: string }[]>();
-        for (const idx of transferIndices) {
-          const t = txns[idx];
-          if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []);
-          byAccount.get(t.accountId)!.push({ idx, date: t.date, amount: t.amount, description: t.description });
-        }
-        for (const [accountId, items] of byAccount.entries()) {
-          try {
-            const checkRes = await apiFetch<{ data: boolean[] }>('/import/check-dismissed-transfers', {
-              method: 'POST',
-              body: JSON.stringify({ accountId, items: items.map(it => ({ date: it.date, amount: it.amount, description: it.description })) }),
-            });
-            checkRes.data.forEach((isDismissed, j) => {
-              if (isDismissed) txns[items[j].idx].isDismissedTransfer = true;
-            });
-          } catch { /* ignore */ }
-        }
+      // Check ALL rows against dismissed list (catches both auto-detected and previously manually-flagged transfers)
+      const byAccount = new Map<number, { idx: number; date: string; amount: number; description: string }[]>();
+      for (let i = 0; i < txns.length; i++) {
+        const t = txns[i];
+        if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []);
+        byAccount.get(t.accountId)!.push({ idx: i, date: t.date, amount: t.amount, description: t.description });
+      }
+      for (const [accountId, items] of byAccount.entries()) {
+        try {
+          const checkRes = await apiFetch<{ data: boolean[] }>('/import/check-dismissed-transfers', {
+            method: 'POST',
+            body: JSON.stringify({ accountId, items: items.map(it => ({ date: it.date, amount: it.amount, description: it.description })) }),
+          });
+          checkRes.data.forEach((isDismissed, j) => {
+            if (isDismissed) {
+              txns[items[j].idx].isLikelyTransfer = true;
+              txns[items[j].idx].isDismissedTransfer = true;
+            }
+          });
+        } catch { /* ignore */ }
       }
 
       setSyncTxns(txns);
@@ -626,10 +625,12 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
               {isMobile ? (
                 /* Mobile: Card-based transaction review */
                 <div className="flex flex-col gap-2">
-                  {mainTxnIndices.map((i) => {
+                  {mainTxnIndices.map((i, visualIdx) => {
                     const t = syncTxns[i];
+                    const hasCategory = t.categoryId || (t.splits && t.splits.length >= 2);
                     return (
-                      <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !t.categoryId && !(t.splits && t.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}>
+                      <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !hasCategory ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}
+                        style={selectedTxnRows.has(i) && hasCategory && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                         <div className="flex items-start gap-2.5">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
@@ -797,11 +798,13 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   </tr>
                 </thead>
                 <tbody>
-                  {mainTxnIndices.map((i) => {
+                  {mainTxnIndices.map((i, visualIdx) => {
                     const t = syncTxns[i];
+                    const hasCategory = t.categoryId || (t.splits && t.splits.length >= 2);
                     return (
                     <React.Fragment key={i}>
-                      <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!t.categoryId && !(t.splits && t.splits.length >= 2) && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
+                      <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!hasCategory && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}
+                        style={selectedTxnRows.has(i) && hasCategory && visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                         <td className="px-2 py-2 text-center">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
