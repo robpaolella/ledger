@@ -233,27 +233,26 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
         isDismissedTransfer: false,
       }));
 
-      // Check dismissed status for transfer-flagged rows
-      const transferIndices = txns.map((t, i) => t.isLikelyTransfer ? i : -1).filter(i => i >= 0);
-      if (transferIndices.length > 0) {
-        // Group by accountId for the check
-        const byAccount = new Map<number, { idx: number; date: string; amount: number; description: string }[]>();
-        for (const idx of transferIndices) {
-          const t = txns[idx];
-          if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []);
-          byAccount.get(t.accountId)!.push({ idx, date: t.date, amount: t.amount, description: t.description });
-        }
-        for (const [accountId, items] of byAccount.entries()) {
-          try {
-            const checkRes = await apiFetch<{ data: boolean[] }>('/import/check-dismissed-transfers', {
-              method: 'POST',
-              body: JSON.stringify({ accountId, items: items.map(it => ({ date: it.date, amount: it.amount, description: it.description })) }),
-            });
-            checkRes.data.forEach((isDismissed, j) => {
-              if (isDismissed) txns[items[j].idx].isDismissedTransfer = true;
-            });
-          } catch { /* ignore */ }
-        }
+      // Check ALL rows against dismissed list (catches both auto-detected and previously manually-flagged transfers)
+      const byAccount = new Map<number, { idx: number; date: string; amount: number; description: string }[]>();
+      for (let i = 0; i < txns.length; i++) {
+        const t = txns[i];
+        if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []);
+        byAccount.get(t.accountId)!.push({ idx: i, date: t.date, amount: t.amount, description: t.description });
+      }
+      for (const [accountId, items] of byAccount.entries()) {
+        try {
+          const checkRes = await apiFetch<{ data: boolean[] }>('/import/check-dismissed-transfers', {
+            method: 'POST',
+            body: JSON.stringify({ accountId, items: items.map(it => ({ date: it.date, amount: it.amount, description: it.description })) }),
+          });
+          checkRes.data.forEach((isDismissed, j) => {
+            if (isDismissed) {
+              txns[items[j].idx].isLikelyTransfer = true;
+              txns[items[j].idx].isDismissedTransfer = true;
+            }
+          });
+        } catch { /* ignore */ }
       }
 
       setSyncTxns(txns);
@@ -385,10 +384,13 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
       const nowTransfer = !t.isLikelyTransfer;
       return { ...t, isLikelyTransfer: nowTransfer, isDismissedTransfer: false };
     }));
-    // Uncheck if newly flagged as transfer
     const t = syncTxns[idx];
     if (!t.isLikelyTransfer) {
+      // Uncheck if newly flagged as transfer
       setSelectedTxnRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
+    } else {
+      // Auto-select when un-flagging (moving back to main list)
+      setSelectedTxnRows(prev => { const next = new Set(prev); next.add(idx); return next; });
     }
   };
 
@@ -626,10 +628,12 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
               {isMobile ? (
                 /* Mobile: Card-based transaction review */
                 <div className="flex flex-col gap-2">
-                  {mainTxnIndices.map((i) => {
+                  {mainTxnIndices.map((i, visualIdx) => {
                     const t = syncTxns[i];
+                    const hasCategory = t.categoryId || (t.splits && t.splits.length >= 2);
                     return (
-                      <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !t.categoryId && !(t.splits && t.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}>
+                      <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !hasCategory ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}
+                        style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                         <div className="flex items-start gap-2.5">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
@@ -797,11 +801,13 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   </tr>
                 </thead>
                 <tbody>
-                  {mainTxnIndices.map((i) => {
+                  {mainTxnIndices.map((i, visualIdx) => {
                     const t = syncTxns[i];
+                    const hasCategory = t.categoryId || (t.splits && t.splits.length >= 2);
                     return (
                     <React.Fragment key={i}>
-                      <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!t.categoryId && !(t.splits && t.splits.length >= 2) && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}>
+                      <tr className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''} ${!hasCategory && selectedTxnRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}
+                        style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
                         <td className="px-2 py-2 text-center">
                           <input type="checkbox" checked={selectedTxnRows.has(i)}
                             onChange={() => {
@@ -962,17 +968,8 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                       {dismissedTxnIndices.map((i) => {
                         const t = syncTxns[i];
                         return (
-                          <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : 'border-[var(--bg-card-border)]'}`}>
+                          <div key={i} className="rounded-lg border px-3 py-2.5 border-[var(--bg-card-border)]">
                             <div className="flex items-start gap-2.5">
-                              <input type="checkbox" checked={selectedTxnRows.has(i)}
-                                onChange={() => {
-                                  setSelectedTxnRows((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(i)) next.delete(i); else next.add(i);
-                                    return next;
-                                  });
-                                }}
-                                className="cursor-pointer mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{t.description}</span>
@@ -998,39 +995,24 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   ) : (
                     <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '40px' }} />
                         <col style={{ width: '110px' }} />
                         <col />
                         <col style={{ width: '15%' }} />
                         <col style={{ width: '95px' }} />
-                        <col style={{ width: '80px' }} />
                       </colgroup>
                       <thead>
                         <tr>
-                          <th className="px-2 py-2 border-b-2 border-[var(--table-border)]" />
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Date</th>
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Description</th>
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Account</th>
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-right">Amount</th>
-                          <th className="px-2 py-2 border-b-2 border-[var(--table-border)]" />
                         </tr>
                       </thead>
                       <tbody>
                         {dismissedTxnIndices.map((i) => {
                           const t = syncTxns[i];
                           return (
-                            <tr key={i} className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''}`}>
-                              <td className="px-2 py-2 text-center">
-                                <input type="checkbox" checked={selectedTxnRows.has(i)}
-                                  onChange={() => {
-                                    setSelectedTxnRows((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(i)) next.delete(i); else next.add(i);
-                                      return next;
-                                    });
-                                  }}
-                                  className="cursor-pointer" />
-                              </td>
+                            <tr key={i} className="border-b border-[var(--table-row-border)]">
                               <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-body)] truncate">{t.date}</td>
                               <td className="px-2.5 py-2">
                                 <div className="font-medium text-[var(--text-primary)] truncate">{t.description}</div>
@@ -1046,7 +1028,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               <td className={`px-2.5 py-2 text-right font-mono font-semibold ${t.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                                 {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
                               </td>
-                              <td />
                             </tr>
                           );
                         })}

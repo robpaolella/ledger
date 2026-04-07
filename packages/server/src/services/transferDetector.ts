@@ -3,7 +3,7 @@ import { accounts } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const TRANSFER_KEYWORDS = [
-  /\bpayment\b/i,
+  /\bpayment/i,                  // standalone "payment" or conjoined "PaymentROBERT"
   /\btransfer\b/i,
   /\bthank you\b/i,
   /\bach pmt\b/i,
@@ -11,6 +11,9 @@ const TRANSFER_KEYWORDS = [
   /\bmobile payment\b/i,
   /\bonline.*transfer\b/i,
   /\bautopay\b/i,
+  /\brtp\b/i,                    // Real-Time Payment
+  /\bincoming payment/i,
+  /\boutgoing payment/i,
 ];
 
 const AMOUNT_THRESHOLD = 100;
