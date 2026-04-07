@@ -3,8 +3,7 @@ import { accounts } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const TRANSFER_KEYWORDS = [
-  /\bpayment\b/i,
-  /\bpayment(?=[A-Z])/,         // "PaymentROBERT" — no space after "Payment"
+  /\bpayment/i,                  // standalone "payment" or conjoined "PaymentROBERT"
   /\btransfer\b/i,
   /\bthank you\b/i,
   /\bach pmt\b/i,
