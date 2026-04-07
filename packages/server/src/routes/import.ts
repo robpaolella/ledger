@@ -91,6 +91,29 @@ function suggestMapping(headers: string[]): { date: number; description: number;
   return { date: date >= 0 ? date : 0, description: description >= 0 ? description : 1, amount: amount >= 0 ? amount : 2 };
 }
 
+// Deduce the account owner's display name from Venmo CSV data.
+// Positive amount → "To" is the owner (money came to them).
+// Negative amount → "From" is the owner (money left their account).
+function detectVenmoOwner(headers: string[], rows: string[][]): string | null {
+  const h = headers.map((x) => x.toLowerCase());
+  const typeIdx = h.findIndex((x) => /^type$/i.test(x));
+  const fromIdx = h.findIndex((x) => /^from$/i.test(x));
+  const toIdx = h.findIndex((x) => /^to$/i.test(x));
+  const amountIdx = h.findIndex((x) => /amount.*total|^amount$/i.test(x));
+  if (fromIdx < 0 || toIdx < 0 || amountIdx < 0) return null;
+
+  for (const row of rows) {
+    const type = typeIdx >= 0 ? row[typeIdx]?.trim().toLowerCase() : '';
+    if (type && type.includes('transfer')) continue;
+    const rawAmt = row[amountIdx]?.trim().replace(/[$,+\s]/g, '');
+    const amt = parseFloat(rawAmt);
+    if (isNaN(amt) || amt === 0) continue;
+    // Positive amount = money in → owner is in "To"; negative = money out → owner is in "From"
+    return amt > 0 ? (row[toIdx]?.trim() || null) : (row[fromIdx]?.trim() || null);
+  }
+  return null;
+}
+
 // POST /api/import/parse
 router.post('/parse', requirePermission('import.csv'), upload.single('file'), (req: Request, res: Response) => {
   try {
@@ -109,6 +132,7 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
 
     const detectedFormat = detectFormat(headers);
     const suggestedMappingResult = suggestMapping(headers);
+    const venmoOwnerName = detectedFormat === 'venmo' ? detectVenmoOwner(headers, rows) : undefined;
 
     res.json({
       data: {
@@ -118,6 +142,7 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
         detectedFormat,
         suggestedMapping: suggestedMappingResult,
         headerRowIndex,
+        ...(venmoOwnerName ? { venmoOwnerName } : {}),
       },
     });
   } catch (err) {

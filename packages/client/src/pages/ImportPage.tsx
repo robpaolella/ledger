@@ -39,6 +39,7 @@ interface ParseResult {
   detectedFormat: string;
   suggestedMapping: { date: number; description: number; amount: number };
   headerRowIndex: number;
+  venmoOwnerName?: string;
 }
 
 interface CategorizedRow {
@@ -272,7 +273,7 @@ export default function ImportPage() {
 
     const acct = accounts.find(a => a.id === selectedAccountId);
     const isVenmo = parseResult?.detectedFormat === 'venmo' || acct?.type === 'venmo';
-    const ownerName = acct?.owners?.[0]?.displayName || acct?.owner || '';
+    const ownerName = parseResult?.venmoOwnerName || acct?.owners?.[0]?.displayName || acct?.owner || '';
 
     const items = allRows.map((row) => {
       let description = row[mapping.description] || '';
