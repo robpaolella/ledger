@@ -384,10 +384,13 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
       const nowTransfer = !t.isLikelyTransfer;
       return { ...t, isLikelyTransfer: nowTransfer, isDismissedTransfer: false };
     }));
-    // Uncheck if newly flagged as transfer
     const t = syncTxns[idx];
     if (!t.isLikelyTransfer) {
+      // Uncheck if newly flagged as transfer
       setSelectedTxnRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
+    } else {
+      // Auto-select when un-flagging (moving back to main list)
+      setSelectedTxnRows(prev => { const next = new Set(prev); next.add(idx); return next; });
     }
   };
 
@@ -965,17 +968,8 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                       {dismissedTxnIndices.map((i) => {
                         const t = syncTxns[i];
                         return (
-                          <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : 'border-[var(--bg-card-border)]'}`}>
+                          <div key={i} className="rounded-lg border px-3 py-2.5 border-[var(--bg-card-border)]">
                             <div className="flex items-start gap-2.5">
-                              <input type="checkbox" checked={selectedTxnRows.has(i)}
-                                onChange={() => {
-                                  setSelectedTxnRows((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(i)) next.delete(i); else next.add(i);
-                                    return next;
-                                  });
-                                }}
-                                className="cursor-pointer mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{t.description}</span>
@@ -1001,39 +995,24 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   ) : (
                     <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '40px' }} />
                         <col style={{ width: '110px' }} />
                         <col />
                         <col style={{ width: '15%' }} />
                         <col style={{ width: '95px' }} />
-                        <col style={{ width: '80px' }} />
                       </colgroup>
                       <thead>
                         <tr>
-                          <th className="px-2 py-2 border-b-2 border-[var(--table-border)]" />
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Date</th>
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Description</th>
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Account</th>
                           <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-right">Amount</th>
-                          <th className="px-2 py-2 border-b-2 border-[var(--table-border)]" />
                         </tr>
                       </thead>
                       <tbody>
                         {dismissedTxnIndices.map((i) => {
                           const t = syncTxns[i];
                           return (
-                            <tr key={i} className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''}`}>
-                              <td className="px-2 py-2 text-center">
-                                <input type="checkbox" checked={selectedTxnRows.has(i)}
-                                  onChange={() => {
-                                    setSelectedTxnRows((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(i)) next.delete(i); else next.add(i);
-                                      return next;
-                                    });
-                                  }}
-                                  className="cursor-pointer" />
-                              </td>
+                            <tr key={i} className="border-b border-[var(--table-row-border)]">
                               <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-body)] truncate">{t.date}</td>
                               <td className="px-2.5 py-2">
                                 <div className="font-medium text-[var(--text-primary)] truncate">{t.description}</div>
@@ -1049,7 +1028,6 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               <td className={`px-2.5 py-2 text-right font-mono font-semibold ${t.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
                                 {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
                               </td>
-                              <td />
                             </tr>
                           );
                         })}

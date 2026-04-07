@@ -493,10 +493,16 @@ export default function ImportPage() {
   };
 
   const toggleTransferFlag = (idx: number) => {
-    setCategorizedRows((prev) => prev.map((r, i) => i === idx ? {
-      ...r,
-      isLikelyTransfer: !r.isLikelyTransfer,
-    } : r));
+    setCategorizedRows((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const nowTransfer = !r.isLikelyTransfer;
+      return { ...r, isLikelyTransfer: nowTransfer, isDismissedTransfer: false };
+    }));
+    // Auto-select when un-flagging (moving back to main list)
+    const r = categorizedRows[idx];
+    if (r.isLikelyTransfer) {
+      setSelectedImportRows(prev => { const next = new Set(prev); next.add(idx); return next; });
+    }
   };
 
   const [dismissedExpanded, setDismissedExpanded] = useState(false);
@@ -1217,19 +1223,8 @@ export default function ImportPage() {
                       {dismissedCsvIndices.map((i) => {
                         const r = categorizedRows[i];
                         return (
-                          <div key={i} className={`rounded-xl border px-3 py-2.5 transition-opacity ${
-                            !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : 'border-[var(--bg-card-border)] bg-[var(--bg-card)]'
-                          }`}>
+                          <div key={i} className="rounded-xl border px-3 py-2.5 border-[var(--bg-card-border)]">
                             <div className="flex items-start gap-2.5">
-                              <input type="checkbox" checked={selectedImportRows.has(i)}
-                                onChange={() => {
-                                  setSelectedImportRows(prev => {
-                                    const next = new Set(prev);
-                                    if (next.has(i)) next.delete(i); else next.add(i);
-                                    return next;
-                                  });
-                                }}
-                                className="cursor-pointer mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-start gap-2">
                                   <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{r.description}</span>
@@ -1239,8 +1234,11 @@ export default function ImportPage() {
                                 </div>
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <span className="text-[11px] font-mono text-[var(--text-muted)]">{r.date}</span>
-                                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                  <button onClick={() => toggleTransferFlag(i)}
+                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                                 </div>
                               </div>
                             </div>
@@ -1251,7 +1249,6 @@ export default function ImportPage() {
                   ) : (
                     <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '40px' }} />
                         <col style={{ width: '90px' }} />
                         <col />
                         <col style={{ width: '90px' }} />
@@ -1261,31 +1258,22 @@ export default function ImportPage() {
                         {dismissedCsvIndices.map((i) => {
                           const r = categorizedRows[i];
                           return (
-                            <tr key={i} className={`border-b border-[var(--table-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''}`}>
-                              <td className="px-2 py-2 text-center">
-                                <input type="checkbox" checked={selectedImportRows.has(i)}
-                                  onChange={() => {
-                                    setSelectedImportRows(prev => {
-                                      const next = new Set(prev);
-                                      if (next.has(i)) next.delete(i); else next.add(i);
-                                      return next;
-                                    });
-                                  }}
-                                  className="cursor-pointer" />
-                              </td>
+                            <tr key={i} className="border-b border-[var(--table-border)]">
                               <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-muted)]">{r.date}</td>
                               <td className="px-2.5 py-2">
                                 <span className="text-[var(--text-primary)]">{r.description}</span>
+                                <div className="mt-1">
+                                  <button onClick={() => toggleTransferFlag(i)}
+                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
+                                </div>
                               </td>
                               <td className="px-2.5 py-2 text-right font-mono">
                                 <span className={r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}>
                                   {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
                                 </span>
                               </td>
-                              <td className="px-2.5 py-2">
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer</span>
-                              </td>
+                              <td />
                             </tr>
                           );
                         })}
