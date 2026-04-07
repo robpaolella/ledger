@@ -1249,10 +1249,9 @@ export default function ImportPage() {
                   ) : (
                     <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '90px' }} />
+                        <col style={{ width: '110px' }} />
                         <col />
-                        <col style={{ width: '90px' }} />
-                        <col style={{ width: '120px' }} />
+                        <col style={{ width: '100px' }} />
                       </colgroup>
                       <tbody>
                         {dismissedCsvIndices.map((i) => {
@@ -1273,7 +1272,6 @@ export default function ImportPage() {
                                   {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
                                 </span>
                               </td>
-                              <td />
                             </tr>
                           );
                         })}
