@@ -59,6 +59,8 @@ interface SyncTransaction {
   subName: string | null;
   // Split support
   splits: SplitRow[] | null;
+  // Dismissed transfer tracking
+  isDismissedTransfer: boolean;
 }
 
 interface SyncBalanceUpdate {
@@ -167,6 +169,9 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
     return indices;
   }, [syncTxns, reviewSortBy, reviewSortDir, categories]);
 
+  const mainTxnIndices = React.useMemo(() => sortedTxnIndices.filter(i => !syncTxns[i].isDismissedTransfer), [sortedTxnIndices, syncTxns]);
+  const dismissedTxnIndices = React.useMemo(() => sortedTxnIndices.filter(i => syncTxns[i].isDismissedTransfer), [sortedTxnIndices, syncTxns]);
+
   const loadLinkedAccounts = useCallback(async () => {
     try {
       const res = await apiFetch<{ data: LinkedAccountGroup[] }>('/simplefin/linked-accounts');
@@ -218,15 +223,39 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
         groupName: t.suggestedGroupName,
         subName: t.suggestedSubName,
         splits: null,
+        isDismissedTransfer: false,
       }));
+
+      // Check dismissed status for transfer-flagged rows
+      const transferIndices = txns.map((t, i) => t.isLikelyTransfer ? i : -1).filter(i => i >= 0);
+      if (transferIndices.length > 0) {
+        // Group by accountId for the check
+        const byAccount = new Map<number, { idx: number; date: string; amount: number; description: string }[]>();
+        for (const idx of transferIndices) {
+          const t = txns[idx];
+          if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []);
+          byAccount.get(t.accountId)!.push({ idx, date: t.date, amount: t.amount, description: t.description });
+        }
+        for (const [accountId, items] of byAccount.entries()) {
+          try {
+            const checkRes = await apiFetch<{ data: boolean[] }>('/import/check-dismissed-transfers', {
+              method: 'POST',
+              body: JSON.stringify({ accountId, items: items.map(it => ({ date: it.date, amount: it.amount, description: it.description })) }),
+            });
+            checkRes.data.forEach((isDismissed, j) => {
+              if (isDismissed) txns[items[j].idx].isDismissedTransfer = true;
+            });
+          } catch { /* ignore */ }
+        }
+      }
 
       setSyncTxns(txns);
       setBalanceUpdates(res.data.balanceUpdates.map((b) => ({ ...b, selected: true })));
       setHoldingsUpdates(res.data.holdingsUpdates.map((h) => ({ ...h, selected: true })));
 
-      // Auto-select: uncheck exact duplicates
+      // Auto-select: uncheck exact duplicates and dismissed transfers
       const selected = new Set(txns.map((_, i) => i));
-      txns.forEach((t, i) => { if (t.duplicateStatus === 'exact' || !t.categoryId) selected.delete(i); });
+      txns.forEach((t, i) => { if (t.duplicateStatus === 'exact' || !t.categoryId || t.isDismissedTransfer) selected.delete(i); });
       setSelectedTxnRows(selected);
 
       setStep(1);
@@ -259,6 +288,24 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
 
     setImporting(true);
     try {
+      // Auto-dismiss unselected transfers
+      const transfersToDismiss = syncTxns.filter((t, i) => t.isLikelyTransfer && !selectedTxnRows.has(i));
+      if (transfersToDismiss.length > 0) {
+        const byAccount = new Map<number, { date: string; amount: number; description: string }[]>();
+        for (const t of transfersToDismiss) {
+          if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []);
+          byAccount.get(t.accountId)!.push({ date: t.date, amount: t.amount, description: t.description });
+        }
+        for (const [accountId, items] of byAccount.entries()) {
+          try {
+            await apiFetch('/import/dismiss-transfers', {
+              method: 'POST',
+              body: JSON.stringify({ accountId, items }),
+            });
+          } catch { /* ignore */ }
+        }
+      }
+
       const res = await apiFetch<{ data: { transactionsImported: number; balancesUpdated: number; holdingsUpdated: number } }>(
         '/simplefin/commit',
         {
@@ -324,6 +371,21 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
       setSelectedTxnRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
     }
   };
+
+  const toggleTransferFlag = (idx: number) => {
+    setSyncTxns(prev => prev.map((t, i) => {
+      if (i !== idx) return t;
+      const nowTransfer = !t.isLikelyTransfer;
+      return { ...t, isLikelyTransfer: nowTransfer, isDismissedTransfer: false };
+    }));
+    // Uncheck if newly flagged as transfer
+    const t = syncTxns[idx];
+    if (!t.isLikelyTransfer) {
+      setSelectedTxnRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
+    }
+  };
+
+  const [dismissedExpanded, setDismissedExpanded] = useState(false);
 
   if (loading) return null;
 
@@ -550,14 +612,14 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
             <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] px-5 py-4 shadow-[var(--bg-card-shadow)] mb-4">
               <div className={`flex justify-between items-center mb-3 ${isMobile ? 'flex-col gap-2 items-stretch' : ''}`}>
                 <span className="text-[13px] text-[var(--text-secondary)]">
-                  {validTxnCount} of {syncTxns.length} transactions selected for import
+                  {validTxnCount} of {mainTxnIndices.length} transactions selected for import
                 </span>
               </div>
 
               {isMobile ? (
                 /* Mobile: Card-based transaction review */
                 <div className="flex flex-col gap-2">
-                  {sortedTxnIndices.map((i) => {
+                  {mainTxnIndices.map((i) => {
                     const t = syncTxns[i];
                     return (
                       <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : !t.categoryId && !(t.splits && t.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' : 'border-[var(--bg-card-border)]'}`}>
@@ -644,8 +706,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                   </div>
                                 </>
                               )}
-                              {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
-                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                   {t.duplicateStatus !== 'none' && (
                                     <button
                                       onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
@@ -657,12 +718,16 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                       ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
                                     </button>
                                   )}
-                                  {t.isLikelyTransfer && (
-                                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                                  {t.isLikelyTransfer ? (
+                                    <button onClick={() => toggleTransferFlag(i)}
+                                      className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                                  ) : (
+                                    <button onClick={() => toggleTransferFlag(i)}
+                                      className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full opacity-50 hover:opacity-80"
+                                      style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Mark as Transfer</button>
                                   )}
                                 </div>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -702,10 +767,13 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   <tr>
                     <th className="px-2 py-2 border-b-2 border-[var(--table-border)]">
                       <input type="checkbox"
-                        checked={selectedTxnRows.size === syncTxns.length && syncTxns.length > 0}
+                        checked={mainTxnIndices.length > 0 && mainTxnIndices.every(i => selectedTxnRows.has(i))}
                         onChange={() => {
-                          if (selectedTxnRows.size === syncTxns.length) setSelectedTxnRows(new Set());
-                          else setSelectedTxnRows(new Set(syncTxns.map((_, i) => i)));
+                          if (mainTxnIndices.every(i => selectedTxnRows.has(i))) {
+                            setSelectedTxnRows(prev => { const next = new Set(prev); mainTxnIndices.forEach(i => next.delete(i)); return next; });
+                          } else {
+                            setSelectedTxnRows(prev => { const next = new Set(prev); mainTxnIndices.forEach(i => next.add(i)); return next; });
+                          }
                         }}
                         className="cursor-pointer" />
                     </th>
@@ -719,7 +787,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedTxnIndices.map((i) => {
+                  {mainTxnIndices.map((i) => {
                     const t = syncTxns[i];
                     return (
                     <React.Fragment key={i}>
@@ -801,8 +869,7 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                               </div>
                             </>
                           )}
-                          {(t.duplicateStatus !== 'none' || t.isLikelyTransfer) && (
-                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                               {t.duplicateStatus !== 'none' && (
                                 <button
                                   onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
@@ -814,12 +881,16 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                                   ⚠ {t.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
                                 </button>
                               )}
-                              {t.isLikelyTransfer && (
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                              {t.isLikelyTransfer ? (
+                                <button onClick={() => toggleTransferFlag(i)}
+                                  className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                              ) : (
+                                <button onClick={() => toggleTransferFlag(i)}
+                                  className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full opacity-50 hover:opacity-80"
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Mark as Transfer</button>
                               )}
                             </div>
-                          )}
                         </td>
                         <td className="px-2.5 py-2 text-center">
                           <span className={`text-[11px] font-semibold font-mono ${
@@ -852,6 +923,124 @@ export default function BankSyncPanel({ categories }: { categories: Category[] }
                   })}
                 </tbody>
               </table>
+              )}
+            </div>
+          )}
+
+          {/* Dismissed Transfers Collapsible Section */}
+          {dismissedTxnIndices.length > 0 && (
+            <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] mb-4 overflow-hidden">
+              <button
+                onClick={() => setDismissedExpanded(!dismissedExpanded)}
+                className="w-full flex items-center justify-between px-5 py-3 border-none bg-transparent cursor-pointer text-left"
+              >
+                <span className="text-[13px] font-semibold text-[var(--text-secondary)]">
+                  ↔ Previously Seen Transfers ({dismissedTxnIndices.length})
+                </span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                  className={`text-[var(--text-muted)] transition-transform ${dismissedExpanded ? 'rotate-180' : ''}`}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {dismissedExpanded && (
+                <div className="border-t border-[var(--table-border)] px-5 py-3">
+                  {isMobile ? (
+                    <div className="flex flex-col gap-2">
+                      {dismissedTxnIndices.map((i) => {
+                        const t = syncTxns[i];
+                        return (
+                          <div key={i} className={`rounded-lg border px-3 py-2.5 ${!selectedTxnRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : 'border-[var(--bg-card-border)]'}`}>
+                            <div className="flex items-start gap-2.5">
+                              <input type="checkbox" checked={selectedTxnRows.has(i)}
+                                onChange={() => {
+                                  setSelectedTxnRows((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(i)) next.delete(i); else next.add(i);
+                                    return next;
+                                  });
+                                }}
+                                className="cursor-pointer mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{t.description}</span>
+                                  <span className={`text-[13px] font-mono font-semibold flex-shrink-0 ${t.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
+                                    {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{t.date}</span>
+                                  <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-[var(--badge-account-bg)] text-[var(--badge-account-text)] font-mono">{t.accountName}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                  <button onClick={() => toggleTransferFlag(i)}
+                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '40px' }} />
+                        <col style={{ width: '110px' }} />
+                        <col />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '95px' }} />
+                        <col style={{ width: '80px' }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th className="px-2 py-2 border-b-2 border-[var(--table-border)]" />
+                          <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Date</th>
+                          <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Description</th>
+                          <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">Account</th>
+                          <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-right">Amount</th>
+                          <th className="px-2 py-2 border-b-2 border-[var(--table-border)]" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dismissedTxnIndices.map((i) => {
+                          const t = syncTxns[i];
+                          return (
+                            <tr key={i} className={`border-b border-[var(--table-row-border)] ${!selectedTxnRows.has(i) ? 'opacity-50' : ''}`}>
+                              <td className="px-2 py-2 text-center">
+                                <input type="checkbox" checked={selectedTxnRows.has(i)}
+                                  onChange={() => {
+                                    setSelectedTxnRows((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(i)) next.delete(i); else next.add(i);
+                                      return next;
+                                    });
+                                  }}
+                                  className="cursor-pointer" />
+                              </td>
+                              <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-body)] truncate">{t.date}</td>
+                              <td className="px-2.5 py-2">
+                                <div className="font-medium text-[var(--text-primary)] truncate">{t.description}</div>
+                                <button onClick={() => toggleTransferFlag(i)}
+                                  className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80 mt-1"
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Transfer ✕</button>
+                              </td>
+                              <td className="px-2.5 py-2">
+                                <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-[var(--badge-account-bg)] text-[var(--badge-account-text)] font-mono inline-block max-w-full truncate" title={t.accountName}>
+                                  {t.accountName}
+                                </span>
+                              </td>
+                              <td className={`px-2.5 py-2 text-right font-mono font-semibold ${t.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
+                                {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
+                              </td>
+                              <td />
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
