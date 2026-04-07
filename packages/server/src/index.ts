@@ -14,6 +14,7 @@ import { migrate2FA } from './db/migrate-2fa.js';
 import { migrateCategorySortOrder } from './db/migrate-category-sort-order.js';
 import { migrateTransactionSplits } from './db/migrate-transaction-splits.js';
 import { migrateBudgetTemplatesRecurring } from './db/migrate-budget-templates-recurring.js';
+import { migrateDismissedTransfers } from './db/migrate-dismissed-transfers.js';
 import { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
@@ -54,6 +55,7 @@ migrate2FA(sqlite);
 migrateCategorySortOrder(sqlite);
 migrateTransactionSplits(sqlite);
 migrateBudgetTemplatesRecurring(sqlite);
+migrateDismissedTransfers(sqlite);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));

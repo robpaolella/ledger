@@ -14,6 +14,13 @@ import SplitEditor from '../components/SplitEditor';
 import type { SplitRow } from '../components/SplitEditor';
 import { useIsMobile } from '../hooks/useIsMobile';
 
+const TRANSFER_ICON_PATH = "M32 176h370.8l-57.38 57.38c-12.5 12.5-12.5 32.75 0 45.25C351.6 284.9 359.8 288 368 288s16.38-3.125 22.62-9.375l112-112c12.5-12.5 12.5-32.75 0-45.25l-112-112c-12.5-12.5-32.75-12.5-45.25 0s-12.5 32.75 0 45.25L402.8 112H32c-17.69 0-32 14.31-32 32S14.31 176 32 176zM480 336H109.3l57.38-57.38c12.5-12.5 12.5-32.75 0-45.25s-32.75-12.5-45.25 0l-112 112c-12.5 12.5-12.5 32.75 0 45.25l112 112C127.6 508.9 135.8 512 144 512s16.38-3.125 22.62-9.375c12.5-12.5 12.5-32.75 0-45.25L109.3 400H480c17.69 0 32-14.31 32-32S497.7 336 480 336z";
+const TransferIcon = ({ size = 10, inline = true }: { size?: number; inline?: boolean }) => (
+  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" style={{ display: 'inline-block', verticalAlign: '-1px', marginRight: inline ? 4 : 0, flexShrink: 0 }}>
+    <path d={TRANSFER_ICON_PATH} />
+  </svg>
+);
+
 interface Account {
   id: number;
   name: string;
@@ -69,6 +76,7 @@ interface CategorizedRow {
   } | null;
   // Transfer detection
   isLikelyTransfer: boolean;
+  isDismissedTransfer: boolean;
   transferTooltip?: string;
 }
 
@@ -157,6 +165,14 @@ export default function ImportPage() {
     });
     return indices;
   }, [categorizedRows, csvSortBy, csvSortDir, categories]);
+
+  // Split into main rows and dismissed transfer rows
+  const mainCsvIndices = React.useMemo(() =>
+    sortedCsvIndices.filter(i => !categorizedRows[i].isDismissedTransfer),
+    [sortedCsvIndices, categorizedRows]);
+  const dismissedCsvIndices = React.useMemo(() =>
+    sortedCsvIndices.filter(i => categorizedRows[i].isDismissedTransfer),
+    [sortedCsvIndices, categorizedRows]);
 
   const handleFile = async (f: File) => {
     if (!selectedAccountId) {
@@ -336,6 +352,7 @@ export default function ImportPage() {
         duplicateStatus: 'none' as CategorizedRow['duplicateStatus'],
         duplicateMatch: null as CategorizedRow['duplicateMatch'],
         isLikelyTransfer: false,
+        isDismissedTransfer: false,
         splits: null,
       };
     });
@@ -382,10 +399,33 @@ export default function ImportPage() {
       // Transfer detection failed — continue without it
     }
 
+    // Check which transfers were previously dismissed
+    const transferIndices = merged.map((r, i) => r.isLikelyTransfer ? i : -1).filter(i => i >= 0);
+    if (transferIndices.length > 0 && selectedAccountId) {
+      try {
+        const dismissCheckItems = transferIndices.map(i => ({
+          date: merged[i].date, amount: merged[i].amount, description: merged[i].description,
+        }));
+        const dismissRes = await apiFetch<{ data: boolean[] }>(
+          '/import/check-dismissed-transfers',
+          { method: 'POST', body: JSON.stringify({ accountId: selectedAccountId, items: dismissCheckItems }) }
+        );
+        dismissRes.data.forEach((isDismissed, idx) => {
+          if (isDismissed) {
+            merged[transferIndices[idx]].isDismissedTransfer = true;
+          }
+        });
+      } catch {
+        // Dismissed check failed — continue without it
+      }
+    }
+
     setCategorizedRows(merged);
-    // Auto-uncheck exact duplicates
+    // Auto-uncheck exact duplicates and dismissed transfers
     const selected = new Set(merged.map((_, i) => i));
-    merged.forEach((r, i) => { if (r.duplicateStatus === 'exact' || !r.categoryId) selected.delete(i); });
+    merged.forEach((r, i) => {
+      if (r.duplicateStatus === 'exact' || !r.categoryId || r.isDismissedTransfer) selected.delete(i);
+    });
     setSelectedImportRows(selected);
     setStep(2);
   };
@@ -413,6 +453,26 @@ export default function ImportPage() {
         }),
       });
       addToast(`Import complete — ${validRows.length} transactions imported`);
+
+      // Auto-dismiss unselected transfers for future imports
+      const unselectedTransfers = categorizedRows.filter((r, i) =>
+        r.isLikelyTransfer && !selectedImportRows.has(i)
+      );
+      if (unselectedTransfers.length > 0 && selectedAccountId) {
+        try {
+          await apiFetch('/import/dismiss-transfers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: selectedAccountId,
+              items: unselectedTransfers.map(r => ({ date: r.date, amount: r.amount, description: r.description })),
+            }),
+          });
+        } catch {
+          // Dismiss failed silently — not critical
+        }
+      }
+
       navigate('/transactions');
     } catch (_err) {
       addToast('Import failed', 'error');
@@ -433,6 +493,15 @@ export default function ImportPage() {
     } : r));
     setSelectedImportRows(prev => { const next = new Set(prev); next.add(idx); return next; });
   };
+
+  const toggleTransferFlag = (idx: number) => {
+    setCategorizedRows((prev) => prev.map((r, i) => i === idx ? {
+      ...r,
+      isLikelyTransfer: !r.isLikelyTransfer,
+    } : r));
+  };
+
+  const [dismissedExpanded, setDismissedExpanded] = useState(false);
 
 
   // Group ALL categories for grouped dropdown
@@ -805,14 +874,14 @@ export default function ImportPage() {
               disabled={importing || validImportCount === 0}
               className={`px-4 py-2 bg-[var(--color-positive)] text-white rounded-lg text-[13px] font-semibold border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed btn-success ${isMobile ? 'w-full' : ''}`}
             >
-              {importing ? 'Importing...' : `Import ${validImportCount} of ${categorizedRows.length} Transactions`}
+              {importing ? 'Importing...' : `Import ${validImportCount} of ${mainCsvIndices.length} Transactions`}
             </button>
           </div>
 
           {isMobile ? (
             /* Mobile: card-based layout */
             <div className="flex flex-col gap-2">
-              {sortedCsvIndices.map((i) => {
+              {mainCsvIndices.map((i) => {
                 const r = categorizedRows[i];
                 return (
                   <React.Fragment key={i}>
@@ -894,17 +963,23 @@ export default function ImportPage() {
                                     </optgroup>
                                   </select>
                                   <button onClick={() => setSplitEditingIdx(i)}
-                                    title="Split"
-                                    className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)]">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M12 4v8m0 0l-6 8m6-8l6 8" />
+                                    title="Split across categories"
+                                    className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
+                                    <svg width="12" height="12" viewBox="0 0 512 512" fill="currentColor">
+                                      <path d="M246.6 150.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0l96 96c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L352 109.3 352 384c0 35.3 28.7 64 64 64l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-70.7 0-128-57.3-128-128c0-35.3-28.7-64-64-64l-114.7 0 41.4 41.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-96-96c-12.5-12.5-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L109.3 256 224 256c23.3 0 45.2 6.2 64 17.1l0-163.9-41.4 41.4z" />
                                     </svg>
                                   </button>
+                                  {!r.isLikelyTransfer && (
+                                    <button onClick={() => toggleTransferFlag(i)}
+                                      title="Mark as transfer"
+                                      className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
+                                      <TransferIcon size={12} inline={false} />
+                                    </button>
+                                  )}
                                 </div>
                               </>
                             )}
-                            {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
-                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 {r.duplicateStatus !== 'none' && (
                                   <button
                                     onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
@@ -917,11 +992,11 @@ export default function ImportPage() {
                                   </button>
                                 )}
                                 {r.isLikelyTransfer && (
-                                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                                  <button onClick={() => toggleTransferFlag(i)}
+                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                                 )}
                               </div>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -979,7 +1054,7 @@ export default function ImportPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedCsvIndices.map((i) => {
+                {mainCsvIndices.map((i) => {
                   const r = categorizedRows[i];
                   return (
                   <React.Fragment key={i}>
@@ -1044,16 +1119,22 @@ export default function ImportPage() {
                               </select>
                               <button onClick={() => setSplitEditingIdx(i)}
                                 title="Split across categories"
-                                className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M12 4v8m0 0l-6 8m6-8l6 8" />
+                                className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
+                                <svg width="11" height="11" viewBox="0 0 512 512" fill="currentColor">
+                                  <path d="M246.6 150.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0l96 96c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L352 109.3 352 384c0 35.3 28.7 64 64 64l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-70.7 0-128-57.3-128-128c0-35.3-28.7-64-64-64l-114.7 0 41.4 41.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-96-96c-12.5-12.5-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L109.3 256 224 256c23.3 0 45.2 6.2 64 17.1l0-163.9-41.4 41.4z" />
                                 </svg>
                               </button>
+                              {!r.isLikelyTransfer && (
+                                <button onClick={() => toggleTransferFlag(i)}
+                                  title="Mark as transfer"
+                                  className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
+                                  <TransferIcon size={11} inline={false} />
+                                </button>
+                              )}
                             </div>
                           </>
                         )}
-                        {(r.duplicateStatus !== 'none' || r.isLikelyTransfer) && (
-                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                             {r.duplicateStatus !== 'none' && (
                               <button
                                 onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
@@ -1066,11 +1147,11 @@ export default function ImportPage() {
                               </button>
                             )}
                             {r.isLikelyTransfer && (
-                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                                style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>↔ Likely Transfer</span>
+                              <button onClick={() => toggleTransferFlag(i)}
+                                className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
+                                style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
                             )}
                           </div>
-                        )}
                       </td>
                       <td className="px-2.5 py-2 text-center">
                         <span className={`text-[11px] font-semibold font-mono ${
@@ -1106,6 +1187,114 @@ export default function ImportPage() {
                 })}
               </tbody>
             </table>
+          )}
+
+          {/* Collapsible Previously Seen Transfers */}
+          {dismissedCsvIndices.length > 0 && (
+            <div className="mt-4 bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] overflow-hidden">
+              <button
+                onClick={() => setDismissedExpanded(!dismissedExpanded)}
+                className="w-full flex items-center justify-between px-5 py-3 bg-transparent border-none cursor-pointer text-left hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-[13px] font-semibold" style={{ color: 'var(--badge-transfer-text)' }}>
+                    <TransferIcon />Previously Seen Transfers
+                  </span>
+                  <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded-full"
+                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>
+                    {dismissedCsvIndices.length}
+                  </span>
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round"
+                  style={{ transform: dismissedExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {dismissedExpanded && (
+                <div className="border-t border-[var(--table-border)]">
+                  {isMobile ? (
+                    <div className="flex flex-col gap-2 p-3">
+                      {dismissedCsvIndices.map((i) => {
+                        const r = categorizedRows[i];
+                        return (
+                          <div key={i} className={`rounded-xl border px-3 py-2.5 transition-opacity ${
+                            !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' : 'border-[var(--bg-card-border)] bg-[var(--bg-card)]'
+                          }`}>
+                            <div className="flex items-start gap-2.5">
+                              <input type="checkbox" checked={selectedImportRows.has(i)}
+                                onChange={() => {
+                                  setSelectedImportRows(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(i)) next.delete(i); else next.add(i);
+                                    return next;
+                                  });
+                                }}
+                                className="cursor-pointer mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{r.description}</span>
+                                  <span className={`text-[13px] font-mono font-semibold flex-shrink-0 ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
+                                    {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{r.date}</span>
+                                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '40px' }} />
+                        <col style={{ width: '90px' }} />
+                        <col />
+                        <col style={{ width: '90px' }} />
+                        <col style={{ width: '120px' }} />
+                      </colgroup>
+                      <tbody>
+                        {dismissedCsvIndices.map((i) => {
+                          const r = categorizedRows[i];
+                          return (
+                            <tr key={i} className={`border-b border-[var(--table-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''}`}>
+                              <td className="px-2 py-2 text-center">
+                                <input type="checkbox" checked={selectedImportRows.has(i)}
+                                  onChange={() => {
+                                    setSelectedImportRows(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(i)) next.delete(i); else next.add(i);
+                                      return next;
+                                    });
+                                  }}
+                                  className="cursor-pointer" />
+                              </td>
+                              <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-muted)]">{r.date}</td>
+                              <td className="px-2.5 py-2">
+                                <span className="text-[var(--text-primary)]">{r.description}</span>
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono">
+                                <span className={r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}>
+                                  {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
+                                </span>
+                              </td>
+                              <td className="px-2.5 py-2">
+                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                  style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

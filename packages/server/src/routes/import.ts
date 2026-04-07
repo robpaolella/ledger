@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { db } from '../db/index.js';
-import { transactions, categories, transactionSplits } from '../db/schema.js';
+import { db, sqlite } from '../db/index.js';
+import { transactions, categories, transactionSplits, dismissedTransfers } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
@@ -449,6 +449,75 @@ router.post('/check-transfers', requirePermission('import.csv'), (req: Request, 
   } catch (err) {
     console.error('POST /import/check-transfers error:', err);
     res.status(500).json({ error: 'Transfer check failed' });
+  }
+});
+
+// Generate a stable signature for matching transfers across imports
+function transferSignature(date: string, amount: number, description: string): string {
+  const normDesc = description.toLowerCase().trim().replace(/\s+/g, ' ');
+  const normAmt = Math.round(amount * 100) / 100;
+  return `${date}|${normAmt}|${normDesc}`;
+}
+
+// POST /api/import/dismiss-transfers — record transfers as "seen" so they collapse on next import
+router.post('/dismiss-transfers', requirePermission('import.csv'), (req: Request, res: Response) => {
+  try {
+    const { accountId, items } = req.body as {
+      accountId: number;
+      items: { date: string; amount: number; description: string }[];
+    };
+    if (!accountId || !items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: 'accountId and items array are required' });
+      return;
+    }
+
+    const insert = sqlite.prepare(
+      `INSERT OR IGNORE INTO dismissed_transfers (account_id, signature, date, amount, description, dismissed_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    );
+    const batch = sqlite.transaction(() => {
+      for (const item of items) {
+        const sig = transferSignature(item.date, item.amount, item.description);
+        insert.run(accountId, sig, item.date, item.amount, item.description);
+      }
+    });
+    batch();
+
+    res.json({ data: { dismissed: items.length } });
+  } catch (err) {
+    console.error('POST /import/dismiss-transfers error:', err);
+    res.status(500).json({ error: 'Failed to dismiss transfers' });
+  }
+});
+
+// POST /api/import/check-dismissed-transfers — check which items were previously dismissed
+router.post('/check-dismissed-transfers', requirePermission('import.csv'), (req: Request, res: Response) => {
+  try {
+    const { accountId, items } = req.body as {
+      accountId: number;
+      items: { date: string; amount: number; description: string }[];
+    };
+    if (!accountId || !items || !Array.isArray(items)) {
+      res.status(400).json({ error: 'accountId and items array are required' });
+      return;
+    }
+
+    // Build set of dismissed signatures for this account
+    const dismissed = db.select({ signature: dismissedTransfers.signature })
+      .from(dismissedTransfers)
+      .where(eq(dismissedTransfers.account_id, accountId))
+      .all();
+    const dismissedSet = new Set(dismissed.map((d) => d.signature));
+
+    const results = items.map((item) => {
+      const sig = transferSignature(item.date, item.amount, item.description);
+      return dismissedSet.has(sig);
+    });
+
+    res.json({ data: results });
+  } catch (err) {
+    console.error('POST /import/check-dismissed-transfers error:', err);
+    res.status(500).json({ error: 'Failed to check dismissed transfers' });
   }
 });
 
