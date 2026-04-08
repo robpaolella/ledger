@@ -1,8 +1,14 @@
 import Database from 'better-sqlite3';
 
 export function migrateCategorySortOrder(sqlite: Database.Database): void {
-  // sort_order column already exists in schema — ensure all rows have meaningful values
-  // Assign sequential sort_order within each (type, group_name) group, ordered alphabetically by sub_name
+  // One-time migration: assign initial alphabetical sort_order values.
+  // After this runs once, manual reordering via /api/categories/reorder is preserved.
+  const flag = sqlite.prepare(
+    `SELECT value FROM app_config WHERE key = 'category_sort_order_migrated'`
+  ).get() as { value: string } | undefined;
+
+  if (flag?.value === 'true') return;
+
   const groups = sqlite.prepare(
     `SELECT DISTINCT type, group_name FROM categories ORDER BY type, group_name`
   ).all() as { type: string; group_name: string }[];
@@ -19,6 +25,9 @@ export function migrateCategorySortOrder(sqlite: Database.Database): void {
         update.run(i, subs[i].id);
       }
     }
+    sqlite.prepare(
+      `INSERT OR REPLACE INTO app_config (key, value) VALUES ('category_sort_order_migrated', 'true')`
+    ).run();
   });
   runAll();
 }
