@@ -779,6 +779,12 @@ Form Input → Storage → Display:
 **Resolution:** Added `return { checks: {}, notes: {} }` as fallback at end of `loadStateLocal()` and `return null` at end of `loadStateFromServer()`.
 **Rule going forward:** Every function with a declared return type must have an explicit return on every code path, including the "nothing matched" fallback. Pay special attention to files with `@ts-nocheck` — they silently swallow type errors. When initializing React state from a loader function, always ensure the loader cannot return `undefined`.
 
+### Migrations Must Be Idempotent and One-Time (2026-04-08)
+**Context:** Sub-categories were losing their manual sort order after every server restart
+**Problem:** `migrateCategorySortOrder()` ran on every startup with no guard, re-sorting all sub-categories alphabetically. This wiped out any manual reordering done via the `/reorder` endpoint.
+**Resolution:** Added an `app_config` flag (`category_sort_order_migrated = 'true'`). The migration checks the flag first and skips if already applied.
+**Rule going forward:** Migrations that set initial data values must be guarded by an `app_config` flag so they only run once. Never re-apply data transformations on every startup — only schema changes (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN) are safe to run repeatedly.
+
 ## Development Workflow
 
 ### Environments
