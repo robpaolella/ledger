@@ -80,11 +80,12 @@ function detectFormat(headers: string[]): 'chase' | 'venmo' | 'generic' {
   return 'generic';
 }
 
-function suggestMapping(headers: string[]): { date: number; description: number; amount: number } {
+function suggestMapping(headers: string[], format: 'chase' | 'venmo' | 'generic'): { date: number; description: number; amount: number } {
   const h = headers.map((x) => x.toLowerCase());
   let date = h.findIndex((x) => /posting\s?date|trans(action)?\s?date|^date$/i.test(x));
   if (date < 0) date = h.findIndex((x) => x.includes('date'));
-  let description = h.findIndex((x) => /description|memo|payee|merchant/i.test(x));
+  let description = format === 'venmo' ? h.findIndex((x) => /^note$/i.test(x)) : -1;
+  if (description < 0) description = h.findIndex((x) => /description|memo|payee|merchant/i.test(x));
   if (description < 0) description = h.findIndex((x) => x.includes('desc'));
   let amount = h.findIndex((x) => /^amount$|^amount.*total/i.test(x));
   if (amount < 0) amount = h.findIndex((x) => x.includes('amount'));
@@ -108,7 +109,7 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
     }
 
     const detectedFormat = detectFormat(headers);
-    const suggestedMappingResult = suggestMapping(headers);
+    const suggestedMappingResult = suggestMapping(headers, detectedFormat);
 
     res.json({
       data: {
