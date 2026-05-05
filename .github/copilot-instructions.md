@@ -779,6 +779,12 @@ Form Input → Storage → Display:
 **Resolution:** Added `return { checks: {}, notes: {} }` as fallback at end of `loadStateLocal()` and `return null` at end of `loadStateFromServer()`.
 **Rule going forward:** Every function with a declared return type must have an explicit return on every code path, including the "nothing matched" fallback. Pay special attention to files with `@ts-nocheck` — they silently swallow type errors. When initializing React state from a loader function, always ensure the loader cannot return `undefined`.
 
+### Venmo Description Direction Must Not Infer Account Owner (2026-05-05)
+**Context:** Importing a Venmo statement where the first completed row was a "Charge" from the account owner to another person
+**Problem:** The import parser inferred the account owner from the first non-transfer row using amount sign. For a completed Venmo Charge, that picked the person being charged instead of the statement owner, causing later outgoing payments to be labeled "To Robert Paolella" instead of the actual recipient.
+**Resolution:** Venmo descriptions are derived from the row's type and amount direction, not an inferred owner name. Payment rows use positive = `From <From>` and negative = `To <To>`. Charge rows invert the counterparty columns: positive = `From <To>` and negative = `To <From>`. Funding/add-funds/transfer rows are skipped.
+**Rule going forward:** Never infer Venmo counterparty descriptions from an account-owner guess. Use Venmo row type plus amount direction, and skip funding/transfer rows that are not person-to-person transactions.
+
 ## Development Workflow
 
 ### Environments
