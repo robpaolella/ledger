@@ -770,7 +770,7 @@ Form Input → Storage → Display:
 ### Scrollable Areas Must Hide Scrollbars (2026-05-20)
 **Context:** Constraining the Net Worth Update Balances modal to the viewport introduced a visible browser scrollbar on the modal panel.
 **Problem:** Visible scrollbars are not part of Ledger's design language. Existing modal and list patterns use hidden scrollbars with overflow still enabled, often paired with a fade/chevron indicator for longer constrained content.
-**Resolution:** Added the shared `hide-scrollbar` utility to the constrained desktop `ResponsiveModal` panel so it remains viewport-safe without showing a scrollbar.
+**Resolution:** Updated the constrained desktop `ResponsiveModal` to use the same pattern as existing scrollable blocks: an overflow-hidden outer panel, hidden-scrollbar inner scroll container, and bottom gradient fade with circular chevron button while more content is available.
 **Rule going forward:** Never introduce a visible scrollbar for vertical modal or list scrolling. Use `hide-scrollbar` on scroll containers, and use the existing ScrollableList/fade/chevron pattern when a constrained content area needs an explicit scroll affordance.
 
 ### New Mockups Require Vite Glob Re-evaluation (2026-02-27)
