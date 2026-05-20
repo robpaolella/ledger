@@ -22,11 +22,11 @@ export default function ResponsiveModal({ title, isOpen, onClose, children, maxW
     );
   }
 
-  // Desktop: centered modal (same pattern as existing local Modal functions)
+  // Desktop: centered modal with viewport-safe bounds.
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-6" onClick={onClose}>
       <div
-        className="bg-[var(--bg-card)] rounded-xl p-6 w-full shadow-xl"
+        className="responsive-modal-panel bg-[var(--bg-card)] rounded-xl p-6 w-full shadow-xl"
         style={{ maxWidth: maxWidth || '28rem' }}
         onClick={(e) => e.stopPropagation()}
       >
