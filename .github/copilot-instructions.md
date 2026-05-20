@@ -767,6 +767,12 @@ Form Input → Storage → Display:
 **Resolution:** Created a dedicated `.app-shell-height` CSS class in `index.css` with `height: 100vh; height: 100dvh;` (CSS progressive enhancement — dvh overrides vh in the same rule block). Replaced the conflicting Tailwind classes with this single class.
 **Rule going forward:** Never rely on HTML class order to control CSS cascade priority between Tailwind utilities. When two utilities set the same CSS property and one must win, use a custom CSS class with declarations in the correct order (later declaration wins within the same rule). This is especially important for viewport units with fallbacks (vh → dvh, vh → svh).
 
+### Scrollable Areas Must Hide Scrollbars (2026-05-20)
+**Context:** Constraining the Net Worth Update Balances modal to the viewport introduced a visible browser scrollbar on the modal panel.
+**Problem:** Visible scrollbars are not part of Ledger's design language. Existing modal and list patterns use hidden scrollbars with overflow still enabled, often paired with a fade/chevron indicator for longer constrained content.
+**Resolution:** Added the shared `hide-scrollbar` utility to the constrained desktop `ResponsiveModal` panel so it remains viewport-safe without showing a scrollbar.
+**Rule going forward:** Never introduce a visible scrollbar for vertical modal or list scrolling. Use `hide-scrollbar` on scroll containers, and use the existing ScrollableList/fade/chevron pattern when a constrained content area needs an explicit scroll affordance.
+
 ### New Mockups Require Vite Glob Re-evaluation (2026-02-27)
 **Context:** Created a new mockup `.tsx` file in `.github/mockups/` while the dev server was running
 **Problem:** The new mockup did not appear in the `/mockup` index list. Vite's `import.meta.glob` builds its file list when the module is first evaluated and does not automatically detect new files matching the pattern.
