@@ -46,7 +46,6 @@ interface ParseResult {
   detectedFormat: string;
   suggestedMapping: { date: number; description: number; amount: number };
   headerRowIndex: number;
-  venmoOwnerName?: string;
 }
 
 interface CategorizedRow {
@@ -89,6 +88,31 @@ function normalizeAmount(raw: string): number {
   const val = parseFloat(s);
   if (isNaN(val)) return 0;
   return isParenthesized ? -val : val;
+}
+
+function isImportableVenmoRow(type: string, status: string, from: string, to: string): boolean {
+  const normalizedType = type.trim().toLowerCase();
+  const normalizedStatus = status.trim().toLowerCase();
+
+  if (normalizedStatus && /incomplete|declined|expired|cancelled/.test(normalizedStatus)) return false;
+  if (/transfer|add funds/.test(normalizedType)) return false;
+  if (!from.trim() && !to.trim()) return false;
+
+  return normalizedType === 'payment' || normalizedType === 'charge';
+}
+
+function buildVenmoDescription(type: string, from: string, to: string, note: string, amount: number): string {
+  const normalizedType = type.trim().toLowerCase();
+  const isMoneyIn = amount >= 0;
+
+  const counterparty = normalizedType === 'charge'
+    ? (isMoneyIn ? to : from)
+    : (isMoneyIn ? from : to);
+
+  const fallbackCounterparty = counterparty || from || to || 'Venmo';
+  const prefix = `${isMoneyIn ? 'From' : 'To'} ${fallbackCounterparty}`;
+
+  return note ? `${prefix}: ${note}` : prefix;
 }
 
 export default function ImportPage() {
@@ -249,16 +273,22 @@ export default function ImportPage() {
         return result;
       }).filter((r: string[]) => r.some((c) => c.trim()));
 
-      // For Venmo: filter out transfer rows and rows without valid dates
+      // For Venmo: keep person-to-person transactions and skip funding/transfer rows.
       if (res.data.detectedFormat === 'venmo') {
         const hLower = res.data.headers.map(x => x.toLowerCase());
         const typeIdx = hLower.findIndex(x => /^type$/i.test(x));
+        const statusIdx = hLower.findIndex(x => /^status$/i.test(x));
         const dateIdx = hLower.findIndex(x => /datetime|date/i.test(x));
+        const fromIdx = hLower.findIndex(x => /^from$/i.test(x));
+        const toIdx = hLower.findIndex(x => /^to$/i.test(x));
         parsedRows = parsedRows.filter((row: string[]) => {
-          if (typeIdx >= 0) {
-            const type = row[typeIdx]?.trim().toLowerCase() || '';
-            if (type.includes('transfer')) return false;
-          }
+          const type = typeIdx >= 0 ? row[typeIdx]?.trim() || '' : '';
+          const status = statusIdx >= 0 ? row[statusIdx]?.trim() || '' : '';
+          const from = fromIdx >= 0 ? row[fromIdx]?.trim() || '' : '';
+          const to = toIdx >= 0 ? row[toIdx]?.trim() || '' : '';
+
+          if (!isImportableVenmoRow(type, status, from, to)) return false;
+
           if (dateIdx >= 0) {
             const dateVal = row[dateIdx]?.trim() || '';
             if (!dateVal || isNaN(new Date(dateVal).getTime())) return false;
@@ -289,7 +319,8 @@ export default function ImportPage() {
 
     const acct = accounts.find(a => a.id === selectedAccountId);
     const isVenmo = parseResult?.detectedFormat === 'venmo' || acct?.type === 'venmo';
-    const ownerName = parseResult?.venmoOwnerName || acct?.owners?.[0]?.displayName || acct?.owner || '';
+    const hLower = parseResult.headers.map(x => x.toLowerCase());
+    const venmoTypeIdx = hLower.findIndex(x => /^type$/i.test(x));
 
     const items = allRows.map((row) => {
       let description = row[mapping.description] || '';
@@ -301,9 +332,8 @@ export default function ImportPage() {
         const note = venmoMapping.note >= 0 ? row[venmoMapping.note]?.trim() || '' : '';
         venmoNote = note || undefined;
         const rawAmt = normalizeAmount(row[mapping.amount] || '0');
-        const counterparty = from.toLowerCase() === ownerName.toLowerCase() ? to : from;
-        const prefix = rawAmt >= 0 ? `From ${counterparty}` : `To ${counterparty}`;
-        description = note ? `${prefix}: ${note}` : prefix;
+        const type = venmoTypeIdx >= 0 ? row[venmoTypeIdx]?.trim() || '' : '';
+        description = buildVenmoDescription(type, from, to, note, rawAmt);
       }
       return {
         description,
