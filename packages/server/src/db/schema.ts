@@ -142,6 +142,9 @@ export const transactions = sqliteTable('transactions', {
   account_id: integer('account_id').notNull().references(() => accounts.id),
   date: text('date').notNull(),
   description: text('description').notNull(),
+  // Verbatim bank-provided statement text (SimpleFIN rawDescription / CSV raw
+  // row). `description` stays the payee-preferred display+matching string.
+  bank_description: text('bank_description'),
   note: text('note'),
   category_id: integer('category_id').references(() => categories.id),
   merchant_id: integer('merchant_id').references(() => merchants.id),
@@ -368,3 +371,52 @@ export const recurringItems = sqliteTable('recurring_items', {
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
   updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
 });
+
+// === Benchmark Prices ===
+// Daily split/dividend-adjusted closes from Tiingo — core benchmarks
+// (SPY/VTI/BND) plus every held symbol. Powers the Investments performance
+// chart + per-holding range-% chips. Pulled by the daily scheduler.
+export const benchmarkPrices = sqliteTable('benchmark_prices', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  symbol: text('symbol').notNull(),
+  date: text('date').notNull(),
+  adj_close: real('adj_close').notNull(),
+}, (table) => [
+  uniqueIndex('benchmark_prices_symbol_date_idx').on(table.symbol, table.date),
+]);
+
+// === Holdings History ===
+// Per-(link, symbol, date) snapshots captured at each SimpleFIN commit.
+// simplefin_holdings only keeps the latest snapshot (delete + reinsert), so
+// day-over-day change (dashboard movers, portfolio Today %) lives here.
+export const holdingsHistory = sqliteTable('holdings_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  simplefin_link_id: integer('simplefin_link_id').notNull().references(() => simplefinLinks.id),
+  symbol: text('symbol').notNull(),
+  date: text('date').notNull(),
+  shares: real('shares').notNull(),
+  cost_basis: real('cost_basis').notNull(),
+  market_value: real('market_value').notNull(),
+}, (table) => [
+  uniqueIndex('holdings_history_link_symbol_date_idx').on(table.simplefin_link_id, table.symbol, table.date),
+]);
+
+// === Symbol Meta ===
+// Per-symbol asset class for the Investments holdings-table grouping
+// (null → 'Uncategorized'). User-editable via PATCH /api/investments/symbols.
+export const symbolMeta = sqliteTable('symbol_meta', {
+  symbol: text('symbol').primaryKey(),
+  asset_class: text('asset_class'),
+});
+
+// === Budget Alerts ===
+// Crossing-state ledger for budget-exceeded notifications: one row per
+// (category, month) = "already alerted" — later overage growth updates the
+// notification body without re-pinging or resurrecting a cleared one.
+export const budgetAlerts = sqliteTable('budget_alerts', {
+  category_id: integer('category_id').notNull().references(() => categories.id),
+  month: text('month').notNull(),
+  first_exceeded_at: text('first_exceeded_at').default('CURRENT_TIMESTAMP'),
+}, (table) => [
+  uniqueIndex('budget_alerts_category_month_idx').on(table.category_id, table.month),
+]);

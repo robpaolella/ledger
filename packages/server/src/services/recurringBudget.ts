@@ -14,6 +14,15 @@ interface Row {
   months_json: string | null; start_date: string | null; effective_start: string | null; effective_end: string | null;
 }
 
+/**
+ * Floor-only fold: recurring is the minimum unless the month is overridden.
+ * Single source shared by /budgets (summary + annual) and budget alerts.
+ */
+export function effectiveBudgetedAmount(stored: number, overridden: boolean, floor: number | undefined): number {
+  if (floor == null) return stored;
+  return overridden ? stored : Math.max(stored, floor);
+}
+
 function parseIntArray(json: string | null): number[] {
   if (!json) return [];
   try { const v = JSON.parse(json); return Array.isArray(v) ? v.map(Number).filter((n) => Number.isFinite(n)) : []; }

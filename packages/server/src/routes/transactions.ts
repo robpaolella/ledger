@@ -6,7 +6,8 @@ import { sanitize, sanitizeString } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 import { findOrCreateMerchant } from '../db/merchants.js';
-import { resolveReview, clearReviewNotification } from '../services/reviews.js';
+import { resolveReview, openReviewAssignees, syncReviewNotification } from '../services/reviews.js';
+import { checkBudgetExceededForMonths } from '../services/budgetAlerts.js';
 
 const router = Router();
 
@@ -285,6 +286,7 @@ router.get('/', (req: Request, res: Response) => {
         id: transactions.id,
         date: transactions.date,
         description: transactions.description,
+        bank_description: transactions.bank_description,
         note: transactions.note,
         amount: transactions.amount,
         created_at: transactions.created_at,
@@ -337,6 +339,7 @@ router.get('/', (req: Request, res: Response) => {
         id: r.id,
         date: r.date,
         description: r.description,
+        bankDescription: r.bank_description ?? null,
         note: r.note,
         amount: r.amount,
         created_at: r.created_at,
@@ -410,6 +413,7 @@ router.get('/:id', (req: Request, res: Response) => {
         id: transactions.id,
         date: transactions.date,
         description: transactions.description,
+        bank_description: transactions.bank_description,
         note: transactions.note,
         amount: transactions.amount,
         created_at: transactions.created_at,
@@ -454,6 +458,7 @@ router.get('/:id', (req: Request, res: Response) => {
         id: r.id,
         date: r.date,
         description: r.description,
+        bankDescription: r.bank_description ?? null,
         note: r.note,
         amount: r.amount,
         created_at: r.created_at,
@@ -521,6 +526,7 @@ router.post('/', requirePermission('transactions.create'), (req: Request, res: R
         saveSplits(id, splits, merchantId);
         return id;
       })();
+      checkBudgetExceededForMonths(sqlite, [date.slice(0, 7)]);
       res.status(201).json({ data: { id: txnId } });
     } else {
       const result = db.insert(transactions).values({
@@ -533,6 +539,7 @@ router.post('/', requirePermission('transactions.create'), (req: Request, res: R
         amount: parsedAmount,
       }).run();
 
+      checkBudgetExceededForMonths(sqlite, [date.slice(0, 7)]);
       res.status(201).json({ data: { id: result.lastInsertRowid } });
     }
   } catch (err) {
@@ -622,6 +629,10 @@ router.put('/:id', requirePermission('transactions.edit'), (req: Request, res: R
         .run();
     }
 
+    checkBudgetExceededForMonths(sqlite, [
+      existing[0].date.slice(0, 7),
+      (date ?? existing[0].date).slice(0, 7),
+    ]);
     res.json({ data: { id } });
   } catch (err) {
     console.error('PUT /transactions/:id error:', err);
@@ -666,6 +677,7 @@ router.patch('/:txnId/splits/:splitId', requirePermission('transactions.edit'), 
       // Confirming a leg's category is a user action → resolve any open review (atomically).
       if (set.category_id !== undefined) resolveReview(sqlite, { txnId, resolvedBy: req.user!.userId });
     })();
+    if (set.category_id !== undefined) checkBudgetExceededForMonths(sqlite, [parent[0].date.slice(0, 7)]);
     res.json({ data: { id: splitId } });
   } catch (err) {
     console.error('PATCH /transactions/:txnId/splits/:splitId error:', err);
@@ -682,10 +694,13 @@ router.delete('/:id', requirePermission('transactions.delete'), (req: Request, r
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Notifications don't FK-cascade — clear the review notification explicitly.
-    // (The transaction_reviews row itself cascades on the txn delete.)
-    clearReviewNotification(sqlite, id);
-    db.delete(transactions).where(eq(transactions.id, id)).run();
+    // The transaction_reviews row cascades with the txn delete, so capture the
+    // open review's assignee first and refresh their aggregate count after.
+    sqlite.transaction(() => {
+      const assignees = openReviewAssignees(sqlite, [id]);
+      db.delete(transactions).where(eq(transactions.id, id)).run();
+      for (const uid of assignees) syncReviewNotification(sqlite, uid, { ping: false });
+    })();
     res.json({ data: { id } });
   } catch (err) {
     console.error('DELETE /transactions/:id error:', err);
@@ -753,6 +768,15 @@ router.post('/bulk-update', requirePermission('transactions.bulk_edit'), (req: R
       })();
     }
 
+    if (updates.categoryId || updates.date) {
+      const monthRows = sqlite.prepare(
+        `SELECT DISTINCT substr(date, 1, 7) AS m FROM transactions WHERE id IN (${ids.map(() => '?').join(',')})`
+      ).all(...ids) as { m: string }[];
+      const months = monthRows.map((r) => r.m);
+      if (updates.date) months.push(updates.date.slice(0, 7));
+      checkBudgetExceededForMonths(sqlite, months);
+    }
+
     res.json({ data: { affected } });
   } catch (err) {
     console.error('POST /transactions/bulk-update error:', err);
@@ -770,12 +794,16 @@ router.post('/bulk-delete', requirePermission('transactions.bulk_edit'), (req: R
       return;
     }
 
-    for (const id of ids) clearReviewNotification(sqlite, id); // reviews cascade; notifications don't
-    const result = db.delete(transactions)
-      .where(inArray(transactions.id, ids))
-      .run();
+    // Reviews cascade with the deletes; refresh affected assignees' aggregate
+    // notifications afterwards (silent — a shrinking queue never re-pings).
+    let affected = 0;
+    sqlite.transaction(() => {
+      const assignees = openReviewAssignees(sqlite, ids);
+      affected = db.delete(transactions).where(inArray(transactions.id, ids)).run().changes;
+      for (const uid of assignees) syncReviewNotification(sqlite, uid, { ping: false });
+    })();
 
-    res.json({ data: { affected: result.changes } });
+    res.json({ data: { affected } });
   } catch (err) {
     console.error('POST /transactions/bulk-delete error:', err);
     res.status(500).json({ error: 'Bulk delete failed' });

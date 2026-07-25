@@ -3,7 +3,7 @@ import { db, sqlite } from '../db/index.js';
 import { budgets, categories } from '../db/schema.js';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
-import { getRecurringFloors } from '../services/recurringBudget.js';
+import { getRecurringFloors, effectiveBudgetedAmount } from '../services/recurringBudget.js';
 
 const router = Router();
 
@@ -153,7 +153,7 @@ router.get('/summary', (req: Request, res: Response) => {
     const foldBudget = (c: { id: number }, stored: number, overridden: boolean): { budgeted: number; manual: number; recurring: RecMeta | null; overridden: boolean } => {
       const f = floors.get(c.id);
       if (!f) return { budgeted: stored, manual: stored, recurring: null, overridden: false };
-      const budgeted = overridden ? stored : Math.max(stored, f.amount);
+      const budgeted = effectiveBudgetedAmount(stored, overridden, f.amount);
       return { budgeted, manual: stored, recurring: { amount: f.amount, itemCount: f.itemCount, items: f.items }, overridden };
     };
 

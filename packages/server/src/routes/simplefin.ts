@@ -8,14 +8,8 @@ import {
 } from '../db/schema.js';
 import { eq, or, isNull } from 'drizzle-orm';
 import { claimAccessUrl, fetchAccounts } from '../services/simplefin.js';
-import { convertToLedgerSign } from '../services/signConversion.js';
-import { detectDuplicates } from '../services/duplicateDetector.js';
-import { detectTransfers } from '../services/transferDetector.js';
-import type { AccountClassification, SyncTransaction, SyncBalanceUpdate, SyncHoldingsUpdate } from '@ledger/shared/src/types.js';
+import { runSyncPipeline, commitSync, withSyncLock, type CommitPayload } from '../services/simplefinSync.js';
 import { requirePermission } from '../middleware/permissions.js';
-import { resolveMerchantId } from '../db/merchants.js';
-import { buildCategorizer, REVIEW_THRESHOLD } from '../services/categorize.js';
-import { flagReview, defaultAssigneeForTxn } from '../services/reviews.js';
 
 const router = Router();
 
@@ -414,203 +408,23 @@ router.post('/sync', requirePermission('import.bank_sync'), async (req: Request,
       return;
     }
 
-    const userId = req.user!.userId;
-    const startTs = Math.floor(new Date(startDate).getTime() / 1000);
-    const endTs = Math.floor(new Date(endDate).getTime() / 1000);
+    // Shared pipeline (also used by the daily scheduler). The lock serializes
+    // the fetch phase with any in-flight scheduled run — we wait, not 409.
+    const result = await withSyncLock(() =>
+      runSyncPipeline({ userId: req.user!.userId, connectionIds, accountIds, startDate, endDate }),
+    );
 
-    // Get accessible connections
-    let connections;
-    if (connectionIds && connectionIds.length > 0) {
-      connections = sqlite.prepare(`
-        SELECT * FROM simplefin_connections
-        WHERE id IN (${connectionIds.map(() => '?').join(',')})
-        AND (user_id IS NULL OR user_id = ?)
-      `).all(...connectionIds, userId) as (typeof simplefinConnections.$inferSelect)[];
-    } else {
-      connections = sqlite.prepare(`
-        SELECT * FROM simplefin_connections
-        WHERE user_id IS NULL OR user_id = ?
-      `).all(userId) as (typeof simplefinConnections.$inferSelect)[];
-    }
-
-    if (connections.length === 0) {
+    if (result.connectionCount === 0) {
       res.status(400).json({ error: 'No accessible connections found' });
       return;
     }
 
-    // Get all linked accounts for these connections
-    const connIds = connections.map((c) => c.id);
-    let allLinks = sqlite.prepare(`
-      SELECT sl.*, a.name as ledger_account_name, a.classification, a.type as account_type
-      FROM simplefin_links sl
-      JOIN accounts a ON sl.account_id = a.id
-      WHERE sl.simplefin_connection_id IN (${connIds.map(() => '?').join(',')})
-    `).all(...connIds) as (typeof simplefinLinks.$inferSelect & {
-      ledger_account_name: string;
-      classification: AccountClassification;
-      account_type: string;
-    })[];
-
-    // Filter by accountIds if specified
-    if (accountIds && accountIds.length > 0) {
-      allLinks = allLinks.filter((l) => accountIds.includes(l.account_id));
-    }
-
-    if (allLinks.length === 0) {
-      res.json({ data: { transactions: [], balanceUpdates: [], holdingsUpdates: [] } });
-      return;
-    }
-
-    // Build link lookup by SimpleFIN account ID
-    const linkMap = new Map(allLinks.map((l) => [l.simplefin_account_id, l]));
-
-    // Fetch from each connection
-    const allSyncTransactions: SyncTransaction[] = [];
-    const allBalanceUpdates: SyncBalanceUpdate[] = [];
-    const allHoldingsUpdates: SyncHoldingsUpdate[] = [];
-
-    // Build the categorizer once (loads rules + history + merchants once).
-    const categorizer = buildCategorizer(sqlite);
-
-    for (const conn of connections) {
-      let response;
-      try {
-        response = await fetchAccounts(conn.access_url, startTs, endTs);
-      } catch (err: unknown) {
-        console.error(`Failed to fetch from connection ${conn.id}:`, err instanceof Error ? err.message : err);
-        continue;
-      }
-
-      for (const sfAccount of response.accounts) {
-        const link = linkMap.get(sfAccount.id);
-        if (!link) continue; // Not linked, skip
-
-        const classification = link.classification as AccountClassification;
-
-        // Process transactions — but NOT for investment accounts. Their activity
-        // is mostly the mirror side of transfers/contributions (already cataloged
-        // from the liquid source account) plus market moves; importing them would
-        // double-count. Investment accounts still contribute balances + holdings.
-        if (classification !== 'investment' && sfAccount.transactions.length > 0) {
-          // Filter out already-imported transactions by SimpleFIN ID
-          const sfTxnIds = sfAccount.transactions.map((t) => t.id);
-          const existingIds = new Set<string>();
-          // Check in batches to avoid SQLite parameter limits
-          for (let i = 0; i < sfTxnIds.length; i += 100) {
-            const batch = sfTxnIds.slice(i, i + 100);
-            const rows = sqlite.prepare(`
-              SELECT simplefin_transaction_id FROM transactions
-              WHERE simplefin_transaction_id IN (${batch.map(() => '?').join(',')})
-            `).all(...batch) as { simplefin_transaction_id: string }[];
-            for (const r of rows) existingIds.add(r.simplefin_transaction_id);
-          }
-
-          const newTxns = sfAccount.transactions.filter((t) => !existingIds.has(t.id));
-
-          if (newTxns.length > 0) {
-            // Convert amounts and build categorization items
-            const catItems = newTxns.map((t) => ({
-              description: t.payee || t.description,
-              payee: t.payee || undefined,
-              amount: convertToLedgerSign(parseFloat(t.amount), classification),
-            }));
-
-            // Auto-categorize (unified resolver)
-            const catResponse = catItems.map((it) => categorizer.categorize(it));
-
-            // Detect duplicates
-            const dupItems = newTxns.map((t) => ({
-              date: unixToDate(t.transacted_at),
-              amount: convertToLedgerSign(parseFloat(t.amount), classification),
-              description: t.payee || t.description,
-              accountId: link.account_id,
-            }));
-            const dupResults = detectDuplicates(dupItems);
-
-            // Detect transfers
-            const transferResults = detectTransfers(
-              newTxns.map((t) => ({
-                payee: t.payee || '',
-                description: t.description,
-                amount: convertToLedgerSign(parseFloat(t.amount), classification),
-              }))
-            );
-
-            for (let i = 0; i < newTxns.length; i++) {
-              const t = newTxns[i];
-              const cat = catResponse[i];
-              const dup = dupResults[i];
-              const isTransfer = transferResults[i];
-
-              allSyncTransactions.push({
-                simplefinId: t.id,
-                accountId: link.account_id,
-                accountName: link.ledger_account_name,
-                date: unixToDate(t.transacted_at),
-                description: t.payee || t.description,
-                rawDescription: t.description,
-                amount: convertToLedgerSign(parseFloat(t.amount), classification),
-                suggestedCategoryId: cat.categoryId,
-                suggestedGroupName: cat.groupName,
-                suggestedSubName: cat.subName,
-                confidence: cat.confidence,
-                duplicateStatus: dup.status,
-                duplicateMatchId: dup.matchId,
-                duplicateMatchDescription: dup.matchDescription,
-                duplicateMatchDate: dup.matchDate,
-                duplicateMatchAmount: dup.matchAmount,
-                duplicateMatchAccountName: dup.matchAccountName,
-                isLikelyTransfer: isTransfer,
-              });
-            }
-          }
-        }
-
-        // Balance updates
-        const sfBalance = parseFloat(sfAccount.balance);
-        const balanceDate = unixToDate(sfAccount['balance-date']);
-
-        // Get latest balance snapshot for this account
-        const latestSnapshot = sqlite.prepare(`
-          SELECT balance FROM balance_snapshots
-          WHERE account_id = ?
-          ORDER BY date DESC, id DESC
-          LIMIT 1
-        `).get(link.account_id) as { balance: number } | undefined;
-
-        allBalanceUpdates.push({
-          accountId: link.account_id,
-          accountName: link.ledger_account_name,
-          currentBalance: sfBalance,
-          previousBalance: latestSnapshot?.balance ?? null,
-          balanceDate,
-        });
-
-        // Holdings updates
-        if (sfAccount.holdings.length > 0) {
-          allHoldingsUpdates.push({
-            accountId: link.account_id,
-            accountName: link.ledger_account_name,
-            holdings: sfAccount.holdings.map((h) => ({
-              symbol: h.symbol,
-              description: h.description,
-              shares: parseFloat(h.shares),
-              costBasis: parseFloat(h.cost_basis),
-              marketValue: parseFloat(h.market_value),
-            })),
-          });
-        }
-      }
-    }
-
-    // Sort transactions by date descending
-    allSyncTransactions.sort((a, b) => b.date.localeCompare(a.date));
-
     res.json({
       data: {
-        transactions: allSyncTransactions,
-        balanceUpdates: allBalanceUpdates,
-        holdingsUpdates: allHoldingsUpdates,
+        transactions: result.transactions,
+        balanceUpdates: result.balanceUpdates,
+        holdingsUpdates: result.holdingsUpdates,
+        failures: result.failures,
       },
     });
   } catch (err) {
@@ -622,151 +436,8 @@ router.post('/sync', requirePermission('import.bank_sync'), async (req: Request,
 // POST /api/simplefin/commit
 router.post('/commit', requirePermission('import.bank_sync'), (req: Request, res: Response) => {
   try {
-    const { transactions: txns, balanceUpdates, holdingsUpdates } = req.body as {
-      transactions: {
-        simplefinId: string;
-        accountId: number;
-        date: string;
-        description: string;
-        rawDescription: string;
-        amount: number;
-        categoryId?: number;
-        confidence?: number | null;
-        splits?: { categoryId: number; amount: number }[];
-      }[];
-      balanceUpdates: {
-        accountId: number;
-        balance: number;
-        date: string;
-      }[];
-      holdingsUpdates: {
-        accountId: number;
-        holdings: {
-          symbol: string;
-          description: string;
-          shares: number;
-          costBasis: number;
-          marketValue: number;
-        }[];
-      }[];
-    };
-
-    let txnCount = 0;
-    let balanceCount = 0;
-    let holdingsCount = 0;
-    const now = new Date().toISOString();
-
-    const commitTxn = sqlite.transaction(() => {
-      // Insert transactions
-      if (txns && txns.length > 0) {
-        const insertTxn = sqlite.prepare(`
-          INSERT INTO transactions (account_id, date, description, note, category_id, merchant_id, amount, simplefin_transaction_id, categorize_confidence, needs_review)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        const insertSplit = sqlite.prepare(`
-          INSERT INTO transaction_splits (transaction_id, category_id, amount)
-          VALUES (?, ?, ?)
-        `);
-
-        for (const t of txns) {
-          const hasSplits = t.splits && t.splits.length >= 2;
-          // Resolve merchant from the payee-preferred description (same handle → atomic).
-          const merchantId = resolveMerchantId(t.description, sqlite);
-          const catId = hasSplits ? null : (t.categoryId ?? null);
-          const conf = hasSplits ? null : (t.confidence ?? null);
-          // Flag for review when uncategorized, or auto-categorized below the
-          // confidence threshold. Split parents are considered categorized (via legs).
-          const needsReview = hasSplits ? 0 : (catId == null || (conf != null && conf < REVIEW_THRESHOLD) ? 1 : 0);
-          // Store payee as description, raw bank description as note
-          const result = insertTxn.run(
-            t.accountId,
-            t.date,
-            t.description,
-            t.rawDescription !== t.description ? t.rawDescription : null,
-            catId,
-            merchantId,
-            t.amount,
-            t.simplefinId,
-            conf,
-            needsReview
-          );
-          const newTxnId = Number(result.lastInsertRowid);
-          if (hasSplits) {
-            for (const s of t.splits!) {
-              insertSplit.run(newTxnId, s.categoryId, s.amount);
-            }
-          }
-          // Auto-flagged rows open a review assigned to the account owner (the most-
-          // privileged owner if the account is shared), and notify them.
-          if (needsReview === 1) {
-            flagReview(sqlite, { txnId: newTxnId, reason: catId == null ? 'auto_uncategorized' : 'auto_low_confidence', assigneeId: defaultAssigneeForTxn(sqlite, newTxnId) });
-          }
-          txnCount++;
-        }
-      }
-
-      // Create balance snapshots
-      if (balanceUpdates && balanceUpdates.length > 0) {
-        const insertBalance = sqlite.prepare(`
-          INSERT INTO balance_snapshots (account_id, date, balance, note)
-          VALUES (?, ?, ?, ?)
-        `);
-
-        for (const b of balanceUpdates) {
-          insertBalance.run(b.accountId, b.date, b.balance, 'SimpleFIN bank sync');
-          balanceCount++;
-        }
-      }
-
-      // Upsert holdings
-      if (holdingsUpdates && holdingsUpdates.length > 0) {
-        for (const hu of holdingsUpdates) {
-          // Find the link for this account
-          const link = sqlite.prepare(`
-            SELECT id FROM simplefin_links WHERE account_id = ? LIMIT 1
-          `).get(hu.accountId) as { id: number } | undefined;
-
-          if (!link) continue;
-
-          // Delete existing holdings for this link
-          sqlite.prepare('DELETE FROM simplefin_holdings WHERE simplefin_link_id = ?').run(link.id);
-
-          // Insert new holdings
-          const insertHolding = sqlite.prepare(`
-            INSERT INTO simplefin_holdings (simplefin_link_id, symbol, description, shares, cost_basis, market_value, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `);
-
-          for (const h of hu.holdings) {
-            insertHolding.run(link.id, h.symbol, h.description, h.shares, h.costBasis, h.marketValue, now);
-            holdingsCount++;
-          }
-        }
-      }
-
-      // Update last_synced_at on links
-      const accountIds = new Set<number>();
-      if (txns) txns.forEach((t) => accountIds.add(t.accountId));
-      if (balanceUpdates) balanceUpdates.forEach((b) => accountIds.add(b.accountId));
-      if (holdingsUpdates) holdingsUpdates.forEach((h) => accountIds.add(h.accountId));
-
-      if (accountIds.size > 0) {
-        const updateSync = sqlite.prepare('UPDATE simplefin_links SET last_synced_at = ? WHERE account_id = ?');
-        for (const accountId of accountIds) {
-          updateSync.run(now, accountId);
-        }
-      }
-    });
-
-    commitTxn();
-
-    res.json({
-      data: {
-        transactionsImported: txnCount,
-        balancesUpdated: balanceCount,
-        holdingsUpdated: holdingsCount,
-      },
-    });
+    const result = commitSync(req.body as CommitPayload);
+    res.json({ data: result });
   } catch (err) {
     console.error('POST /simplefin/commit error:', err);
     res.status(500).json({ error: 'Failed to commit sync data' });
@@ -905,12 +576,5 @@ router.get('/holdings', (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch holdings' });
   }
 });
-
-// === Helpers ===
-
-function unixToDate(unix: number): string {
-  return new Date(unix * 1000).toISOString().slice(0, 10);
-}
-
 
 export default router;

@@ -32,6 +32,9 @@ import { migrateSettingsColumns } from './db/migrate-settings-columns.js';
 import { migrateCategoryGroups } from './db/migrate-category-groups.js';
 import { migrateFinancialInstitutions } from './db/migrate-financial-institutions.js';
 import { migrateVendorLogos } from './db/migrate-vendor-logos.js';
+import { migrateBankDescription } from './db/migrate-bank-description.js';
+import { migrateInvestments } from './db/migrate-investments.js';
+import { migrateNotificationCenter } from './db/migrate-notification-center.js';
 import { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
@@ -42,6 +45,8 @@ import transactionRoutes from './routes/transactions.js';
 import merchantRoutes from './routes/merchants.js';
 import categoryRuleRoutes from './routes/categoryRules.js';
 import reviewRoutes from './routes/reviews.js';
+import notificationRoutes from './routes/notifications.js';
+import investmentRoutes from './routes/investments.js';
 import dashboardRoutes from './routes/dashboard.js';
 import budgetRoutes from './routes/budgets.js';
 import reportRoutes from './routes/reports.js';
@@ -55,6 +60,7 @@ import twofaRoutes from './routes/twofa.js';
 import recurringRoutes from './routes/recurring.js';
 import devRoutes from './routes/dev.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { startDailyScheduler } from './services/scheduler.js';
 
 dotenv.config();
 
@@ -92,6 +98,9 @@ migrateSettingsColumns(sqlite);    // additive columns (category emoji/exclude, 
 migrateCategoryGroups(sqlite);     // first-class category_groups entity + backfill
 migrateFinancialInstitutions(sqlite); // financial_institutions table + accounts.institution_id + backfill
 migrateVendorLogos(sqlite);           // vendor_logos catalog + backfill merchant logos
+migrateBankDescription(sqlite);       // transactions.bank_description (verbatim statement text)
+migrateInvestments(sqlite);           // benchmark_prices + holdings_history (+seed) + symbol_meta
+migrateNotificationCenter(sqlite);    // review notifications → per-user aggregate + budget_alerts
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));
@@ -121,6 +130,8 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/merchants', merchantRoutes);
 app.use('/api/category-rules', categoryRuleRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/investments', investmentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/recurring', recurringRoutes);
@@ -161,5 +172,9 @@ if (isProd) {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}${isProd ? ' (production)' : ''}`);
 });
+
+// Daily SimpleFIN auto-pull (+ benchmark prices + budget-exceeded sweep) with
+// boot catch-up + retry — guarantees at-least-once per day the server is up.
+startDailyScheduler();
 
 export { app, db };

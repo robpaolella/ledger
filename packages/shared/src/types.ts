@@ -83,6 +83,8 @@ export interface Transaction {
   account_id: number;
   date: string;
   description: string;
+  /** Verbatim bank-provided statement text (null on legacy + manual rows). */
+  bank_description: string | null;
   note: string | null;
   category_id: number | null;
   merchant_id: number | null;

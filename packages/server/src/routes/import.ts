@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 import { detectTransfers } from '../services/transferDetector.js';
+import { checkBudgetExceededForMonths } from '../services/budgetAlerts.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -205,6 +206,9 @@ router.post('/commit', requirePermission('import.csv'), (req: Request, res: Resp
         category_id: hasSplits ? null : t.categoryId!,
         date: t.date,
         description: t.description,
+        // CSV description IS the raw statement text — preserve it verbatim
+        // even if the user later renames the merchant/description.
+        bank_description: t.description,
         note: t.note || null,
         merchant_id: resolveMerchantId(t.description),
         amount: t.amount,
@@ -222,6 +226,9 @@ router.post('/commit', requirePermission('import.csv'), (req: Request, res: Resp
       }
       count++;
     }
+
+    // Imported spending may push categories over budget (internally try/catch).
+    checkBudgetExceededForMonths(sqlite, txns.map((t) => t.date.slice(0, 7)));
 
     res.status(201).json({ data: { imported: count } });
   } catch (err) {

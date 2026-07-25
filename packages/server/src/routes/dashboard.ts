@@ -339,4 +339,68 @@ router.get('/recent-transactions', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/dashboard/spending-series?month=YYYY-MM — per-day CUMULATIVE
+// expense totals for the month (through today) + the full prior month,
+// aligned by day-of-month. Same split-aware UNION + exclude_from_budget
+// filters as /summary, so the final cumulative point equals the month's
+// expense headline.
+router.get('/spending-series', (req: Request, res: Response) => {
+  try {
+    // Local date parts (not UTC) — the rest of this file builds local months,
+    // and a UTC 'today' would truncate/extend the series near midnight.
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const month = (req.query.month as string) || localToday.slice(0, 7);
+    const prior = priorMonth(month);
+
+    const dailyExpenses = (m: string): Map<string, number> => {
+      const { startDate, endDate } = monthRange(m);
+      const rows = sqlite.prepare(`
+        SELECT combined.date AS date, coalesce(sum(combined.amt), 0) AS total
+        FROM (
+          SELECT t.date AS date, t.category_id AS cat_id, t.amount AS amt
+          FROM transactions t
+          WHERE t.category_id IS NOT NULL AND t.date >= ? AND t.date <= ?
+          UNION ALL
+          SELECT t.date, ts.category_id, ts.amount
+          FROM transaction_splits ts
+          JOIN transactions t ON ts.transaction_id = t.id
+          WHERE t.category_id IS NULL AND t.date >= ? AND t.date <= ?
+        ) combined
+        JOIN categories c ON combined.cat_id = c.id
+        WHERE c.type = 'expense' AND COALESCE(c.exclude_from_budget, 0) = 0
+        GROUP BY combined.date
+      `).all(startDate, endDate, startDate, endDate) as { date: string; total: number }[];
+      return new Map(rows.map((r) => [r.date, r.total]));
+    };
+
+    const today = localToday;
+    const buildSeries = (m: string, throughToday: boolean) => {
+      const [y, mo] = m.split('-').map(Number);
+      const daysInMonth = new Date(y, mo, 0).getDate();
+      const byDate = dailyExpenses(m);
+      const days: { day: number; date: string; cumulative: number }[] = [];
+      let running = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${m}-${String(d).padStart(2, '0')}`;
+        if (throughToday && date > today) break;
+        running += byDate.get(date) ?? 0;
+        days.push({ day: d, date, cumulative: Math.round(running * 100) / 100 });
+      }
+      return days;
+    };
+
+    res.json({
+      data: {
+        month,
+        days: buildSeries(month, month === today.slice(0, 7)),
+        prior: { month: prior, days: buildSeries(prior, false) },
+      },
+    });
+  } catch (err) {
+    console.error('GET /dashboard/spending-series error:', err);
+    res.status(500).json({ error: 'Failed to fetch spending series' });
+  }
+});
+
 export default router;
