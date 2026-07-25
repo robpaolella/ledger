@@ -8,6 +8,7 @@ import { VendorAvatar, SegmentedControl } from '../components/primitives';
 import KPICard from '../components/KPICard';
 import CurrencyInput from '../components/CurrencyInput';
 import ResponsiveModal from '../components/ResponsiveModal';
+import MerchantPicker, { type MerchantOption } from '../components/MerchantPicker';
 
 type Kind = 'monthly' | 'semi_monthly' | 'biweekly' | 'weekly' | 'every_n_months' | 'custom_months';
 
@@ -100,6 +101,7 @@ export default function RecurringPage() {
   const [monthView, setMonthView] = useState<MonthView | null>(null);
   const [cats, setCats] = useState<Cat[]>([]);
   const [accts, setAccts] = useState<Acct[]>([]);
+  const [merchants, setMerchants] = useState<MerchantOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [panel, setPanel] = useState<RItem | null>(null);
@@ -115,11 +117,12 @@ export default function RecurringPage() {
   }, [month, addToast]);
   const loadMeta = useCallback(async () => {
     try {
-      const [c, a] = await Promise.all([
+      const [c, a, m] = await Promise.all([
         apiFetch<{ data: Cat[] }>('/categories'),
         apiFetch<{ data: Acct[] }>('/accounts'),
+        apiFetch<{ data: MerchantOption[] }>('/merchants'),
       ]);
-      setCats(c.data); setAccts(a.data);
+      setCats(c.data); setAccts(a.data); setMerchants(m.data);
     } catch { /* non-fatal */ }
   }, []);
 
@@ -291,7 +294,7 @@ export default function RecurringPage() {
       )}
 
       {modalOpen && (
-        <RecurringModal item={panel} cats={cats} accts={accts}
+        <RecurringModal item={panel} cats={cats} accts={accts} merchants={merchants}
           onClose={() => setModalOpen(false)}
           onSaved={async () => { setModalOpen(false); setPanel(null); await refresh(); }} />
       )}
@@ -423,11 +426,14 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
             <VendorAvatar name={item.merchantName ?? item.label} src={item.merchantLogoUrl || undefined} size={48} color={color} />
             <div className="min-w-0">
               <div className="text-lg font-extrabold truncate">{item.label}</div>
-              <div className="text-[13px] text-content-3">{cadenceLabel(item)}</div>
+              <div className="text-[13px] text-content-3 truncate">
+                {item.merchantName && item.merchantName !== item.label ? `${item.merchantName} · ` : ''}{cadenceLabel(item)}
+              </div>
             </div>
           </div>
           <div className={`text-[30px] font-extrabold tracking-tight tabular-nums mb-1 ${item.type === 'income' ? 'text-positive' : 'text-content'}`}>{item.type === 'income' ? '+' : ''}{fmt(item.amount ?? 0)}</div>
           {next && <div className="text-[13px] text-content-3 mb-6">Next: {dateChip(next.date)} · {relativeLabel(next.date, today)}</div>}
+          {row('Vendor', item.merchantName ?? '—')}
           {row('Account', item.accountName ? `${item.accountName}${item.accountLastFour ? ` (…${item.accountLastFour})` : ''}` : '—')}
           {row('Category', <span className="inline-flex items-center gap-1.5">{getCategoryEmoji(item.subName)} {item.subName}</span>)}
           {row('Frequency', cadenceLabel(item))}
@@ -451,13 +457,16 @@ const FREQ_CHIPS: { value: Kind; label: string }[] = [
   { value: 'every_n_months', label: 'Every N months' }, { value: 'custom_months', label: 'Custom months' },
 ];
 
-function RecurringModal({ item, cats, accts, onClose, onSaved }: {
-  item: RItem | null; cats: Cat[]; accts: Acct[]; onClose: () => void; onSaved: () => void;
+function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
+  item: RItem | null; cats: Cat[]; accts: Acct[]; merchants: MerchantOption[]; onClose: () => void; onSaved: () => void;
 }) {
   const { addToast } = useToast();
   const editing = !!item;
   const [type, setType] = useState<'income' | 'expense'>(item?.type ?? 'expense');
   const [label, setLabel] = useState(item?.label ?? '');
+  // Seed empty when the merchant was derived from the label — otherwise saving would send it
+  // explicitly and pin it, so renaming the label later would stop re-deriving the vendor.
+  const [merchantName, setMerchantName] = useState(item && item.merchantName && item.merchantName !== item.label ? item.merchantName : '');
   const [amount, setAmount] = useState(item?.amount != null ? String(item.amount) : '');
   const [categoryId, setCategoryId] = useState<number | ''>(item?.category_id ?? '');
   const [accountId, setAccountId] = useState<number | ''>(item?.account_id ?? '');
@@ -515,6 +524,8 @@ function RecurringModal({ item, cats, accts, onClose, onSaved }: {
     const body: Record<string, unknown> = {
       label: label.trim(), categoryId, accountId: accountId === '' ? null : accountId,
       amount: parsedAmount, freqKind, startDate, status,
+      // Empty = omit the key so the server derives the merchant from the label.
+      ...(merchantName.trim() ? { merchant: merchantName.trim() } : {}),
     };
     if (freqKind === 'monthly' || freqKind === 'every_n_months' || freqKind === 'custom_months') body.day = day;
     if (freqKind === 'semi_monthly') { body.dayOfMonth1 = day1; body.dayOfMonth2 = day2; }
@@ -546,6 +557,12 @@ function RecurringModal({ item, cats, accts, onClose, onSaved }: {
         <div>
           <div className={labelCls}>Label</div>
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Netflix" className={fieldCls} />
+        </div>
+        <div>
+          <div className={labelCls}>Vendor (optional)</div>
+          <MerchantPicker value={merchantName} merchants={merchants} onSelect={setMerchantName}
+            allowClear placeholder="Same as label" triggerClassName={fieldCls} />
+          <div className="mt-1.5 text-[11px] text-content-3">Used for the logo and merchant matching. Leave empty to use the label.</div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
