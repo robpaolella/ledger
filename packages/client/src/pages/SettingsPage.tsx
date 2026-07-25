@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import BankSyncSection from '../components/BankSyncSection';
 import InlineNotification from '../components/InlineNotification';
@@ -630,9 +631,7 @@ function PreferencesTab() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState('');
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-  });
+  const { theme, toggle: toggleTheme } = useTheme();
 
   // 2FA state
   const [twofaEnabled, setTwofaEnabled] = useState(!!user?.twofaEnabled);
@@ -646,13 +645,6 @@ function PreferencesTab() {
   const [copied, setCopied] = useState(false);
   const [secretCopied, setSecretCopied] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
-
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
-    document.documentElement.classList.toggle('dark', next === 'dark');
-    localStorage.setItem('ledger-theme', next);
-  };
 
   const handleSaveProfile = async () => {
     setProfileLoading(true);

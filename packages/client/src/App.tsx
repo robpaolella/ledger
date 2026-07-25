@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { useToast } from './context/ToastContext';
 import LoginPage from './pages/LoginPage';
 import SetupPage from './pages/SetupPage';
@@ -10,6 +11,7 @@ import BudgetPage from './pages/BudgetPage';
 import CategoryDetailPage from './pages/CategoryDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import AccountsPage from './pages/AccountsPage';
+import AccountDetailPage from './pages/AccountDetailPage';
 import ImportPage from './pages/ImportPage';
 import SettingsPage from './pages/SettingsPage';
 import MockupPage from './pages/MockupPage';
@@ -19,31 +21,11 @@ import InvestmentsPage from './pages/InvestmentsPage';
 import ReviewsPage from './pages/ReviewsPage';
 import MobileHeader from './components/MobileHeader';
 import BottomTabBar from './components/BottomTabBar';
-import LedgerLogo from './components/LedgerLogo';
-import { NAV_ITEMS, UTILITY_ITEMS } from './lib/navItems';
+import Sidebar from './components/Sidebar';
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { apiFetch } from './lib/api';
 import { loadCategoryEmojis } from './lib/categoryMeta';
 import { useIsMobile } from './hooks/useIsMobile';
-
-function getInitialTheme(): 'light' | 'dark' {
-  const stored = localStorage.getItem('ledger-theme');
-  if (stored === 'dark' || stored === 'light') return stored;
-  if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
-  return 'light';
-}
-
-function useTheme() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('ledger-theme', theme);
-  }, [theme]);
-
-  const toggle = () => setTheme(t => t === 'light' ? 'dark' : 'light');
-  return { theme, toggle };
-}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -70,23 +52,9 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 function AppShell() {
-  const { user, logout } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-  const { theme, toggle: toggleTheme } = useTheme();
   const { addToast } = useToast();
   const isMobile = useIsMobile();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('ledger-sidebar-collapsed') === 'true');
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [reviewCount, setReviewCount] = useState(0);
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem('ledger-sidebar-collapsed', String(next));
-      return next;
-    });
-  };
 
   const showFab = isMobile && location.pathname === '/transactions';
 
@@ -105,165 +73,9 @@ function AppShell() {
   // shared map directly as it edits (setCategoryEmojiOverrides).
   useEffect(() => { loadCategoryEmojis(); }, []);
 
-  // Sidebar Review badge = open-review count; refetch on navigation AND on a
-  // 'reviews-changed' event (approving/flagging on the current page doesn't change the route).
-  useEffect(() => {
-    const refetch = () => apiFetch<{ data: { open: number } }>('/reviews/count').then((r) => setReviewCount(r.data.open)).catch(() => {});
-    refetch();
-    window.addEventListener('reviews-changed', refetch);
-    return () => window.removeEventListener('reviews-changed', refetch);
-  }, [location.pathname]);
-
   return (
     <div className="flex app-shell-height bg-bg font-sans">
-      {/* Sidebar */}
-      <div
-        className="bg-surface border-r border-line flex flex-col shrink-0 desktop-only overflow-hidden"
-        style={{ width: sidebarCollapsed ? 64 : 236, transition: 'width 200ms ease' }}
-      >
-        {/* Logo / Expand toggle */}
-        <div
-          className="flex items-center border-b border-line"
-          style={{ padding: sidebarCollapsed ? '20px 0 16px' : '20px 20px 16px', justifyContent: sidebarCollapsed ? 'center' : 'space-between' }}
-        >
-          {sidebarCollapsed ? (
-            <div
-              onClick={toggleSidebar}
-              className="text-content-3 hover:text-content cursor-pointer flex items-center justify-center transition-colors"
-              title="Expand sidebar"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" /><line x1="20" y1="4" x2="20" y2="20" />
-              </svg>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 min-w-0">
-                <LedgerLogo size={28} className="shrink-0" />
-                <span className="text-content text-base font-extrabold tracking-[-0.02em] whitespace-nowrap">Ledger</span>
-              </div>
-              <button
-                onClick={toggleSidebar}
-                className="bg-transparent border-none text-content-3 hover:text-content hover:bg-surface-2 cursor-pointer p-1 rounded flex items-center justify-center transition-colors"
-                title="Collapse sidebar"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" /><line x1="4" y1="4" x2="4" y2="20" />
-                </svg>
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 py-3 flex flex-col gap-0.5" style={{ padding: sidebarCollapsed ? '12px 8px' : '12px 10px' }}>
-          {NAV_ITEMS.map((item) => {
-            const isActive = item.to === '/'
-              ? location.pathname === '/'
-              : location.pathname.startsWith(item.to);
-
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                title={sidebarCollapsed ? item.label : undefined}
-                className={`flex items-center gap-2.5 rounded-[11px] text-sm no-underline transition-colors ${
-                  isActive
-                    ? 'bg-primary/15 text-primary font-semibold'
-                    : 'text-content-2 font-medium hover:bg-surface-2 hover:text-content'
-                }`}
-                style={{ padding: sidebarCollapsed ? '9px 0' : '9px 12px', justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}
-              >
-                <span className="shrink-0 flex relative">
-                  {item.icon}
-                  {item.to === '/reviews' && reviewCount > 0 && sidebarCollapsed && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary" />
-                  )}
-                </span>
-                {!sidebarCollapsed && item.label}
-                {item.to === '/reviews' && reviewCount > 0 && !sidebarCollapsed && (
-                  <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold inline-flex items-center justify-center">{reviewCount}</span>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        {/* Footer: account menu trigger */}
-        <div className="border-t border-line p-3">
-          <button
-            onClick={() => setAccountMenuOpen((o) => !o)}
-            className="flex items-center w-full rounded-[11px] cursor-pointer hover:bg-surface-2 transition-colors"
-            style={sidebarCollapsed ? { justifyContent: 'center', padding: 8 } : { justifyContent: 'flex-start', gap: 10, padding: '8px 10px' }}
-            title={sidebarCollapsed ? (user?.displayName ?? 'Account') : undefined}
-            aria-haspopup="menu"
-            aria-expanded={accountMenuOpen}
-          >
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[13px]"
-              style={{ background: 'color-mix(in srgb, var(--primary) 16%, transparent)', color: 'var(--primary)' }}
-            >
-              {user?.displayName?.charAt(0).toUpperCase() ?? '?'}
-            </div>
-            {!sidebarCollapsed && (
-              <>
-                <span className="flex-1 min-w-0 text-left text-sm font-semibold text-content leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                  {user?.displayName}
-                </span>
-                <svg className="shrink-0 text-content-3" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Account menu popover — fixed so it escapes the sidebar's overflow */}
-      {accountMenuOpen && (
-        <div className="desktop-only">
-          <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
-          <div
-            className="fixed z-50 bg-elevated border border-line rounded-[12px] shadow-md p-1.5"
-            style={{ left: 12, bottom: 68, width: 216 }}
-            role="menu"
-          >
-            {UTILITY_ITEMS.map((item) => (
-              <button
-                key={item.to}
-                onClick={() => { navigate(item.to); setAccountMenuOpen(false); }}
-                className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-medium text-content-2 hover:bg-surface-2 hover:text-content transition-colors"
-                role="menuitem"
-              >
-                <span className="shrink-0 text-content-3 flex">{item.icon}</span>{item.label}
-              </button>
-            ))}
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-medium text-content-2 hover:bg-surface-2 hover:text-content transition-colors"
-              role="menuitem"
-            >
-              <span className="shrink-0 text-content-3 flex">
-                {theme === 'light' ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                )}
-              </span>
-              {theme === 'light' ? 'Dark mode' : 'Light mode'}
-            </button>
-            <div className="h-px bg-line my-1" />
-            <button
-              onClick={() => { setAccountMenuOpen(false); logout(); }}
-              className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-negative hover:bg-negative/10 transition-colors"
-              role="menuitem"
-            >
-              <span className="shrink-0 flex">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              </span>
-              Sign out
-            </button>
-          </div>
-        </div>
-      )}
+      <Sidebar />
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
@@ -272,6 +84,7 @@ function AppShell() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/accounts/:id" element={<AccountDetailPage />} />
             <Route path="/net-worth" element={<Navigate to="/accounts" replace />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
@@ -333,29 +146,31 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {setupRequired ? (
-            <Route path="*" element={<SetupPage />} />
-          ) : (
-            <>
-              {import.meta.env.DEV && <Route path="/mockup" element={<MockupPage />} />}
-              {import.meta.env.DEV && <Route path="/qa" element={<QAPage />} />}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/setup-2fa" element={<ProtectedRoute><TwoFASetupPage /></ProtectedRoute>} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <AppShell />
-                  </ProtectedRoute>
-                }
-              />
-            </>
-          )}
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            {setupRequired ? (
+              <Route path="*" element={<SetupPage />} />
+            ) : (
+              <>
+                {import.meta.env.DEV && <Route path="/mockup" element={<MockupPage />} />}
+                {import.meta.env.DEV && <Route path="/qa" element={<QAPage />} />}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/setup-2fa" element={<ProtectedRoute><TwoFASetupPage /></ProtectedRoute>} />
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <AppShell />
+                    </ProtectedRoute>
+                  }
+                />
+              </>
+            )}
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

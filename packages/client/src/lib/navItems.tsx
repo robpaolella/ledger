@@ -60,12 +60,6 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/investments', label: 'Investments', icon: icons.investments },
 ];
 
-// Secondary / utility destinations — reached from the sidebar account menu,
-// not the primary nav (kept as live routes).
-export const UTILITY_ITEMS: NavItem[] = [
-  { to: '/settings', label: 'Settings', icon: icons.settings },
-];
-
 // Tabs shown directly in the mobile bottom tab bar
 export const TAB_BAR_ITEMS: NavItem[] = [
   { to: '/', label: 'Home', icon: icons.dashboard },

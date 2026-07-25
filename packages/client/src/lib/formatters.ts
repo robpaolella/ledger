@@ -36,6 +36,28 @@ export function fmtWhole(n: number): string {
 }
 
 /**
+ * Relative timestamp: "Just now", "5m ago", "3h ago", "2d ago".
+ * Accepts ISO strings and bare SQLite CURRENT_TIMESTAMP values
+ * ("YYYY-MM-DD HH:MM:SS"), which are UTC despite lacking a zone marker.
+ */
+export function timeAgo(iso: string | null): string {
+  if (!iso) return '';
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(iso)
+    ? `${iso.replace(' ', 'T')}Z`
+    : iso;
+  const then = new Date(normalized).getTime();
+  if (isNaN(then)) return '';
+  const s = Math.max(0, (Date.now() - then) / 1000);
+  if (s < 60) return 'Just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+/**
  * Display logic for transaction amounts considering both sign and category type.
  * Savings contributions are outflows and behave like expenses (positive = money
  * out to savings), so they share the expense treatment.
