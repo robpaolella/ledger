@@ -12,6 +12,13 @@ interface Props {
   formatValue?: (n: number) => string;
   formatDate?: (d: string) => string;
   yTicks?: number;
+  /** Enlarged end-point dot (r=7, stroke 3) per the dashboard net-worth design. */
+  highlightLast?: boolean;
+  /** X-label mode: 'auto' = first/mid/last (default), 'date' = only the last
+   *  point's date centered under the dot, 'none' = no x labels. */
+  lastLabel?: 'auto' | 'date' | 'none';
+  /** In 'auto' mode: render this many evenly-spaced x labels instead of 3. */
+  xTicks?: number;
 }
 
 const defaultDate = (d: string) => {
@@ -37,6 +44,9 @@ export default function AreaLineChart({
   formatValue = defaultValue,
   formatDate = defaultDate,
   yTicks = 5,
+  highlightLast = false,
+  lastLabel = 'auto',
+  xTicks,
 }: Props) {
   // Guard against non-finite values (NaN/Infinity) breaking SVG coordinates.
   const points = useMemo(() => rawPoints.filter((p) => Number.isFinite(p.value)), [rawPoints]);
@@ -120,16 +130,33 @@ export default function AreaLineChart({
               <polygon points={areaPts} fill={`url(#${gid})`} />
               <polyline points={linePts} fill="none" stroke={color} strokeWidth="2.25" strokeLinejoin="round" strokeLinecap="round" />
               {/* end marker */}
-              <circle cx={xFor(points.length - 1)} cy={yFor(points[points.length - 1].value)} r="4.5" fill={color} stroke="var(--surface)" strokeWidth="2" />
+              <circle
+                cx={xFor(points.length - 1)} cy={yFor(points[points.length - 1].value)}
+                r={highlightLast ? 7 : 4.5} fill={color} stroke="var(--surface)" strokeWidth={highlightLast ? 3 : 2}
+              />
 
-              {/* x labels: first, middle, last */}
-              {[0, Math.floor((points.length - 1) / 2), points.length - 1]
+              {/* x labels: first/middle/last (or xTicks evenly spaced), or only the last point's date */}
+              {lastLabel === 'auto' && (
+                xTicks && points.length > 1
+                  ? Array.from({ length: Math.min(xTicks, points.length) }, (_, k) =>
+                      Math.round((k * (points.length - 1)) / (Math.min(xTicks, points.length) - 1)))
+                  : [0, Math.floor((points.length - 1) / 2), points.length - 1]
+              )
                 .filter((v, i, a) => a.indexOf(v) === i)
                 .map((i) => (
                   <text key={i} x={xFor(i)} y={height - 6} textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--text-3)">
                     {formatDate(points[i].date)}
                   </text>
                 ))}
+              {lastLabel === 'date' && (
+                // Centered under the end dot, clamped so it never clips the edge.
+                <text
+                  x={Math.min(Math.max(xFor(points.length - 1), pad.left + 20), width - 24)}
+                  y={height - 6} textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--text-3)"
+                >
+                  {formatDate(points[points.length - 1].date)}
+                </text>
+              )}
 
               {/* hover crosshair + dot */}
               {hp && (
