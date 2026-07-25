@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
 import ResponsiveModal from '../components/ResponsiveModal';
 import CurrencyInput from '../components/CurrencyInput';
+import Dropdown from '../components/Dropdown';
 import { OwnerBadge, SharedBadge, initOwnerSlots } from '../components/badges';
 import { VendorAvatar, SegmentedControl } from '../components/primitives';
-import InstitutionPicker from '../components/InstitutionPicker';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
+import { timeAgo } from '../lib/formatters';
 
 // ---- types ----
 interface Account {
@@ -29,7 +31,6 @@ interface NetWorthData {
 interface HistoryPoint {
   date: string; netWorth: number; liquid: number; investment: number; liability: number; physical: number; assets: number;
 }
-interface User { id: number; displayName: string }
 
 // ---- helpers ----
 const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -52,51 +53,12 @@ const GROUPS: { key: string; name: string; color: string }[] = [
   { key: 'liability', name: 'Liabilities', color: 'var(--negative)' },
 ];
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return '';
-  const then = new Date(iso).getTime();
-  if (isNaN(then)) return '';
-  const s = Math.max(0, (Date.now() - then) / 1000);
-  if (s < 60) return 'Just now';
-  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24); return `${d}d ago`;
-}
-
 // Client mirror of server depreciation (for the modal live preview).
 function depreciate(cost: number, salvage: number, purchaseDate: string, method: string, rate: number, life: number): { value: number; years: number } {
   const years = Math.max(0, (Date.now() - new Date(purchaseDate).getTime()) / (365.25 * 864e5));
   if (method === 'declining_balance') return { value: Math.max(salvage, cost * Math.pow(1 - rate / 100, years)), years };
   const annual = (cost - salvage) / (life || 1);
   return { value: Math.max(salvage, cost - annual * Math.min(years, life)), years };
-}
-
-// Small custom dropdown (button + menu).
-function Dropdown({ value, options, onChange, minWidth = 130 }: { value: string; options: { key: string; label: string }[]; onChange: (k: string) => void; minWidth?: number }) {
-  const [open, setOpen] = useState(false);
-  const current = options.find((o) => o.key === value)?.label ?? value;
-  return (
-    <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} style={{ minWidth }}
-        className="flex items-center justify-between gap-2 h-10 px-3.5 rounded-[11px] bg-surface-2 border border-line text-sm font-semibold text-content hover:border-line-strong">
-        <span>{current}</span>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-11 right-0 z-50 min-w-full py-1 rounded-[11px] bg-elevated border border-line-strong shadow-md">
-            {options.map((o) => (
-              <button key={o.key} onClick={() => { onChange(o.key); setOpen(false); }}
-                className={`block w-full text-left px-3.5 py-2 text-sm whitespace-nowrap hover:bg-surface-2 ${o.key === value ? 'text-primary font-semibold' : 'text-content'}`}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
 }
 
 const chkbox = (checked: boolean) => (
@@ -108,13 +70,13 @@ const chkbox = (checked: boolean) => (
 export default function AccountsPage() {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState<NetWorthData | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [range, setRange] = useState('1m');
   const [perf, setPerf] = useState<'netWorth' | 'assets' | 'liability'>('netWorth');
   const [summaryMode, setSummaryMode] = useState<'totals' | 'percent'>('totals');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [users, setUsers] = useState<User[]>([]);
 
   // account filter
   const [selected, setSelected] = useState<Set<number> | null>(null); // null = all
@@ -133,11 +95,6 @@ export default function AccountsPage() {
   const [syncBalances, setSyncBalances] = useState<SyncBal[]>([]);
   const [syncSel, setSyncSel] = useState<Set<number>>(new Set());
   const [syncLoading, setSyncLoading] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', lastFour: '', type: 'checking', classification: 'liquid', ownerId: 0, institutionId: null as number | null });
-  // manual balance entry (restores the capability the old Net Worth page had)
-  const [balanceEdit, setBalanceEdit] = useState<Account | null>(null);
-  const [balanceInput, setBalanceInput] = useState('');
 
   const loadData = useCallback(async () => {
     const res = await apiFetch<{ data: NetWorthData }>('/networth/summary');
@@ -153,11 +110,8 @@ export default function AccountsPage() {
   useEffect(() => { loadHistory(range, selected); }, [range, selected, loadHistory]);
   useEffect(() => {
     apiFetch<{ data: { id: number }[] }>('/simplefin/connections').then((r) => setHasSimplefin(r.data.length > 0)).catch(() => {});
-    apiFetch<{ data: { id: number; display_name?: string; displayName?: string }[] }>('/users').then((r) => {
-      const list = r.data.map((u) => ({ id: u.id, displayName: u.displayName ?? u.display_name ?? '' }));
-      setUsers(list);
-      initOwnerSlots(list.map((u) => u.id));
-      if (list[0]) setAddForm((f) => ({ ...f, ownerId: list[0].id }));
+    apiFetch<{ data: { id: number }[] }>('/users').then((r) => {
+      initOwnerSlots(r.data.map((u) => u.id));
     }).catch(() => {});
   }, []);
 
@@ -241,27 +195,7 @@ export default function AccountsPage() {
     addToast(`Updated ${sel.length} balance${sel.length !== 1 ? 's' : ''}`); setShowRefresh(false); await loadData(); loadHistory(range, selected);
   };
 
-  // ---- add account ----
-  const addAccount = async () => {
-    if (!addForm.name || !addForm.ownerId) { addToast('Name and owner are required', 'error'); return; }
-    try {
-      await apiFetch('/accounts', { method: 'POST', body: JSON.stringify({ name: addForm.name, lastFour: addForm.lastFour || null, type: addForm.type, classification: addForm.classification, ownerIds: [addForm.ownerId], institutionId: addForm.institutionId }) });
-      setShowAdd(false); setAddForm((f) => ({ ...f, name: '', lastFour: '', institutionId: null })); addToast('Account added'); await loadData();
-    } catch { addToast('Failed to add account', 'error'); }
-  };
-
   const canEdit = hasPermission('accounts.edit');
-  const canBalance = hasPermission('balances.update');
-  const openBalance = (a: Account) => { setBalanceEdit(a); setBalanceInput(a.balance ? String(a.balance) : ''); };
-  const saveBalance = async () => {
-    if (!balanceEdit) return;
-    const balance = parseFloat(balanceInput);
-    if (isNaN(balance)) { addToast('Enter a valid balance', 'error'); return; }
-    try {
-      await apiFetch('/balances', { method: 'POST', body: JSON.stringify({ accountId: balanceEdit.accountId, date: new Date().toISOString().slice(0, 10), balance }) });
-      setBalanceEdit(null); addToast('Balance updated'); await loadData(); loadHistory(range, selected);
-    } catch { addToast('Failed to update balance', 'error'); }
-  };
   const acctColor = (cls: string) => cls === 'liability' ? 'var(--negative)' : cls === 'investment' ? 'var(--c-teal)' : 'var(--c-blue)';
 
   const ChangeText = ({ v }: { v: number }) => (
@@ -321,12 +255,6 @@ export default function AccountsPage() {
               Refresh all
             </button>
           )}
-          {canEdit && (
-            <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary text-sm font-bold shadow-sm">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-              Add account
-            </button>
-          )}
         </div>
       </div>
 
@@ -367,8 +295,8 @@ export default function AccountsPage() {
                   <span className="ml-auto text-[17px] font-extrabold tabular-nums">{money(total)}</span>
                 </button>
                 {!isCollapsed && rows.map((a) => (
-                  <div key={a.accountId} onClick={canBalance ? () => openBalance(a) : undefined}
-                    className={`flex items-center gap-3.5 px-5 h-[74px] border-t border-line ${canBalance ? 'cursor-pointer hover:bg-surface-2/40' : ''}`}>
+                  <div key={a.accountId} onClick={() => navigate(`/accounts/${a.accountId}`)}
+                    className="flex items-center gap-3.5 px-5 h-[74px] border-t border-line cursor-pointer hover:bg-surface-2/40">
                     <VendorAvatar name={a.institution || a.name} src={a.logoUrl || undefined} color={a.institutionColor || acctColor(a.classification)} size={40} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -545,68 +473,6 @@ export default function AccountsPage() {
         </ResponsiveModal>
       )}
 
-      {/* manual balance modal */}
-      {balanceEdit && (
-        <ResponsiveModal isOpen onClose={() => setBalanceEdit(null)} title={`Update balance — ${balanceEdit.name}`}>
-          <div className="flex flex-col gap-4 p-1">
-            <div>
-              <label className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
-              <CurrencyInput value={balanceInput} onChange={setBalanceInput} autoFocus allowNegative />
-              <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number.</p>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setBalanceEdit(null)} className="h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
-              <button onClick={saveBalance} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm">Save balance</button>
-            </div>
-          </div>
-        </ResponsiveModal>
-      )}
-
-      {/* add account modal */}
-      {showAdd && (
-        <ResponsiveModal isOpen onClose={() => setShowAdd(false)} title="Add account">
-          <div className="flex flex-col gap-4 p-1">
-            <div>
-              <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Name</label>
-              <input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="e.g. Chase Checking" className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
-            </div>
-            <div>
-              <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Institution</label>
-              <InstitutionPicker value={addForm.institutionId} onChange={(id) => setAddForm({ ...addForm, institutionId: id })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Last 4</label>
-                <input value={addForm.lastFour} onChange={(e) => setAddForm({ ...addForm, lastFour: e.target.value.replace(/\D/g, '').slice(0, 4) })} className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Owner</label>
-                <select value={addForm.ownerId} onChange={(e) => setAddForm({ ...addForm, ownerId: parseInt(e.target.value) })} className="w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none">
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Type</label>
-                <select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })} className="w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none">
-                  {Object.entries(SUBTYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Group</label>
-                <select value={addForm.classification} onChange={(e) => setAddForm({ ...addForm, classification: e.target.value })} className="w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none">
-                  <option value="liquid">Liquid</option><option value="investment">Investments</option><option value="liability">Liabilities</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setShowAdd(false)} className="h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
-              <button onClick={addAccount} disabled={!addForm.name} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Add account</button>
-            </div>
-          </div>
-        </ResponsiveModal>
-      )}
     </div>
   );
 }
