@@ -42,7 +42,13 @@ let warnedNoToken = false;
 export async function syncBenchmarkPrices(
   sqlite: Database.Database,
   fetchImpl: typeof fetch = fetch,
+  opts?: { paceMs?: number },
 ): Promise<BenchmarkSyncResult> {
+  // Free tier caps at 50 requests/HOUR (1,000/day). A portfolio can track
+  // 60+ symbols, so pace real requests at ~45/hour — the daily job doesn't
+  // care that a full pass takes over an hour, and already-current symbols
+  // skip without a request (or a sleep).
+  const paceMs = opts?.paceMs ?? 80_000;
   const token = process.env.TIINGO_TOKEN;
   if (!token) {
     if (!warnedNoToken) {
@@ -101,7 +107,8 @@ export async function syncBenchmarkPrices(
       console.error(`[benchmarks] ${symbol}: ${msg}`);
       errors.push(`${symbol}: ${msg}`);
     }
-    await sleep(300); // gentle pacing — far under the 50 req/hour free cap
+    // Pace only actual requests (already-current symbols `continue` past this).
+    await sleep(paceMs);
   }
 
   return { updatedSymbols, errors };

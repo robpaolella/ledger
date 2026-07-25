@@ -77,7 +77,7 @@ const sorted = (xs: string[]) => [...xs].sort().join(',');
 console.log('without TIINGO_TOKEN → skipped cleanly');
 {
   delete process.env.TIINGO_TOKEN;
-  const r = await syncBenchmarkPrices(db, fetchStub);
+  const r = await syncBenchmarkPrices(db, fetchStub, { paceMs: 0 });
   check("skipped = 'no_token'", r.skipped === 'no_token', r);
   check('nothing fetched', calls.length === 0, calls);
   check('no symbols updated, no errors', r.updatedSymbols.length === 0 && r.errors.length === 0, r);
@@ -100,7 +100,7 @@ console.log('first run → backfill startDate ≈ 2 years back, rows inserted');
     { date: `${daysAgo(3)}T00:00:00.000Z`, adjClose: 100 },
     { date: `${daysAgo(2)}T00:00:00.000Z`, adjClose: 101 },
   ] });
-  const r = await syncBenchmarkPrices(db, fetchStub);
+  const r = await syncBenchmarkPrices(db, fetchStub, { paceMs: 0 });
   check('all 4 tracked symbols fetched', calls.length === 4, calls);
   check('startDate ≈ 2 years back', calls.every((c) => { const d = daysBetween(c.startDate, today); return d >= 725 && d <= 735; }), calls);
   check('endDate = today', calls.every((c) => c.endDate === today), calls);
@@ -113,7 +113,7 @@ console.log('second run → incremental from MAX(date)+1 day');
 {
   calls.length = 0;
   responder = () => ({ ok: true, rows: [{ date: `${daysAgo(1)}T00:00:00.000Z`, adjClose: 102 }] });
-  const r = await syncBenchmarkPrices(db, fetchStub);
+  const r = await syncBenchmarkPrices(db, fetchStub, { paceMs: 0 });
   check('startDate = MAX(date)+1', calls.length === 4 && calls.every((c) => c.startDate === daysAgo(1)), calls);
   check('one new row per symbol', ['SPY', 'VTI', 'BND', 'AAPL'].every((s) => countFor(s) === 3));
   check('no errors', r.errors.length === 0, r.errors);
@@ -123,7 +123,7 @@ console.log('overlapping re-run → INSERT OR REPLACE (no duplicates)');
 {
   calls.length = 0;
   responder = () => ({ ok: true, rows: [{ date: `${daysAgo(1)}T00:00:00.000Z`, adjClose: 999 }] });
-  await syncBenchmarkPrices(db, fetchStub);
+  await syncBenchmarkPrices(db, fetchStub, { paceMs: 0 });
   check('startDate = today (MAX is yesterday)', calls.every((c) => c.startDate === today), calls);
   check('row counts unchanged', ['SPY', 'VTI', 'BND', 'AAPL'].every((s) => countFor(s) === 3));
   check('close replaced in place', closeFor('SPY', daysAgo(1)) === 999, closeFor('SPY', daysAgo(1)));
@@ -135,7 +135,7 @@ console.log('one symbol failing (res.ok false) does not block the others');
   responder = (symbol) => symbol === 'SPY'
     ? { ok: false, status: 500 }
     : { ok: true, rows: [{ date: `${today}T00:00:00.000Z`, adjClose: 104 }] };
-  const r = await syncBenchmarkPrices(db, fetchStub);
+  const r = await syncBenchmarkPrices(db, fetchStub, { paceMs: 0 });
   check('SPY failure recorded in errors', r.errors.length === 1 && r.errors[0].startsWith('SPY:') && r.errors[0].includes('500'), r.errors);
   check('other symbols still updated', sorted(r.updatedSymbols) === 'AAPL,BND,VTI', r);
   check('rows landed for the others', ['VTI', 'BND', 'AAPL'].every((s) => countFor(s) === 4));
@@ -149,7 +149,7 @@ console.log('already-current symbols are skipped without fetching');
     if (symbol !== 'SPY') throw new Error(`unexpected fetch for ${symbol}`);
     return { ok: true, rows: [{ date: `${today}T00:00:00.000Z`, adjClose: 105 }] };
   };
-  const r = await syncBenchmarkPrices(db, fetchStub);
+  const r = await syncBenchmarkPrices(db, fetchStub, { paceMs: 0 });
   check('only SPY (still behind) fetched', calls.length === 1 && calls[0].symbol === 'SPY', calls);
   check('SPY caught up, no errors', countFor('SPY') === 4 && r.errors.length === 0, r);
 }
