@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { VendorAvatar } from '../components/primitives';
@@ -56,7 +56,8 @@ export default function ReviewsPage() {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [users, setUsers] = useState<HUser[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true); // only ever set on first mount
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -84,13 +85,15 @@ export default function ReviewsPage() {
     return () => document.removeEventListener('keydown', esc);
   }, [closeAll, detail]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadSeqRef = useRef(0);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setInitialLoading(true); else setRefreshing(true);
+    const seq = ++loadSeqRef.current; // drop out-of-order responses so a stale list can't resurrect removed rows
     try {
       const res = await apiFetch<{ data: ReviewRow[]; total: number }>('/reviews?status=open&limit=500');
-      setRows(res.data);
+      if (seq === loadSeqRef.current) setRows(res.data);
     } catch { addToast('Failed to load reviews', 'error'); }
-    finally { setLoading(false); }
+    finally { setInitialLoading(false); setRefreshing(false); }
   }, [addToast]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -135,38 +138,60 @@ export default function ReviewsPage() {
   }, [categories, catSearch]);
 
   // ---- mutations ----
+  // Optimistic in-place updates: the grouped list must never unmount wholesale (the shell
+  // scroll container clamps scrollTop to 0 when it does). Patch rows locally; on API failure
+  // reconcile with a silent reload (server is source of truth — a whole-list snapshot rollback
+  // would clobber other in-flight optimistic updates).
   // A category-only change is a relabel: keep account/date/description/amount, omit note
   // so the server preserves it. Changing the category resolves the open review server-side.
   const setTxnCategory = async (base: Txn, categoryId: number) => {
+    setEditCat(null); setCatSearch('');
+    setRows((rs) => rs.filter((r) => r.transaction.id !== base.id));
+    const cat = categories.find((c) => c.id === categoryId);
+    if (cat) setDetail((d) => (d && d.id === base.id ? { ...d, category: { id: cat.id, groupName: cat.group_name, subName: cat.sub_name, displayName: cat.display_name, type: cat.type } } : d));
     try {
       await apiFetch(`/transactions/${base.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId: base.account.id, date: base.date, description: base.description, amount: base.amount, categoryId }) });
-      setEditCat(null); setCatSearch('');
-      await load(); notifyChanged();
+      notifyChanged(); load({ silent: true });
       if (detail && detail.id === base.id) await refetchDetail(base.id);
-    } catch { addToast('Failed to set category', 'error'); }
+    } catch {
+      load({ silent: true });
+      if (detail && detail.id === base.id) refetchDetail(base.id); // undo the optimistic detail patch
+      addToast('Failed to set category', 'error');
+    }
   };
   const resolve = async (ids: number[]) => {
     if (busy || ids.length === 0) return;
     setBusy(true);
+    setRows((rs) => rs.filter((r) => !ids.includes(r.transaction.id)));
     try {
       await apiFetch('/reviews/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ids.length === 1 ? { transactionId: ids[0] } : { transactionIds: ids }) });
-      await load(); notifyChanged();
+      notifyChanged(); load({ silent: true });
       if (detail && ids.includes(detail.id)) await refetchDetail(detail.id);
-    } catch { addToast('Failed to approve', 'error'); }
+    } catch { load({ silent: true }); addToast('Failed to approve', 'error'); }
     finally { setBusy(false); }
   };
   const reassign = async (txnId: number, assigneeId: number) => {
     setEditAssign(null);
+    const nextAssignee = users.find((u) => u.id === assigneeId);
+    if (nextAssignee) {
+      setRows((rs) => rs.map((r) => (r.transaction.id === txnId ? { ...r, assignee: nextAssignee } : r)));
+      setDetail((d) => (d && d.id === txnId && d.review ? { ...d, review: { ...d.review, assignee: nextAssignee } } : d));
+    }
     try {
       await apiFetch(`/reviews/${txnId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assigneeId }) });
-      await load(); notifyChanged();
+      notifyChanged(); load({ silent: true });
       if (detail && detail.id === txnId) await refetchDetail(txnId);
-    } catch { addToast('Failed to reassign', 'error'); }
+    } catch {
+      load({ silent: true });
+      if (detail && detail.id === txnId) refetchDetail(txnId); // undo the optimistic detail patch
+      addToast('Failed to reassign', 'error');
+    }
   };
   const saveReviewNote = async (txnId: number, note: string) => {
+    setRows((rs) => rs.map((r) => (r.transaction.id === txnId ? { ...r, note } : r)));
     try { await apiFetch(`/reviews/${txnId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) }); }
-    catch { addToast('Failed to save note', 'error'); }
+    catch { load({ silent: true }); addToast('Failed to save note', 'error'); }
   };
   const saveTxnNote = async (base: DetailTxn, note: string) => {
     try {
@@ -280,11 +305,12 @@ export default function ReviewsPage() {
             <div className="flex items-baseline gap-2.5">
               <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} need review</span>
               {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Reset filters</span>}
+              {refreshing && <span className="text-[12px] text-content-3 animate-pulse">Refreshing…</span>}
             </div>
             <span className="font-mono text-[13px] text-content-2 tabular-nums">{money(shownTotal)} pending</span>
           </div>
 
-          {loading ? (
+          {initialLoading ? (
             <div className="px-6 py-10 text-center text-content-3 text-sm border-t border-line">Loading…</div>
           ) : groups.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3.5 px-6 pt-16 pb-[72px] text-center">
