@@ -20,6 +20,7 @@ import FilterPopover from '../components/FilterPopover';
 import type { FilterDraft } from '../components/filterModel';
 import DateRangePopover from '../components/DateRangePopover';
 import ManualImportModal from '../components/ManualImportModal';
+import MerchantPicker from '../components/MerchantPicker';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface DuplicateMatch {
@@ -74,7 +75,8 @@ interface TransactionMerchant {
 interface Transaction {
   id: number;
   date: string;
-  description: string; // raw statement text
+  description: string; // payee-preferred statement text
+  bankDescription?: string | null; // raw bank statement text (SimpleFIN/CSV rows)
   note: string | null;
   amount: number;
   merchant: TransactionMerchant | null;
@@ -96,6 +98,7 @@ interface HouseholdUser { id: number; displayName: string }
 interface Merchant {
   id: number;
   name: string;
+  logo_url?: string | null;
   txn_count?: number;
 }
 
@@ -212,7 +215,6 @@ function TransactionForm({
   // Refs for focusing first invalid field
   const dateRef = useRef<HTMLInputElement>(null);
   const accountRef = useRef<HTMLSelectElement>(null);
-  const merchantRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLInputElement>(null);
   const categoryRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -297,7 +299,7 @@ function TransactionForm({
   const getFirstInvalidRef = () => {
     if (!date) return dateRef;
     if (accountId <= 0) return accountRef;
-    if (!merchant.trim()) return merchantRef;
+    // Merchant is a picker (no focusable input) — its error renders inline.
     if (!splitMode && categoryId <= 0) return categoryRef;
     if (amount === '' || isNaN(parsedAmount)) return amountRef;
     return null;
@@ -399,9 +401,8 @@ function TransactionForm({
           </Field>
         </div>
         <Field label="Merchant" required error={errMerchant}>
-          <input ref={merchantRef} value={merchant} onChange={(e) => setMerchant(e.target.value)}
-            list="txn-form-merchant-list" placeholder="Who was paid?" className={inputCls(!!errMerchant)} />
-          <datalist id="txn-form-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
+          <MerchantPicker value={merchant} merchants={merchants} onSelect={setMerchant}
+            placeholder="Who was paid?" triggerClassName={inputCls(!!errMerchant)} />
         </Field>
         <Field label="Statement (optional)">
           <input ref={descRef} value={description} onChange={(e) => setDescription(e.target.value)}
@@ -615,24 +616,23 @@ export default function TransactionsPage() {
   const [cellSearch, setCellSearch] = useState('');
   const [detail, setDetail] = useState<Transaction | null>(null);
   const [detailNote, setDetailNote] = useState('');
-  const [detailMerchant, setDetailMerchant] = useState('');
-  const [detailStatement, setDetailStatement] = useState('');
+  // Click-to-edit header amount: the buffer is seeded only when editing starts,
+  // so concurrent commits can't clobber live typing.
   const [detailAmount, setDetailAmount] = useState('');
-  // True while the detail Amount field has focus — used to avoid re-seeding the
-  // amount buffer out from under an in-progress edit when a concurrent field
-  // commit (e.g. a category change PUT) resolves.
-  const amountFieldFocused = useRef(false);
+  const [amountEditing, setAmountEditing] = useState(false);
+  // Set by Escape so the blur that follows skips the commit.
+  const amountCancelled = useRef(false);
+  const [detailCalOpen, setDetailCalOpen] = useState(false);
   // When a split leg is open in the detail panel, this is its split id (the
   // panel still holds the parent `detail`); null = viewing the parent itself.
   const [detailSplitId, setDetailSplitId] = useState<number | null>(null);
   // Mirror of detailSplitId that's always current, so an in-flight refreshDetail
   // re-seeds the leg that's open NOW (not the one open when the PATCH fired).
   const detailSplitIdRef = useRef<number | null>(null);
-  // Which split-child text field has focus, so a concurrent PATCH's refresh
-  // doesn't clobber an in-progress edit in the sibling field.
-  const splitFieldFocused = useRef<'merchant' | 'note' | null>(null);
+  // True while the split-child note field has focus, so a concurrent PATCH's
+  // refresh doesn't clobber an in-progress edit.
+  const splitFieldFocused = useRef<'note' | null>(null);
   const [detailSplitNote, setDetailSplitNote] = useState('');
-  const [detailSplitMerchant, setDetailSplitMerchant] = useState('');
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitMode, setSplitMode] = useState<'$' | '%'>('$');
   const [splitOrigExpanded, setSplitOrigExpanded] = useState(false);
@@ -672,8 +672,8 @@ export default function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Open add form from FAB (via URL param or custom event), deep-link a merchant
-  // filter (/transactions?merchantId=12), or open a transaction's detail panel from
-  // the Reviews page (/transactions?review=34).
+  // filter (/transactions?merchantId=12) or account filter (?accountId=5), or open
+  // a transaction's detail panel from the Reviews page (/transactions?review=34).
   useEffect(() => {
     if (searchParams.get('add') === '1') {
       setEditing('new');
@@ -683,6 +683,12 @@ export default function TransactionsPage() {
     const mid = searchParams.get('merchantId');
     if (mid) {
       setFilterMerchant([mid]);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    const aid = searchParams.get('accountId');
+    if (aid) {
+      setFilterAccount(aid);
       setSearchParams({}, { replace: true });
       return;
     }
@@ -823,11 +829,11 @@ export default function TransactionsPage() {
   };
 
   // Inline/panel edit — rebuilds the txn body (preserving splits) and PUTs.
-  const updateTxnField = async (t: Transaction, changes: { description?: string; merchant?: string; categoryId?: number; date?: string; note?: string | null; accountId?: number; amount?: number }) => {
+  const updateTxnField = async (t: Transaction, changes: { description?: string; merchant?: string; categoryId?: number; date?: string; note?: string | null; amount?: number }) => {
     const isSplit = !!(t.splits && t.splits.length > 0);
     let newAmount = t.amount;
     const body: Record<string, unknown> = {
-      accountId: changes.accountId ?? t.account.id,
+      accountId: t.account.id,
       date: changes.date ?? t.date,
       description: changes.description ?? t.description,
       note: changes.note !== undefined ? changes.note : t.note,
@@ -865,9 +871,6 @@ export default function TransactionsPage() {
         const newCat = (!isSplit && changes.categoryId != null)
           ? categories.find((c) => c.id === changes.categoryId)
           : undefined;
-        const newAcct = changes.accountId !== undefined
-          ? accounts.find((a) => a.id === changes.accountId)
-          : undefined;
         setDetail((prev) => {
           if (!prev || prev.id !== t.id) return prev;
           // The server resolves an open review when the category actually changes
@@ -883,9 +886,6 @@ export default function TransactionsPage() {
             merchant: changes.merchant !== undefined
               ? (changes.merchant.trim() ? { id: prev.merchant?.id ?? -1, name: changes.merchant.trim() } : null)
               : prev.merchant,
-            account: newAcct
-              ? { id: newAcct.id, name: newAcct.name, lastFour: newAcct.last_four, owner: newAcct.owner, owners: newAcct.owners, isShared: newAcct.isShared }
-              : prev.account,
             category: (!isSplit && changes.categoryId != null)
               ? (newCat ? { id: newCat.id, groupName: newCat.group_name, subName: newCat.sub_name, displayName: newCat.display_name, type: newCat.type } : null)
               : prev.category,
@@ -893,16 +893,6 @@ export default function TransactionsPage() {
             review: reviewResolved ? null : prev.review,
           };
         });
-        // Keep the amount input in sync only when its DISPLAYED value could have
-        // changed (an amount edit, or a category change that flips the
-        // income/expense sign convention) — never touch the merchant/statement/
-        // note buffers here, so a field being typed in isn't overwritten. Also
-        // skip while the amount field itself has focus, so a concurrent
-        // category-change PUT resolving mid-edit can't clobber live typing.
-        if (!isSplit && (changes.amount !== undefined || changes.categoryId != null) && !amountFieldFocused.current) {
-          const dispType = newCat?.type ?? detail.category?.type ?? 'expense';
-          setDetailAmount(String(dispType === 'income' ? -newAmount : newAmount));
-        }
       }
       await loadTransactions();
       // Offer to learn a durable merchant→category rule when the category changed.
@@ -920,17 +910,16 @@ export default function TransactionsPage() {
     const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
     return String(catType === 'income' ? -t.amount : t.amount);
   };
-  const seedDetail = (t: Transaction) => { setDetail(t); setDetailNote(t.note ?? ''); setDetailMerchant(vendorLabel(t)); setDetailStatement(t.description ?? ''); setDetailAmount(displayAmount(t)); setDetailReviewNote(t.review?.note ?? ''); };
+  const seedDetail = (t: Transaction) => { setDetail(t); setDetailNote(t.note ?? ''); setDetailReviewNote(t.review?.note ?? ''); };
   const refreshDetail = async (id: number) => {
     try {
       const res = await apiFetch<{ data: Transaction }>(`/transactions/${id}`);
       seedDetail(res.data);
-      // Re-seed the leg that's open NOW (via the ref), and skip any field the user
-      // is currently editing so an in-flight refresh can't clobber live typing.
+      // Re-seed the leg that's open NOW (via the ref), and skip the note field if
+      // the user is editing it so an in-flight refresh can't clobber live typing.
       const activeId = detailSplitIdRef.current;
       const active = activeId != null ? (res.data.splits ?? []).find((s) => s.id === activeId) : undefined;
       if (active) {
-        if (splitFieldFocused.current !== 'merchant') setDetailSplitMerchant(legMerchantSeed(res.data, active));
         if (splitFieldFocused.current !== 'note') setDetailSplitNote(active.note ?? '');
       } else if (activeId != null) {
         setDetailSplitId(null); // leg gone (unsplit/merged) → fall back to parent view
@@ -941,8 +930,10 @@ export default function TransactionsPage() {
   const openDetail = (t: Transaction, split?: TransactionSplit) => {
     setDetailSplitId(split?.id ?? null);
     detailSplitIdRef.current = split?.id ?? null;
+    setAmountEditing(false);
+    setDetailCalOpen(false);
     seedDetail(t);
-    if (split) { setDetailSplitMerchant(legMerchantSeed(t, split)); setDetailSplitNote(split.note ?? ''); }
+    if (split) setDetailSplitNote(split.note ?? '');
     // List rows carry no review data — fetch the full record so the panel shows it.
     void refreshDetail(t.id);
   };
@@ -964,7 +955,7 @@ export default function TransactionsPage() {
     try { await apiFetch(`/reviews/${detail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); afterReviewChange(detail.id); }
     catch { addToast('Failed to update review', 'error'); }
   };
-  const closeDetail = () => { setDetail(null); setDetailSplitId(null); detailSplitIdRef.current = null; };
+  const closeDetail = () => { setDetail(null); setDetailSplitId(null); detailSplitIdRef.current = null; setAmountEditing(false); setDetailCalOpen(false); };
 
   const deleteFromDetail = async () => {
     if (!detail) return;
@@ -1259,8 +1250,15 @@ export default function TransactionsPage() {
   }
   const displayRows = dateGroups.flatMap((g) => g.rows); // flat, split-expanded (mobile)
 
+  // Fork glyph: one trunk in from the left splitting into two arrowed branches
+  // (visually distinct from the toolbar Sort icon's opposed vertical arrows).
   const splitIcon = (size = 12) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3"/></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12h6c2.4 0 3.6-1.1 5-2.5L18 6" />
+      <path d="M3 12h6c2.4 0 3.6 1.1 5 2.5L18 18" />
+      <path d="M14 6h4v4" />
+      <path d="M14 18h4v-4" />
+    </svg>
   );
 
   const renderRow = (t: Transaction, split?: TransactionSplit) => {
@@ -1611,8 +1609,9 @@ export default function TransactionsPage() {
               {/* Merchant */}
               <div>
                 <div className="text-[13px] font-semibold text-content-2 mb-2">Merchant</div>
-                <input value={bulkMerchant} onChange={(e) => setBulkMerchant(e.target.value)} list="bulk-merchant-list" placeholder="Choose or type a merchant…" className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
-                <datalist id="bulk-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
+                <MerchantPicker value={bulkMerchant} merchants={merchants} onSelect={setBulkMerchant} allowClear
+                  placeholder="Choose a merchant…"
+                  triggerClassName="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
               </div>
               {/* Category */}
               <div>
@@ -1668,23 +1667,25 @@ export default function TransactionsPage() {
                 const isSplit = !!(detail.splits && detail.splits.length > 0);
                 const fieldCls = 'w-full h-12 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none';
                 const labelCls = 'text-[13px] font-semibold text-content-2 mb-2';
-                const commitMerchant = () => { const v = detailMerchant.trim(); if (v && v !== vendorLabel(detail)) updateTxnField(detail, { merchant: v }); };
-                const commitStatement = () => {
-                  const v = detailStatement.trim();
-                  // Never wipe the raw bank text to empty — a merchant-less row
-                  // would lose its only vendor label. Clearing reverts.
-                  if (!v) { setDetailStatement(detail.description ?? ''); return; }
-                  if (v !== (detail.description ?? '')) updateTxnField(detail, { description: v });
-                };
+                // Click-to-edit header amount: seeded on click, committed on blur/Enter,
+                // Escape cancels (amountCancelled skips the commit on the ensuing blur).
                 const commitAmount = () => {
+                  setAmountEditing(false);
+                  if (amountCancelled.current) { amountCancelled.current = false; return; }
                   if (isSplit) return;
                   const entered = parseFloat(detailAmount);
                   if (isNaN(entered) || entered === parseFloat(displayAmount(detail))) return;
                   updateTxnField(detail, { amount: entered });
                 };
-                // Accounts grouped by owner for the select.
-                const acctGroups = new Map<string, Account[]>();
-                for (const a of accounts) { const k = a.isShared ? 'Shared' : (a.owners?.[0]?.displayName || a.owner); if (!acctGroups.has(k)) acctGroups.set(k, []); acctGroups.get(k)!.push(a); }
+                const statementText = detail.bankDescription ?? detail.description;
+                const copyStatement = () => {
+                  navigator.clipboard.writeText(statementText ?? '')
+                    .then(() => addToast('Statement copied'))
+                    .catch(() => addToast('Copy failed', 'error'));
+                };
+                const copyGlyph = (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                );
 
                 // ===== Split-CHILD view: one leg opened as its own transaction =====
                 const activeSplit = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
@@ -1700,21 +1701,21 @@ export default function TransactionsPage() {
                     .map(([g, subs]) => [g, subs.filter((c) => c.type !== 'transfer' && ((childDir === 'income' ? c.type === 'income' : c.type !== 'income') || c.id === activeSplit.categoryId))] as [string, Category[]])
                     .filter(([, subs]) => subs.length > 0);
                   const mSeed = legMerchantSeed(detail, activeSplit);
-                  // Compare to the seed (own-or-parent, no statement fallback) and allow
-                  // clearing → '' → inherit the parent merchant again.
-                  const commitSplitMerchant = () => { splitFieldFocused.current = null; const v = detailSplitMerchant.trim(); if (v !== mSeed) patchSplitField({ merchant: v }); };
                   const commitSplitNote = () => { splitFieldFocused.current = null; if ((activeSplit.note ?? '') !== detailSplitNote) patchSplitField({ note: detailSplitNote }); };
                   const roCls = `${fieldCls} mb-6 flex items-center text-content-2`;
                   const dateLabel = new Date(detail.date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
                   return (
                     <>
-                      <div className="flex items-center gap-4 mb-5">
+                      <div className="flex items-start justify-between gap-4 mb-6">
                         {(activeSplit.merchant ?? detail.merchant)?.logoUrl
                           ? <img src={((activeSplit.merchant ?? detail.merchant)?.logoUrl) as string} alt="" className="shrink-0 rounded-full object-cover" style={{ width: 52, height: 52 }} />
                           : <span className="shrink-0 rounded-full flex items-center justify-center font-bold text-xl" style={{ width: 52, height: 52, background: `color-mix(in srgb, ${scolor} 16%, transparent)`, color: scolor }}>{sInitial}</span>}
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-right">
                           <div className={`text-[28px] font-extrabold tracking-tight tabular-nums leading-none ${sClass}`}>{sAmt}</div>
-                          <div className="text-[12px] text-content-3 mt-1 truncate">{accountLabel(detail.account)}</div>
+                          <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[12px] text-content-3">
+                            <VendorAvatar name={detail.account.name} src={detail.account.logoUrl || undefined} color={detail.account.color || 'var(--c-blue)'} size={16} />
+                            <span className="truncate">{accountLabel(detail.account)}</span>
+                          </div>
                         </div>
                       </div>
 
@@ -1729,15 +1730,20 @@ export default function TransactionsPage() {
                         </div>
                       </div>
 
-                      <div className={labelCls}>Merchant</div>
-                      <input value={detailSplitMerchant} onChange={(e) => setDetailSplitMerchant(e.target.value)} onFocus={() => { splitFieldFocused.current = 'merchant'; }} onBlur={commitSplitMerchant}
-                        list="txn-merchant-list" placeholder="Set merchant…" className={`${fieldCls} font-semibold mb-6`} />
-                      <datalist id="txn-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
+                      <div className={labelCls}>Statement <span className="font-normal text-content-3">(from original)</span></div>
+                      <div className="mb-6 flex items-start gap-2">
+                        <span className="flex-1 text-[13px] text-content-2 leading-snug break-words">{statementText || '—'}</span>
+                        <button onClick={copyStatement} title="Copy statement"
+                          className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
+                          {copyGlyph}
+                        </button>
+                      </div>
 
-                      <div className={labelCls}>Amount</div>
-                      <div className={`${fieldCls} mb-6 flex items-center justify-between`}>
-                        <span className={`tabular-nums font-semibold ${sClass}`}>{sAmt}</span>
-                        <button onClick={openSplit} className="text-[12px] font-semibold text-primary">Edit in splits</button>
+                      <div className={labelCls}>Merchant</div>
+                      <div className="mb-6">
+                        <MerchantPicker value={mSeed} merchants={merchants} allowClear
+                          onSelect={(name) => { if (name !== mSeed) patchSplitField({ merchant: name }); }}
+                          triggerClassName={`${fieldCls} font-semibold`} />
                       </div>
 
                       <div className={labelCls}>Category</div>
@@ -1745,20 +1751,14 @@ export default function TransactionsPage() {
                         <select value={activeSplit.categoryId} onChange={(e) => e.target.value && patchSplitField({ categoryId: parseInt(e.target.value) })}
                           className="w-full h-12 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none appearance-none cursor-pointer">
                           {childGroups.map(([group, subs]) => (
-                            <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>
+                            <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name)} {c.sub_name}</option>)}</optgroup>
                           ))}
                         </select>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-4 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
                       </div>
 
-                      <div className={labelCls}>Account <span className="font-normal text-content-3">(from original)</span></div>
-                      <div className={roCls}>{accountLabel(detail.account)}</div>
-
                       <div className={labelCls}>Date <span className="font-normal text-content-3">(from original)</span></div>
                       <div className={`${roCls} tabular-nums`}>{dateLabel}</div>
-
-                      <div className={labelCls}>Statement <span className="font-normal text-content-3">(from original)</span></div>
-                      <div className={`${roCls} truncate`}><span className="truncate">{detail.description}</span></div>
 
                       <div className={labelCls}>Notes</div>
                       <textarea value={detailSplitNote} onChange={(e) => setDetailSplitNote(e.target.value)} onFocus={() => { splitFieldFocused.current = 'note'; }} onBlur={commitSplitNote}
@@ -1770,29 +1770,48 @@ export default function TransactionsPage() {
 
                 return (
                   <>
-                    <div className="flex items-center gap-4 mb-6">
+                    <div className="flex items-start justify-between gap-4 mb-6">
                       {detail.merchant?.logoUrl
                         ? <img src={detail.merchant.logoUrl} alt="" className="shrink-0 rounded-full object-cover" style={{ width: 52, height: 52 }} />
                         : <span className="shrink-0 rounded-full flex items-center justify-center font-bold text-xl" style={{ width: 52, height: 52, background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}>{initial}</span>}
-                      <div className={`text-[28px] font-extrabold tracking-tight tabular-nums ${amtClass}`}>{amtText}</div>
+                      <div className="min-w-0 text-right">
+                        {!isSplit && canEdit && amountEditing ? (
+                          <CurrencyInput allowNegative autoFocus value={detailAmount} onChange={setDetailAmount} onBlur={commitAmount}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur();
+                              else if (e.key === 'Escape') { amountCancelled.current = true; e.currentTarget.blur(); }
+                            }}
+                            className="w-44 h-11 px-3 rounded-[11px] bg-surface-2 border border-primary text-content text-[22px] font-extrabold tabular-nums text-right outline-none" />
+                        ) : (
+                          <div
+                            className={`text-[28px] font-extrabold tracking-tight tabular-nums leading-none ${amtClass} ${!isSplit && canEdit ? 'cursor-pointer hover:opacity-80' : ''}`}
+                            title={!isSplit && canEdit ? 'Click to edit amount' : undefined}
+                            onClick={() => { if (!isSplit && canEdit) { setDetailAmount(displayAmount(detail)); amountCancelled.current = false; setAmountEditing(true); } }}>
+                            {amtText}
+                          </div>
+                        )}
+                        <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[12px] text-content-3">
+                          <VendorAvatar name={detail.account.name} src={detail.account.logoUrl || undefined} color={detail.account.color || 'var(--c-blue)'} size={16} />
+                          <span className="truncate">{accountLabel(detail.account)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={labelCls}>Statement</div>
+                    <div className="mb-6 flex items-start gap-2">
+                      <span className="flex-1 text-[13px] text-content-2 leading-snug break-words">{statementText || '—'}</span>
+                      <button onClick={copyStatement} title="Copy statement"
+                        className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
+                        {copyGlyph}
+                      </button>
                     </div>
 
                     <div className={labelCls}>Merchant</div>
-                    <input value={detailMerchant} onChange={(e) => setDetailMerchant(e.target.value)} onBlur={commitMerchant}
-                      list="txn-merchant-list" placeholder="Set merchant…" className={`${fieldCls} font-semibold mb-6`} />
-                    <datalist id="txn-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
-
-                    <div className={labelCls}>Amount</div>
-                    {isSplit ? (
-                      <div className={`${fieldCls} mb-6 flex items-center justify-between text-content-3`}>
-                        <span className="tabular-nums text-content">{amtText}</span>
-                        <span className="text-[12px]">set by splits</span>
-                      </div>
-                    ) : (
-                      <div className="mb-6" onFocus={() => { amountFieldFocused.current = true; }} onBlur={() => { amountFieldFocused.current = false; }}>
-                        <CurrencyInput allowNegative value={detailAmount} onChange={setDetailAmount} onBlur={commitAmount} className={fieldCls} />
-                      </div>
-                    )}
+                    <div className="mb-6">
+                      <MerchantPicker value={vendorLabel(detail)} merchants={merchants}
+                        onSelect={(name) => { if (name && name !== vendorLabel(detail)) updateTxnField(detail, { merchant: name }); }}
+                        triggerClassName={`${fieldCls} font-semibold`} />
+                    </div>
 
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[13px] font-semibold text-content-2">Category</span>
@@ -1824,10 +1843,10 @@ export default function TransactionsPage() {
                       <div className="relative mb-6">
                         <select value={detail.category?.id ?? ''} onChange={(e) => e.target.value && updateTxnField(detail, { categoryId: parseInt(e.target.value) })}
                           className="w-full h-12 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none appearance-none cursor-pointer">
-                          <option value="">Uncategorized</option>
+                          <option value="">🏷️ Uncategorized</option>
                           {groupedAll.map(([group, subs]) => (
                             <optgroup key={group} label={group}>
-                              {subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                              {subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name)} {c.sub_name}</option>)}
                             </optgroup>
                           ))}
                         </select>
@@ -1835,23 +1854,23 @@ export default function TransactionsPage() {
                       </div>
                     )}
 
-                    <div className={labelCls}>Account</div>
-                    <div className="relative mb-6">
-                      <select value={detail.account.id} onChange={(e) => e.target.value && updateTxnField(detail, { accountId: parseInt(e.target.value) })}
-                        className="w-full h-12 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none appearance-none cursor-pointer">
-                        {Array.from(acctGroups.entries()).map(([owner, accts]) => (
-                          <optgroup key={owner} label={owner}>{accts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)}</option>)}</optgroup>
-                        ))}
-                      </select>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-4 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
-                    </div>
-
                     <div className={labelCls}>Date</div>
-                    <input type="date" value={detail.date} onChange={(e) => e.target.value && updateTxnField(detail, { date: e.target.value })} className={`${fieldCls} mb-6`} />
-
-                    <div className={labelCls}>Statement <span className="font-normal text-content-3">(raw bank text)</span></div>
-                    <input value={detailStatement} onChange={(e) => setDetailStatement(e.target.value)} onBlur={commitStatement}
-                      placeholder="Raw bank statement text" className={`${fieldCls} mb-6`} />
+                    <div className="relative mb-6">
+                      <button type="button" onClick={() => setDetailCalOpen((o) => !o)}
+                        className={`${fieldCls} flex items-center justify-between cursor-pointer`}
+                        style={{ borderColor: detailCalOpen ? 'var(--primary)' : undefined }}>
+                        <span className="tabular-nums">{new Date(detail.date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+                      </button>
+                      {detailCalOpen && (
+                        <>
+                          <div className="fixed inset-0 z-[74]" onClick={() => setDetailCalOpen(false)} />
+                          <div className="absolute top-[52px] left-0 z-[75] w-[320px] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                            <Calendar value={detail.date} onChange={(d) => { updateTxnField(detail, { date: d }); setDetailCalOpen(false); }} />
+                          </div>
+                        </>
+                      )}
+                    </div>
 
                     <div className={labelCls}>Notes</div>
                     <textarea value={detailNote} onChange={(e) => setDetailNote(e.target.value)}
