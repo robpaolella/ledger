@@ -12,11 +12,11 @@ const FULL = 236;  // expanded width
 
 const UTIL_BTN = 'w-8 h-8 rounded-lg flex items-center justify-center bg-transparent border-none text-content-3 hover:text-content hover:bg-surface-2 cursor-pointer transition-colors';
 
-// Labels are ALWAYS mounted and fade/slide — icons never move between states.
+// Labels are ALWAYS mounted at their final position and only FADE — no
+// translate, so nothing visibly travels while the rail width animates.
 const fadeStyle = (expanded: boolean): CSSProperties => ({
   opacity: expanded ? 1 : 0,
-  transform: expanded ? 'none' : 'translateX(-8px)',
-  transition: 'opacity 150ms ease, transform 150ms ease',
+  transition: 'opacity 150ms ease',
 });
 
 const crossfadeStyle = (visible: boolean): CSSProperties => ({
@@ -117,10 +117,22 @@ export default function Sidebar() {
         {/* Header — logo at a fixed x in every state (no wordmark); when
             expanded the utility icons sit beside it: [theme][cog][bell][pin] */}
         <div className="relative shrink-0" style={{ padding: '20px 0 8px 18px' }}>
-          <LedgerLogo size={28} className="shrink-0 block" />
+          <span className="relative inline-block">
+            <LedgerLogo size={28} className="shrink-0 block" />
+            {/* Unread indicator while the bell is hidden (collapsed rail) */}
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-negative"
+                style={crossfadeStyle(!expanded)}
+              />
+            )}
+          </span>
+          {/* Hard-fixed LEFT offset (not right-anchored): the cluster must not
+              travel with the animating right edge — it fades in place and the
+              growing rail simply unclips it. left = FULL − cluster(140) − 12. */}
           <div
             className="absolute flex items-center gap-1"
-            style={{ right: 12, top: 18, ...crossfadeStyle(expanded) }}
+            style={{ left: FULL - 152, top: 18, ...crossfadeStyle(expanded) }}
           >
             <button className={UTIL_BTN} onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
               {theme === 'light' ? moonIcon : sunIcon}
