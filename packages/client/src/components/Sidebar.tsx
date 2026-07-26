@@ -71,6 +71,15 @@ export default function Sidebar() {
     setPinnedCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem('ledger-sidebar-collapsed', String(next));
+      if (next) {
+        // Collapsing: also drop the hover/focus holds so the overlay shrinks
+        // WITH the layout placeholder — otherwise (the pointer is on this very
+        // button) the still-expanded overlay covers the reflowed content.
+        // Hover re-arms after the pointer leaves and re-enters the rail.
+        if (leaveTimer.current != null) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
+        setHovered(false);
+        setFocusWithin(false);
+      }
       return next;
     });
   };
@@ -105,12 +114,43 @@ export default function Sidebar() {
         onFocusCapture={(e) => { if (e.target.matches(':focus-visible')) setFocusWithin(true); }}
         onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFocusWithin(false); }}
       >
-        {/* Header — the logo shows in every state at a fixed x; the wordmark fades */}
-        <div className="flex items-center shrink-0" style={{ padding: '20px 0 16px 18px' }}>
-          <LedgerLogo size={28} className="shrink-0" />
-          <span className="text-content text-base font-extrabold tracking-[-0.02em] whitespace-nowrap ml-2" style={fadeStyle(expanded)}>
-            Ledger
-          </span>
+        {/* Header — logo at a fixed x in every state (no wordmark); when
+            expanded the utility icons sit beside it: [theme][cog][bell][pin] */}
+        <div className="relative shrink-0" style={{ padding: '20px 0 8px 18px' }}>
+          <LedgerLogo size={28} className="shrink-0 block" />
+          <div
+            className="absolute flex items-center gap-1"
+            style={{ right: 12, top: 18, ...crossfadeStyle(expanded) }}
+          >
+            <button className={UTIL_BTN} onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+              {theme === 'light' ? moonIcon : sunIcon}
+            </button>
+            <button className={UTIL_BTN} onClick={() => navigate('/settings')} title="Settings">
+              {icons.settings}
+            </button>
+            <NotificationBell unreadCount={unreadCount} open={bellOpen} onOpenChange={setBellOpen} buttonClassName={UTIL_BTN} />
+            <button className={UTIL_BTN} onClick={togglePin} title={pinnedCollapsed ? 'Pin sidebar open' : 'Collapse sidebar'}>
+              {pinnedCollapsed ? expandIcon : collapseIcon}
+            </button>
+          </div>
+        </div>
+
+        {/* Collapsed rail: the utilities stack under the logo (pin hidden —
+            hover expands, then the header row offers it). Height animates so
+            the nav slides rather than jumps. */}
+        <div
+          className="shrink-0 flex flex-col items-center gap-1 overflow-hidden"
+          style={{ height: expanded ? 0 : 112, transition: 'height 200ms ease', ...crossfadeStyle(!expanded) }}
+        >
+          <button className={UTIL_BTN} onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'} tabIndex={-1}>
+            {theme === 'light' ? moonIcon : sunIcon}
+          </button>
+          <button className={UTIL_BTN} onClick={() => navigate('/settings')} title="Settings" tabIndex={-1}>
+            {icons.settings}
+          </button>
+          {/* Opening from the collapsed stack expands the rail; the header-row
+              bell (same lifted state) is the dropdown's anchor. */}
+          <NotificationBell unreadCount={unreadCount} open={false} onOpenChange={setBellOpen} buttonClassName={UTIL_BTN} buttonTabIndex={-1} />
         </div>
 
         {/* Navigation — constant item padding keeps every icon at x=23 */}
@@ -153,34 +193,6 @@ export default function Sidebar() {
             );
           })}
         </nav>
-
-        {/* Utility cluster — expanded: [theme][cog][bell][pin] row; collapsed:
-            centered [theme][cog][bell] stack (hover is the expand affordance) */}
-        <div className="relative shrink-0 mb-1" style={{ height: expanded ? 32 : 104, transition: 'height 200ms ease' }}>
-          <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 px-4" style={crossfadeStyle(expanded)}>
-            <button className={UTIL_BTN} onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
-              {theme === 'light' ? moonIcon : sunIcon}
-            </button>
-            <button className={UTIL_BTN} onClick={() => navigate('/settings')} title="Settings">
-              {icons.settings}
-            </button>
-            <NotificationBell unreadCount={unreadCount} open={bellOpen} onOpenChange={setBellOpen} buttonClassName={UTIL_BTN} />
-            <button className={UTIL_BTN} onClick={togglePin} title={pinnedCollapsed ? 'Pin sidebar open' : 'Collapse sidebar'}>
-              {pinnedCollapsed ? expandIcon : collapseIcon}
-            </button>
-          </div>
-          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-1" style={crossfadeStyle(!expanded)}>
-            <button className={UTIL_BTN} onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'} tabIndex={-1}>
-              {theme === 'light' ? moonIcon : sunIcon}
-            </button>
-            <button className={UTIL_BTN} onClick={() => navigate('/settings')} title="Settings" tabIndex={-1}>
-              {icons.settings}
-            </button>
-            {/* Opening from the collapsed stack expands the rail; the expanded-row
-                bell (same lifted state) is the dropdown's anchor. */}
-            <NotificationBell unreadCount={unreadCount} open={false} onOpenChange={setBellOpen} buttonClassName={UTIL_BTN} buttonTabIndex={-1} />
-          </div>
-        </div>
 
         {/* Account row — avatar center x=32 matches the nav icon column */}
         <div className="shrink-0" style={{ padding: '0 8px 12px' }}>

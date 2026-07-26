@@ -46,7 +46,7 @@ interface Props {
 
 export default function NotificationBell({ unreadCount, open, onOpenChange, buttonClassName, buttonTabIndex }: Props) {
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [anchor, setAnchor] = useState<{ right: number; bottom: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ right: number; top: number } | null>(null);
 
   // Capture the anchor when opening, then re-measure once the sidebar's 200ms
   // width animation settles so the popover hugs the bell's final position.
@@ -54,7 +54,7 @@ export default function NotificationBell({ unreadCount, open, onOpenChange, butt
     if (!open) return;
     const measure = () => {
       const r = buttonRef.current?.getBoundingClientRect();
-      if (r) setAnchor({ right: r.right, bottom: r.bottom });
+      if (r) setAnchor({ right: r.right, top: r.top });
     };
     measure();
     const t = setTimeout(measure, 220);

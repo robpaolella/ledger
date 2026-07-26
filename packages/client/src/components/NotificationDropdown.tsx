@@ -48,7 +48,7 @@ const fallbackIcon = (
 const notifyChanged = () => window.dispatchEvent(new CustomEvent('notifications-changed'));
 
 interface Props {
-  anchor: { right: number; bottom: number };
+  anchor: { right: number; top: number };
   onClose: () => void;
 }
 
@@ -170,8 +170,8 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
         className="fixed z-50 w-[360px] flex flex-col bg-elevated border border-line rounded-[12px] shadow-md overflow-hidden"
         style={{
           left: anchor.right + 10,
-          bottom: window.innerHeight - anchor.bottom,
-          maxHeight: Math.min(480, anchor.bottom - 12),
+          top: anchor.top,
+          maxHeight: Math.min(480, window.innerHeight - anchor.top - 12),
         }}
         role="dialog"
         aria-label="Notifications"
