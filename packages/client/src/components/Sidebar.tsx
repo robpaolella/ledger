@@ -135,23 +135,8 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Collapsed rail: the utilities stack under the logo (pin hidden —
-            hover expands, then the header row offers it). Height animates so
-            the nav slides rather than jumps. */}
-        <div
-          className="shrink-0 flex flex-col items-center gap-1 overflow-hidden"
-          style={{ height: expanded ? 0 : 112, transition: 'height 200ms ease', ...crossfadeStyle(!expanded) }}
-        >
-          <button className={UTIL_BTN} onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'} tabIndex={-1}>
-            {theme === 'light' ? moonIcon : sunIcon}
-          </button>
-          <button className={UTIL_BTN} onClick={() => navigate('/settings')} title="Settings" tabIndex={-1}>
-            {icons.settings}
-          </button>
-          {/* Opening from the collapsed stack expands the rail; the header-row
-              bell (same lifted state) is the dropdown's anchor. */}
-          <NotificationBell unreadCount={unreadCount} open={false} onOpenChange={setBellOpen} buttonClassName={UTIL_BTN} buttonTabIndex={-1} />
-        </div>
+        {/* Collapsed rail shows no utilities — they fade in with the header
+            row on hover-expand. */}
 
         {/* Navigation — constant item padding keeps every icon at x=23 */}
         <nav className="flex-1 min-h-0 flex flex-col gap-0.5" style={{ padding: '12px 10px' }}>
