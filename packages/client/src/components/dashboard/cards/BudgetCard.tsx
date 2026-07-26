@@ -31,7 +31,8 @@ function BudgetBlock({ label, verb, budgeted, actual, positive = false }: { labe
           </span>
         ) : (
           <span className="text-content-3">
-            <span className="font-bold tabular-nums text-negative">{usd0(-remaining)}</span> over
+            {/* Exceeding plan is only bad for expenses — earning/saving past it stays green. */}
+            <span className={`font-bold tabular-nums ${positive ? 'text-positive' : 'text-negative'}`}>{usd0(-remaining)}</span> over
           </span>
         )}
       </div>
@@ -59,7 +60,7 @@ export default function BudgetCard({ dragHandleProps }: DashboardCardProps) {
         <>
           <BudgetBlock label="Income" verb="earned" budgeted={totals.budgetedIncome} actual={totals.actualIncome} positive />
           <BudgetBlock label="Expenses" verb="spent" budgeted={totals.budgetedExpenses} actual={totals.actualExpenses} />
-          <BudgetBlock label="Savings" verb="saved" budgeted={totals.budgetedSavings} actual={totals.actualSavings} />
+          <BudgetBlock label="Savings" verb="saved" budgeted={totals.budgetedSavings} actual={totals.actualSavings} positive />
         </>
       )}
     </DashboardCard>
