@@ -7,6 +7,7 @@ import {
   type ConnectionFailure,
 } from './simplefinSync.js';
 import { notifySyncFailure } from './notifications.js';
+import { getConfig as getAppConfig, setConfig as setAppConfig } from './appConfig.js';
 import { syncBenchmarkPrices } from './benchmarks.js';
 import { checkBudgetExceeded } from './budgetAlerts.js';
 
@@ -33,16 +34,8 @@ const LAST_SUCCESS_KEY = 'daily_sync.last_success';
 
 const localDate = (d = new Date()): string => d.toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-function getConfig(key: string): string | null {
-  const row = sqlite.prepare('SELECT value FROM app_config WHERE key = ?').get(key) as { value: string } | undefined;
-  return row?.value ?? null;
-}
-
-function setConfig(key: string, value: string): void {
-  sqlite.prepare(
-    'INSERT INTO app_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-  ).run(key, value);
-}
+const getConfig = (key: string): string | null => getAppConfig(sqlite, key);
+const setConfig = (key: string, value: string): void => setAppConfig(sqlite, key, value);
 
 interface DayState {
   day: string;

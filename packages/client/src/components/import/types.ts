@@ -48,6 +48,7 @@ export interface ImpCsvRow {
   amount: number;            // ledger sign (money-out positive)
   confidence: number;        // 0–1
   categoryId: number | null;
+  source?: string | null;    // suggestion origin; null = user-picked
   duplicateStatus: 'exact' | 'possible' | 'none';
   isLikelyTransfer: boolean;
   isDismissedTransfer: boolean;

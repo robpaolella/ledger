@@ -356,6 +356,104 @@ function AccountForm({
   );
 }
 
+// --- AI panel (admin) ---
+function AiPanel() {
+  const { addToast } = useToast();
+  const [enabled, setEnabled] = useState(false);
+  const [baseUrl, setBaseUrl] = useState('');
+  const [model, setModel] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState<{ reachable: boolean; modelAvailable: boolean; latencyMs?: number; error?: string } | null>(null);
+
+  useEffect(() => {
+    apiFetch<{ data: { enabled: boolean; baseUrl: string; model: string } }>('/llm/config')
+      .then((res) => { setEnabled(res.data.enabled); setBaseUrl(res.data.baseUrl); setModel(res.data.model); setLoaded(true); })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const save = async (patch: { enabled?: boolean; baseUrl?: string; model?: string }) => {
+    setSaving(true);
+    try {
+      await apiFetch('/llm/config', { method: 'PUT', body: JSON.stringify(patch) });
+      addToast('AI settings saved');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to save AI settings', 'error');
+    } finally { setSaving(false); }
+  };
+
+  const toggle = async (next: boolean) => {
+    setEnabled(next);
+    try {
+      await apiFetch('/llm/config', { method: 'PUT', body: JSON.stringify({ enabled: next }) });
+      addToast(next ? 'AI categorization enabled' : 'AI categorization disabled');
+    } catch {
+      setEnabled(!next);
+      addToast('Failed to update setting', 'error');
+    }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    setStatus(null);
+    try {
+      await apiFetch('/llm/config', { method: 'PUT', body: JSON.stringify({ baseUrl, model }) });
+      const res = await apiFetch<{ data: { reachable: boolean; modelAvailable: boolean; latencyMs?: number; error?: string } }>('/llm/status');
+      setStatus(res.data);
+    } catch (err) {
+      setStatus({ reachable: false, modelAvailable: false, error: err instanceof Error ? err.message : 'Failed' });
+    } finally { setTesting(false); }
+  };
+
+  return (
+    <div className="bg-surface border border-line rounded-[16px] shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+        <div>
+          <span className="text-[17px] font-extrabold">AI categorization</span>
+          <div className="text-[13px] text-content-3 mt-0.5">
+            A local LLM reviews every transaction the rules aren&apos;t certain about — bank sync and CSV import — and learns from your corrections.
+          </div>
+        </div>
+        <Switch checked={enabled} onChange={toggle} title="Enable AI categorization" />
+      </div>
+      <div className="px-5 py-4 flex flex-col gap-3 max-w-[520px]">
+        <div>
+          <label className="block text-[11px] font-medium text-content-3 mb-1">Ollama base URL</label>
+          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://192.168.1.50:11434"
+            disabled={!loaded}
+            className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-surface-2 outline-none text-content" />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-content-3 mb-1">Model</label>
+          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen3:4b"
+            disabled={!loaded}
+            className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-surface-2 outline-none text-content" />
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => save({ baseUrl, model })} disabled={saving || !loaded}
+            className="h-9 px-3.5 rounded-[10px] bg-primary text-on-primary font-bold text-[13px] disabled:opacity-50">
+            Save
+          </button>
+          <button onClick={test} disabled={testing || !baseUrl}
+            className="h-9 px-3.5 rounded-[10px] bg-surface-2 border border-line-strong text-content font-semibold text-[13px] disabled:opacity-50">
+            {testing ? 'Testing…' : 'Test connection'}
+          </button>
+          {status && (
+            <span className={`text-[12px] font-semibold ${status.reachable && status.modelAvailable ? 'text-positive' : 'text-negative'}`}>
+              {status.reachable
+                ? status.modelAvailable
+                  ? `Connected · ${status.latencyMs}ms`
+                  : `Reachable, but model "${model}" not found`
+                : `Unreachable${status.error ? ` — ${status.error}` : ''}`}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Category Form ---
 const SECTION_LABEL: Record<string, string> = { income: 'Income', expense: 'Expenses', savings: 'Savings' };
 
@@ -2057,7 +2155,10 @@ export default function SettingsPage() {
       { id: 'accounts', label: 'Accounts', inert: false },
       { id: 'categories', label: 'Categories', inert: false },
       { id: 'merchants', label: 'Merchants', inert: false },
-      ...(isAdmin() ? [{ id: 'users', label: 'Users', inert: false }] : []),
+      ...(isAdmin() ? [
+        { id: 'users', label: 'Users', inert: false },
+        { id: 'ai', label: 'AI', inert: false },
+      ] : []),
     ] },
   ];
 
@@ -2099,6 +2200,7 @@ export default function SettingsPage() {
           )}
           {panel === 'merchants' && <MerchantsPanel />}
           {panel === 'users' && isAdmin() && <UsersPermissionsSection />}
+          {panel === 'ai' && isAdmin() && <AiPanel />}
 
           {panel === 'accounts' && (
             <div className="flex flex-col gap-5">

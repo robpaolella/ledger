@@ -57,6 +57,7 @@ import assetRoutes from './routes/assets.js';
 import networthRoutes from './routes/networth.js';
 import importRoutes from './routes/import.js';
 import simplefinRoutes from './routes/simplefin.js';
+import llmRoutes from './routes/llm.js';
 import setupRoutes from './routes/setup.js';
 import twofaRoutes from './routes/twofa.js';
 import recurringRoutes from './routes/recurring.js';
@@ -145,6 +146,7 @@ app.use('/api/assets', assetRoutes);
 app.use('/api/networth', networthRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/simplefin', simplefinRoutes);
+app.use('/api/llm', llmRoutes);
 if (!isProd) {
   app.use('/api/dev', devRoutes);
 }

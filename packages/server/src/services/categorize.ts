@@ -29,7 +29,7 @@ export interface CategorizeResult {
   groupName: string | null;
   subName: string | null;
   confidence: number;
-  source: 'rule' | 'merchant-history' | 'text-history' | 'heuristic' | 'none';
+  source: 'rule' | 'merchant-history' | 'text-history' | 'heuristic' | 'llm' | 'none';
 }
 
 // Heuristic keyword rules, keyed to (group, sub). Any pair that doesn't resolve
@@ -108,10 +108,12 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
     merchantsByName.set(m.name, m.id);
   }
 
-  // --- per-merchant category distribution (split parents excluded: category_id NULL) ---
+  // --- per-merchant category distribution (split parents excluded: category_id NULL;
+  //     rows still awaiting review excluded so unconfirmed guesses can't vote for
+  //     themselves — anti-feedback-amplification) ---
   const merchantHist = new Map<number, Map<number, number>>();
   for (const row of sqlite.prepare(
-    'SELECT merchant_id, category_id, COUNT(*) AS cnt FROM transactions WHERE merchant_id IS NOT NULL AND category_id IS NOT NULL GROUP BY merchant_id, category_id'
+    'SELECT merchant_id, category_id, COUNT(*) AS cnt FROM transactions WHERE merchant_id IS NOT NULL AND category_id IS NOT NULL AND needs_review = 0 GROUP BY merchant_id, category_id'
   ).all() as { merchant_id: number; category_id: number; cnt: number }[]) {
     let m = merchantHist.get(row.merchant_id);
     if (!m) { m = new Map(); merchantHist.set(row.merchant_id, m); }
@@ -121,7 +123,7 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
   // --- text-history distribution (fallback for merchant-less / legacy rows) ---
   const textHist = new Map<string, Map<number, number>>();
   for (const row of sqlite.prepare(
-    'SELECT description, category_id, COUNT(*) AS cnt FROM transactions WHERE category_id IS NOT NULL GROUP BY description, category_id'
+    'SELECT description, category_id, COUNT(*) AS cnt FROM transactions WHERE category_id IS NOT NULL AND needs_review = 0 GROUP BY description, category_id'
   ).all() as { description: string; category_id: number; cnt: number }[]) {
     const key = row.description.toLowerCase().trim();
     if (!key) continue;

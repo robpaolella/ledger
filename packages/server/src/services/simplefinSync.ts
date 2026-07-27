@@ -4,7 +4,9 @@ import { fetchAccounts } from './simplefin.js';
 import { convertToLedgerSign } from './signConversion.js';
 import { detectDuplicates } from './duplicateDetector.js';
 import { detectTransfers } from './transferDetector.js';
-import { buildCategorizer, REVIEW_THRESHOLD } from './categorize.js';
+import { buildCategorizer, REVIEW_THRESHOLD, type CategorizeResult } from './categorize.js';
+import { llmConfig, llmCategorizeBatch, mergeLlmResult, type LlmTxnInput } from './llmCategorize.js';
+import { normalizeMerchantName } from './merchantNormalize.js';
 import { flagReview, defaultAssigneeForTxn } from './reviews.js';
 import { clearSyncFailureNotification } from './notifications.js';
 import { checkBudgetExceededForMonths } from './budgetAlerts.js';
@@ -311,6 +313,53 @@ export async function runSyncPipeline(opts: {
         });
       }
     }
+  }
+
+  // LLM second opinion for everything the deterministic chain isn't certain
+  // about (rules stay absolute). Failure-proof: any error, timeout, or
+  // disabled config leaves the deterministic results untouched.
+  try {
+    const candidates = result.transactions
+      .filter((t) => t.confidence < 1 && t.duplicateStatus !== 'exact')
+      .slice(0, 200); // defensive cap — keeps a large backfill's sync bounded
+    if (candidates.length > 0 && llmConfig(sqlite)) {
+      const typeByAccount = new Map(allLinks.map((l) => [l.account_id, l.account_type]));
+      const items: LlmTxnInput[] = candidates.map((t, i) => ({
+        key: i,
+        date: t.date,
+        amount: t.amount,
+        accountName: t.accountName,
+        accountType: typeByAccount.get(t.accountId),
+        merchantName: normalizeMerchantName(t.description) || null,
+        description: t.description,
+        bankDescription: t.rawDescription,
+        prior: {
+          categoryId: t.suggestedCategoryId,
+          groupName: t.suggestedGroupName,
+          subName: t.suggestedSubName,
+          confidence: t.confidence,
+          source: (t.suggestedSource ?? 'none') as CategorizeResult['source'],
+        },
+      }));
+      const verdicts = await llmCategorizeBatch(sqlite, items);
+      if (verdicts.size > 0) {
+        const catMeta = new Map((sqlite.prepare('SELECT id, group_name, sub_name FROM categories').all() as
+          { id: number; group_name: string; sub_name: string }[]).map((c) => [c.id, c]));
+        for (const item of items) {
+          const merged = mergeLlmResult(item.prior, verdicts.get(item.key));
+          if (merged === item.prior) continue;
+          const t = candidates[item.key];
+          const meta = merged.categoryId != null ? catMeta.get(merged.categoryId) : undefined;
+          t.suggestedCategoryId = merged.categoryId;
+          t.suggestedGroupName = merged.groupName ?? meta?.group_name ?? null;
+          t.suggestedSubName = merged.subName ?? meta?.sub_name ?? null;
+          t.suggestedSource = merged.source;
+          t.confidence = merged.confidence;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[llm-categorize] enrichment pass failed:', err instanceof Error ? err.message : err);
   }
 
   // Sort transactions by date descending

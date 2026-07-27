@@ -271,7 +271,7 @@ export default function ImportPage() {
     }).filter((it) => it.description.trim());
 
     try {
-      const res = await apiFetch<{ data: { description: string; suggestedCategoryId: number | null; confidence: number }[] }>(
+      const res = await apiFetch<{ data: { description: string; suggestedCategoryId: number | null; confidence: number; source?: string }[] }>(
         '/import/categorize',
         { method: 'POST', body: JSON.stringify({ items: items.map((it) => ({ description: it.description, amount: it.amount, venmoNote: it.venmoNote })) }) },
       );
@@ -286,6 +286,7 @@ export default function ImportPage() {
           amount: sign === 'bank' ? -amt : amt,
           confidence: cat.confidence,
           categoryId: cat.suggestedCategoryId,
+          source: cat.source ?? null,
           duplicateStatus: 'none',
           isLikelyTransfer: false,
           isDismissedTransfer: false,
@@ -331,7 +332,13 @@ export default function ImportPage() {
         method: 'POST',
         body: JSON.stringify({
           accountId: csvAccountId,
-          transactions: valid.map((r) => ({ date: r.date, description: r.description, note: r.note, categoryId: r.categoryId, amount: r.amount })),
+          // User-picked rows (source null) commit as manual — no confidence, no
+          // review flag; auto-suggested rows keep confidence/source so low ones
+          // land in the review queue (same contract as bank sync).
+          transactions: valid.map((r) => ({
+            date: r.date, description: r.description, note: r.note, categoryId: r.categoryId, amount: r.amount,
+            confidence: r.source ? r.confidence : null, source: r.source ?? null,
+          })),
         }),
       });
       addToast(`Import complete — ${valid.length} transactions imported`);
