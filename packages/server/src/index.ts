@@ -37,6 +37,7 @@ import { migrateInvestments } from './db/migrate-investments.js';
 import { migrateNotificationCenter } from './db/migrate-notification-center.js';
 import { migrateAutoImport } from './db/migrate-auto-import.js';
 import { migrateCategoryFeedback } from './db/migrate-category-feedback.js';
+import { migrateAmazon } from './db/migrate-amazon.js';
 import { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
@@ -58,6 +59,7 @@ import networthRoutes from './routes/networth.js';
 import importRoutes from './routes/import.js';
 import simplefinRoutes from './routes/simplefin.js';
 import llmRoutes from './routes/llm.js';
+import amazonRoutes from './routes/amazon.js';
 import setupRoutes from './routes/setup.js';
 import twofaRoutes from './routes/twofa.js';
 import recurringRoutes from './routes/recurring.js';
@@ -106,6 +108,7 @@ migrateInvestments(sqlite);           // benchmark_prices + holdings_history (+s
 migrateNotificationCenter(sqlite);    // review notifications → per-user aggregate + budget_alerts
 migrateAutoImport(sqlite);            // simplefin_links.auto_import (daily txn auto-import toggle)
 migrateCategoryFeedback(sqlite);      // category_feedback log + transactions.categorize_source
+migrateAmazon(sqlite);                // amazon_orders/items/charges/matches (order enrichment)
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));
@@ -147,6 +150,7 @@ app.use('/api/networth', networthRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/simplefin', simplefinRoutes);
 app.use('/api/llm', llmRoutes);
+app.use('/api/amazon', amazonRoutes);
 if (!isProd) {
   app.use('/api/dev', devRoutes);
 }

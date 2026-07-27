@@ -182,6 +182,50 @@ export const categoryFeedback = sqliteTable('category_feedback', {
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 
+// === Amazon Order Enrichment ===
+// Populated by the host-side scraper sidecar (scripts/amazon) via
+// services/amazonIngest; charges are the Amazon Transactions-page rows
+// (per-shipment amounts) used to match ledger transactions.
+export const amazonOrders = sqliteTable('amazon_orders', {
+  order_number: text('order_number').primaryKey(),
+  order_date: text('order_date').notNull(),
+  total: real('total'),
+  subtotal: real('subtotal'),
+  tax: real('tax'),
+  raw_json: text('raw_json').notNull(),
+  scraped_at: text('scraped_at').notNull(),
+});
+
+export const amazonOrderItems = sqliteTable('amazon_order_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  order_number: text('order_number').notNull().references(() => amazonOrders.order_number, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  unit_price: real('unit_price'),
+  quantity: integer('quantity').default(1),
+  asin: text('asin'),
+  seller: text('seller'),
+});
+
+export const amazonCharges = sqliteTable('amazon_charges', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  charge_date: text('charge_date').notNull(),
+  amount: real('amount').notNull(),
+  order_number: text('order_number').references(() => amazonOrders.order_number),
+  payment_method: text('payment_method'),
+  is_refund: integer('is_refund').default(0),
+});
+
+export const amazonMatches = sqliteTable('amazon_matches', {
+  transaction_id: integer('transaction_id').primaryKey().references(() => transactions.id, { onDelete: 'cascade' }),
+  order_number: text('order_number').notNull().references(() => amazonOrders.order_number),
+  charge_id: integer('charge_id').references(() => amazonCharges.id),
+  amount: real('amount').notNull(),
+  matched_by: text('matched_by').notNull().default('auto'), // auto | manual
+  confidence: real('confidence'),
+  enriched_at: text('enriched_at'),
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+});
+
 // === Transaction Splits ===
 export const transactionSplits = sqliteTable('transaction_splits', {
   id: integer('id').primaryKey({ autoIncrement: true }),

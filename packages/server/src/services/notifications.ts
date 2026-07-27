@@ -95,3 +95,30 @@ export function notifySyncFailure(sqlite: Database.Database, f: SyncFailureInput
 export function clearSyncFailureNotification(sqlite: Database.Database, connectionId: number): void {
   deleteByDedupeKey(sqlite, syncFailureKey(connectionId));
 }
+
+/* ------ Amazon scraper sidecar failures ------ */
+
+const AMAZON_KEYS = { auth: 'amazon:auth', stale: 'amazon:stale', other: 'amazon:other' } as const;
+
+/** Raise an Amazon-sidecar problem to active admins/owners (they run the host tooling). */
+export function notifyAmazonFailure(sqlite: Database.Database, kind: keyof typeof AMAZON_KEYS, message: string): void {
+  const admins = (sqlite.prepare(
+    "SELECT id FROM users WHERE is_active = 1 AND role IN ('owner', 'admin')"
+  ).all() as { id: number }[]).map((r) => r.id);
+  for (const userId of admins) {
+    upsertNotification(sqlite, userId, {
+      type: 'amazon_failure',
+      severity: kind === 'stale' ? 'warning' : 'error',
+      title: kind === 'auth' ? 'Amazon session expired' : kind === 'stale' ? 'Amazon scrape is stale' : 'Amazon scrape failing',
+      body: message,
+      actionLabel: 'Open Settings',
+      actionTarget: '/settings?panel=ai',
+      dedupeKey: AMAZON_KEYS[kind],
+    });
+  }
+}
+
+/** A healthy run clears every Amazon alert for everyone. */
+export function clearAmazonFailureNotification(sqlite: Database.Database): void {
+  for (const key of Object.values(AMAZON_KEYS)) deleteByDedupeKey(sqlite, key);
+}

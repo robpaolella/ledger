@@ -8,6 +8,7 @@ import {
 } from './simplefinSync.js';
 import { notifySyncFailure } from './notifications.js';
 import { getConfig as getAppConfig, setConfig as setAppConfig } from './appConfig.js';
+import { runAmazonPipeline } from './amazonPipeline.js';
 import { syncBenchmarkPrices } from './benchmarks.js';
 import { checkBudgetExceeded } from './budgetAlerts.js';
 
@@ -159,6 +160,11 @@ async function runOnce(): Promise<void> {
       checkBudgetExceeded(sqlite, { month: today.slice(0, 7) });
     } catch (err) {
       console.error('[daily-sync] budget sweep failed:', err);
+    }
+    try {
+      await runAmazonPipeline(sqlite); // no-op unless amazon.enabled
+    } catch (err) {
+      console.error('[daily-sync] amazon pipeline failed:', err);
     }
   }
 
