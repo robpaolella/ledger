@@ -13,7 +13,7 @@ import BankSyncSection from '../components/BankSyncSection';
 import InlineNotification from '../components/InlineNotification';
 import TotpCodeInput from '../components/TotpCodeInput';
 import { OwnerBadge, SharedBadge, ClassificationBadge, initOwnerSlots, type AccountClassification } from '../components/badges';
-import { VendorAvatar } from '../components/primitives';
+import { VendorAvatar, Switch } from '../components/primitives';
 import { getCategoryEmoji, getCategoryColorVar, setCategoryEmojiOverrides } from '../lib/categoryMeta';
 import PermissionGate from '../components/PermissionGate';
 import ResponsiveModal from '../components/ResponsiveModal';
@@ -112,6 +112,8 @@ function SortableDesktopSub({ cat, canEdit, onEdit }: { cat: Category; canEdit: 
 function AccountForm({
   account,
   users,
+  syncLink,
+  onToggleAutoImport,
   onSave,
   onDelete,
   onClose,
@@ -119,11 +121,14 @@ function AccountForm({
 }: {
   account?: Account;
   users: { id: number; displayName: string }[];
+  syncLink?: { linkId: number; autoImport: number };
+  onToggleAutoImport?: (next: boolean) => void;
   onSave: (data: Record<string, unknown>) => void;
   onDelete?: () => Promise<string | null>;
   onClose: () => void;
   onAvatarChanged?: () => void;
 }) {
+  const { hasPermission } = useAuth();
   const [name, setName] = useState(account?.name ?? '');
   const [lastFour, setLastFour] = useState(account?.last_four ?? '');
   const [type, setType] = useState(account?.type ?? 'checking');
@@ -303,6 +308,23 @@ function AccountForm({
             )}
           </div>
         </div>
+        {account && syncLink && (
+          <div>
+            <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">Bank Sync</label>
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 border border-[var(--table-border)] rounded-lg">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-[var(--text-body)]">Auto-import transactions</div>
+                <div className="text-[11px] text-[var(--text-muted)]">Imported by the daily sync · balances always update</div>
+              </div>
+              <Switch
+                checked={syncLink.autoImport === 1}
+                onChange={(next) => onToggleAutoImport?.(next)}
+                disabled={!hasPermission('simplefin.manage')}
+                title="Daily transaction auto-import"
+              />
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex gap-2 mt-5 justify-end">
         {account && onDelete && (
@@ -1834,6 +1856,8 @@ export default function SettingsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [userList, setUserList] = useState<{ id: number; displayName: string }[]>([]);
   const [editingAccount, setEditingAccount] = useState<Account | null | 'new'>(null);
+  // accountId → SimpleFIN link (drives the auto-import toggle in the account modal).
+  const [syncLinks, setSyncLinks] = useState<Record<number, { linkId: number; autoImport: number }>>({});
   const [showInstitutions, setShowInstitutions] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null | 'new'>(null);
   const [newCatGroupId, setNewCatGroupId] = useState<number | null>(null);
@@ -1846,12 +1870,18 @@ export default function SettingsPage() {
   const setPanel = (p: string) => setSearchParams({ panel: p });
 
   const loadData = useCallback(async () => {
-    const [acctRes, catRes, groupRes, userRes] = await Promise.all([
+    const [acctRes, catRes, groupRes, userRes, linkRes] = await Promise.all([
       apiFetch<{ data: Account[] }>('/accounts'),
       apiFetch<{ data: Category[] }>('/categories'),
       apiFetch<{ data: Group[] }>('/categories/groups'),
       apiFetch<{ data: { id: number; display_name: string }[] }>('/users'),
+      apiFetch<{ data: { accounts: { link_id: number; account_id: number; auto_import: number }[] }[] }>('/simplefin/linked-accounts'),
     ]);
+    const links: Record<number, { linkId: number; autoImport: number }> = {};
+    for (const conn of linkRes.data) {
+      for (const l of conn.accounts) links[l.account_id] = { linkId: l.link_id, autoImport: l.auto_import };
+    }
+    setSyncLinks(links);
     setAccounts(acctRes.data);
     setCategories(catRes.data);
     setGroups(groupRes.data);
@@ -1890,6 +1920,20 @@ export default function SettingsPage() {
       loadData();
     } catch {
       addToast('Failed to save account', 'error');
+    }
+  };
+
+  const handleToggleAutoImport = async (accountId: number, next: boolean) => {
+    const link = syncLinks[accountId];
+    if (!link) return;
+    // Optimistic flip; revert on failure.
+    const set = (val: number) => setSyncLinks((prev) => ({ ...prev, [accountId]: { ...prev[accountId], autoImport: val } }));
+    set(next ? 1 : 0);
+    try {
+      await apiFetch(`/simplefin/links/${link.linkId}`, { method: 'PATCH', body: JSON.stringify({ autoImport: next }) });
+    } catch {
+      set(next ? 0 : 1);
+      addToast('Failed to update auto-import', 'error');
     }
   };
 
@@ -2149,6 +2193,8 @@ export default function SettingsPage() {
         <AccountForm
           account={editingAccount === 'new' ? undefined : editingAccount}
           users={userList}
+          syncLink={editingAccount !== 'new' ? syncLinks[editingAccount.id] : undefined}
+          onToggleAutoImport={editingAccount !== 'new' ? (next) => handleToggleAutoImport(editingAccount.id, next) : undefined}
           onSave={handleSaveAccount}
           onDelete={editingAccount !== 'new' && hasPermission('accounts.delete') ? handleDeleteAccount : undefined}
           onClose={() => setEditingAccount(null)}

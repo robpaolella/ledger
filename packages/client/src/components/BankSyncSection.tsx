@@ -10,7 +10,6 @@ import { ConnectedBadge } from './badges';
 import InlineNotification from './InlineNotification';
 import ResponsiveModal from './ResponsiveModal';
 import InstitutionPicker from './InstitutionPicker';
-import { Switch } from './primitives';
 
 interface Connection {
   id: number;
@@ -306,25 +305,6 @@ function AccountLinkingTable({
     onAccountCreated();
   };
 
-  const handleToggleAutoImport = async (sfAcct: SimpleFINAccount, next: boolean) => {
-    if (!sfAcct.link) return;
-    const linkId = sfAcct.link.id;
-    // Optimistic flip; revert on failure.
-    const apply = (val: number) => setSfAccounts((prev) =>
-      prev.map((a) => a.link?.id === linkId ? { ...a, link: { ...a.link!, autoImport: val } } : a)
-    );
-    apply(next ? 1 : 0);
-    try {
-      await apiFetch(`/simplefin/links/${linkId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ autoImport: next }),
-      });
-    } catch (_err) {
-      apply(next ? 0 : 1);
-      addToast('Failed to update auto-import', 'error');
-    }
-  };
-
   // Group accounts by classification
   const grouped = new Map<string, LedgerAccount[]>();
   for (const acct of accounts.filter((a) => a.is_active)) {
@@ -361,7 +341,6 @@ function AccountLinkingTable({
             <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">SimpleFIN Account</th>
             <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-right">Balance</th>
             <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left" style={{ width: '260px' }}>Ledger Account</th>
-            <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-center" style={{ width: '90px' }}>Auto-import</th>
           </tr>
         </thead>
         <tbody>
@@ -400,23 +379,6 @@ function AccountLinkingTable({
                   <option value="create-new">+ Create New Account</option>
                 </select>
               </td>
-              <td className="px-2.5 py-2 text-center">
-                {(() => {
-                  if (!sfAcct.link) return <span className="text-[var(--text-muted)]">—</span>;
-                  const linkedAcct = accounts.find((a) => a.id === sfAcct.link!.accountId);
-                  const isInvestment = linkedAcct?.classification === 'investment';
-                  return (
-                    <Switch
-                      checked={sfAcct.link.autoImport === 1}
-                      onChange={(next) => handleToggleAutoImport(sfAcct, next)}
-                      disabled={!canManage}
-                      title={isInvestment
-                        ? 'Daily transaction auto-import — off by default for investment accounts; contribution legs are labeled Transfers'
-                        : 'Daily transaction auto-import'}
-                    />
-                  );
-                })()}
-              </td>
             </tr>
           ))}
         </tbody>
@@ -426,7 +388,7 @@ function AccountLinkingTable({
           {linkedCount} of {sfAccounts.length} accounts linked
         </span>
         <span className="text-[11px] text-[var(--text-muted)]">
-          Balances update daily for all linked accounts · transactions auto-import only where enabled
+          Balances update daily for all linked accounts · auto-import is set per account in Your accounts
         </span>
       </div>
 
