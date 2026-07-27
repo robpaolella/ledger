@@ -353,7 +353,7 @@ export default function ImportPage() {
     setFetching(true);
     setFetchedRange({ startDate, endDate });
     try {
-      const res = await apiFetch<{ data: { transactions: (ImpSyncRow & { suggestedCategoryId: number | null })[] } }>(
+      const res = await apiFetch<{ data: { transactions: (ImpSyncRow & { suggestedCategoryId: number | null; suggestedSource?: string })[] } }>(
         '/simplefin/sync',
         { method: 'POST', body: JSON.stringify({ accountIds, startDate, endDate }) },
       );
@@ -367,6 +367,7 @@ export default function ImportPage() {
         amount: t.amount,
         confidence: t.confidence,
         categoryId: t.suggestedCategoryId,
+        source: t.suggestedSource ?? null,
         duplicateStatus: t.duplicateStatus,
         isLikelyTransfer: t.isLikelyTransfer,
         isDismissedTransfer: false,
@@ -412,7 +413,7 @@ export default function ImportPage() {
           transactions: valid.map((r) => ({
             simplefinId: r.simplefinId, accountId: r.accountId, date: r.date,
             description: r.description, rawDescription: r.rawDescription, amount: r.amount,
-            categoryId: r.categoryId, confidence: r.confidence ?? null,
+            categoryId: r.categoryId, confidence: r.confidence ?? null, source: r.source ?? null,
           })),
           balanceUpdates: [],
           holdingsUpdates: [],

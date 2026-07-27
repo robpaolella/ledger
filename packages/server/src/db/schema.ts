@@ -154,6 +154,31 @@ export const transactions = sqliteTable('transactions', {
   // and a flag for low-confidence rows queued for user review.
   categorize_confidence: real('categorize_confidence'),
   needs_review: integer('needs_review').default(0),
+  // Origin of the auto-assigned category: rule | merchant-history | text-history
+  // | heuristic | llm (null = manual/unknown).
+  categorize_source: text('categorize_source'),
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+});
+
+// === Category Feedback ===
+// Durable log of user categorization decisions (corrections/confirmations/split
+// legs). Snapshots txn fields so rows survive transaction deletion; feeds the
+// LLM categorizer's few-shot context.
+export const categoryFeedback = sqliteTable('category_feedback', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  transaction_id: integer('transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+  description: text('description').notNull(),
+  bank_description: text('bank_description'),
+  merchant_id: integer('merchant_id').references(() => merchants.id),
+  account_id: integer('account_id').references(() => accounts.id),
+  amount: real('amount').notNull(),
+  txn_date: text('txn_date'),
+  prior_category_id: integer('prior_category_id').references(() => categories.id),
+  prior_source: text('prior_source'),
+  prior_confidence: real('prior_confidence'),
+  corrected_category_id: integer('corrected_category_id').notNull().references(() => categories.id),
+  kind: text('kind').notNull().default('correction'), // correction | confirmation | split_leg
+  user_id: integer('user_id').references(() => users.id),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 

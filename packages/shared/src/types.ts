@@ -267,6 +267,7 @@ export interface SyncTransaction {
   suggestedCategoryId: number | null;
   suggestedGroupName: string | null;
   suggestedSubName: string | null;
+  suggestedSource?: string;
   confidence: number;
   duplicateStatus: DuplicateStatus;
   duplicateMatchId: number | null;

@@ -55,6 +55,7 @@ export interface CommitTransaction {
   amount: number;
   categoryId?: number;
   confidence?: number | null;
+  source?: string | null;
   splits?: { categoryId: number; amount: number }[];
 }
 
@@ -263,6 +264,7 @@ export async function runSyncPipeline(opts: {
               suggestedCategoryId: cat.categoryId,
               suggestedGroupName: cat.groupName,
               suggestedSubName: cat.subName,
+              suggestedSource: cat.source,
               confidence: cat.confidence,
               duplicateStatus: dup.status,
               duplicateMatchId: dup.matchId,
@@ -329,8 +331,8 @@ export function commitSync(payload: CommitPayload): CommitResult {
     // Insert transactions
     if (txns && txns.length > 0) {
       const insertTxn = sqlite.prepare(`
-        INSERT INTO transactions (account_id, date, description, bank_description, note, category_id, merchant_id, amount, simplefin_transaction_id, categorize_confidence, needs_review)
-        VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+        INSERT INTO transactions (account_id, date, description, bank_description, note, category_id, merchant_id, amount, simplefin_transaction_id, categorize_confidence, needs_review, categorize_source)
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(simplefin_transaction_id) WHERE simplefin_transaction_id IS NOT NULL DO NOTHING
       `);
       const insertSplit = sqlite.prepare(`
@@ -347,6 +349,7 @@ export function commitSync(payload: CommitPayload): CommitResult {
         // Flag for review when uncategorized, or auto-categorized below the
         // confidence threshold. Split parents are considered categorized (via legs).
         const needsReview = hasSplits ? 0 : (catId == null || (conf != null && conf < REVIEW_THRESHOLD) ? 1 : 0);
+        const source = catId == null ? null : (t.source ?? null);
         const result = insertTxn.run(
           t.accountId,
           t.date,
@@ -358,6 +361,7 @@ export function commitSync(payload: CommitPayload): CommitResult {
           t.simplefinId,
           conf,
           needsReview,
+          source,
         );
         // ON CONFLICT DO NOTHING → changes 0 when the scheduler and a manual
         // commit race on the same simplefinId; only the winner counts/flag.

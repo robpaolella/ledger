@@ -34,6 +34,7 @@ export interface ImpSyncRow {
   amount: number;            // ledger sign (money-out positive)
   confidence: number;        // 0–1
   categoryId: number | null; // user override / suggestion
+  source?: string | null;    // suggestion origin (rule/merchant-history/…/llm); null = user-picked
   duplicateStatus: 'exact' | 'possible' | 'none';
   isLikelyTransfer: boolean;
   isDismissedTransfer: boolean;

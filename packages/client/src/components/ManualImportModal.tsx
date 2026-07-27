@@ -18,6 +18,7 @@ interface SyncCandidate {
   rawDescription: string;
   amount: number;
   suggestedCategoryId: number | null;
+  suggestedSource?: string;
   confidence: number;
   duplicateStatus: 'exact' | 'possible' | 'none';
 }
@@ -86,6 +87,7 @@ export default function ManualImportModal({ onClose, onImported }: { onClose: ()
               amount: t.amount,
               categoryId: t.suggestedCategoryId ?? undefined,
               confidence: t.confidence ?? null,
+              source: t.suggestedSource ?? null,
             })),
             balanceUpdates: sync.data.balanceUpdates.map((b) => ({ accountId: b.accountId, balance: b.currentBalance, date: b.balanceDate })),
             holdingsUpdates: sync.data.holdingsUpdates.map((h) => ({ accountId: h.accountId, holdings: h.holdings })),

@@ -2,6 +2,16 @@ import { Router, Request, Response } from 'express';
 import { sqlite } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { flagReview, resolveReview, assignReview, setReviewNote, reopenReview } from '../services/reviews.js';
+import { recordCategoryFeedback } from '../services/feedback.js';
+
+/** Resolving a review on a categorized txn = confirming its category — a
+ *  positive learning signal. Skipped for big bulk resolves (queue-clearing). */
+function recordConfirmation(txnId: number, userId: number): void {
+  const row = sqlite.prepare('SELECT category_id FROM transactions WHERE id = ?').get(txnId) as { category_id: number | null } | undefined;
+  if (row?.category_id != null) {
+    recordCategoryFeedback(sqlite, { txnId, newCategoryId: row.category_id, kind: 'confirmation', userId });
+  }
+}
 
 const router = Router();
 
@@ -146,7 +156,10 @@ router.post('/resolve', requirePermission('transactions.edit'), (req: Request, r
     const ids = transactionIds && Array.isArray(transactionIds) ? transactionIds : (transactionId ? [transactionId] : []);
     if (ids.length === 0) return res.status(400).json({ error: 'transactionId or transactionIds required' });
     sqlite.transaction(() => {
-      for (const id of ids) resolveReview(sqlite, { txnId: id, resolvedBy: req.user!.userId });
+      for (const id of ids) {
+        if (ids.length <= 20) recordConfirmation(id, req.user!.userId);
+        resolveReview(sqlite, { txnId: id, resolvedBy: req.user!.userId });
+      }
     })();
     res.json({ data: { resolved: ids.length } });
   } catch (err) {
@@ -164,6 +177,7 @@ router.patch('/:transactionId', requirePermission('transactions.edit'), (req: Re
     const { assigneeId, note, status } = req.body as { assigneeId?: number | null; note?: string | null; status?: string };
 
     sqlite.transaction(() => {
+      if (status === 'resolved' && existing.status === 'open') recordConfirmation(txnId, req.user!.userId);
       if (status === 'resolved') resolveReview(sqlite, { txnId, resolvedBy: req.user!.userId });
       else if (status === 'open') reopenReview(sqlite, txnId);
       if (note !== undefined) setReviewNote(sqlite, txnId, note && note.trim() ? note.trim() : null);

@@ -8,6 +8,7 @@ import { detectDuplicates } from '../services/duplicateDetector.js';
 import { findOrCreateMerchant } from '../db/merchants.js';
 import { resolveReview, openReviewAssignees, syncReviewNotification } from '../services/reviews.js';
 import { checkBudgetExceededForMonths } from '../services/budgetAlerts.js';
+import { recordCategoryFeedback } from '../services/feedback.js';
 
 const router = Router();
 
@@ -573,6 +574,17 @@ router.put('/:id', requirePermission('transactions.edit'), (req: Request, res: R
     if (splits && splits.length > 0) {
       // Switching to / staying in split mode — parent + legs are all-or-nothing.
       sqlite.transaction(() => {
+        // Learning signal: record each NEW leg assignment (skip legs identical to
+        // an existing one — re-saving the modal unchanged is not a decision).
+        const existingLegs = sqlite.prepare(
+          'SELECT category_id, amount FROM transaction_splits WHERE transaction_id = ?'
+        ).all(id) as { category_id: number; amount: number }[];
+        const existingKeys = new Set(existingLegs.map((l) => `${l.category_id}:${l.amount}`));
+        for (const s of splits) {
+          if (!existingKeys.has(`${s.categoryId}:${s.amount}`)) {
+            recordCategoryFeedback(sqlite, { txnId: id, newCategoryId: s.categoryId, kind: 'split_leg', userId: req.user!.userId, amountOverride: s.amount });
+          }
+        }
         db.update(transactions)
           .set({
             account_id: accountId ?? existing[0].account_id,
@@ -596,6 +608,9 @@ router.put('/:id', requirePermission('transactions.edit'), (req: Request, res: R
       // (note/date/amount) on an already-categorized txn must not resolve a manual review.
       const catChanged = categoryId !== existing[0].category_id;
       sqlite.transaction(() => {
+        if (catChanged) {
+          recordCategoryFeedback(sqlite, { txnId: id, newCategoryId: categoryId, kind: 'correction', userId: req.user!.userId });
+        }
         // Switching to single category (or staying single) — clear any existing splits
         db.delete(transactionSplits).where(eq(transactionSplits.transaction_id, id)).run();
         db.update(transactions)
@@ -673,6 +688,12 @@ router.patch('/:txnId/splits/:splitId', requirePermission('transactions.edit'), 
     if (Object.keys(set).length === 0) return res.json({ data: { id: splitId } });
 
     sqlite.transaction(() => {
+      if (set.category_id !== undefined) {
+        const legRow = sqlite.prepare('SELECT category_id, amount FROM transaction_splits WHERE id = ?').get(splitId) as { category_id: number; amount: number };
+        if (legRow.category_id !== set.category_id) {
+          recordCategoryFeedback(sqlite, { txnId, newCategoryId: set.category_id, kind: 'correction', userId: req.user!.userId, amountOverride: legRow.amount });
+        }
+      }
       db.update(transactionSplits).set(set).where(eq(transactionSplits.id, splitId)).run();
       // Confirming a leg's category is a user action → resolve any open review (atomically).
       if (set.category_id !== undefined) resolveReview(sqlite, { txnId, resolvedBy: req.user!.userId });
@@ -750,6 +771,12 @@ router.post('/bulk-update', requirePermission('transactions.bulk_edit'), (req: R
 
     if (Object.keys(setFields).length > 0) {
       sqlite.transaction(() => {
+        // Learning signal per row (fn no-ops for rows already in that category).
+        if (updates.categoryId) {
+          for (const id of ids) {
+            recordCategoryFeedback(sqlite, { txnId: id, newCategoryId: updates.categoryId, kind: 'correction', userId: req.user!.userId });
+          }
+        }
         // If changing category, clear any existing splits on these transactions
         if (updates.categoryId) {
           db.delete(transactionSplits)

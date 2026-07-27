@@ -27,7 +27,7 @@ export default function SyncReview({
   const toggle = (i: number) => setSelected((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   const toggleAll = () => setSelected(() => (allOn ? new Set<number>() : new Set(rows.map((_, i) => i))));
   const setCategory = (i: number, catId: number) => {
-    setRows((prev) => prev.map((r, j) => j === i ? { ...r, categoryId: catId, confidence: 1 } : r));
+    setRows((prev) => prev.map((r, j) => j === i ? { ...r, categoryId: catId, confidence: 1, source: null } : r));
     // Categorizing arms the row for import — except don't re-arm auto-skipped duplicates.
     if (rows[i]?.duplicateStatus !== 'exact') setSelected((prev) => new Set(prev).add(i));
   };

@@ -142,6 +142,7 @@ async function runOnce(): Promise<void> {
       amount: t.amount,
       categoryId: t.suggestedCategoryId ?? undefined,
       confidence: t.confidence,
+      source: t.suggestedSource ?? null,
     }));
   const commit = commitSync({
     transactions: txns,
