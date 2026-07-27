@@ -123,6 +123,7 @@ async function runOnce(): Promise<void> {
     runSyncPipeline({
       userId: null, // system scope: every connection (shared + personal)
       connectionIds: retryScope && retryScope.length > 0 ? retryScope : undefined,
+      respectAutoImport: true, // per-link toggle gates transactions; balances always sync
       startDate,
       endDate,
     }),

@@ -35,6 +35,7 @@ import { migrateVendorLogos } from './db/migrate-vendor-logos.js';
 import { migrateBankDescription } from './db/migrate-bank-description.js';
 import { migrateInvestments } from './db/migrate-investments.js';
 import { migrateNotificationCenter } from './db/migrate-notification-center.js';
+import { migrateAutoImport } from './db/migrate-auto-import.js';
 import { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
@@ -101,6 +102,7 @@ migrateVendorLogos(sqlite);           // vendor_logos catalog + backfill merchan
 migrateBankDescription(sqlite);       // transactions.bank_description (verbatim statement text)
 migrateInvestments(sqlite);           // benchmark_prices + holdings_history (+seed) + symbol_meta
 migrateNotificationCenter(sqlite);    // review notifications → per-user aggregate + budget_alerts
+migrateAutoImport(sqlite);            // simplefin_links.auto_import (daily txn auto-import toggle)
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));

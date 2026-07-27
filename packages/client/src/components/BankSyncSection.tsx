@@ -10,6 +10,7 @@ import { ConnectedBadge } from './badges';
 import InlineNotification from './InlineNotification';
 import ResponsiveModal from './ResponsiveModal';
 import InstitutionPicker from './InstitutionPicker';
+import { Switch } from './primitives';
 
 interface Connection {
   id: number;
@@ -25,7 +26,7 @@ interface SimpleFINAccount {
   balance: number;
   currency: string;
   org: string;
-  link: { id: number; accountId: number; lastSyncedAt: string | null } | null;
+  link: { id: number; accountId: number; lastSyncedAt: string | null; autoImport: number } | null;
 }
 
 interface LedgerAccount {
@@ -243,7 +244,7 @@ function AccountLinkingTable({
           await apiFetch(`/simplefin/links/${sfAcct.link.id}`, { method: 'DELETE' });
         }
 
-        const res = await apiFetch<{ data: { id: number } }>('/simplefin/links', {
+        const res = await apiFetch<{ data: { id: number; autoImport: number } }>('/simplefin/links', {
           method: 'POST',
           body: JSON.stringify({
             simplefinConnectionId: connectionId,
@@ -258,7 +259,7 @@ function AccountLinkingTable({
         setSfAccounts((prev) =>
           prev.map((a) =>
             a.simplefinAccountId === sfAcct.simplefinAccountId
-              ? { ...a, link: { id: res.data.id, accountId, lastSyncedAt: null } }
+              ? { ...a, link: { id: res.data.id, accountId, lastSyncedAt: null, autoImport: res.data.autoImport } }
               : a
           )
         );
@@ -282,7 +283,7 @@ function AccountLinkingTable({
     const newAccountId = res.data.id;
 
     // Link it
-    const linkRes = await apiFetch<{ data: { id: number } }>('/simplefin/links', {
+    const linkRes = await apiFetch<{ data: { id: number; autoImport: number } }>('/simplefin/links', {
       method: 'POST',
       body: JSON.stringify({
         simplefinConnectionId: connectionId,
@@ -297,12 +298,31 @@ function AccountLinkingTable({
     setSfAccounts((prev) =>
       prev.map((a) =>
         a.simplefinAccountId === sfAcctId
-          ? { ...a, link: { id: linkRes.data.id, accountId: newAccountId, lastSyncedAt: null } }
+          ? { ...a, link: { id: linkRes.data.id, accountId: newAccountId, lastSyncedAt: null, autoImport: linkRes.data.autoImport } }
           : a
       )
     );
     setCreatingForSfId(null);
     onAccountCreated();
+  };
+
+  const handleToggleAutoImport = async (sfAcct: SimpleFINAccount, next: boolean) => {
+    if (!sfAcct.link) return;
+    const linkId = sfAcct.link.id;
+    // Optimistic flip; revert on failure.
+    const apply = (val: number) => setSfAccounts((prev) =>
+      prev.map((a) => a.link?.id === linkId ? { ...a, link: { ...a.link!, autoImport: val } } : a)
+    );
+    apply(next ? 1 : 0);
+    try {
+      await apiFetch(`/simplefin/links/${linkId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ autoImport: next }),
+      });
+    } catch (_err) {
+      apply(next ? 0 : 1);
+      addToast('Failed to update auto-import', 'error');
+    }
   };
 
   // Group accounts by classification
@@ -341,6 +361,7 @@ function AccountLinkingTable({
             <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left">SimpleFIN Account</th>
             <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-right">Balance</th>
             <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-left" style={{ width: '260px' }}>Ledger Account</th>
+            <th className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2.5 py-2 border-b-2 border-[var(--table-border)] text-center" style={{ width: '90px' }}>Auto-import</th>
           </tr>
         </thead>
         <tbody>
@@ -379,13 +400,40 @@ function AccountLinkingTable({
                   <option value="create-new">+ Create New Account</option>
                 </select>
               </td>
+              <td className="px-2.5 py-2 text-center">
+                {(() => {
+                  if (!sfAcct.link) return <span className="text-[var(--text-muted)]">—</span>;
+                  const linkedAcct = accounts.find((a) => a.id === sfAcct.link!.accountId);
+                  if (linkedAcct?.classification === 'investment') {
+                    return (
+                      <Switch
+                        checked={false}
+                        onChange={() => {}}
+                        disabled
+                        title="Investment accounts sync balances & holdings only"
+                      />
+                    );
+                  }
+                  return (
+                    <Switch
+                      checked={sfAcct.link.autoImport === 1}
+                      onChange={(next) => handleToggleAutoImport(sfAcct, next)}
+                      disabled={!canManage}
+                      title="Daily transaction auto-import"
+                    />
+                  );
+                })()}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="mt-2 px-2.5">
+      <div className="mt-2 px-2.5 flex items-center justify-between gap-3 flex-wrap">
         <span className={`text-[12px] font-medium ${linkedCount === sfAccounts.length ? 'text-[#10b981]' : 'text-[#f59e0b]'}`}>
           {linkedCount} of {sfAccounts.length} accounts linked
+        </span>
+        <span className="text-[11px] text-[var(--text-muted)]">
+          Balances update daily for all linked accounts · transactions auto-import only where enabled
         </span>
       </div>
 

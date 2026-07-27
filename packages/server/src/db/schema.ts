@@ -215,6 +215,8 @@ export const simplefinLinks = sqliteTable('simplefin_links', {
   last_sync_status: text('last_sync_status'),
   last_sync_error: text('last_sync_error'),
   last_sync_attempt_at: text('last_sync_attempt_at'),
+  // Daily scheduler imports transactions for this link (balances always sync).
+  auto_import: integer('auto_import').notNull().default(1),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 

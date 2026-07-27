@@ -116,10 +116,12 @@ export async function runSyncPipeline(opts: {
   userId?: number | null;
   connectionIds?: number[];
   accountIds?: number[];
+  /** Scheduler mode: import transactions only for auto_import links; balances/holdings still collected for all. */
+  respectAutoImport?: boolean;
   startDate: string;
   endDate: string;
 }): Promise<SyncPipelineResult> {
-  const { userId = null, connectionIds, accountIds, startDate, endDate } = opts;
+  const { userId = null, connectionIds, accountIds, respectAutoImport, startDate, endDate } = opts;
   const startTs = Math.floor(new Date(startDate).getTime() / 1000);
   const endTs = Math.floor(new Date(endDate).getTime() / 1000);
 
@@ -201,7 +203,8 @@ export async function runSyncPipeline(opts: {
       // is mostly the mirror side of transfers/contributions (already cataloged
       // from the liquid source account) plus market moves; importing them would
       // double-count. Investment accounts still contribute balances + holdings.
-      if (classification !== 'investment' && sfAccount.transactions.length > 0) {
+      const importTxns = classification !== 'investment' && (!respectAutoImport || link.auto_import === 1);
+      if (importTxns && sfAccount.transactions.length > 0) {
         // Filter out already-imported transactions by SimpleFIN ID
         const sfTxnIds = sfAccount.transactions.map((t) => t.id);
         const existingIds = new Set<string>();

@@ -244,6 +244,7 @@ router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
           id: link.id,
           accountId: link.account_id,
           lastSyncedAt: link.last_synced_at,
+          autoImport: link.auto_import,
         } : null,
       };
     });
@@ -271,7 +272,12 @@ router.get('/linked-accounts', (req: Request, res: Response) => {
         sl.simplefin_account_name,
         sl.simplefin_org_name,
         sl.last_synced_at,
-        a.name as ledger_account_name
+        sl.last_sync_status,
+        sl.last_sync_error,
+        sl.last_sync_attempt_at,
+        sl.auto_import,
+        a.name as ledger_account_name,
+        a.classification
       FROM simplefin_connections sc
       JOIN simplefin_links sl ON sl.simplefin_connection_id = sc.id
       JOIN accounts a ON sl.account_id = a.id
@@ -286,7 +292,12 @@ router.get('/linked-accounts', (req: Request, res: Response) => {
       simplefin_account_name: string;
       simplefin_org_name: string | null;
       last_synced_at: string | null;
+      last_sync_status: string | null;
+      last_sync_error: string | null;
+      last_sync_attempt_at: string | null;
+      auto_import: number;
       ledger_account_name: string;
+      classification: string;
     }[];
 
     // Group by connection
@@ -324,12 +335,18 @@ router.post('/links', requirePermission('simplefin.manage'), (req: Request, res:
       return;
     }
 
+    // Investment accounts default auto-import off — the sync pipeline never
+    // imports their transactions anyway; liquid/liability default on.
+    const target = sqlite.prepare('SELECT classification FROM accounts WHERE id = ?').get(accountId) as { classification: string } | undefined;
+    const autoImport = target?.classification === 'investment' ? 0 : 1;
+
     const result = db.insert(simplefinLinks).values({
       simplefin_connection_id: simplefinConnectionId,
       simplefin_account_id: simplefinAccountId,
       account_id: accountId,
       simplefin_account_name: simplefinAccountName,
       simplefin_org_name: simplefinOrgName || null,
+      auto_import: autoImport,
     }).run();
 
     // Give the linked account an institution identity from the SimpleFIN org
@@ -360,11 +377,38 @@ router.post('/links', requirePermission('simplefin.manage'), (req: Request, res:
         simplefinAccountId,
         accountId,
         simplefinAccountName,
+        autoImport,
       },
     });
   } catch (err) {
     console.error('POST /simplefin/links error:', err);
     res.status(500).json({ error: 'Failed to create link' });
+  }
+});
+
+// PATCH /api/simplefin/links/:id — toggle daily transaction auto-import
+router.patch('/links/:id', requirePermission('simplefin.manage'), (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { autoImport } = req.body as { autoImport?: unknown };
+
+    if (typeof autoImport !== 'boolean') {
+      res.status(400).json({ error: 'autoImport (boolean) is required' });
+      return;
+    }
+
+    const link = db.select().from(simplefinLinks).where(eq(simplefinLinks.id, id)).get();
+    if (!link) {
+      res.status(404).json({ error: 'Link not found' });
+      return;
+    }
+
+    db.update(simplefinLinks).set({ auto_import: autoImport ? 1 : 0 }).where(eq(simplefinLinks.id, id)).run();
+
+    res.json({ data: { id, autoImport: autoImport ? 1 : 0 } });
+  } catch (err) {
+    console.error('PATCH /simplefin/links/:id error:', err);
+    res.status(500).json({ error: 'Failed to update link' });
   }
 });
 
