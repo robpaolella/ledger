@@ -18,6 +18,46 @@ export interface EnrichResult {
 }
 
 const NOTE_MAX = 120;
+/** Above this item count, subset search is skipped (2^n) — such orders are rare. */
+const SUBSET_MAX_ITEMS = 14;
+
+export interface EnrichItem { title: string; unitPrice: number | null; quantity: number }
+
+/**
+ * Amazon bills PER SHIPMENT, so one charge often covers only part of an order.
+ * Find the unique subset of items whose price (grossed up by the order's tax
+ * rate) matches the charge. Returns null when nothing fits or when two
+ * different subsets fit equally well — better to skip than to mis-split.
+ */
+export function pickItemSubset(
+  items: EnrichItem[],
+  chargeAmount: number,
+  taxRate: number,
+): EnrichItem[] | null {
+  if (items.length === 0 || items.length > SUBSET_MAX_ITEMS) return null;
+  const prices = items.map((it) => (it.unitPrice ?? 0) * it.quantity);
+  if (prices.some((p) => p <= 0)) return null;
+
+  const target = chargeAmount / (1 + taxRate);
+  const tolerance = Math.max(0.5, target * 0.02);
+  let best: { mask: number; diff: number } | null = null;
+  let secondDiff = Infinity;
+
+  for (let mask = 1; mask < (1 << items.length); mask++) {
+    let sum = 0;
+    for (let i = 0; i < items.length; i++) if (mask & (1 << i)) sum += prices[i];
+    const diff = Math.abs(sum - target);
+    if (best == null || diff < best.diff) {
+      secondDiff = best?.diff ?? Infinity;
+      best = { mask, diff };
+    } else if (diff < secondDiff) {
+      secondDiff = diff;
+    }
+  }
+  if (!best || best.diff > tolerance) return null;
+  if (secondDiff <= tolerance) return null; // two subsets fit — ambiguous
+  return items.filter((_, i) => best!.mask & (1 << i));
+}
 
 /** Cent-safe proportional allocation of the txn total across category buckets. */
 export function allocateAmounts(total: number, bases: number[]): number[] {
@@ -78,17 +118,39 @@ export async function enrichMatchedTransactions(sqlite: Database.Database): Prom
       continue;
     }
 
-    const items = sqlite.prepare(
+    const rawItems = sqlite.prepare(
       'SELECT title, unit_price, quantity FROM amazon_order_items WHERE order_number = ?'
     ).all(match.order_number) as { title: string; unit_price: number | null; quantity: number | null }[];
-    if (items.length === 0) {
+    if (rawItems.length === 0) {
       markEnriched.run(match.transaction_id);
       result.skipped++;
       continue;
     }
+    const allItems: EnrichItem[] = rawItems.map((it) => ({
+      title: it.title, unitPrice: it.unit_price, quantity: it.quantity ?? 1,
+    }));
+
+    // Does this charge cover the whole order, or just one shipment of it?
+    const itemsTotal = allItems.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
+    let items = allItems;
+    if (itemsTotal > 0 && match.amount < itemsTotal * 0.95) {
+      const order = sqlite.prepare(
+        'SELECT subtotal, tax FROM amazon_orders WHERE order_number = ?'
+      ).get(match.order_number) as { subtotal: number | null; tax: number | null } | undefined;
+      const taxRate = order?.subtotal && order.tax ? order.tax / order.subtotal : 0.08;
+      const subset = pickItemSubset(allItems, match.amount, taxRate);
+      if (!subset) {
+        // Can't tell which items this shipment paid for — leave the txn alone
+        // rather than split it wrongly. The order link is still recorded.
+        markEnriched.run(match.transaction_id);
+        result.skipped++;
+        continue;
+      }
+      items = subset;
+    }
 
     const llmItems = items.map((it, i) => ({
-      key: i, title: it.title, unitPrice: it.unit_price, quantity: it.quantity ?? 1,
+      key: i, title: it.title, unitPrice: it.unitPrice, quantity: it.quantity,
     }));
     const verdicts = await llmCategorizeItems(sqlite, {
       orderNumber: match.order_number, merchantName: 'Amazon', items: llmItems,

@@ -112,7 +112,8 @@ def main() -> int:
                 "date": completed.isoformat() if completed else None,
                 "amount": money(getattr(txn, "grand_total", None)),
                 "orderNumbers": [txn.order_number] if getattr(txn, "order_number", None) else [],
-                "paymentMethod": f"{getattr(txn, 'payment_method', '') or ''} {getattr(txn, 'payment_method_last_4', '') or ''}".strip() or None,
+                # payment_method already carries the masked last-4 ("Visa ****1234").
+                "paymentMethod": getattr(txn, "payment_method", None) or None,
                 "isRefund": bool(getattr(txn, "is_refund", False)),
             })
 
