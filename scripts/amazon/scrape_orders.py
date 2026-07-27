@@ -16,6 +16,8 @@ One-time setup (interactive login, persists the session):
 Then run headless on a schedule:
   python3 scrape_orders.py --days 30 --out /path/to/ledger/data/amazon
 """
+from __future__ import annotations
+
 import argparse
 import datetime as dt
 import json
