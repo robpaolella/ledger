@@ -9,3 +9,4 @@ docs/
 backups/
 .jwt-secret
 simplefin-test.json
+__pycache__/
