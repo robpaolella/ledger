@@ -301,6 +301,47 @@ export async function llmCategorizeBatch(
   return out;
 }
 
+/**
+ * Item-level categorization for Amazon order enrichment: one verdict per line
+ * item. Few-shot filtered to the given merchant's feedback (usually Amazon).
+ * Same transport/validation machinery; never throws.
+ */
+export async function llmCategorizeItems(
+  sqlite: Database.Database,
+  opts: { orderNumber: string; merchantName: string; items: { key: number; title: string; unitPrice: number | null; quantity: number }[] },
+  fetchImpl: typeof fetch = fetch,
+): Promise<Map<number, LlmVerdict>> {
+  const out = new Map<number, LlmVerdict>();
+  const cfg = llmConfig(sqlite);
+  if (!cfg || opts.items.length === 0) return out;
+
+  const { lines: taxonomy, validIds } = taxonomyLines(sqlite);
+  const merchantId = (sqlite.prepare('SELECT id FROM merchants WHERE name = ?').get(opts.merchantName) as { id: number } | undefined)?.id;
+  const fewShot = fewShotExamples(sqlite, merchantId != null ? [merchantId] : []);
+
+  const prompt = [
+    'TAXONOMY (id | section / group / category):',
+    taxonomy,
+    ...(fewShot.length > 0 ? ['', 'PAST DECISIONS BY THIS HOUSEHOLD (follow these patterns):', ...fewShot] : []),
+    '',
+    `CATEGORIZE each purchased item from ${opts.merchantName} order ${opts.orderNumber}:`,
+    ...opts.items.map((it) =>
+      `key=${it.key} | "${it.title}"${it.unitPrice != null ? ` | $${it.unitPrice.toFixed(2)}` : ''}${it.quantity > 1 ? ` × ${it.quantity}` : ''}`),
+  ].join('\n');
+
+  try {
+    const content = await ollamaChat(cfg, prompt, fetchImpl);
+    const verdicts = parseVerdicts(content, validIds);
+    const keys = new Set(opts.items.map((i) => i.key));
+    for (const [key, v] of verdicts) {
+      if (keys.has(key)) out.set(key, v);
+    }
+  } catch (err) {
+    console.error(`[llm-categorize] items for order ${opts.orderNumber} failed:`, err instanceof Error ? err.message : err);
+  }
+  return out;
+}
+
 /** Connection probe for the Settings "Test connection" button. */
 export async function llmStatus(sqlite: Database.Database, fetchImpl: typeof fetch = fetch): Promise<{
   enabled: boolean; reachable: boolean; modelAvailable: boolean; latencyMs?: number; error?: string;

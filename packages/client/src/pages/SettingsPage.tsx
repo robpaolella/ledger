@@ -5,6 +5,7 @@ import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSe
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { apiFetch } from '../lib/api';
+import { timeAgo } from '../lib/formatters';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -448,6 +449,97 @@ function AiPanel() {
                 : `Unreachable${status.error ? ` — ${status.error}` : ''}`}
             </span>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Amazon integration card (admin) ---
+interface AmazonStatus {
+  enabled: boolean;
+  lastIngestAt: string | null;
+  dataDir: string;
+  sidecar: { lastRun: string; ok: boolean; errorKind: string | null; message: string; sessionOk: boolean } | null;
+  counts: { orders: number; charges: number; matched: number; enriched: number };
+}
+
+function AmazonCard() {
+  const { addToast } = useToast();
+  const [status, setStatus] = useState<AmazonStatus | null>(null);
+  const [running, setRunning] = useState(false);
+
+  const load = useCallback(() => {
+    apiFetch<{ data: AmazonStatus }>('/amazon/status').then((res) => setStatus(res.data)).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const toggle = async (next: boolean) => {
+    setStatus((s) => s ? { ...s, enabled: next } : s);
+    try {
+      await apiFetch('/amazon/config', { method: 'PUT', body: JSON.stringify({ enabled: next }) });
+      addToast(next ? 'Amazon integration enabled' : 'Amazon integration disabled');
+    } catch {
+      setStatus((s) => s ? { ...s, enabled: !next } : s);
+      addToast('Failed to update setting', 'error');
+    }
+  };
+
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const res = await apiFetch<{ data: { match?: { matched: number; ambiguous: number }; enrich?: { enriched: number; split: number } } }>(
+        '/amazon/run', { method: 'POST' });
+      const m = res.data.match, e = res.data.enrich;
+      addToast(`Amazon run complete — ${m?.matched ?? 0} matched, ${e?.enriched ?? 0} enriched (${e?.split ?? 0} split)`);
+      load();
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Amazon run failed', 'error');
+    } finally { setRunning(false); }
+  };
+
+  const sessionExpired = status?.sidecar?.errorKind === 'auth';
+
+  return (
+    <div className="bg-surface border border-line rounded-[16px] shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+        <div>
+          <span className="text-[17px] font-extrabold">Amazon orders</span>
+          <div className="text-[13px] text-content-3 mt-0.5">
+            Matches Amazon charges to your transactions and categorizes them from the actual items — splitting mixed orders by category.
+          </div>
+        </div>
+        <Switch checked={status?.enabled ?? false} onChange={toggle} disabled={!status} title="Enable Amazon integration" />
+      </div>
+      <div className="px-5 py-4 flex flex-col gap-3">
+        {status && (
+          <div className="flex items-center gap-4 flex-wrap text-[13px]">
+            <span className={`font-semibold ${status.sidecar ? (status.sidecar.sessionOk ? 'text-positive' : 'text-negative') : 'text-content-3'}`}>
+              {status.sidecar
+                ? status.sidecar.sessionOk ? 'Scraper session OK' : 'Session expired'
+                : 'Scraper has not run yet'}
+            </span>
+            {status.sidecar && <span className="text-content-3">Last scrape {timeAgo(status.sidecar.lastRun)}</span>}
+            <span className="text-content-3">
+              {status.counts.orders} orders · {status.counts.matched} matched · {status.counts.enriched} enriched
+            </span>
+          </div>
+        )}
+        {sessionExpired && (
+          <div className="text-[12px] text-content-2 bg-surface-2 border border-line rounded-lg px-3 py-2">
+            Re-login on the server: <code className="font-mono">~/.venvs/amazon/bin/amazon-orders login</code> — see <code className="font-mono">scripts/amazon/README.md</code>.
+          </div>
+        )}
+        {status && !status.sidecar && (
+          <div className="text-[12px] text-content-2 bg-surface-2 border border-line rounded-lg px-3 py-2">
+            One-time setup lives in <code className="font-mono">scripts/amazon/README.md</code>; the scraper drops files into <code className="font-mono">{status.dataDir}</code>.
+          </div>
+        )}
+        <div>
+          <button onClick={runNow} disabled={running || !status?.enabled}
+            className="h-9 px-3.5 rounded-[10px] bg-surface-2 border border-line-strong text-content font-semibold text-[13px] disabled:opacity-50">
+            {running ? 'Running…' : 'Run now'}
+          </button>
         </div>
       </div>
     </div>
@@ -2200,7 +2292,12 @@ export default function SettingsPage() {
           )}
           {panel === 'merchants' && <MerchantsPanel />}
           {panel === 'users' && isAdmin() && <UsersPermissionsSection />}
-          {panel === 'ai' && isAdmin() && <AiPanel />}
+          {panel === 'ai' && isAdmin() && (
+            <div className="flex flex-col gap-5">
+              <AiPanel />
+              <AmazonCard />
+            </div>
+          )}
 
           {panel === 'accounts' && (
             <div className="flex flex-col gap-5">
