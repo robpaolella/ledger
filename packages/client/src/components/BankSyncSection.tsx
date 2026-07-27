@@ -404,22 +404,15 @@ function AccountLinkingTable({
                 {(() => {
                   if (!sfAcct.link) return <span className="text-[var(--text-muted)]">—</span>;
                   const linkedAcct = accounts.find((a) => a.id === sfAcct.link!.accountId);
-                  if (linkedAcct?.classification === 'investment') {
-                    return (
-                      <Switch
-                        checked={false}
-                        onChange={() => {}}
-                        disabled
-                        title="Investment accounts sync balances & holdings only"
-                      />
-                    );
-                  }
+                  const isInvestment = linkedAcct?.classification === 'investment';
                   return (
                     <Switch
                       checked={sfAcct.link.autoImport === 1}
                       onChange={(next) => handleToggleAutoImport(sfAcct, next)}
                       disabled={!canManage}
-                      title="Daily transaction auto-import"
+                      title={isInvestment
+                        ? 'Daily transaction auto-import — off by default for investment accounts; contribution legs are labeled Transfers'
+                        : 'Daily transaction auto-import'}
                     />
                   );
                 })()}

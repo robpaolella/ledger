@@ -199,11 +199,13 @@ export async function runSyncPipeline(opts: {
 
       const classification = link.classification as AccountClassification;
 
-      // Process transactions — but NOT for investment accounts. Their activity
-      // is mostly the mirror side of transfers/contributions (already cataloged
-      // from the liquid source account) plus market moves; importing them would
-      // double-count. Investment accounts still contribute balances + holdings.
-      const importTxns = classification !== 'investment' && (!respectAutoImport || link.auto_import === 1);
+      // Process transactions. In scheduler mode the per-link auto_import flag
+      // gates ingestion; manual sync imports whatever the user selected.
+      // Investment links default auto_import=0 (their activity is mostly the
+      // mirror side of contributions already imported from the liquid source,
+      // plus market noise) but can opt in. All accounts contribute balances +
+      // holdings regardless.
+      const importTxns = !respectAutoImport || link.auto_import === 1;
       if (importTxns && sfAccount.transactions.length > 0) {
         // Filter out already-imported transactions by SimpleFIN ID
         const sfTxnIds = sfAccount.transactions.map((t) => t.id);
