@@ -40,8 +40,19 @@ export interface LlmSettings {
   timeoutMs: number;
 }
 
-/** Max LLM confidence — only explicit user rules ever reach 1.0. */
-const LLM_CONF_CAP = 0.95;
+/**
+ * Trust ceiling for an LLM-decided category. Deliberately BELOW
+ * `REVIEW_THRESHOLD` (0.8): small local models report near-max confidence on
+ * every answer, right or wrong, so the raw score says nothing about accuracy.
+ * Storing it below the threshold means an LLM-assigned category always lands in
+ * the review queue — where confirming or correcting it feeds the few-shot
+ * examples that improve the next run. Raise once the feedback log is rich
+ * enough to trust unattended.
+ *
+ * The RAW score is still used to decide whether the model beats the
+ * deterministic prior — only the stored (trusted) value is capped.
+ */
+const LLM_TRUST_CAP = 0.75;
 const FEWSHOT_LIMIT = 12;
 
 /** null = disabled or unconfigured (feature is a no-op then). */
@@ -53,6 +64,11 @@ export function llmConfig(sqlite: Database.Database): LlmSettings | null {
   const batchSize = Math.max(1, Number(getConfig(sqlite, 'llm.batch_size') ?? 8) || 8);
   const timeoutMs = Math.max(5_000, Number(getConfig(sqlite, 'llm.timeout_ms') ?? 60_000) || 60_000);
   return { baseUrl, model, batchSize, timeoutMs };
+}
+
+/** Clamp a raw model score to what we're willing to act on unattended. */
+export function trustedConfidence(raw: number): number {
+  return Math.min(Math.max(raw, 0), LLM_TRUST_CAP);
 }
 
 /* ------ prompt building ------ */
@@ -225,7 +241,7 @@ export function parseVerdicts(content: string, validIds: Set<number>): Map<numbe
     const { key, categoryId, confidence, reasoning } = r as { key?: unknown; categoryId?: unknown; confidence?: unknown; reasoning?: unknown };
     if (!Number.isInteger(key)) continue;
     const conf = typeof confidence === 'number' && Number.isFinite(confidence)
-      ? Math.min(Math.max(confidence, 0), LLM_CONF_CAP) : 0;
+      ? Math.min(Math.max(confidence, 0), 1) : 0;
     let catId: number | null = null;
     if (Number.isInteger(categoryId)) {
       if (!validIds.has(categoryId as number)) continue; // hallucinated id → drop (prior stands)
@@ -242,13 +258,15 @@ export function parseVerdicts(content: string, validIds: Set<number>): Map<numbe
  */
 export function mergeLlmResult(prior: CategorizeResult, llm: LlmVerdict | undefined): CategorizeResult {
   if (!llm || llm.categoryId == null) return prior;             // abstain/missing → prior
+  const trusted = Math.min(llm.confidence, LLM_TRUST_CAP);
   if (llm.categoryId === prior.categoryId) {
     // Independent agreement is evidence — raise confidence, keep provenance.
-    return { ...prior, confidence: Math.max(prior.confidence, llm.confidence) };
+    return { ...prior, confidence: Math.max(prior.confidence, trusted) };
   }
-  // Disagreement: the model must BEAT the prior, ties go to observed behavior.
+  // Disagreement: the model must BEAT the prior on its RAW score, ties go to
+  // observed behavior. What gets STORED is capped, so the result is reviewable.
   if (llm.confidence > prior.confidence) {
-    return { categoryId: llm.categoryId, groupName: null, subName: null, confidence: llm.confidence, source: 'llm' };
+    return { categoryId: llm.categoryId, groupName: null, subName: null, confidence: trusted, source: 'llm' };
   }
   return prior;
 }

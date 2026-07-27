@@ -56,7 +56,7 @@ async function main() {
   let v = parseVerdicts('{"results":[{"key":0,"categoryId":10,"confidence":0.9}]}', valid);
   assert.equal(v.get(0)!.categoryId, 10);
   v = parseVerdicts('<think>hm</think>{"results":[{"key":1,"categoryId":11,"confidence":1.4}]}', valid);
-  assert.equal(v.get(1)!.confidence, 0.95, 'clamped to cap');
+  assert.equal(v.get(1)!.confidence, 1, 'raw score clamped to 1');
   v = parseVerdicts('{"results":[{"key":2,"categoryId":999,"confidence":0.9}]}', valid);
   assert.equal(v.has(2), false, 'hallucinated id dropped');
   v = parseVerdicts('{"results":[{"key":3,"categoryId":null,"confidence":0.2}]}', valid);
@@ -69,14 +69,21 @@ async function main() {
   assert.equal(mergeLlmResult(det, { categoryId: null, confidence: 0.9 }), det, 'abstain → prior');
   let m = mergeLlmResult(det, { categoryId: 11, confidence: 0.9 });
   assert.equal(m.source, 'heuristic', 'agreement keeps provenance');
-  assert.equal(m.confidence, 0.9, 'agreement raises confidence');
+  assert.equal(m.confidence, 0.75, 'agreement raises confidence, capped at trust ceiling');
   m = mergeLlmResult(det, { categoryId: 10, confidence: 0.85 });
   assert.equal(m.source, 'llm');
   assert.equal(m.categoryId, 10, 'higher-confidence disagreement wins');
+  assert.equal(m.confidence, 0.75, 'stored confidence capped below the review threshold');
+  m = mergeLlmResult(prior(11, 0.9, 'merchant-history'), { categoryId: 10, confidence: 0.95 });
+  assert.equal(m.categoryId, 10, 'raw score still beats a strong prior');
+  assert.equal(m.confidence, 0.75, '…but the result is reviewable');
   m = mergeLlmResult(prior(11, 0.9, 'merchant-history'), { categoryId: 10, confidence: 0.85 });
-  assert.equal(m.categoryId, 11, 'lower-confidence disagreement loses');
+  assert.equal(m.categoryId, 11, 'lower raw score loses to the prior');
+  m = mergeLlmResult(prior(11, 0.95, 'merchant-history'), { categoryId: 11, confidence: 0.9 });
+  assert.equal(m.confidence, 0.95, 'agreement never LOWERS a strong prior');
   m = mergeLlmResult(prior(null, 0, 'none'), { categoryId: 12, confidence: 0.7 });
   assert.equal(m.categoryId, 12, 'fills uncategorized');
+  assert.ok(m.confidence < 0.8, 'uncategorized fill lands in review');
 
   // --- fewShotExamples: corrections before confirmations, dedupe ---
   const ins = db.prepare(`INSERT INTO category_feedback (description, merchant_id, amount, corrected_category_id, kind) VALUES (?, ?, ?, ?, ?)`);

@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { REVIEW_THRESHOLD } from './categorize.js';
-import { llmConfig, llmCategorizeItems } from './llmCategorize.js';
+import { llmConfig, llmCategorizeItems, trustedConfidence } from './llmCategorize.js';
 import { validateSplits, saveSplits, type SplitInput } from './splits.js';
 import { flagReview, resolveReview, defaultAssigneeForTxn } from './reviews.js';
 
@@ -174,7 +174,9 @@ export async function enrichMatchedTransactions(sqlite: Database.Database): Prom
       b.base += (it.unitPrice ?? 0) * it.quantity;
       b.minConf = Math.min(b.minConf, v.confidence);
     }
-    const minConf = Math.min(...[...buckets.values()].map((b) => b.minConf));
+    // Same trust ceiling as the transaction-level stage: an item-derived
+    // category is a suggestion to review, not an unattended decision.
+    const minConf = trustedConfidence(Math.min(...[...buckets.values()].map((b) => b.minConf)));
     // A user-flagged (manual) review must survive enrichment — only auto flags
     // are ours to resolve.
     const openManual = !!sqlite.prepare(
