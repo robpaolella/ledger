@@ -21,10 +21,15 @@ export function migrateTransferCategoryDedupe(sqlite: Database.Database): void {
     (sqlite.prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?").get(name) as { cnt: number }).cnt > 0;
   if (!hasTable('categories')) return;
 
-  // Canonical = the transfer-typed row (lowest id if somehow several exist).
-  const canonical = sqlite.prepare(
-    "SELECT id FROM categories WHERE type = 'transfer' ORDER BY id LIMIT 1"
-  ).get() as { id: number } | undefined;
+  // Canonical = the transfer-typed `Transfers > Transfer` LEAF. Matching on the
+  // type alone is wrong: the section legitimately holds other leaves (Credit Card
+  // Payment, Balance Adjustments), and picking the lowest transfer-typed id would
+  // fold Transfer into whichever of those sorted first.
+  const canonical = sqlite.prepare(`
+    SELECT id FROM categories
+    WHERE type = 'transfer' AND group_name = 'Transfers' AND sub_name = 'Transfer'
+    ORDER BY id LIMIT 1
+  `).get() as { id: number } | undefined;
   if (!canonical) return; // nothing to fold onto — migrateTransfersCategory seeds it
 
   // Same leaf under the same group name, any type, that isn't the canonical row.
