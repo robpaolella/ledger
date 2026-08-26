@@ -1944,8 +1944,8 @@ export default function TransactionsPage() {
                     )}
 
                     {canEdit && (
-                      <button onClick={deleteFromDetail} className="w-full h-11 rounded-[11px] font-bold text-sm"
-                        style={{ border: '1px solid color-mix(in srgb, var(--negative) 40%, var(--line))', color: 'var(--negative)', background: 'transparent' }}>Delete transaction</button>
+                      <ConfirmDeleteButton variant="block" onConfirm={deleteFromDetail}
+                        label="Delete transaction" confirmLabel="Delete permanently?" />
                     )}
                   </>
                 );
