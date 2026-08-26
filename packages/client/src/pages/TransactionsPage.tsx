@@ -127,6 +127,7 @@ interface Account {
   id: number;
   name: string;
   last_four: string | null;
+  classification?: string | null; // groups the Accounts filter tab
   owner: string;
   owners?: { id: number; displayName: string }[];
   isShared?: boolean;
@@ -586,7 +587,7 @@ export default function TransactionsPage() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [filterAccount, setFilterAccount] = useState('All');
+  const [filterAccount, setFilterAccount] = useState<string[]>([]);
   const [filterType, setFilterType] = useState('All');
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
   const [filterMerchant, setFilterMerchant] = useState<string[]>([]); // merchant ids as strings
@@ -612,7 +613,7 @@ export default function TransactionsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [filterTab, setFilterTab] = useState('Categories');
   const [filterSearch, setFilterSearch] = useState('');
-  const [filterDraft, setFilterDraft] = useState<FilterDraft>({ account: 'All', type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
+  const [filterDraft, setFilterDraft] = useState<FilterDraft>({ account: [], type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
   const [editCell, setEditCell] = useState<{ id: number; field: 'vendor' | 'category' } | null>(null);
   // Row whose Review badge has its quick-action popover open.
   const [reviewPopId, setReviewPopId] = useState<number | null>(null);
@@ -699,7 +700,7 @@ export default function TransactionsPage() {
     }
     const aid = searchParams.get('accountId');
     if (aid) {
-      setFilterAccount(aid);
+      setFilterAccount([aid]);
       setSearchParams({}, { replace: true });
       return;
     }
@@ -739,7 +740,7 @@ export default function TransactionsPage() {
     params.set('limit', limit.toString());
     params.set('offset', '0');
     if (search) params.set('search', search);
-    if (filterAccount !== 'All') params.set('accountId', filterAccount);
+    if (filterAccount.length) params.set('accountIds', filterAccount.join(','));
     if (filterType !== 'All') params.set('type', filterType.toLowerCase());
     if (filterCategory.length > 0) {
       const groupNames = filterCategory.filter(v => v.startsWith('group:')).map(v => v.slice(6));
@@ -830,7 +831,7 @@ export default function TransactionsPage() {
   };
 
   // Date / Filters overlays — edits are staged in a draft, committed on Apply.
-  const openFilterPopover = () => { setFilterDraft({ account: filterAccount, type: filterType, category: [...filterCategory], merchant: [...filterMerchant], op: amountOp, val: amountValue, min: amountMin, max: amountMax, needsReview: filterNeedsReview }); setFilterTab('Categories'); setFilterSearch(''); setSortOpen(false); setFilterOpen(true); };
+  const openFilterPopover = () => { setFilterDraft({ account: [...filterAccount], type: filterType, category: [...filterCategory], merchant: [...filterMerchant], op: amountOp, val: amountValue, min: amountMin, max: amountMax, needsReview: filterNeedsReview }); setFilterTab('Categories'); setFilterSearch(''); setSortOpen(false); setFilterOpen(true); };
   const applyFilters = () => {
     setFilterAccount(filterDraft.account); setFilterType(filterDraft.type); setFilterCategory(filterDraft.category); setFilterMerchant(filterDraft.merchant);
     setAmountOp(filterDraft.op); setAmountValue(filterDraft.val); setAmountMin(filterDraft.min); setAmountMax(filterDraft.max);
@@ -839,8 +840,8 @@ export default function TransactionsPage() {
   };
   const clearDate = () => { setDatePreset('all'); setCustomStart(''); setCustomEnd(''); };
   const clearFilters = () => {
-    setFilterDraft({ account: 'All', type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
-    setFilterAccount('All'); setFilterType('All'); setFilterCategory([]); setFilterMerchant([]);
+    setFilterDraft({ account: [], type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
+    setFilterAccount([]); setFilterType('All'); setFilterCategory([]); setFilterMerchant([]);
     setAmountOp(''); setAmountValue(''); setAmountMin(''); setAmountMax(''); setFilterNeedsReview(false);
   };
   // Clear every active filter (search + date + filters) without opening a popover.
@@ -1269,7 +1270,7 @@ export default function TransactionsPage() {
     : datePreset === 'custom'
       ? (customStart && customEnd ? `${shortDate(customStart)} – ${shortDate(customEnd)}` : customStart ? `From ${shortDate(customStart)}` : customEnd ? `Until ${shortDate(customEnd)}` : 'Custom')
       : (DATE_PRESETS.find((p) => p.value === datePreset)?.label ?? 'Date');
-  const filterCount = (filterAccount !== 'All' ? 1 : 0) + (filterType !== 'All' ? 1 : 0) + filterCategory.length + filterMerchant.length + (amountOp ? 1 : 0) + (filterNeedsReview ? 1 : 0);
+  const filterCount = filterAccount.length + (filterType !== 'All' ? 1 : 0) + filterCategory.length + filterMerchant.length + (amountOp ? 1 : 0) + (filterNeedsReview ? 1 : 0);
   const anyActive = search !== '' || datePreset !== 'all' || filterCount > 0;
   const groupedAll = Array.from(
     categories.reduce((m, c) => { if (!m.has(c.group_name)) m.set(c.group_name, []); m.get(c.group_name)!.push(c); return m; }, new Map<string, Category[]>()).entries()

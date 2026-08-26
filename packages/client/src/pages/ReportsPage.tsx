@@ -22,7 +22,7 @@ interface Txn {
   splits?: ScopeLeg[] | null;
 }
 interface MerchantOpt { id: number; name: string }
-interface AccountOpt { id: number; name: string; last_four?: string | null }
+interface AccountOpt { id: number; name: string; last_four?: string | null; classification?: string | null }
 interface CategoryRow { id: number; group_name: string; sub_name: string; type: string }
 
 type Preset = '1M' | '3M' | '6M' | 'YTD' | 'CY' | '1Y' | 'custom';
@@ -73,7 +73,7 @@ const groupsOf = (f: FilterDraft) => f.category.filter((c) => c.startsWith('grou
 // Build the querystring the (applied) filter set contributes to /reports/period.
 function reportFilterParams(f: FilterDraft): URLSearchParams {
   const p = new URLSearchParams();
-  if (f.account !== 'All') p.set('accountIds', f.account);
+  if (f.account.length) p.set('accountIds', f.account.join(','));
   if (f.merchant.length) p.set('merchantIds', f.merchant.join(','));
   const catIds = catIdsOf(f), groups = groupsOf(f);
   if (catIds.length) p.set('categoryIds', catIds.join(','));
@@ -219,7 +219,7 @@ export default function ReportsPage() {
       scope = { groupNames: groups, categoryIds: catIds.map(Number) };
     }
     if (filters.merchant.length) p.set('merchantIds', filters.merchant.join(','));
-    if (filters.account !== 'All') p.set('accountId', filters.account);
+    if (filters.account.length) p.set('accountIds', filters.account.join(','));
     if (filters.op) {
       p.set('amountOp', filters.op);
       if (filters.op === 'bt') { if (filters.min) p.set('amountMin', filters.min); if (filters.max) p.set('amountMax', filters.max); }

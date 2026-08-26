@@ -2,13 +2,20 @@ import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { VendorAvatar } from './primitives';
 import { type FilterDraft, filterDraftCount } from './filterModel';
 
-interface AccountOpt { id: number | string; name: string; last_four?: string | null; lastFour?: string | null; avatar_url?: string | null; institutionRef?: { logo_url: string | null; color: string | null } | null }
+interface AccountOpt { id: number | string; name: string; last_four?: string | null; lastFour?: string | null; avatar_url?: string | null; classification?: string | null; institutionRef?: { logo_url: string | null; color: string | null } | null }
 interface MerchantOpt { id: number; name: string; txn_count?: number; logo_url?: string | null }
 interface CategoryGroup { group: string; subs: { id: number; sub: string }[] }
 interface CategoryRow { id: number; group_name: string; sub_name: string }
 
 const NAV = ['Categories', 'Merchants', 'Accounts', 'Tags', 'Amount', 'Other'];
 const accountLabel = (a: AccountOpt) => { const lf = a.lastFour ?? a.last_four; return lf ? `${a.name} (${lf})` : a.name; };
+// Same order and wording as the rest of the app (see components/import/types.ts).
+const ACCOUNT_SECTIONS: { key: string; label: string }[] = [
+  { key: 'liquid', label: 'Liquid' },
+  { key: 'investment', label: 'Investments' },
+  { key: 'liability', label: 'Liabilities' },
+];
+const sectionOf = (a: AccountOpt) => (ACCOUNT_SECTIONS.some((s) => s.key === a.classification) ? a.classification! : 'liquid');
 const Chk = ({ on }: { on: boolean }) => (
   <span className="w-[19px] h-[19px] shrink-0 rounded-[6px] border-[1.5px] flex items-center justify-center" style={{ borderColor: on ? 'var(--primary)' : 'var(--line-strong)', background: on ? 'var(--primary)' : 'transparent' }}>
     {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
@@ -47,16 +54,32 @@ export default function FilterPopover({
     return { ...d, category: all ? d.category.filter((c) => !tokens.includes(c)) : [...new Set([...d.category, ...tokens])] };
   });
   const toggleMerchant = (id: string) => setDraft((d) => ({ ...d, merchant: d.merchant.includes(id) ? d.merchant.filter((v) => v !== id) : [...d.merchant, id] }));
+  const toggleAccount = (id: string) => setDraft((d) => ({ ...d, account: d.account.includes(id) ? d.account.filter((v) => v !== id) : [...d.account, id] }));
+  /** Group checkbox: check the whole section, or clear it when it's already full. */
+  const toggleAccountSection = (ids: string[]) => setDraft((d) => {
+    const all = ids.length > 0 && ids.every((id) => d.account.includes(id));
+    return { ...d, account: all ? d.account.filter((id) => !ids.includes(id)) : [...new Set([...d.account, ...ids])] };
+  });
   const q = search.toLowerCase();
   const count = filterDraftCount(draft);
 
-  // "Select all" bulk toggles for the multi-select checklists (Accounts is single-select).
+  // "Select all" bulk toggles for the multi-select checklists.
   const visibleCatTokens = categoryGroups.flatMap((g) => (q ? g.subs.filter((s) => `${s.sub} ${g.group}`.toLowerCase().includes(q)) : g.subs)).map((s) => `sub:${s.id}`);
   const visibleMerchantIds = merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => m.id.toString());
   const catAllChecked = visibleCatTokens.length > 0 && visibleCatTokens.every((t) => draft.category.includes(t));
   const merAllChecked = visibleMerchantIds.length > 0 && visibleMerchantIds.every((id) => draft.merchant.includes(id));
   const toggleAllCategories = () => setDraft((d) => ({ ...d, category: catAllChecked ? d.category.filter((x) => !visibleCatTokens.includes(x)) : [...new Set([...d.category, ...visibleCatTokens])] }));
   const toggleAllMerchants = () => setDraft((d) => ({ ...d, merchant: merAllChecked ? d.merchant.filter((x) => !visibleMerchantIds.includes(x)) : [...new Set([...d.merchant, ...visibleMerchantIds])] }));
+
+  // Accounts, bucketed by classification. Search filters the members; a section
+  // with no surviving member is dropped so its group checkbox can't select rows
+  // that aren't on screen.
+  const visibleAccounts = accounts.filter((a) => !q || accountLabel(a).toLowerCase().includes(q));
+  const accountSections = ACCOUNT_SECTIONS
+    .map((sec) => ({ ...sec, rows: visibleAccounts.filter((a) => sectionOf(a) === sec.key) }))
+    .filter((sec) => sec.rows.length > 0);
+  const visibleAccountIds = visibleAccounts.map((a) => a.id.toString());
+  const acctAllChecked = visibleAccountIds.length > 0 && visibleAccountIds.every((id) => draft.account.includes(id));
 
   return (
     <>
@@ -100,16 +123,34 @@ export default function FilterPopover({
               );
             })}
             {tab === 'Accounts' && (
-              <>
-                <div onClick={() => setDraft((d) => ({ ...d, account: 'All' }))} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px] cursor-pointer"><Chk on={draft.account === 'All'} /><span className="flex-1 truncate">All accounts</span></div>
-                {accounts.filter((a) => !q || accountLabel(a).toLowerCase().includes(q)).map((a) => (
-                  <div key={a.id} onClick={() => setDraft((d) => ({ ...d, account: a.id.toString() }))} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px] cursor-pointer">
-                    <Chk on={draft.account === a.id.toString()} />
-                    <VendorAvatar name={a.name} src={(a.avatar_url || a.institutionRef?.logo_url) || undefined} color={a.institutionRef?.color || 'var(--c-blue)'} size={18} />
-                    <span className="flex-1 truncate">{accountLabel(a)}</span>
-                  </div>
-                ))}
-              </>
+              accountSections.length === 0 ? (
+                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No accounts match</div>
+              ) : (
+                <>
+                  <div onClick={() => setDraft((d) => ({ ...d, account: acctAllChecked ? d.account.filter((id) => !visibleAccountIds.includes(id)) : [...new Set([...d.account, ...visibleAccountIds])] }))}
+                    className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2 cursor-pointer"><Chk on={acctAllChecked} />Select all</div>
+                  {accountSections.map((sec) => {
+                    const ids = sec.rows.map((a) => a.id.toString());
+                    const secChecked = ids.every((id) => draft.account.includes(id));
+                    return (
+                      <div key={sec.key} className="mb-1">
+                        <div onClick={() => toggleAccountSection(ids)} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-sm font-semibold cursor-pointer">
+                          <Chk on={secChecked} />
+                          <span className="flex-1">{sec.label}</span>
+                          <span className="text-content-3 text-[13px] tabular-nums shrink-0">{sec.rows.length}</span>
+                        </div>
+                        {sec.rows.map((a) => (
+                          <div key={a.id} onClick={() => toggleAccount(a.id.toString())} className="flex items-center gap-3 pl-8 pr-1 py-2 rounded-lg hover:bg-surface-2 text-[13px] cursor-pointer">
+                            <Chk on={draft.account.includes(a.id.toString())} />
+                            <VendorAvatar name={a.name} src={(a.avatar_url || a.institutionRef?.logo_url) || undefined} color={a.institutionRef?.color || 'var(--c-blue)'} size={18} />
+                            <span className="flex-1 truncate">{accountLabel(a)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </>
+              )
             )}
             {tab === 'Amount' && (
               <div className="px-1">
@@ -200,10 +241,18 @@ export default function FilterPopover({
                     })}
                   </div>
                 )}
-                {draft.account !== 'All' && (
+                {draft.account.length > 0 && (
                   <div>
-                    <div className="flex items-center justify-between mb-1.5"><span className="text-[13px] font-semibold text-content-3">Accounts</span><button onClick={() => setDraft((d) => ({ ...d, account: 'All' }))} className="text-[13px] font-semibold text-primary">Clear</button></div>
-                    <div className="flex items-center gap-2 py-1.5 text-sm"><span className="flex-1 truncate">{(() => { const a = accounts.find((x) => x.id.toString() === draft.account); return a ? accountLabel(a) : draft.account; })()}</span><RemoveBtn onClick={() => setDraft((d) => ({ ...d, account: 'All' }))} /></div>
+                    <div className="flex items-center justify-between mb-1.5"><span className="text-[13px] font-semibold text-content-3">Accounts</span><button onClick={() => setDraft((d) => ({ ...d, account: [] }))} className="text-[13px] font-semibold text-primary">Clear</button></div>
+                    {draft.account.map((aid) => {
+                      const a = accounts.find((x) => x.id.toString() === aid);
+                      return (
+                        <div key={aid} className="flex items-center gap-2 py-1.5 text-sm">
+                          <span className="flex-1 truncate">{a ? accountLabel(a) : aid}</span>
+                          <RemoveBtn onClick={() => toggleAccount(aid)} />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {draft.op && (

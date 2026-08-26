@@ -86,7 +86,7 @@ router.get('/', (req: Request, res: Response) => {
   try {
     const {
       startDate, endDate,
-      accountId, categoryId, groupName, categoryIds, groupNames,
+      accountId, accountIds, categoryId, groupName, categoryIds, groupNames,
       merchantId, merchantIds,
       type, owner, search,
       amountOp, amountValue, amountMin, amountMax,
@@ -101,7 +101,13 @@ router.get('/', (req: Request, res: Response) => {
     const conditions = [];
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));
+    // `accountId` (single) is kept for deep links; `accountIds` (CSV) is what the
+    // multi-select Accounts filter sends.
     if (accountId) conditions.push(eq(transactions.account_id, parseInt(accountId, 10)));
+    if (accountIds) {
+      const aIdList = accountIds.split(',').map(Number).filter((n) => !isNaN(n));
+      if (aIdList.length) conditions.push(inArray(transactions.account_id, aIdList));
+    }
     // Merchant filters match the parent's merchant OR any split leg's effective
     // merchant (own, or the parent's when the leg inherits) — so a merchant that
     // appears only on a split leg still filters, mirroring the one-row-per-leg list.
@@ -308,12 +314,16 @@ router.get('/', (req: Request, res: Response) => {
 // GET /api/transactions/summary — income/expense totals for filters
 router.get('/summary', (req: Request, res: Response) => {
   try {
-    const { startDate, endDate, accountId, owner } = req.query as Record<string, string | undefined>;
+    const { startDate, endDate, accountId, accountIds, owner } = req.query as Record<string, string | undefined>;
 
     const conditions = [];
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));
     if (accountId) conditions.push(eq(transactions.account_id, parseInt(accountId, 10)));
+    if (accountIds) {
+      const aIdList = accountIds.split(',').map(Number).filter((n) => !isNaN(n));
+      if (aIdList.length) conditions.push(inArray(transactions.account_id, aIdList));
+    }
     if (owner) conditions.push(sql`EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = ${accounts.id} AND u.display_name = ${owner})`);
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
