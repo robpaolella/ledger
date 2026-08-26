@@ -21,6 +21,8 @@ import { migrateSavingsCategories } from './db/migrate-savings-categories.js';
 import { migrateMerchants } from './db/migrate-merchants.js';
 import { migrateMerchantAliases } from './db/migrate-merchant-aliases.js';
 import { migrateMerchantRulePrefs } from './db/migrate-merchant-rule-prefs.js';
+import { migrateTransferLinks } from './db/migrate-transfer-links.js';
+import { linkTransfers } from './services/transferLinker.js';
 import { migrateTransferCategoryDedupe } from './db/migrate-transfer-category-dedupe.js';
 import { migrateAccountInstitution } from './db/migrate-account-institution.js';
 import { migrateTxnCategorize } from './db/migrate-txn-categorize.js';
@@ -114,6 +116,17 @@ migrateCategoryFeedback(sqlite);      // category_feedback log + transactions.ca
 migrateAmazon(sqlite);                // amazon_orders/items/charges/matches (order enrichment)
 migrateMerchantAliases(sqlite);       // merchant_aliases — merges keep routing future imports
 migrateMerchantRulePrefs(sqlite);     // merchants.suppress_rule_suggest ("never ask again")
+migrateTransferLinks(sqlite);         // transfer_links — the two legs of one money movement
+
+// Backfill/refresh transfer links on boot: cheap (bucketed by amount) and
+// self-healing, so history and anything imported outside a sync gets paired too.
+// Pairs the user has pulled apart are recorded as rejected and stay apart.
+try {
+  const { linked } = linkTransfers(sqlite);
+  if (linked > 0) console.log(`Linked ${linked} transfer pair(s).`);
+} catch (err) {
+  console.error('Transfer linking failed:', err instanceof Error ? err.message : err);
+}
 migrateTransferCategoryDedupe(sqlite); // last — folds a duplicate Transfers > Transfer onto the canonical row
 enforceTransferBudgetExclusion(sqlite); // invariant: transfers are never budgeted
 

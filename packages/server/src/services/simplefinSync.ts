@@ -4,6 +4,8 @@ import { fetchAccounts } from './simplefin.js';
 import { convertToLedgerSign } from './signConversion.js';
 import { detectDuplicates } from './duplicateDetector.js';
 import { detectTransfers } from './transferDetector.js';
+import { linkTransfers } from './transferLinker.js';
+import { WINDOW_DAYS } from './transferMatch.js';
 import { buildCategorizer, REVIEW_THRESHOLD, type CategorizeResult } from './categorize.js';
 import { llmConfig, llmCategorizeBatch, mergeLlmResult, type LlmTxnInput } from './llmCategorize.js';
 import { normalizeMerchantName } from './merchantNormalize.js';
@@ -506,6 +508,17 @@ export function commitSync(payload: CommitPayload): CommitResult {
   // (Internally per-month try/catch: an alert failure never fails the commit.)
   if (txns && txns.length > 0) {
     checkBudgetExceededForMonths(sqlite, txns.map((t) => t.date.slice(0, 7)));
+    // Pair the two legs of any transfer that just landed, so it shows as one row.
+    // Never fail the commit over it — the rows are already safely stored.
+    try {
+      const earliest = txns.map((t) => t.date).sort()[0];
+      const since = new Date(new Date(`${earliest}T00:00:00`).getTime() - WINDOW_DAYS * 86400000)
+        .toISOString().slice(0, 10);
+      const linked = linkTransfers(sqlite, { since }).linked;
+      if (linked > 0) console.log(`[transfers] linked ${linked} transfer pair(s)`);
+    } catch (err) {
+      console.error('[transfers] linking failed:', err instanceof Error ? err.message : err);
+    }
   }
 
   return { transactionsImported: txnCount, balancesUpdated: balanceCount, holdingsUpdated: holdingsCount };

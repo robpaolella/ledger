@@ -53,6 +53,44 @@ function getSplitsForTransactions(transactionIds: number[]): Map<number, SplitDt
   return map;
 }
 
+/**
+ * The other side of a linked transfer, keyed by the OUT leg's transaction id.
+ * Only the out leg is listed (see the collapse condition in GET /), so this is
+ * what turns one row into "US Bank Checking → US Bank Savings".
+ */
+function getTransferLinks(fromIds: number[]): Map<number, {
+  linkId: number; confidence: number | null; linkedBy: string;
+  counterpartyTransactionId: number;
+  counterpartyAccount: { id: number; name: string; lastFour: string | null };
+  counterpartyDate: string;
+}> {
+  const map = new Map<number, ReturnType<typeof getTransferLinks> extends Map<number, infer V> ? V : never>();
+  if (fromIds.length === 0) return map;
+  const rows = sqlite.prepare(`
+    SELECT tl.id AS link_id, tl.from_transaction_id, tl.to_transaction_id, tl.confidence, tl.linked_by,
+           o.date AS other_date, a.id AS acct_id, a.name AS acct_name, a.last_four
+    FROM transfer_links tl
+    JOIN transactions o ON o.id = tl.to_transaction_id
+    JOIN accounts a ON a.id = o.account_id
+    WHERE tl.status = 'linked' AND tl.from_transaction_id IN (${fromIds.map(() => '?').join(',')})
+  `).all(...fromIds) as {
+    link_id: number; from_transaction_id: number; to_transaction_id: number;
+    confidence: number | null; linked_by: string; other_date: string;
+    acct_id: number; acct_name: string; last_four: string | null;
+  }[];
+  for (const r of rows) {
+    map.set(r.from_transaction_id, {
+      linkId: r.link_id,
+      confidence: r.confidence,
+      linkedBy: r.linked_by,
+      counterpartyTransactionId: r.to_transaction_id,
+      counterpartyAccount: { id: r.acct_id, name: r.acct_name, lastFour: r.last_four },
+      counterpartyDate: r.other_date,
+    });
+  }
+  return map;
+}
+
 function getAccountOwners(accountIds: number[]): Map<number, { id: number; displayName: string }[]> {
   if (accountIds.length === 0) return new Map();
   const rows = sqlite.prepare(`
@@ -106,8 +144,26 @@ router.get('/', (req: Request, res: Response) => {
     if (accountId) conditions.push(eq(transactions.account_id, parseInt(accountId, 10)));
     if (accountIds) {
       const aIdList = accountIds.split(',').map(Number).filter((n) => !isNaN(n));
-      if (aIdList.length) conditions.push(inArray(transactions.account_id, aIdList));
+      if (aIdList.length) {
+        // A linked transfer shows as ONE row (the out leg), so filtering by the
+        // receiving account must still match it — otherwise the money you received
+        // vanishes from that account's list.
+        const ph = aIdList.map((n) => sql`${n}`);
+        conditions.push(or(
+          inArray(transactions.account_id, aIdList),
+          sql`EXISTS (
+            SELECT 1 FROM transfer_links tl JOIN transactions o ON o.id = tl.to_transaction_id
+            WHERE tl.status = 'linked' AND tl.from_transaction_id = ${transactions.id}
+              AND o.account_id IN (${sql.join(ph, sql`, `)}))`,
+        )!);
+      }
     }
+    // A linked transfer collapses to its out leg; hide the in leg from the list so
+    // one movement of money is one row. Both rows stay in the table — each
+    // account's own balance and history depend on them.
+    conditions.push(sql`NOT EXISTS (
+      SELECT 1 FROM transfer_links tl
+      WHERE tl.status = 'linked' AND tl.to_transaction_id = ${transactions.id})`);
     // Merchant filters match the parent's merchant OR any split leg's effective
     // merchant (own, or the parent's when the leg inherits) — so a merchant that
     // appears only on a split leg still filters, mirroring the one-row-per-leg list.
@@ -267,13 +323,23 @@ router.get('/', (req: Request, res: Response) => {
     const ownerMap = getAccountOwners([...new Set(rows.map((r) => r.account_id))]);
     const splitsMap = getSplitsForTransactions(rows.map(r => r.id));
     const acctInstMap = getInstitutionLogos(rows.map((r) => r.account_institution_id));
+    const transferMap = getTransferLinks(rows.map((r) => r.id));
 
     const data = rows.map((r) => {
       const owners = ownerMap.get(r.account_id) || [];
       const splits = splitsMap.get(r.id) || null;
       const acctInst = r.account_institution_id != null ? acctInstMap.get(r.account_institution_id) : undefined;
+      const link = transferMap.get(r.id);
       return {
         id: r.id,
+        transfer: link ? {
+          linkId: link.linkId,
+          confidence: link.confidence,
+          linkedBy: link.linkedBy,
+          toTransactionId: link.counterpartyTransactionId,
+          toAccount: link.counterpartyAccount,
+          toDate: link.counterpartyDate,
+        } : null,
         date: r.date,
         description: r.description,
         bankDescription: r.bank_description ?? null,
@@ -394,9 +460,18 @@ router.get('/:id', (req: Request, res: Response) => {
       FROM transaction_reviews rv LEFT JOIN users u ON rv.assignee_id = u.id
       WHERE rv.transaction_id = ?
     `).get(id) as { status: string; reason: string; note: string | null; assignee_id: number | null; assignee_name: string | null } | undefined;
+    const link = getTransferLinks([id]).get(id);
     res.json({
       data: {
         id: r.id,
+        transfer: link ? {
+          linkId: link.linkId,
+          confidence: link.confidence,
+          linkedBy: link.linkedBy,
+          toTransactionId: link.counterpartyTransactionId,
+          toAccount: link.counterpartyAccount,
+          toDate: link.counterpartyDate,
+        } : null,
         date: r.date,
         description: r.description,
         bankDescription: r.bank_description ?? null,
@@ -643,6 +718,62 @@ router.patch('/:txnId/splits/:splitId', requirePermission('transactions.edit'), 
   } catch (err) {
     console.error('PATCH /transactions/:txnId/splits/:splitId error:', err);
     res.status(500).json({ error: 'Failed to update split' });
+  }
+});
+
+// POST /api/transactions/:id/transfer-link { otherId } — link two rows as one
+// movement of money. Direction comes from the ledger sign, not the argument order.
+router.post('/:id/transfer-link', requirePermission('transactions.edit'), (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { otherId } = req.body as { otherId?: number };
+    if (!otherId) return res.status(400).json({ error: 'otherId is required' });
+    if (otherId === id) return res.status(400).json({ error: 'a transaction cannot link to itself' });
+
+    const pair = sqlite.prepare(
+      `SELECT id, account_id, amount FROM transactions WHERE id IN (?, ?)`
+    ).all(id, otherId) as { id: number; account_id: number; amount: number }[];
+    if (pair.length < 2) return res.status(404).json({ error: 'Transaction not found' });
+
+    const out = pair.find((t) => t.amount > 0);
+    const inc = pair.find((t) => t.amount < 0);
+    if (!out || !inc) return res.status(400).json({ error: 'a transfer needs one outgoing and one incoming row' });
+    if (out.account_id === inc.account_id) return res.status(400).json({ error: 'both rows are on the same account' });
+
+    sqlite.transaction(() => {
+      // Free either leg from an existing link first — a row belongs to one transfer.
+      sqlite.prepare(`
+        UPDATE transfer_links SET status = 'rejected', unlinked_at = datetime('now')
+        WHERE status = 'linked' AND (from_transaction_id IN (?, ?) OR to_transaction_id IN (?, ?))
+      `).run(out.id, inc.id, out.id, inc.id);
+      sqlite.prepare(`
+        INSERT INTO transfer_links (from_transaction_id, to_transaction_id, amount, confidence, linked_by, status)
+        VALUES (?, ?, ?, 1.0, 'manual', 'linked')
+        ON CONFLICT(from_transaction_id, to_transaction_id) DO UPDATE SET
+          status = 'linked', linked_by = 'manual', confidence = 1.0, unlinked_at = NULL
+      `).run(out.id, inc.id, Math.abs(out.amount));
+    })();
+    res.status(201).json({ data: { fromTransactionId: out.id, toTransactionId: inc.id } });
+  } catch (err) {
+    console.error('POST /transactions/:id/transfer-link error:', err);
+    res.status(500).json({ error: 'Failed to link transfer' });
+  }
+});
+
+// DELETE /api/transactions/:id/transfer-link — split the pair back into two rows.
+// The row is kept as 'rejected' so the detector cannot immediately re-pair them.
+router.delete('/:id/transfer-link', requirePermission('transactions.edit'), (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const out = sqlite.prepare(`
+      UPDATE transfer_links SET status = 'rejected', unlinked_at = datetime('now')
+      WHERE status = 'linked' AND (from_transaction_id = ? OR to_transaction_id = ?)
+    `).run(id, id);
+    if (out.changes === 0) return res.status(404).json({ error: 'No transfer link on this transaction' });
+    res.json({ data: { unlinked: out.changes } });
+  } catch (err) {
+    console.error('DELETE /transactions/:id/transfer-link error:', err);
+    res.status(500).json({ error: 'Failed to unlink transfer' });
   }
 });
 

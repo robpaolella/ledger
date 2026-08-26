@@ -91,6 +91,16 @@ interface Transaction {
     note: string | null;
     assignee: { id: number; displayName: string } | null;
   } | null;
+  // Present when this row is the OUT leg of a linked transfer: the in leg is
+  // hidden from the list and its account is shown here as the destination.
+  transfer?: {
+    linkId: number;
+    confidence: number | null;
+    linkedBy: string; // auto | manual
+    toTransactionId: number;
+    toAccount: { id: number; name: string; lastFour: string | null };
+    toDate: string;
+  } | null;
 }
 
 interface HouseholdUser { id: number; displayName: string }
@@ -1018,6 +1028,16 @@ export default function TransactionsPage() {
     if (!detail) return;
     await markReviewedById(detail.id);
   };
+  // Split a linked transfer back into its two rows. The pair is remembered as
+  // rejected server-side, so the detector won't immediately re-pair them.
+  const unlinkTransfer = async (id: number) => {
+    try {
+      await apiFetch(`/transactions/${id}/transfer-link`, { method: 'DELETE' });
+      addToast('Transfer unlinked — the two transactions are separate again', 'success');
+      if (detail?.id === id) await refreshDetail(id);
+      loadTransactions();
+    } catch { addToast('Failed to unlink transfer', 'error'); }
+  };
   const patchReview = async (body: Record<string, unknown>) => {
     if (!detail) return;
     try { await apiFetch(`/reviews/${detail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); afterReviewChange(detail.id); }
@@ -1448,10 +1468,29 @@ export default function TransactionsPage() {
             </div>
           )}
         </div>
-        {/* account */}
+        {/* account — a linked transfer reads as one movement: from → to */}
         <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-3">
           <VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={18} />
-          <span className="truncate">{accountLabel(t.account)}</span>
+          {t.transfer ? (
+            <span className="truncate flex items-center gap-1.5" title={`${accountLabel(t.account)} → ${accountLabel(t.transfer.toAccount)}`}>
+              <span className="truncate">{accountLabel(t.account)}</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              <span className="truncate">{accountLabel(t.transfer.toAccount)}</span>
+            </span>
+          ) : (
+            <span className="truncate flex items-center gap-1.5">
+              {/* An unpaired transfer leg still has to say which way the money went —
+                  the amount column renders transfers as a bare magnitude. */}
+              {t.category?.type === 'transfer' && (
+                <span title={t.amount > 0 ? 'Money out' : 'Money in'} className="shrink-0 leading-none" style={{ color: 'var(--text-3)' }}>
+                  {t.amount > 0
+                    ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M9 7h8v8" /></svg>
+                    : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M17 7L7 17M15 17H7V9" /></svg>}
+                </span>
+              )}
+              <span className="truncate">{accountLabel(t.account)}</span>
+            </span>
+          )}
         </div>
         {/* amount */}
         <div className={`w-[128px] shrink-0 text-right font-bold text-[15px] tabular-nums ${amtClass}`}>{amtText}</div>
@@ -1967,6 +2006,29 @@ export default function TransactionsPage() {
                         </>
                       )}
                     </div>
+
+                    {detail.transfer && (
+                      <div className="mb-8">
+                        <div className={labelCls}>Transfer</div>
+                        <div className="rounded-[11px] border border-line p-3 bg-surface-2">
+                          <div className="flex items-center gap-2 text-[13px] text-content mb-1.5">
+                            <span className="truncate font-semibold">{accountLabel(detail.account)}</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                            <span className="truncate font-semibold">{accountLabel(detail.transfer.toAccount)}</span>
+                          </div>
+                          <p className="text-[12px] text-content-3 m-0">
+                            Shown as one transaction. The receiving row posted {detail.transfer.toDate}
+                            {detail.transfer.linkedBy === 'auto' ? ' · matched automatically' : ' · linked by hand'}.
+                          </p>
+                          {canEdit && (
+                            <button onClick={() => unlinkTransfer(detail.id)}
+                              className="mt-2.5 h-8 px-3 rounded-[9px] border border-line-strong bg-surface text-content-2 font-semibold text-[12.5px] cursor-pointer hover:text-content">
+                              Unlink — show as two transactions
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     <div className={labelCls}>Notes</div>
                     <textarea value={detailNote} onChange={(e) => setDetailNote(e.target.value)}
