@@ -137,7 +137,7 @@ router.get('/summary', (req: Request, res: Response) => {
       total: sql<number>`coalesce(sum(${budgets.amount}), 0)`,
     }).from(budgets)
       .innerJoin(categories, eq(budgets.category_id, categories.id))
-      .where(and(eq(budgets.month, month), sql`coalesce(${categories.exclude_from_budget}, 0) = 0`))
+      .where(and(eq(budgets.month, month), sql`coalesce(${categories.exclude_from_budget}, 0) = 0 AND ${categories.type} <> 'transfer'`))
       .all();
 
     res.json({

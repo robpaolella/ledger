@@ -157,7 +157,10 @@ router.post('/', requirePermission('categories.create'), (req: Request, res: Res
     is_deductible: isDeductible ? 1 : 0,
     sort_order: nextOrder,
     emoji: emoji ?? null,
-    exclude_from_budget: excludeFromBudget ? 1 : 0,
+    // Transfers are money moving between the user's own accounts — never
+    // spending. Their budget exclusion is an invariant of the section, not a
+    // per-category preference, so the request's value is ignored.
+    exclude_from_budget: group.type === 'transfer' || excludeFromBudget ? 1 : 0,
   }).run();
   const created = db.select().from(categories).where(eq(categories.id, Number(result.lastInsertRowid))).get();
   res.status(201).json({ data: created });
@@ -214,7 +217,11 @@ router.put('/:id', requirePermission('categories.edit'), (req: Request, res: Res
     type: newType,
     ...(isDeductible !== undefined && { is_deductible: isDeductible ? 1 : 0 }),
     ...(emoji !== undefined && { emoji: emoji || null }),
-    ...(excludeFromBudget !== undefined && { exclude_from_budget: excludeFromBudget ? 1 : 0 }),
+    // See POST: the transfer section's budget exclusion is permanent. Moving a
+    // category INTO it also flips the flag on, and out of it hands control back.
+    ...(newType === 'transfer'
+      ? { exclude_from_budget: 1 }
+      : excludeFromBudget !== undefined && { exclude_from_budget: excludeFromBudget ? 1 : 0 }),
   }).where(eq(categories.id, id)).run();
   const updated = db.select().from(categories).where(eq(categories.id, id)).get();
   res.json({ data: updated });

@@ -133,7 +133,7 @@ router.get('/summary', (req: Request, res: Response) => {
 
     // Get all categories
     const allCategories = db.select().from(categories)
-      .where(sql`COALESCE(${categories.exclude_from_budget}, 0) = 0`)
+      .where(sql`COALESCE(${categories.exclude_from_budget}, 0) = 0 AND ${categories.type} <> 'transfer'`)
       .orderBy(asc(categories.sort_order), asc(categories.sub_name))
       .all();
 
@@ -309,7 +309,7 @@ router.get('/annual', (req: Request, res: Response) => {
     const year = String(req.query.year || new Date().getFullYear());
 
     const allCategories = db.select().from(categories)
-      .where(sql`COALESCE(${categories.exclude_from_budget}, 0) = 0`)
+      .where(sql`COALESCE(${categories.exclude_from_budget}, 0) = 0 AND ${categories.type} <> 'transfer'`)
       .orderBy(asc(categories.sort_order), asc(categories.sub_name))
       .all();
 

@@ -25,7 +25,7 @@ import { migrateAccountInstitution } from './db/migrate-account-institution.js';
 import { migrateTxnCategorize } from './db/migrate-txn-categorize.js';
 import { migrateSyncStatus } from './db/migrate-sync-status.js';
 import { migrateNotifications } from './db/migrate-notifications.js';
-import { migrateTransfersCategory } from './db/migrate-transfers-category.js';
+import { migrateTransfersCategory, enforceTransferBudgetExclusion } from './db/migrate-transfers-category.js';
 import { migrateSplitMerchant } from './db/migrate-split-merchant.js';
 import { migrateRecurringItems } from './db/migrate-recurring-items.js';
 import { migrateBudgetOverride } from './db/migrate-budget-override.js';
@@ -113,6 +113,7 @@ migrateCategoryFeedback(sqlite);      // category_feedback log + transactions.ca
 migrateAmazon(sqlite);                // amazon_orders/items/charges/matches (order enrichment)
 migrateMerchantAliases(sqlite);       // merchant_aliases — merges keep routing future imports
 migrateTransferCategoryDedupe(sqlite); // last — folds a duplicate Transfers > Transfer onto the canonical row
+enforceTransferBudgetExclusion(sqlite); // invariant: transfers are never budgeted
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));

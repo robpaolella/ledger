@@ -574,6 +574,10 @@ function CategoryForm({
   const [groupId, setGroupId] = useState<number | null>(category?.group_id ?? initialGroupId ?? groups[0]?.id ?? null);
   const [excludeFromBudget, setExcludeFromBudget] = useState(category?.exclude_from_budget === 1);
   const [error, setError] = useState<string | null>(null);
+  // Transfers move money between the user's own accounts, so they are never
+  // spending: budget exclusion is an invariant of the section rather than a
+  // preference. The server forces the flag on too — this only reflects it.
+  const isTransfer = groups.find((g) => g.id === groupId)?.type === 'transfer';
 
   const PICKER_W = 320;
   const PICKER_H = 420;
@@ -654,17 +658,29 @@ function CategoryForm({
             })}
           </select>
         </div>
-        {/* Exclude from budget */}
+        {/* Exclude from budget — locked on for the Transfers section */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[14px] font-bold text-content">Exclude from budget</div>
-            <div className="text-[12.5px] text-content-3 mt-0.5">This category and its transactions will be hidden from your budget.</div>
+            <div className="text-[14px] font-bold text-content">Excluded from budget</div>
+            <div className="text-[12.5px] text-content-3 mt-0.5">
+              {isTransfer
+                ? 'Always excluded — transfers move money between your own accounts, so they are never budgeted.'
+                : 'This category and its transactions will be hidden from your budget.'}
+            </div>
           </div>
-          <button type="button" onClick={() => setExcludeFromBudget((v) => !v)}
-            className="w-11 h-[26px] flex-none rounded-full p-[3px] cursor-pointer transition-colors"
-            style={{ background: excludeFromBudget ? 'var(--primary)' : 'var(--line-strong)' }}>
-            <span className="block w-5 h-5 rounded-full bg-white transition-transform" style={{ transform: excludeFromBudget ? 'translateX(18px)' : 'translateX(0)' }} />
-          </button>
+          {isTransfer ? (
+            <span title="Permanent for the Transfers section"
+              className="flex-none inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-full text-[11.5px] font-bold text-content-3 bg-surface-2 border border-line">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+              Always
+            </span>
+          ) : (
+            <button type="button" onClick={() => setExcludeFromBudget((v) => !v)}
+              className="w-11 h-[26px] flex-none rounded-full p-[3px] cursor-pointer transition-colors"
+              style={{ background: excludeFromBudget ? 'var(--primary)' : 'var(--line-strong)' }}>
+              <span className="block w-5 h-5 rounded-full bg-white transition-transform" style={{ transform: excludeFromBudget ? 'translateX(18px)' : 'translateX(0)' }} />
+            </button>
+          )}
         </div>
       </div>
       <div className="flex gap-2 mt-6 justify-end items-center">
@@ -680,7 +696,7 @@ function CategoryForm({
         <button onClick={() => {
           if (!subName.trim()) { setError('Category name is required'); return; }
           if (!groupId) { setError('Please choose a group'); return; }
-          onSave({ groupId, subName: subName.trim(), emoji, excludeFromBudget });
+          onSave({ groupId, subName: subName.trim(), emoji, excludeFromBudget: isTransfer || excludeFromBudget });
         }}
           className="h-[42px] px-5 rounded-[11px] bg-primary text-on-primary font-bold text-[14px] cursor-pointer">
           Save
