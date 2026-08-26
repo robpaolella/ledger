@@ -119,12 +119,10 @@ export async function runSyncPipeline(opts: {
   userId?: number | null;
   connectionIds?: number[];
   accountIds?: number[];
-  /** Scheduler mode: import transactions only for auto_import links; balances/holdings still collected for all. */
-  respectAutoImport?: boolean;
   startDate: string;
   endDate: string;
 }): Promise<SyncPipelineResult> {
-  const { userId = null, connectionIds, accountIds, respectAutoImport, startDate, endDate } = opts;
+  const { userId = null, connectionIds, accountIds, startDate, endDate } = opts;
   const startTs = Math.floor(new Date(startDate).getTime() / 1000);
   const endTs = Math.floor(new Date(endDate).getTime() / 1000);
 
@@ -202,13 +200,14 @@ export async function runSyncPipeline(opts: {
 
       const classification = link.classification as AccountClassification;
 
-      // Process transactions. In scheduler mode the per-link auto_import flag
-      // gates ingestion; manual sync imports whatever the user selected.
+      // Process transactions. The per-link auto_import flag is the ONLY gate, and
+      // it applies to EVERY sync path — the nightly scheduler and manual runs
+      // alike — so the toggle in the account editor means one thing everywhere.
       // Investment links default auto_import=0 (their activity is mostly the
       // mirror side of contributions already imported from the liquid source,
       // plus market noise) but can opt in. All accounts contribute balances +
       // holdings regardless.
-      const importTxns = !respectAutoImport || link.auto_import === 1;
+      const importTxns = link.auto_import === 1;
       if (importTxns && sfAccount.transactions.length > 0) {
         // Filter out already-imported transactions by SimpleFIN ID
         const sfTxnIds = sfAccount.transactions.map((t) => t.id);

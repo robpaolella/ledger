@@ -32,6 +32,7 @@ interface LinkedAccountGroup {
     simplefin_account_name: string;
     simplefin_org_name: string | null;
     last_synced_at: string | null;
+    auto_import: number;
   }[];
 }
 interface ParseResult {
@@ -170,6 +171,7 @@ export default function ImportPage() {
         institutionName: a.institutionRef?.name || l.simplefin_org_name || '',
         sfinName: l.simplefin_account_name,
         syncedAt: l.last_synced_at,
+        autoImport: l.auto_import === 1,
       };
     });
   }, [accounts, linkedGroups]);

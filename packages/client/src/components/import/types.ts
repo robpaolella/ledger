@@ -15,6 +15,7 @@ export interface SyncAccount {
   institutionName: string;    // display institution
   sfinName: string;           // SimpleFIN account name
   syncedAt: string | null;    // last synced
+  autoImport: boolean;        // false = transactions never import (balances still sync)
 }
 
 export const BUCKETS: { key: SyncAccount['bucket']; label: string; color: string; paths: string[] }[] = [

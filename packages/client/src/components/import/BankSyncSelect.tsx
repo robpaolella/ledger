@@ -57,7 +57,10 @@ export default function BankSyncSelect({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ liquid: true, investment: false, liability: true });
   // selection: absence = selected (default all on); presence of false = deselected.
   const [deselected, setDeselected] = useState<Set<number>>(new Set());
-  const isSel = (id: number) => !deselected.has(id);
+  // Accounts with auto-import off never sync transactions (server enforces the
+  // same rule) — show them, but never let them be selected.
+  const gated = useMemo(() => new Set(accounts.filter((a) => !a.autoImport).map((a) => a.id)), [accounts]);
+  const isSel = (id: number) => !gated.has(id) && !deselected.has(id);
 
   const ownerOptions = useMemo(() => {
     const map = new Map<number, string>();
@@ -83,10 +86,10 @@ export default function BankSyncSelect({
 
   const setSel = (ids: number[], on: boolean) => setDeselected((prev) => {
     const next = new Set(prev);
-    for (const id of ids) { if (on) next.delete(id); else next.add(id); }
+    for (const id of ids) { if (gated.has(id)) continue; if (on) next.delete(id); else next.add(id); }
     return next;
   });
-  const toggleAcct = (id: number) => setSel([id], !isSel(id));
+  const toggleAcct = (id: number) => { if (!gated.has(id)) setSel([id], !isSel(id)); };
 
   const selectedAll = accounts.filter((a) => isSel(a.id));
   const selectedTotal = selectedAll.length;
@@ -97,15 +100,17 @@ export default function BankSyncSelect({
     ...BUCKETS.map((b) => ({ key: b.key, label: b.label, dot: b.color, count: accounts.filter((a) => a.bucket === b.key).length })),
   ];
 
-  // master (over visible)
-  const visSel = visible.filter((a) => isSel(a.id)).length;
-  const masterAll = visible.length > 0 && visSel === visible.length;
-  const masterSome = visSel > 0 && visSel < visible.length;
+  // master (over visible, excluding accounts that can never sync transactions)
+  const selectable = visible.filter((a) => !gated.has(a.id));
+  const visSel = selectable.filter((a) => isSel(a.id)).length;
+  const masterAll = selectable.length > 0 && visSel === selectable.length;
+  const masterSome = visSel > 0 && visSel < selectable.length;
 
   const groups = BUCKETS.filter((b) => typeFilter === 'all' || typeFilter === b.key).map((b) => {
     const rows = visible.filter((a) => a.bucket === b.key);
-    const sel = rows.filter((a) => isSel(a.id)).length;
-    return { ...b, rows, sel, all: rows.length > 0 && sel === rows.length, some: sel > 0 && sel < rows.length };
+    const selRows = rows.filter((a) => !gated.has(a.id));
+    const sel = selRows.filter((a) => isSel(a.id)).length;
+    return { ...b, rows, sel, selCount: selRows.length, all: selRows.length > 0 && sel === selRows.length, some: sel > 0 && sel < selRows.length };
   }).filter((g) => g.rows.length > 0);
 
   const doFetch = () => {
@@ -153,11 +158,11 @@ export default function BankSyncSelect({
 
         {/* master select */}
         <div className="flex items-center justify-between px-1 pb-3">
-          <div onClick={() => setSel(visible.map((a) => a.id), !masterAll)} className="flex items-center gap-2.5 cursor-pointer text-[13px] font-semibold text-content-2">
-            <ImpCheckbox checked={masterAll} indeterminate={masterSome} onClick={(e) => { e.stopPropagation(); setSel(visible.map((a) => a.id), !masterAll); }} />
+          <div onClick={() => setSel(selectable.map((a) => a.id), !masterAll)} className="flex items-center gap-2.5 cursor-pointer text-[13px] font-semibold text-content-2">
+            <ImpCheckbox checked={masterAll} indeterminate={masterSome} onClick={(e) => { e.stopPropagation(); setSel(selectable.map((a) => a.id), !masterAll); }} />
             Select all visible
           </div>
-          <span className="text-xs text-content-3 font-mono">{visSel} / {visible.length} shown</span>
+          <span className="text-xs text-content-3 font-mono">{visSel} / {selectable.length} shown</span>
         </div>
 
         {/* groups */}
@@ -165,13 +170,13 @@ export default function BankSyncSelect({
           {groups.map((g) => (
             <div key={g.key} className="border border-line rounded-[16px] bg-surface overflow-hidden shadow-sm">
               <div className="flex items-center gap-3.5 px-[18px] py-3.5 bg-surface-2">
-                <ImpCheckbox checked={g.all} indeterminate={g.some} onClick={(e) => { e.stopPropagation(); setSel(g.rows.map((a) => a.id), !g.all); }} />
+                <ImpCheckbox checked={g.all} indeterminate={g.some} disabled={g.selCount === 0} onClick={(e) => { e.stopPropagation(); setSel(g.rows.map((a) => a.id), !g.all); }} />
                 <span className="w-[34px] h-[34px] flex-none rounded-[10px] flex items-center justify-center" style={{ background: `color-mix(in srgb, ${g.color} 16%, transparent)`, color: g.color }}>
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{g.paths.map((d, i) => <path key={i} d={d} />)}</svg>
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-[15px] tracking-[-0.01em] text-content">{g.label}</div>
-                  <div className="text-xs text-content-3 mt-px">{g.sel} of {g.rows.length} selected</div>
+                  <div className="text-xs text-content-3 mt-px">{g.sel} of {g.selCount} selected{g.selCount < g.rows.length ? ` · ${g.rows.length - g.selCount} import off` : ''}</div>
                 </div>
                 <span onClick={() => setExpanded((e) => ({ ...e, [g.key]: !e[g.key] }))} className="w-[30px] h-[30px] flex-none rounded-[8px] flex items-center justify-center cursor-pointer text-content-3">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded[g.key] ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .2s' }}><path d="m6 9 6 6 6-6" /></svg>
@@ -180,17 +185,22 @@ export default function BankSyncSelect({
               {expanded[g.key] && (
                 <div>
                   {g.rows.map((a) => {
+                    const off = gated.has(a.id);
                     const on = isSel(a.id);
                     const oColor = a.isShared ? 'var(--own-shared)' : ownerColor(a.owners[0]?.displayName ?? '');
                     const oLabel = a.isShared ? 'Shared' : (a.owners[0]?.displayName ?? '—');
                     return (
-                      <div key={a.id} onClick={() => toggleAcct(a.id)} className="flex items-center gap-3.5 px-[18px] py-3.5 border-t border-line cursor-pointer" style={{ background: on ? 'color-mix(in srgb, var(--primary) 6%, transparent)' : 'transparent' }}>
-                        <ImpCheckbox checked={on} onClick={(e) => { e.stopPropagation(); toggleAcct(a.id); }} />
+                      <div key={a.id} onClick={() => toggleAcct(a.id)}
+                        title={off ? 'Transaction import is off for this account — turn it on in Settings ▸ Your accounts ▸ Bank Sync' : undefined}
+                        className={`flex items-center gap-3.5 px-[18px] py-3.5 border-t border-line ${off ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        style={{ background: on ? 'color-mix(in srgb, var(--primary) 6%, transparent)' : 'transparent', opacity: off ? 0.55 : 1 }}>
+                        <ImpCheckbox checked={on} disabled={off} onClick={(e) => { e.stopPropagation(); toggleAcct(a.id); }} />
                         <VendorAvatar name={a.institutionName || a.name} src={a.logoSrc} color={a.color} size={32} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2.5">
                             <span className="font-semibold text-sm truncate text-content">{a.name}</span>
                             <span className="h-[19px] px-[7px] flex-none rounded-[5px] flex items-center font-semibold text-[10.5px]" style={{ background: `color-mix(in srgb, ${oColor} 20%, transparent)`, color: oColor }}>{oLabel}</span>
+                            {off && <span className="h-[19px] px-[7px] flex-none rounded-[5px] flex items-center font-semibold text-[10.5px] text-content-3 bg-surface-2 border border-line">Import off</span>}
                           </div>
                           <div className="font-mono text-[11.5px] text-content-3 mt-0.5 truncate">{a.sfinName}{a.institutionName ? ` · ${a.institutionName}` : ''}</div>
                         </div>
@@ -232,7 +242,7 @@ export default function BankSyncSelect({
         <div className="border border-line rounded-[16px] bg-surface p-5 shadow-sm">
           <div className="flex items-baseline gap-2.5">
             <span className="text-[34px] font-extrabold tracking-[-0.02em] tabular-nums leading-none text-content">{selectedTotal}</span>
-            <span className="text-[13px] text-content-3">of {accounts.length} accounts</span>
+            <span className="text-[13px] text-content-3">of {accounts.length - gated.size} accounts</span>
           </div>
           <div className="text-[12.5px] text-content-3 mt-[5px]">selected for import</div>
           <div className="flex flex-col gap-2 mt-4">

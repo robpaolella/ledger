@@ -42,24 +42,26 @@ export function vendorColor(name: string): string {
 // Tri-state checkbox — 20px rounded square, primary fill when on/mixed.
 // ─────────────────────────────────────────────────────────────────────────────
 export function ImpCheckbox({
-  checked, indeterminate = false, onClick, title, size = 20,
+  checked, indeterminate = false, onClick, title, size = 20, disabled = false,
 }: {
   checked: boolean;
   indeterminate?: boolean;
   onClick: (e: React.MouseEvent | React.KeyboardEvent) => void;
   title?: string;
   size?: number;
+  disabled?: boolean;
 }) {
   const on = checked || indeterminate;
   return (
     <span
-      onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } }}
+      onClick={disabled ? undefined : onClick}
+      onKeyDown={(e) => { if (!disabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(e); } }}
       title={title}
       role="checkbox"
-      tabIndex={0}
+      tabIndex={disabled ? -1 : 0}
       aria-checked={indeterminate ? 'mixed' : checked}
-      className="flex-none inline-flex items-center justify-center rounded-[6px] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      aria-disabled={disabled || undefined}
+      className={`flex-none inline-flex items-center justify-center rounded-[6px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary ${disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'}`}
       style={{
         width: size,
         height: size,

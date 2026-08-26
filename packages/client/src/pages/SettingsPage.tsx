@@ -314,14 +314,14 @@ function AccountForm({
             <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">Bank Sync</label>
             <div className="flex items-center justify-between gap-3 px-3 py-2.5 border border-[var(--table-border)] rounded-lg">
               <div className="min-w-0">
-                <div className="text-[13px] font-medium text-[var(--text-body)]">Auto-import transactions</div>
-                <div className="text-[11px] text-[var(--text-muted)]">Imported by the daily sync · balances always update</div>
+                <div className="text-[13px] font-medium text-[var(--text-body)]">Import transactions</div>
+                <div className="text-[11px] text-[var(--text-muted)]">Imported on every sync — daily and manual · balances always update</div>
               </div>
               <Switch
                 checked={syncLink.autoImport === 1}
                 onChange={(next) => onToggleAutoImport?.(next)}
                 disabled={!hasPermission('simplefin.manage')}
-                title="Daily transaction auto-import"
+                title="Transaction import (daily and manual sync)"
               />
             </div>
           </div>

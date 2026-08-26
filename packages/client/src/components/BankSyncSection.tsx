@@ -388,7 +388,7 @@ function AccountLinkingTable({
           {linkedCount} of {sfAccounts.length} accounts linked
         </span>
         <span className="text-[11px] text-[var(--text-muted)]">
-          Balances update daily for all linked accounts · auto-import is set per account in Your accounts
+          Balances update daily for all linked accounts · transaction import is set per account in Your accounts
         </span>
       </div>
 
