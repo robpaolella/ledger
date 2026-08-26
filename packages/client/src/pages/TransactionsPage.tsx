@@ -616,6 +616,14 @@ export default function TransactionsPage() {
   const [editCell, setEditCell] = useState<{ id: number; field: 'vendor' | 'category' } | null>(null);
   // Row whose Review badge has its quick-action popover open.
   const [reviewPopId, setReviewPopId] = useState<number | null>(null);
+  // The page header sticks at the top of the scroll container; the card toolbar
+  // ("N transactions" + Edit multiple) stacks directly under it, so it needs the
+  // header's live height rather than a hardcoded offset — the header wraps on
+  // narrow viewports and changes height.
+  const pageHeaderRef = useRef<HTMLDivElement>(null);
+  const toolbarSentinelRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  const [toolbarStuck, setToolbarStuck] = useState(false);
   const [cellSearch, setCellSearch] = useState('');
   const [detail, setDetail] = useState<Transaction | null>(null);
   const [detailNote, setDetailNote] = useState('');
@@ -753,6 +761,31 @@ export default function TransactionsPage() {
     setTransactions(res.data);
     setTotal(res.total);
   }, [getDateRange, search, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder]);
+
+  useEffect(() => {
+    const el = pageHeaderRef.current;
+    if (!el) return;
+    const measure = () => setHeaderH(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobile]);
+
+  // Stuck-state for the toolbar's separator: a 1px sentinel above it leaves the
+  // viewport (inset by the header) exactly when the toolbar pins. IntersectionObserver
+  // rather than a scroll listener because the page scrolls in an ancestor container,
+  // not the window.
+  useEffect(() => {
+    const el = toolbarSentinelRef.current;
+    if (!el || headerH === 0) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setToolbarStuck(!entry.isIntersecting),
+      { threshold: 0, rootMargin: `-${Math.round(headerH)}px 0px 0px 0px` },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [headerH, isMobile]);
 
   const loadMerchants = useCallback(async () => {
     const res = await apiFetch<{ data: Merchant[] }>('/merchants');
@@ -1439,7 +1472,7 @@ export default function TransactionsPage() {
         </div>
       )}
       {/* Header + consolidated top-right controls */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 bg-bg border-b border-line flex items-center justify-between gap-4 flex-wrap">
+      <div ref={pageHeaderRef} className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 bg-bg border-b border-line flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-6">
           <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Transactions</h1>
           <div className="hidden md:flex items-center gap-5 text-[15px] font-semibold">
@@ -1592,7 +1625,14 @@ export default function TransactionsPage() {
         </div>
       ) : (
       <div className="bg-surface rounded-card border border-line shadow-sm">
-        {/* card toolbar */}
+        {/* 1px sentinel: drives the sticky toolbar's separator (see the observer above) */}
+        <div ref={toolbarSentinelRef} aria-hidden className="h-px -mb-px" />
+        {/* card toolbar — pinned under the page header so "Edit multiple" and the
+            selection controls stay reachable however far the list is scrolled */}
+        <div
+          className={`sticky z-10 bg-surface rounded-t-card ${toolbarStuck ? 'border-b border-line' : ''}`}
+          style={{ top: headerH }}
+        >
         {!bulkMode ? (
           <div className="flex items-center justify-between gap-4 px-6 py-4">
             <span className="text-[15px] font-bold tabular-nums">{total.toLocaleString()} transactions</span>
@@ -1631,6 +1671,7 @@ export default function TransactionsPage() {
             </div>
           </div>
         )}
+        </div>
         {/* date-grouped rows */}
         {dateGroups.map((g) => (
           <div key={g.date}>
