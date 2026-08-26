@@ -10,7 +10,7 @@ import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
 import Calendar from '../components/Calendar';
 import PermissionGate from '../components/PermissionGate';
-import { CategoryBadge, NeedsReviewBadge } from '../components/badges';
+import { CategoryBadge, NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
@@ -613,6 +613,8 @@ export default function TransactionsPage() {
   const [filterSearch, setFilterSearch] = useState('');
   const [filterDraft, setFilterDraft] = useState<FilterDraft>({ account: 'All', type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
   const [editCell, setEditCell] = useState<{ id: number; field: 'vendor' | 'category' } | null>(null);
+  // Row whose Review badge has its quick-action popover open.
+  const [reviewPopId, setReviewPopId] = useState<number | null>(null);
   const [cellSearch, setCellSearch] = useState('');
   const [detail, setDetail] = useState<Transaction | null>(null);
   const [detailNote, setDetailNote] = useState('');
@@ -945,10 +947,21 @@ export default function TransactionsPage() {
     try { await apiFetch('/reviews/flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: detail.id }) }); afterReviewChange(detail.id); }
     catch { addToast('Failed to flag for review', 'error'); }
   };
+  /** Resolve a review by id — used by the detail panel and by the row badge popover. */
+  const markReviewedById = async (id: number) => {
+    try {
+      await apiFetch('/reviews/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: id }) });
+      // Refresh the open panel only when it's this transaction; the list, the
+      // header count and the sidebar badge always resync.
+      if (detail?.id === id) await refreshDetail(id);
+      loadTransactions();
+      loadReviewCount();
+      window.dispatchEvent(new CustomEvent('reviews-changed'));
+    } catch { addToast('Failed to mark reviewed', 'error'); }
+  };
   const markReviewed = async () => {
     if (!detail) return;
-    try { await apiFetch('/reviews/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: detail.id }) }); afterReviewChange(detail.id); }
-    catch { addToast('Failed to mark reviewed', 'error'); }
+    await markReviewedById(detail.id);
   };
   const patchReview = async (body: Record<string, unknown>) => {
     if (!detail) return;
@@ -1316,7 +1329,7 @@ export default function TransactionsPage() {
           </span>
         )}
         {/* vendor cell (avatar + name), inline edit — outline encompasses the logo */}
-        <div className="relative flex-[1.4] min-w-0" onClick={(e) => { if (!bulkMode && canEdit) { e.stopPropagation(); setEditCell({ id: t.id, field: 'vendor' }); setCellSearch(''); } }}>
+        <div className="relative flex-[1.4] min-w-0" onClick={(e) => { if (!bulkMode && canEdit) { e.stopPropagation(); setReviewPopId(null); setEditCell({ id: t.id, field: 'vendor' }); setCellSearch(''); } }}>
           <div className={`group flex items-center gap-2.5 h-9 pl-1 pr-2 rounded-[8px] border transition-colors ${vendorEditing ? 'border-primary' : 'border-transparent hover:border-line-strong'}`}>
             {t.merchant?.logoUrl
               ? <img src={t.merchant.logoUrl} alt="" className="w-[26px] h-[26px] shrink-0 rounded-full object-cover" />
@@ -1339,13 +1352,31 @@ export default function TransactionsPage() {
           )}
         </div>
         {/* category cell (inline edit; disabled for splits) */}
-        <div className="relative flex-1 min-w-0" onClick={(e) => { if (!bulkMode && !isSplit && canEdit) { e.stopPropagation(); setEditCell({ id: t.id, field: 'category' }); setCellSearch(''); } }}>
+        <div className="relative flex-1 min-w-0" onClick={(e) => { if (!bulkMode && !isSplit && canEdit) { e.stopPropagation(); setReviewPopId(null); setEditCell({ id: t.id, field: 'category' }); setCellSearch(''); } }}>
           <div className={`group flex items-center gap-2 h-9 px-2 rounded-[8px] border transition-colors text-[13px] text-content-2 ${categoryEditing ? 'border-primary' : isSplit ? 'border-transparent' : 'border-transparent hover:border-line-strong'}`}>
             <span className="text-[15px] leading-none">{emoji}</span>
             <span className="truncate flex-1">{isSplit ? `Split (${t.splits!.length})` : (t.category?.subName ?? 'Uncategorized')}</span>
-            {t.needsReview && !isSplit && <NeedsReviewBadge />}
+            {t.needsReview && !isSplit && (
+              canEdit && !bulkMode
+                ? <NeedsReviewBadge onClick={() => { setEditCell(null); setReviewPopId((id) => (id === t.id ? null : t.id)); }} />
+                : <NeedsReviewBadge />
+            )}
             {canEdit && !bulkMode && !isSplit && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className={`shrink-0 transition-opacity ${categoryEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}><path d="m6 9 6 6 6-6"/></svg>}
           </div>
+          {reviewPopId === t.id && (
+            <div onClick={(e) => e.stopPropagation()} className="absolute top-9 right-0 z-[60] w-[248px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-3">
+              <div className="text-[13px] font-bold text-content">Needs review</div>
+              <p className="text-[12px] text-content-3 leading-snug mt-1 mb-2.5">{NEEDS_REVIEW_HINT}</p>
+              <button onClick={() => { setReviewPopId(null); void markReviewedById(t.id); }}
+                className="w-full h-9 rounded-[10px] bg-primary text-on-primary font-bold text-[13px] border-none cursor-pointer">
+                Mark reviewed
+              </button>
+              <button onClick={() => { setReviewPopId(null); openDetail(t); }}
+                className="w-full h-8 mt-1.5 rounded-[10px] bg-transparent text-content-2 font-semibold text-[12px] border-none cursor-pointer hover:bg-surface-2">
+                Open details
+              </button>
+            </div>
+          )}
           {categoryEditing && (
             <div onClick={(e) => e.stopPropagation()} className="absolute top-9 left-0 z-[60] w-64 bg-elevated border border-line-strong rounded-[12px] shadow-md overflow-hidden">
               <div className="p-2 border-b border-line"><input autoFocus value={cellSearch} onChange={(e) => setCellSearch(e.target.value)} placeholder="Search categories…" className="w-full h-9 px-3 rounded-lg bg-surface-2 border border-line text-content text-sm outline-none" /></div>
@@ -1590,7 +1621,7 @@ export default function TransactionsPage() {
         {transactions.length === 0 && <div className="text-center py-10 text-content-3 text-sm">No transactions found for this period</div>}
       </div>
       )}
-      {editCell && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); }} />}
+      {(editCell || reviewPopId != null) && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); setReviewPopId(null); }} />}
 
       {/* ===== Bulk-edit sidebar (multi-select) ===== */}
       {bulkEditOpen && (
