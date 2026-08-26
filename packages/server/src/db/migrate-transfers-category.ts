@@ -9,7 +9,10 @@ import Database from 'better-sqlite3';
  * are auto-labeled with this category so both legs stay visible but net to zero
  * in income/expense/savings & budget math.
  *
- * Idempotent — seeds only when no transfer category exists yet.
+ * Idempotent — seeds only when no transfer category exists yet. NOTE that this
+ * guard cannot see a hand-made `Transfers > Transfer` filed under an expense
+ * group, which is how a duplicate pair arose once; migrateTransferCategoryDedupe
+ * folds any such twin onto the canonical transfer-typed row after the fact.
  */
 export function migrateTransfersCategory(sqlite: Database.Database): void {
   const tableExists = sqlite.prepare(
