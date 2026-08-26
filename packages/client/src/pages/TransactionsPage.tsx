@@ -99,6 +99,7 @@ interface Merchant {
   id: number;
   name: string;
   logo_url?: string | null;
+  suppress_rule_suggest?: number;
   txn_count?: number;
 }
 
@@ -830,6 +831,24 @@ export default function TransactionsPage() {
     }
   };
 
+  // "Never for this merchant" — mute the prompt rather than answering it. Undone
+  // from Settings ▸ Merchants, so it is never a one-way door.
+  const muteMerchantRule = async () => {
+    if (!ruleSuggest) return;
+    const { merchantId, merchantName } = ruleSuggest;
+    setRuleSuggest(null);
+    try {
+      await apiFetch(`/merchants/${merchantId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppressRuleSuggest: true }),
+      });
+      await loadMerchants();
+      addToast(`Won't ask about ${merchantName} again — change it in Settings ▸ Merchants`, 'success');
+    } catch {
+      addToast('Failed to update merchant', 'error');
+    }
+  };
+
   // Inline/panel edit — rebuilds the txn body (preserving splits) and PUTs.
   const updateTxnField = async (t: Transaction, changes: { description?: string; merchant?: string; categoryId?: number; date?: string; note?: string | null; amount?: number }) => {
     const isSplit = !!(t.splits && t.splits.length > 0);
@@ -897,10 +916,12 @@ export default function TransactionsPage() {
         });
       }
       await loadTransactions();
-      // Offer to learn a durable merchant→category rule when the category changed.
+      // Offer to learn a durable merchant→category rule when the category changed —
+      // unless the user has muted suggestions for this merchant.
       if (!isSplit && changes.categoryId != null && changes.categoryId !== t.category?.id && t.merchant && t.merchant.id > 0) {
+        const muted = merchants.find((m) => m.id === t.merchant!.id)?.suppress_rule_suggest === 1;
         const cat = categories.find((c) => c.id === changes.categoryId);
-        if (cat) setRuleSuggest({ merchantId: t.merchant.id, merchantName: t.merchant.name, categoryId: cat.id, categoryName: cat.sub_name });
+        if (cat && !muted) setRuleSuggest({ merchantId: t.merchant.id, merchantName: t.merchant.name, categoryId: cat.id, categoryName: cat.sub_name });
       }
     } catch {
       addToast('Failed to update transaction', 'error');
@@ -1413,6 +1434,8 @@ export default function TransactionsPage() {
           <span className="text-sm text-content">Always categorize <span className="font-bold">{ruleSuggest.merchantName}</span> as <span className="font-bold">{ruleSuggest.categoryName}</span>?</span>
           <button onClick={applyMerchantRule} className="h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
           <button onClick={() => setRuleSuggest(null)} className="h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
+          <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
+            className="h-9 px-3 rounded-[10px] text-content-3 font-semibold text-sm hover:bg-surface-2 shrink-0">Never</button>
         </div>
       )}
       {/* Header + consolidated top-right controls */}

@@ -20,6 +20,7 @@ import { migratePayCycles } from './db/migrate-pay-cycles.js';
 import { migrateSavingsCategories } from './db/migrate-savings-categories.js';
 import { migrateMerchants } from './db/migrate-merchants.js';
 import { migrateMerchantAliases } from './db/migrate-merchant-aliases.js';
+import { migrateMerchantRulePrefs } from './db/migrate-merchant-rule-prefs.js';
 import { migrateTransferCategoryDedupe } from './db/migrate-transfer-category-dedupe.js';
 import { migrateAccountInstitution } from './db/migrate-account-institution.js';
 import { migrateTxnCategorize } from './db/migrate-txn-categorize.js';
@@ -112,6 +113,7 @@ migrateAutoImport(sqlite);            // simplefin_links.auto_import (daily txn 
 migrateCategoryFeedback(sqlite);      // category_feedback log + transactions.categorize_source
 migrateAmazon(sqlite);                // amazon_orders/items/charges/matches (order enrichment)
 migrateMerchantAliases(sqlite);       // merchant_aliases — merges keep routing future imports
+migrateMerchantRulePrefs(sqlite);     // merchants.suppress_rule_suggest ("never ask again")
 migrateTransferCategoryDedupe(sqlite); // last — folds a duplicate Transfers > Transfer onto the canonical row
 enforceTransferBudgetExclusion(sqlite); // invariant: transfers are never budgeted
 

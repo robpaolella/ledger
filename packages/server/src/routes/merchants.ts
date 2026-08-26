@@ -24,7 +24,7 @@ const isOwnedMerchantLogo = (url: string | null | undefined): boolean =>
 router.get('/', (_req: Request, res: Response) => {
   try {
     const rows = sqlite.prepare(`
-      SELECT m.id, m.name, m.logo_url, m.created_at,
+      SELECT m.id, m.name, m.logo_url, m.created_at, m.suppress_rule_suggest,
         (SELECT COUNT(*) FROM transactions t
            WHERE t.merchant_id = m.id
              AND NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transaction_id = t.id))
@@ -32,8 +32,15 @@ router.get('/', (_req: Request, res: Response) => {
         (SELECT COUNT(*) FROM transaction_splits ts
            JOIN transactions tp ON ts.transaction_id = tp.id
            WHERE COALESCE(ts.merchant_id, tp.merchant_id) = m.id)
-        AS txn_count
+        AS txn_count,
+        -- The merchant's "always categorize as" rule, if it has one. At most one
+        -- exists: POST /category-rules replaces a merchant's rule rather than
+        -- stacking (see routes/categoryRules.ts).
+        cr.id AS rule_id, cr.category_id AS rule_category_id,
+        c.sub_name AS rule_sub_name, c.group_name AS rule_group_name
       FROM merchants m
+      LEFT JOIN category_rules cr ON cr.match_type = 'merchant' AND cr.pattern = CAST(m.id AS TEXT)
+      LEFT JOIN categories c ON c.id = cr.category_id
       ORDER BY m.name ASC
     `).all();
     res.json({ data: rows });
@@ -43,25 +50,34 @@ router.get('/', (_req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/merchants/:id — rename
+// PATCH /api/merchants/:id — rename and/or set the "never suggest a rule here" flag
 router.patch('/:id', requirePermission('transactions.edit'), (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { name } = sanitize(req.body) as { name?: unknown };
-    if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name is required' });
-    const clean = name.trim();
+    const { name, suppressRuleSuggest } = sanitize(req.body) as { name?: unknown; suppressRuleSuggest?: unknown };
+    // Both fields are optional, but a no-op request is a caller bug worth surfacing.
+    const wantsRename = name !== undefined;
+    const wantsSuppress = suppressRuleSuggest !== undefined;
+    if (!wantsRename && !wantsSuppress) return res.status(400).json({ error: 'name or suppressRuleSuggest is required' });
+    if (wantsRename && (typeof name !== 'string' || !name.trim())) return res.status(400).json({ error: 'name must be a non-empty string' });
 
     const existing = db.select().from(merchants).where(eq(merchants.id, id)).all();
     if (existing.length === 0) return res.status(404).json({ error: 'Merchant not found' });
 
-    // Renaming onto an existing name would violate UNIQUE — merge instead.
-    const clash = db.select().from(merchants).where(eq(merchants.name, clean)).all();
-    if (clash.length > 0 && clash[0].id !== id) {
-      return res.status(409).json({ error: 'A merchant with that name already exists — merge instead' });
+    const clean = wantsRename ? (name as string).trim() : existing[0].name;
+    if (wantsRename) {
+      // Renaming onto an existing name would violate UNIQUE — merge instead.
+      const clash = db.select().from(merchants).where(eq(merchants.name, clean)).all();
+      if (clash.length > 0 && clash[0].id !== id) {
+        return res.status(409).json({ error: 'A merchant with that name already exists — merge instead' });
+      }
     }
 
-    db.update(merchants).set({ name: clean }).where(eq(merchants.id, id)).run();
-    res.json({ data: { id, name: clean } });
+    db.update(merchants).set({
+      ...(wantsRename && { name: clean }),
+      ...(wantsSuppress && { suppress_rule_suggest: suppressRuleSuggest ? 1 : 0 }),
+    }).where(eq(merchants.id, id)).run();
+    res.json({ data: { id, name: clean, suppressRuleSuggest: wantsSuppress ? (suppressRuleSuggest ? 1 : 0) : existing[0].suppress_rule_suggest } });
   } catch (err) {
     console.error('PATCH /merchants/:id error:', err);
     res.status(500).json({ error: 'Failed to rename merchant' });

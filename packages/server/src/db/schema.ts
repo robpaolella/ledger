@@ -118,6 +118,8 @@ export const merchants = sqliteTable('merchants', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
   logo_url: text('logo_url'),
+  // 1 = the user said "never ask again" to the always-categorize prompt here.
+  suppress_rule_suggest: integer('suppress_rule_suggest').notNull().default(0),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 

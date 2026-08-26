@@ -4,7 +4,14 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import ImageCropModal from './ImageCropModal';
 
-interface Merchant { id: number; name: string; logo_url: string | null; txn_count: number }
+interface Merchant {
+  id: number; name: string; logo_url: string | null; txn_count: number;
+  suppress_rule_suggest: number;
+  // The merchant's "always categorize as" rule (at most one), null when unset.
+  rule_id: number | null; rule_category_id: number | null;
+  rule_sub_name: string | null; rule_group_name: string | null;
+}
+interface CategoryOption { id: number; sub_name: string; group_name: string; type: string }
 interface MerchantAlias { alias_name: string; created_at: string | null }
 
 const AV_COLOR = ['--c-teal', '--c-green', '--c-blue', '--c-indigo', '--c-violet', '--c-fuchsia', '--c-rose', '--c-orange', '--c-amber'];
@@ -36,6 +43,7 @@ export default function MerchantsPanel() {
   const [aliases, setAliases] = useState<MerchantAlias[]>([]);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +52,58 @@ export default function MerchantsPanel() {
     finally { setLoading(false); }
   }, [addToast]);
   useEffect(() => { load(); }, [load]);
+
+  // Rule targets: transfers are applied by categorization, not chosen per merchant.
+  useEffect(() => {
+    apiFetch<{ data: CategoryOption[] }>('/categories')
+      .then((r) => setCategoryOptions(r.data.filter((c) => c.type !== 'transfer')))
+      .catch(() => setCategoryOptions([]));
+  }, []);
+
+  /** Set / replace the merchant's always-categorize rule. */
+  const setRule = async (categoryId: number) => {
+    if (!edit || busy) return;
+    setBusy(true);
+    try {
+      const res = await apiFetch<{ data: { affected: number } }>('/category-rules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchType: 'merchant', pattern: String(edit.id), categoryId, applyToExisting: true }),
+      });
+      const n = res.data.affected;
+      addToast(`Rule saved — ${n} transaction${n === 1 ? '' : 's'} updated`, 'success');
+      await load();
+      setEdit((prev) => (prev ? { ...prev, rule_category_id: categoryId } : prev));
+    } catch { addToast('Failed to save rule', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  /** Remove it — existing transactions keep whatever category they already have. */
+  const clearRule = async () => {
+    if (!edit?.rule_id || busy) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/category-rules/${edit.rule_id}`, { method: 'DELETE' });
+      addToast('Rule removed', 'success');
+      await load();
+      setEdit((prev) => (prev ? { ...prev, rule_id: null, rule_category_id: null, rule_sub_name: null, rule_group_name: null } : prev));
+    } catch { addToast('Failed to remove rule', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const toggleSuppress = async (next: boolean) => {
+    if (!edit) return;
+    setEdit((prev) => (prev ? { ...prev, suppress_rule_suggest: next ? 1 : 0 } : prev));
+    try {
+      await apiFetch(`/merchants/${edit.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppressRuleSuggest: next }),
+      });
+      await load();
+    } catch {
+      setEdit((prev) => (prev ? { ...prev, suppress_rule_suggest: next ? 0 : 1 } : prev));
+      addToast('Failed to update merchant', 'error');
+    }
+  };
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -158,6 +218,47 @@ export default function MerchantsPanel() {
             </div>
             <div className="text-[12px] font-semibold text-content-3 mb-1.5">Merchant name</div>
             <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-5" />
+            {/* Always categorize as — the merchant's durable rule, set from here or
+                from the prompt after recategorizing a transaction. */}
+            <div className="mb-5">
+              <div className="text-[12px] font-semibold text-content-3 mb-1.5">Always categorize as</div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <select
+                    value={edit.rule_category_id ?? ''}
+                    disabled={!canEdit || busy}
+                    onChange={(e) => { if (e.target.value) void setRule(Number(e.target.value)); }}
+                    className="w-full h-11 pl-3 pr-9 rounded-[10px] bg-surface-2 border border-line-strong text-content text-sm appearance-none cursor-pointer disabled:opacity-60">
+                    <option value="">No rule — categorize each time</option>
+                    {Object.entries(categoryOptions.reduce<Record<string, CategoryOption[]>>((m, c) => {
+                      (m[c.group_name] ||= []).push(c); return m;
+                    }, {})).map(([group, subs]) => (
+                      <optgroup key={group} label={group}>
+                        {subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><path d="m6 9 6 6 6-6" /></svg>
+                </div>
+                {edit.rule_id != null && canEdit && (
+                  <button onClick={clearRule} disabled={busy} title="Remove this rule"
+                    className="w-11 h-11 flex-none flex items-center justify-center rounded-[10px] border border-line-strong bg-surface-2 text-negative disabled:opacity-50">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                  </button>
+                )}
+              </div>
+              <p className="text-[12px] text-content-3 mt-1.5 mb-0">
+                {edit.rule_id != null
+                  ? 'New and existing transactions from this merchant use this category. Remove it with the ✕ to choose per transaction again.'
+                  : 'Pick a category to apply it to this merchant’s transactions from now on.'}
+              </p>
+              <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
+                <input type="checkbox" checked={edit.suppress_rule_suggest === 1} disabled={!canEdit}
+                  onChange={(e) => void toggleSuppress(e.target.checked)}
+                  className="w-4 h-4 flex-none accent-[var(--primary)] cursor-pointer" />
+                <span className="text-[13px] text-content-2">Don’t ask about this merchant when I change a category</span>
+              </label>
+            </div>
             {aliases.length > 0 && (
               <div className="mb-5">
                 <div className="text-[12px] font-semibold text-content-3 mb-1.5">Also matches</div>
