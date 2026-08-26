@@ -48,4 +48,14 @@ export function migrateAmazon(sqlite: Database.Database): void {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // note_written_at: set once the item list has been offered to the ledger
+  // transaction's note. Stamped even when the note was left alone (user already
+  // wrote one), so a note the user later clears is never silently refilled.
+  const cols = new Set(
+    (sqlite.prepare('PRAGMA table_info(amazon_matches)').all() as { name: string }[]).map((c) => c.name),
+  );
+  if (!cols.has('note_written_at')) {
+    sqlite.exec('ALTER TABLE amazon_matches ADD COLUMN note_written_at TEXT');
+  }
 }

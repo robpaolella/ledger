@@ -1,13 +1,56 @@
 /**
- * Self-test for Amazon enrichment allocation math.
- * Run: npx tsx src/services/amazonEnrich.selftest.ts
+ * Self-test for the pure Amazon item helpers: allocation math, shipment-subset
+ * search, and transaction-note composition.
+ * Run: npx tsx src/services/amazonItems.selftest.ts
  */
 import assert from 'node:assert';
-import { allocateAmounts, pickItemSubset } from './amazonEnrich.js';
+import { allocateAmounts, composeOrderNote, pickItemSubset } from './amazonItems.js';
+import { isStatementCode } from './amazonNotes.js';
 
 const sum = (xs: number[]) => Math.round(xs.reduce((s, x) => s + x, 0) * 100) / 100;
 
 function main() {
+  // --- composeOrderNote: the transaction note ---
+  // Single item, whole order.
+  let n = composeOrderNote('114-1234567-8901234', [{ title: 'USB-C Cable', quantity: 1 }], false);
+  assert.equal(n, 'Amazon #114-1234567-8901234: USB-C Cable');
+
+  // Quantity prefix only above 1, items joined with '; '.
+  n = composeOrderNote('114-0000001-0000001', [
+    { title: 'AA Batteries', quantity: 4 },
+    { title: 'Dish Soap', quantity: 1 },
+  ], false);
+  assert.equal(n, 'Amazon #114-0000001-0000001: 4× AA Batteries; Dish Soap');
+
+  // Partial shipment the subset search couldn't resolve: says so, lists the order.
+  n = composeOrderNote('114-2222222-2222222', [
+    { title: 'Thing One', quantity: 1 },
+    { title: 'Thing Two', quantity: 1 },
+  ], true);
+  assert.ok(n.startsWith('Amazon #114-2222222-2222222 (part of a 2-item order): '), n);
+  assert.ok(n.includes('Thing One; Thing Two'), n);
+
+  // Long orders are capped and ellipsized — the whole note stays note-sized.
+  const many = Array.from({ length: 60 }, (_, i) => ({ title: `Item number ${i} with a long name`, quantity: 1 }));
+  n = composeOrderNote('114-3333333-3333333', many, false);
+  assert.ok(n.length <= 400, `capped, got ${n.length}`);
+  assert.ok(n.endsWith('…'), 'ellipsized');
+  assert.ok(n.startsWith('Amazon #114-3333333-3333333: Item number 0'), n.slice(0, 60));
+
+  // --- isStatementCode: which existing notes are safe to replace ---
+  // Real shapes found in the live ledger, parked there by an earlier import.
+  for (const code of [
+    'AMAZON MKTPL*BS55A82H0', 'Amazon.com*BF6IH8OJ2', 'AMZN Mktp US*2X9K1Y3Z',
+    'AMAZON DIGITAL*BV1GT1L01', 'amazon prime BF03M31F2',
+  ]) assert.ok(isStatementCode(code), `machine text: ${code}`);
+
+  // Anything the user actually wrote stays put.
+  for (const written of [
+    'Gift for Sam', 'Amazon return pending', 'reimburse from work',
+    'Amazon MKTPL*BS55A82H0 — check this', 'birthday',
+  ]) assert.ok(!isStatementCode(written), `user text: ${written}`);
+
+  // --- allocateAmounts: split-leg amounts ---
   // Proportional with tax remainder: $54.32 total over $30 + $14.99 items.
   let a = allocateAmounts(54.32, [30.0, 14.99]);
   assert.equal(sum(a), 54.32, 'sums to total');
@@ -66,7 +109,7 @@ function main() {
   // Too many items → refuse (2^n guard).
   assert.equal(pickItemSubset(Array.from({ length: 15 }, (_, i) => it(`I${i}`, i + 1)), 10, 0.08), null, 'item cap');
 
-  console.log('amazonEnrich selftest: all assertions passed');
+  console.log('amazonItems selftest: all assertions passed');
 }
 
 main();

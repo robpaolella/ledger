@@ -3,6 +3,7 @@ import { REVIEW_THRESHOLD } from './categorize.js';
 import { llmConfig, llmCategorizeItems, trustedConfidence } from './llmCategorize.js';
 import { validateSplits, saveSplits, type SplitInput } from './splits.js';
 import { flagReview, resolveReview, defaultAssigneeForTxn } from './reviews.js';
+import { allocateAmounts, itemNote, pickItemSubset, type EnrichItem } from './amazonItems.js';
 
 /**
  * Enrich matched Amazon transactions with item-level LLM categorization.
@@ -15,69 +16,6 @@ export interface EnrichResult {
   enriched: number;
   split: number;
   skipped: number;
-}
-
-const NOTE_MAX = 120;
-/** Above this item count, subset search is skipped (2^n) — such orders are rare. */
-const SUBSET_MAX_ITEMS = 14;
-
-export interface EnrichItem { title: string; unitPrice: number | null; quantity: number }
-
-/**
- * Amazon bills PER SHIPMENT, so one charge often covers only part of an order.
- * Find the unique subset of items whose price (grossed up by the order's tax
- * rate) matches the charge. Returns null when nothing fits or when two
- * different subsets fit equally well — better to skip than to mis-split.
- */
-export function pickItemSubset(
-  items: EnrichItem[],
-  chargeAmount: number,
-  taxRate: number,
-): EnrichItem[] | null {
-  if (items.length === 0 || items.length > SUBSET_MAX_ITEMS) return null;
-  const prices = items.map((it) => (it.unitPrice ?? 0) * it.quantity);
-  if (prices.some((p) => p <= 0)) return null;
-
-  const target = chargeAmount / (1 + taxRate);
-  const tolerance = Math.max(0.5, target * 0.02);
-  let best: { mask: number; diff: number } | null = null;
-  let secondDiff = Infinity;
-
-  for (let mask = 1; mask < (1 << items.length); mask++) {
-    let sum = 0;
-    for (let i = 0; i < items.length; i++) if (mask & (1 << i)) sum += prices[i];
-    const diff = Math.abs(sum - target);
-    if (best == null || diff < best.diff) {
-      secondDiff = best?.diff ?? Infinity;
-      best = { mask, diff };
-    } else if (diff < secondDiff) {
-      secondDiff = diff;
-    }
-  }
-  if (!best || best.diff > tolerance) return null;
-  if (secondDiff <= tolerance) return null; // two subsets fit — ambiguous
-  return items.filter((_, i) => best!.mask & (1 << i));
-}
-
-/** Cent-safe proportional allocation of the txn total across category buckets. */
-export function allocateAmounts(total: number, bases: number[]): number[] {
-  const baseSum = bases.reduce((s, b) => s + b, 0);
-  if (baseSum <= 0) return bases.map(() => 0);
-  const raw = bases.map((b) => Math.round((total * b / baseSum) * 100) / 100);
-  // Rounding residue → largest bucket, so legs always sum to the exact total.
-  const drift = Math.round((total - raw.reduce((s, r) => s + r, 0)) * 100) / 100;
-  if (drift !== 0) {
-    const largest = bases.indexOf(Math.max(...bases));
-    raw[largest] = Math.round((raw[largest] + drift) * 100) / 100;
-  }
-  return raw;
-}
-
-function itemNote(items: { title: string; quantity: number }[]): string {
-  const joined = items
-    .map((it) => (it.quantity > 1 ? `${it.quantity}× ${it.title}` : it.title))
-    .join('; ');
-  return joined.length > NOTE_MAX ? `${joined.slice(0, NOTE_MAX - 1)}…` : joined;
 }
 
 export async function enrichMatchedTransactions(sqlite: Database.Database): Promise<EnrichResult> {
