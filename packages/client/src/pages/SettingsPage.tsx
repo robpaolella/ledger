@@ -547,7 +547,7 @@ function AmazonCard() {
 }
 
 // --- Category Form ---
-const SECTION_LABEL: Record<string, string> = { income: 'Income', expense: 'Expenses', savings: 'Savings' };
+const SECTION_LABEL: Record<string, string> = { income: 'Income', expense: 'Expenses', savings: 'Savings', transfer: 'Transfers' };
 
 function CategoryForm({
   category,
@@ -643,7 +643,7 @@ function CategoryForm({
           <div className="text-[13px] font-bold text-content mb-1.5">Group</div>
           <select value={groupId ?? ''} onChange={(e) => setGroupId(Number(e.target.value))}
             className="w-full h-11 px-3.5 bg-surface-2 border border-line-strong rounded-[11px] text-content text-[14px] outline-none cursor-pointer">
-            {['income', 'expense', 'savings'].map((t) => {
+            {['income', 'expense', 'savings', 'transfer'].map((t) => {
               const gs = groups.filter((g) => g.type === t);
               if (gs.length === 0) return null;
               return (
@@ -2093,7 +2093,7 @@ export default function SettingsPage() {
   }
   for (const arr of catsByGroup.values()) arr.sort((a, b) => a.sort_order - b.sort_order);
   // Groups per section, ordered.
-  const groupsByType: Record<string, Group[]> = { income: [], expense: [], savings: [] };
+  const groupsByType: Record<string, Group[]> = { income: [], expense: [], savings: [], transfer: [] };
   for (const g of [...groups].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))) {
     if (groupsByType[g.type]) groupsByType[g.type].push(g);
   }
@@ -2341,11 +2341,11 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {(['income', 'expense', 'savings'] as const).map((t) => (
+              {(['income', 'expense', 'savings', 'transfer'] as const).map((t) => (
                 <div key={t}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[18px] font-extrabold tracking-tight">{SECTION_LABEL[t]}</span>
-                    {hasPermission('categories.create') && (
+                    {t !== 'transfer' && hasPermission('categories.create') && (
                       <button onClick={() => setGroupModal({ mode: 'new', type: t })} className="text-[14px] font-bold text-primary cursor-pointer">Create group</button>
                     )}
                   </div>
@@ -2367,7 +2367,7 @@ export default function SettingsPage() {
                               {cats.map((c) => <SortableDesktopSub key={c.id} cat={c} canEdit={hasPermission('categories.edit')} onEdit={(cc) => setEditingCategory(cc)} />)}
                             </SortableContext>
                           </DndContext>
-                          {hasPermission('categories.create') && (
+                          {t !== 'transfer' && hasPermission('categories.create') && (
                             <button onClick={() => { setNewCatGroupId(g.id); setEditingCategory('new'); }} className="flex items-center gap-2.5 px-5 h-12 w-full text-content-3 text-[14px] font-semibold cursor-pointer hover:bg-surface-2">
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg> Create category
                             </button>
@@ -2375,7 +2375,10 @@ export default function SettingsPage() {
                         </div>
                       );
                     })}
-                    {groupsByType[t].length === 0 && (
+                    {t === 'transfer' && groupsByType[t].length > 0 && (
+                      <div className="text-[13px] text-content-3 px-1">Applied automatically to money moving between your own accounts — kept out of income, expense and budget totals.</div>
+                    )}
+                    {t !== 'transfer' && groupsByType[t].length === 0 && (
                       <div className="text-[13px] text-content-3 px-1">No groups yet{hasPermission('categories.create') ? ' — use “Create group” to add one.' : '.'}</div>
                     )}
                   </div>

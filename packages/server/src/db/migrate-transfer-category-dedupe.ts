@@ -53,8 +53,20 @@ export function migrateTransferCategoryDedupe(sqlite: Database.Database): void {
     ['budget_alerts', 'category_id'],
   ];
 
+  // Presentation the canonical row lacks is worth keeping: the hand-made twin is
+  // the one the user actually dressed up (emoji, colour), and losing its icon on
+  // the fold reads as the category having changed identity.
+  const carryOver = (dupeId: number): void => {
+    const src = sqlite.prepare('SELECT emoji FROM categories WHERE id = ?').get(dupeId) as { emoji: string | null } | undefined;
+    if (src?.emoji) {
+      sqlite.prepare('UPDATE categories SET emoji = ? WHERE id = ? AND (emoji IS NULL OR emoji = \'\')')
+        .run(src.emoji, canonical.id);
+    }
+  };
+
   const run = sqlite.transaction(() => {
     for (const d of dupes) {
+      carryOver(d.id);
       for (const [table, col] of plain) {
         if (hasTable(table)) sqlite.prepare(`UPDATE ${table} SET ${col} = ? WHERE ${col} = ?`).run(canonical.id, d.id);
       }
