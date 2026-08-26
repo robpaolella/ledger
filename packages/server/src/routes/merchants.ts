@@ -6,6 +6,7 @@ import { sanitize } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permissions.js';
 import multer from 'multer';
 import { saveImage, deleteImage } from '../services/uploads.js';
+import { normalizeMerchantName } from '../services/merchantNormalize.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -68,19 +69,41 @@ router.patch('/:id', requirePermission('transactions.edit'), (req: Request, res:
 });
 
 // POST /api/merchants/merge — repoint all of source's transactions to target, delete source
+// `keepAlias` (default true) also records source.name → target in merchant_aliases,
+// so imports that normalize to the merged-away name keep landing on the target
+// instead of recreating it (see db/merchants.ts resolveMerchantId).
 router.post('/merge', requirePermission('transactions.edit'), (req: Request, res: Response) => {
   try {
-    const { sourceId, targetId } = req.body as { sourceId?: number; targetId?: number };
+    const { sourceId, targetId, keepAlias } = req.body as { sourceId?: number; targetId?: number; keepAlias?: boolean };
     if (!sourceId || !targetId || sourceId === targetId) {
       return res.status(400).json({ error: 'distinct sourceId and targetId are required' });
     }
     const both = db.select().from(merchants).where(sql`${merchants.id} IN (${sourceId}, ${targetId})`).all();
     if (both.length < 2) return res.status(404).json({ error: 'Merchant not found' });
+    // Alias keys are stored normalized, because that is what ingestion will
+    // produce for a future transaction (normalization is idempotent, so a name
+    // that came from ingestion round-trips unchanged).
+    const aliasKey = normalizeMerchantName(both.find((m) => m.id === sourceId)!.name);
+    const targetKey = normalizeMerchantName(both.find((m) => m.id === targetId)!.name);
 
     const run = sqlite.transaction(() => {
       db.update(transactions).set({ merchant_id: targetId }).where(eq(transactions.merchant_id, sourceId)).run();
       // Repoint split legs too, or the FK (foreign_keys=ON) blocks the delete.
       db.update(transactionSplits).set({ merchant_id: targetId }).where(eq(transactionSplits.merchant_id, sourceId)).run();
+      // Alias bookkeeping — all of it BEFORE the source row goes, or ON DELETE
+      // CASCADE takes the rows with it.
+      if (keepAlias !== false && aliasKey && aliasKey !== targetKey) {
+        sqlite.prepare('INSERT OR REPLACE INTO merchant_aliases (alias_name, merchant_id) VALUES (?, ?)')
+          .run(aliasKey, targetId);
+      }
+      // Aliases that pointed at the source follow it to the target (A→B→C stays
+      // resolvable); OR REPLACE settles a collision with an alias target already has.
+      sqlite.prepare('UPDATE OR REPLACE merchant_aliases SET merchant_id = ? WHERE merchant_id = ?')
+        .run(targetId, sourceId);
+      // A merchant is never an alias of itself. Scoped to this merchant: the same
+      // name may legitimately be an alias of some OTHER merchant.
+      sqlite.prepare('DELETE FROM merchant_aliases WHERE alias_name = ? AND merchant_id = ?')
+        .run(targetKey, targetId);
       // Repoint the source's merchant rule so learning survives the merge — but if
       // the target already has one, drop the source's instead (keep one rule/merchant).
       const targetHasRule = sqlite.prepare("SELECT 1 FROM category_rules WHERE match_type = 'merchant' AND pattern = ?").get(String(targetId));
@@ -160,6 +183,37 @@ router.delete('/:id/logo', requirePermission('transactions.edit'), (req: Request
   } catch (err) {
     console.error('DELETE /merchants/:id/logo error:', err);
     res.status(500).json({ error: 'Failed to remove logo' });
+  }
+});
+
+// GET /api/merchants/:id/aliases — statement names that route to this merchant.
+router.get('/:id/aliases', (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const rows = sqlite.prepare(
+      'SELECT alias_name, created_at FROM merchant_aliases WHERE merchant_id = ? ORDER BY alias_name'
+    ).all(id) as { alias_name: string; created_at: string | null }[];
+    res.json({ data: rows });
+  } catch (err) {
+    console.error('GET /merchants/:id/aliases error:', err);
+    res.status(500).json({ error: 'Failed to load merchant aliases' });
+  }
+});
+
+// DELETE /api/merchants/:id/aliases?name=... — stop routing that name here.
+// Future imports create the name as its own merchant again. The name travels as a
+// query param, not a path segment: merchant names can contain '/' (CVS/pharmacy).
+router.delete('/:id/aliases', requirePermission('transactions.edit'), (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const name = typeof req.query.name === 'string' ? req.query.name : '';
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const out = sqlite.prepare('DELETE FROM merchant_aliases WHERE merchant_id = ? AND alias_name = ?').run(id, name);
+    if (out.changes === 0) return res.status(404).json({ error: 'Alias not found' });
+    res.json({ data: { aliasName: name } });
+  } catch (err) {
+    console.error('DELETE /merchants/:id/aliases error:', err);
+    res.status(500).json({ error: 'Failed to remove merchant alias' });
   }
 });
 

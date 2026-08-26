@@ -19,6 +19,7 @@ import { migrateDismissedTransfers } from './db/migrate-dismissed-transfers.js';
 import { migratePayCycles } from './db/migrate-pay-cycles.js';
 import { migrateSavingsCategories } from './db/migrate-savings-categories.js';
 import { migrateMerchants } from './db/migrate-merchants.js';
+import { migrateMerchantAliases } from './db/migrate-merchant-aliases.js';
 import { migrateAccountInstitution } from './db/migrate-account-institution.js';
 import { migrateTxnCategorize } from './db/migrate-txn-categorize.js';
 import { migrateSyncStatus } from './db/migrate-sync-status.js';
@@ -109,6 +110,7 @@ migrateNotificationCenter(sqlite);    // review notifications → per-user aggre
 migrateAutoImport(sqlite);            // simplefin_links.auto_import (daily txn auto-import toggle)
 migrateCategoryFeedback(sqlite);      // category_feedback log + transactions.categorize_source
 migrateAmazon(sqlite);                // amazon_orders/items/charges/matches (order enrichment)
+migrateMerchantAliases(sqlite);       // merchant_aliases — merges keep routing future imports
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));

@@ -40,7 +40,23 @@ export function findOrCreateMerchant(name: string | null | undefined, sqlite: Da
  * one vendor collapse to a single merchant row. Use this at ingestion (bank sync,
  * CSV import) — NOT for user-typed names, which are stored verbatim via
  * findOrCreateMerchant so the user stays in control of their own spelling.
+ *
+ * A user-recorded alias (written when they merge one merchant into another) wins
+ * over creating the normalized name, so a merge keeps holding for transactions
+ * that arrive later.
  */
 export function resolveMerchantId(raw: string | null | undefined, sqlite: Database.Database = defaultSqlite): number | null {
-  return findOrCreateMerchant(normalizeMerchantName(raw), sqlite);
+  const canonical = normalizeMerchantName(raw);
+  if (!canonical) return null;
+  // Guarded like the vendor_logos lookup above: a CLI entry point that skipped
+  // migrations must still be able to import, just without alias routing.
+  try {
+    const alias = sqlite.prepare(`
+      SELECT ma.merchant_id AS id FROM merchant_aliases ma
+      JOIN merchants m ON m.id = ma.merchant_id
+      WHERE ma.alias_name = ?
+    `).get(canonical) as { id: number } | undefined;
+    if (alias) return alias.id;
+  } catch { /* alias table not ready — fall through */ }
+  return findOrCreateMerchant(canonical, sqlite);
 }

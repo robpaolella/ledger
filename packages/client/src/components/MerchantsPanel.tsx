@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ImageCropModal from './ImageCropModal';
 
 interface Merchant { id: number; name: string; logo_url: string | null; txn_count: number }
+interface MerchantAlias { alias_name: string; created_at: string | null }
 
 const AV_COLOR = ['--c-teal', '--c-green', '--c-blue', '--c-indigo', '--c-violet', '--c-fuchsia', '--c-rose', '--c-orange', '--c-amber'];
 const colorFor = (name: string) => `var(${AV_COLOR[(name.charCodeAt(0) || 0) % AV_COLOR.length]})`;
@@ -30,6 +31,9 @@ export default function MerchantsPanel() {
   const [editName, setEditName] = useState('');
   const [del, setDel] = useState<Merchant | null>(null);
   const [mergeInto, setMergeInto] = useState('');
+  const [keepAlias, setKeepAlias] = useState(true);
+  // Statement names routed to the merchant open in the edit modal.
+  const [aliases, setAliases] = useState<MerchantAlias[]>([]);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -48,7 +52,18 @@ export default function MerchantsPanel() {
     return list;
   }, [merchants, search, sort]);
 
-  const openEdit = (m: Merchant) => { setEdit(m); setEditName(m.name); };
+  const loadAliases = useCallback(async (merchantId: number) => {
+    try { setAliases((await apiFetch<{ data: MerchantAlias[] }>(`/merchants/${merchantId}/aliases`)).data); }
+    catch { setAliases([]); }
+  }, []);
+  const openEdit = (m: Merchant) => { setEdit(m); setEditName(m.name); setAliases([]); void loadAliases(m.id); };
+  const removeAlias = async (name: string) => {
+    if (!edit) return;
+    try {
+      await apiFetch(`/merchants/${edit.id}/aliases?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+      setAliases((prev) => prev.filter((a) => a.alias_name !== name));
+    } catch { addToast('Failed to remove alias', 'error'); }
+  };
   const saveName = async () => {
     if (!edit || busy) return;
     const name = editName.trim();
@@ -74,7 +89,7 @@ export default function MerchantsPanel() {
   const doMerge = async () => {
     if (!del || !mergeInto || busy) return;
     setBusy(true);
-    try { await apiFetch('/merchants/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: del.id, targetId: Number(mergeInto) }) }); setDel(null); setEdit(null); setMergeInto(''); addToast('Merged', 'success'); await load(); }
+    try { await apiFetch('/merchants/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: del.id, targetId: Number(mergeInto), keepAlias }) }); setDel(null); setEdit(null); setMergeInto(''); setKeepAlias(true); addToast('Merged', 'success'); await load(); }
     catch { addToast('Merge failed', 'error'); }
     finally { setBusy(false); }
   };
@@ -143,8 +158,27 @@ export default function MerchantsPanel() {
             </div>
             <div className="text-[12px] font-semibold text-content-3 mb-1.5">Merchant name</div>
             <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-5" />
+            {aliases.length > 0 && (
+              <div className="mb-5">
+                <div className="text-[12px] font-semibold text-content-3 mb-1.5">Also matches</div>
+                <p className="text-[12px] text-content-3 mt-0 mb-2">Imported transactions with these names land on this merchant.</p>
+                <div className="flex flex-col gap-1.5">
+                  {aliases.map((a) => (
+                    <div key={a.alias_name} className="flex items-center gap-2 h-9 pl-3 pr-1.5 rounded-[10px] bg-surface-2 border border-line">
+                      <span className="flex-1 min-w-0 truncate text-[13px] text-content">{a.alias_name}</span>
+                      {canEdit && (
+                        <button onClick={() => removeAlias(a.alias_name)} title={`Stop routing “${a.alias_name}” here`}
+                          className="w-7 h-7 flex-none flex items-center justify-center rounded-[8px] text-content-3 hover:text-content hover:bg-surface">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between">
-              <button onClick={() => { setDel(edit); setMergeInto(''); }} className="text-[13px] font-semibold text-negative">Merge &amp; delete</button>
+              <button onClick={() => { setDel(edit); setMergeInto(''); setKeepAlias(true); }} className="text-[13px] font-semibold text-negative">Merge &amp; delete</button>
               <div className="flex gap-2.5">
                 <button onClick={() => setEdit(null)} className="h-10 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
                 <button onClick={saveName} disabled={busy} className="h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Save</button>
@@ -162,10 +196,18 @@ export default function MerchantsPanel() {
             <h2 className="text-[18px] font-extrabold m-0 mb-1">Merge &amp; delete</h2>
             <p className="text-sm text-content-2 mb-4">There are <span className="font-semibold">{del.txn_count} transaction{del.txn_count === 1 ? '' : 's'}</span> tied to <span className="font-semibold">{del.name}</span>. Choose a merchant to reassign them to before deleting.</p>
             <div className="text-[12px] font-semibold text-content-3 mb-1.5">Reassign transactions to</div>
-            <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} className="w-full h-11 px-3 rounded-[10px] bg-surface-2 border border-line-strong text-content text-sm mb-5">
+            <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} className="w-full h-11 px-3 rounded-[10px] bg-surface-2 border border-line-strong text-content text-sm mb-4">
               <option value="">Select a merchant…</option>
               {merchants.filter((x) => x.id !== del.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
+            <label className="flex items-start gap-2.5 mb-5 cursor-pointer select-none">
+              <input type="checkbox" checked={keepAlias} onChange={(e) => setKeepAlias(e.target.checked)}
+                className="mt-0.5 w-4 h-4 flex-none accent-[var(--primary)] cursor-pointer" />
+              <span className="text-[13px] text-content-2 leading-snug">
+                Keep routing future transactions
+                <span className="block text-[12px] text-content-3">Imports that would have become <span className="font-semibold">{del.name}</span> go to the merchant above instead.</span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2.5">
               <button onClick={() => setDel(null)} className="h-10 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
               <button onClick={doMerge} disabled={!mergeInto || busy} className="h-10 px-5 rounded-[10px] bg-negative text-white font-bold text-sm disabled:opacity-50">Delete</button>
