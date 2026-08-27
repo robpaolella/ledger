@@ -12,7 +12,7 @@ import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/
 // ── Types (mirror GET /api/reports/period + GET /api/transactions) ──
 interface Bucket { label: string; start: string; end: string }
 interface PeriodCat { categoryId: number; groupName: string; subName: string; type: string; sortOrder: number; total: number; buckets: number[] }
-interface PeriodKpis { income: number; expenses: number; savings: number; net: number; savingsRate: number; incomeSourceCount: number }
+interface PeriodKpis { income: number; expenses: number; net: number; savingsRate: number; incomeSourceCount: number }
 interface PeriodData { range: { start: string; end: string; months: number }; buckets: Bucket[]; categories: PeriodCat[]; kpis: PeriodKpis }
 interface Txn {
   id: number; date: string; description: string | null; amount: number;
@@ -107,7 +107,7 @@ function buildSections(cats: PeriodCat[], nBuckets: number): Record<string, Sect
     groups.forEach((g) => g.subs.sort((a, b) => b.total - a.total));
     return { key, label, type, total: groups.reduce((s, g) => s + g.total, 0), groups } as Section;
   };
-  return { income: mk('income', 'Income', 'income'), expenses: mk('expenses', 'Expenses', 'expense'), savings: mk('savings', 'Savings', 'savings') };
+  return { income: mk('income', 'Income', 'income'), expenses: mk('expenses', 'Expenses', 'expense') };
 }
 
 const cum = (arr: number[]) => { let s = 0; return arr.map((v) => (s += v)); };
@@ -178,7 +178,7 @@ export default function ReportsPage() {
     apiFetch<{ data: { name: string; type: string; color: string | null }[] }>('/categories/groups').then((r) => setGroupMeta(r.data)).catch(() => {});
   }, []);
 
-  // Owner-chosen group swatch colors, keyed by `${type}:${name}` (DB type: income/expense/savings).
+  // Owner-chosen group swatch colors, keyed by `${type}:${name}` (DB type: income/expense).
   const groupColorMap = useMemo(() => {
     const m: Record<string, string> = {};
     for (const g of groupMeta) if (g.color) m[`${g.type}:${g.name}`] = g.color;
@@ -266,29 +266,27 @@ export default function ReportsPage() {
     { label: 'Income', value: money0(k.income), sub: `${k.incomeSourceCount} income source${k.incomeSourceCount === 1 ? '' : 's'}`, color: 'text-content', subColor: 'text-content-3' },
     { label: 'Expenses', value: money0(k.expenses), sub: `${money0(k.expenses / months)} avg / mo`, color: 'text-content', subColor: 'text-content-3' },
     { label: 'Net', value: money0(k.net), sub: k.net >= 0 ? '▲ money kept' : '▼ over income', color: k.net >= 0 ? 'text-positive' : 'text-negative', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
-    { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${money0(k.savings / months)} avg / mo`, color: 'text-content', subColor: 'text-positive' },
+    { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${money0(k.net / months)} avg / mo`, color: 'text-content', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
   ];
 
-  // ── FLOW BAR (income allocation: Saved + top expense groups + Other) ──
+  // ── FLOW BAR (where the money that went out went: top expense groups + Other) ──
   const expGroups = sections.expenses.groups;
   const flowSegs: { name: string; color: string; emoji: string; amount: number; pct: number; drill: string | null }[] = [];
   // Focused: shares of the group total. Unfocused: allocation of money that went OUT
-  // — expenses + savings only (no income / no "unspent"), so it fills the bar.
-  const flowDenom = focusObj ? focusObj.group.total : k.expenses + k.savings;
+  // — expenses only (no income / no "unspent"), so it fills the bar.
+  const flowDenom = focusObj ? focusObj.group.total : k.expenses;
   const showFlow = flowDenom > 0;
   if (showFlow) {
     if (focusObj) {
       focusObj.group.subs.forEach((s, i) => flowSegs.push({ name: s.subName, color: subColor(i), emoji: getCategoryEmoji(s.subName), amount: s.total, pct: s.total / flowDenom, drill: null }));
     } else {
-      // "Saved" = the Savings section total (money moved into savings categories).
-      if (k.savings > 0) flowSegs.push({ name: 'Saved', color: 'var(--positive)', emoji: '🏦', amount: k.savings, pct: k.savings / flowDenom, drill: null });
       const top = expGroups.slice(0, 6);
       top.forEach((g) => flowSegs.push({ name: g.groupName, color: groupColorVar('expense', g.groupName), emoji: getCategoryEmoji(g.groupName), amount: g.total, pct: g.total / flowDenom, drill: g.groupName }));
       const otherAmt = expGroups.slice(6).reduce((s, g) => s + g.total, 0);
       if (otherAmt > 0) flowSegs.push({ name: 'Other', color: 'var(--text-3)', emoji: '📦', amount: otherAmt, pct: otherAmt / flowDenom, drill: null });
     }
   }
-  const flowDenomLabel = focusObj ? focusObj.group.groupName : `Spent & saved ${money0(k.expenses + k.savings)}`;
+  const flowDenomLabel = focusObj ? focusObj.group.groupName : `Spent ${money0(k.expenses)}`;
   // Lay the bar out in whole DEVICE pixels so the gap AND every segment edge land
   // on the device grid — then all gaps render at an identical device-pixel width
   // at any DPR (fractional CSS px otherwise anti-aliases gaps to 2 vs 3 px).
@@ -366,7 +364,7 @@ export default function ReportsPage() {
     const g = focusObj.group; const meta = secMeta(g.groupName);
     summarySecs = [{ label: g.groupName, total: g.total, ...meta, rows: g.subs.map((s, i) => ({ key: `s${s.categoryId}`, gkey: '', name: s.subName, emoji: getCategoryEmoji(s.subName), color: subColor(i), leaf: true, amount: s.total, pct: g.total > 0 ? s.total / g.total : 0, drill: null, subs: [] })) }];
   } else {
-    summarySecs = (['income', 'expenses', 'savings'] as const).map((sk) => {
+    summarySecs = (['income', 'expenses'] as const).map((sk) => {
       const sec = sections[sk]; const meta = secMeta(sec.label);
       return { label: sec.label, total: sec.total, ...meta, rows: sec.groups.map((g) => ({
         key: g.groupName, gkey: gkeyOf(sec.label, g.groupName), name: g.groupName, emoji: getCategoryEmoji(g.groupName), color: groupColorVar(typeOfSection(sk), g.groupName), leaf: false, amount: g.total, pct: sec.total > 0 ? g.total / sec.total : 0,
@@ -392,7 +390,7 @@ export default function ReportsPage() {
     const g = focusObj.group;
     timelineSecs = [buildTL(g.groupName, g.total, g.subs.map((s, i) => ({ key: `s${s.categoryId}`, gkey: '', name: s.subName, emoji: getCategoryEmoji(s.subName), color: subColor(i), leaf: true, buckets: s.buckets, total: s.total, drill: null, subs: [] })))];
   } else {
-    timelineSecs = (['income', 'expenses', 'savings'] as const).map((sk) => {
+    timelineSecs = (['income', 'expenses'] as const).map((sk) => {
       const sec = sections[sk];
       return buildTL(sec.label, sec.total, sec.groups.map((g) => ({
         key: g.groupName, gkey: gkeyOf(sec.label, g.groupName), name: g.groupName, emoji: getCategoryEmoji(g.groupName), color: groupColorVar(typeOfSection(sk), g.groupName), leaf: false, buckets: g.buckets, total: g.total,
@@ -543,7 +541,7 @@ export default function ReportsPage() {
 
         {view === 'breakdown' ? (
           !showFlow ? (
-            <div className="text-center text-content-3 text-sm" style={{ padding: '28px 0' }}>No spending or savings in this period.</div>
+            <div className="text-center text-content-3 text-sm" style={{ padding: '28px 0' }}>No spending in this period.</div>
           ) : (
           <div>
             {/* Widths + gap are whole device pixels (see flowWidthsCss) so every gap

@@ -269,8 +269,8 @@ export function CategoryCell({
   const ql = q.trim().toLowerCase();
   const match = (c: ImpCategory) => !ql || c.display_name.toLowerCase().includes(ql) || c.sub_name.toLowerCase().includes(ql) || c.group_name.toLowerCase().includes(ql);
 
-  // Ordered groups for the grouped popover: income → expense → savings, then group name.
-  const typeRank: Record<string, number> = { income: 0, expense: 1, savings: 2 };
+  // Ordered groups for the grouped popover: income → expense, then group name.
+  const typeRank: Record<string, number> = { income: 0, expense: 1 };
   const groups: { group: string; items: ImpCategory[] }[] = [];
   if (grouped) {
     const byGroup = new Map<string, ImpCategory[]>();

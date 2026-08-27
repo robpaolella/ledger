@@ -84,7 +84,7 @@ export const categories = sqliteTable('categories', {
   group_name: text('group_name').notNull(),
   sub_name: text('sub_name').notNull(),
   display_name: text('display_name').notNull(),
-  type: text('type').notNull(), // income, expense, savings
+  type: text('type').notNull(), // income, expense, transfer
   is_deductible: integer('is_deductible').default(0),
   sort_order: integer('sort_order').default(0),
   // How recurring items on this category fold into its monthly budget:
@@ -103,7 +103,7 @@ export const categories = sqliteTable('categories', {
 // Categories link via group_id; categories.group_name mirrors the group name.
 export const categoryGroups = sqliteTable('category_groups', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  type: text('type').notNull(), // income, expense, savings
+  type: text('type').notNull(), // income, expense, transfer
   name: text('name').notNull(),
   // Owner-chosen swatch token (e.g. 'c-rose'); null = fall back to the derived hue.
   color: text('color'),

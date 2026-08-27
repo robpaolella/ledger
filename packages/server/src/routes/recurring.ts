@@ -106,7 +106,7 @@ interface ValidatedItem {
 /**
  * Full-object validation (PUT sends every field, so create/update validate
  * identically — no partial update can desync freq_kind and its day/anchor fields).
- * `type` is DERIVED from the category (income→income; expense/savings→expense),
+ * `type` is DERIVED from the category (income→income; everything else→expense),
  * never trusted from a divergent body value; `amount` is a positive magnitude.
  */
 function validate(body: Record<string, unknown>): { error: string } | { value: ValidatedItem } {

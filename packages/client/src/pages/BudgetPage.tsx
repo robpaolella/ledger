@@ -42,15 +42,12 @@ interface Totals {
   actualIncome: number;
   budgetedExpenses: number;
   actualExpenses: number;
-  budgetedSavings: number;
-  actualSavings: number;
   leftToBudget: number;
 }
 
 interface BudgetSummary {
   income: IncomeRow[];
   expenseGroups: ExpenseGroup[];
-  savingsGroups: ExpenseGroup[];
   totals: Totals;
 }
 
@@ -69,7 +66,6 @@ interface AnnualGroup {
 interface AnnualSummary {
   income: AnnualRow[];
   expenseGroups: AnnualGroup[];
-  savingsGroups: AnnualGroup[];
 }
 
 function monthStr(d: Date): string {
@@ -179,7 +175,7 @@ export default function BudgetPage() {
     return <Spinner />;
   }
 
-  const { income, expenseGroups, savingsGroups, totals } = data;
+  const { income, expenseGroups, totals } = data;
 
   const isMonth = view === 'month';
   const now = new Date();
@@ -196,11 +192,10 @@ export default function BudgetPage() {
     navigate(`/budget/category?group=${encodeURIComponent(groupName)}&type=${encodeURIComponent(dbType(sectionKey))}`);
   const drillSub = (categoryId: number) => navigate(`/budget/category?categoryId=${categoryId}`);
 
-  // Three sections built from the summary (income is a single 'Income' group).
+  // Two sections built from the summary (income is a single 'Income' group).
   const sections = [
     { key: 'income', label: 'Income', groups: [{ groupName: 'Income', subs: income }], planned: totals.budgetedIncome, actual: totals.actualIncome },
     { key: 'expenses', label: 'Expenses', groups: expenseGroups, planned: totals.budgetedExpenses, actual: totals.actualExpenses },
-    { key: 'savings', label: 'Savings', groups: savingsGroups, planned: totals.budgetedSavings, actual: totals.actualSavings },
   ];
 
   // Year view helpers
@@ -217,7 +212,6 @@ export default function BudgetPage() {
   const annualSections = annualData ? [
     { key: 'income', label: 'Income', groups: [{ groupName: 'Income', subs: annualData.income }] },
     { key: 'expenses', label: 'Expenses', groups: annualData.expenseGroups },
-    { key: 'savings', label: 'Savings', groups: annualData.savingsGroups },
   ] : [];
 
   return (
@@ -359,7 +353,6 @@ export default function BudgetPage() {
             {([
               { label: 'Income', planned: totals.budgetedIncome, actual: totals.actualIncome, verb: 'earned' },
               { label: 'Expenses', planned: totals.budgetedExpenses, actual: totals.actualExpenses, verb: 'spent' },
-              { label: 'Savings', planned: totals.budgetedSavings, actual: totals.actualSavings, verb: 'saved' },
             ]).map((b, i) => {
               const pct = b.planned > 0 ? Math.min(100, (b.actual / b.planned) * 100) : 0;
               const rem = b.planned - b.actual;

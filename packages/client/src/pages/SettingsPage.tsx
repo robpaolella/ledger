@@ -547,7 +547,7 @@ function AmazonCard() {
 }
 
 // --- Category Form ---
-const SECTION_LABEL: Record<string, string> = { income: 'Income', expense: 'Expenses', savings: 'Savings', transfer: 'Transfers' };
+const SECTION_LABEL: Record<string, string> = { income: 'Income', expense: 'Expenses', transfer: 'Transfers' };
 
 function CategoryForm({
   category,
@@ -647,7 +647,7 @@ function CategoryForm({
           <div className="text-[13px] font-bold text-content mb-1.5">Group</div>
           <select value={groupId ?? ''} onChange={(e) => setGroupId(Number(e.target.value))}
             className="w-full h-11 px-3.5 bg-surface-2 border border-line-strong rounded-[11px] text-content text-[14px] outline-none cursor-pointer">
-            {['income', 'expense', 'savings', 'transfer'].map((t) => {
+            {['income', 'expense', 'transfer'].map((t) => {
               const gs = groups.filter((g) => g.type === t);
               if (gs.length === 0) return null;
               return (
@@ -2109,7 +2109,7 @@ export default function SettingsPage() {
   }
   for (const arr of catsByGroup.values()) arr.sort((a, b) => a.sort_order - b.sort_order);
   // Groups per section, ordered.
-  const groupsByType: Record<string, Group[]> = { income: [], expense: [], savings: [], transfer: [] };
+  const groupsByType: Record<string, Group[]> = { income: [], expense: [], transfer: [] };
   for (const g of [...groups].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))) {
     if (groupsByType[g.type]) groupsByType[g.type].push(g);
   }
@@ -2357,7 +2357,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {(['income', 'expense', 'savings', 'transfer'] as const).map((t) => (
+              {(['income', 'expense', 'transfer'] as const).map((t) => (
                 <div key={t}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[18px] font-extrabold tracking-tight">{SECTION_LABEL[t]}</span>

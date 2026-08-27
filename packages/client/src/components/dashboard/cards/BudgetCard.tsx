@@ -6,7 +6,6 @@ import type { DashboardCardProps } from '../cardRegistry';
 interface Totals {
   budgetedIncome: number; actualIncome: number;
   budgetedExpenses: number; actualExpenses: number;
-  budgetedSavings: number; actualSavings: number;
 }
 
 // Design shows "$0 earned" — render zero, don't use fmtWhole's "—".
@@ -60,7 +59,6 @@ export default function BudgetCard({ dragHandleProps }: DashboardCardProps) {
         <>
           <BudgetBlock label="Income" verb="earned" budgeted={totals.budgetedIncome} actual={totals.actualIncome} positive />
           <BudgetBlock label="Expenses" verb="spent" budgeted={totals.budgetedExpenses} actual={totals.actualExpenses} />
-          <BudgetBlock label="Savings" verb="saved" budgeted={totals.budgetedSavings} actual={totals.actualSavings} positive />
         </>
       )}
     </DashboardCard>

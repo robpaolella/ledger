@@ -482,7 +482,7 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
 
   const catOptions = useMemo(() => {
-    const wanted = type === 'income' ? ['income'] : ['expense', 'savings'];
+    const wanted = type === 'income' ? ['income'] : ['expense'];
     const filtered = cats.filter((c) => wanted.includes(c.type));
     const groups = new Map<string, Cat[]>();
     for (const c of filtered) { if (!groups.has(c.group_name)) groups.set(c.group_name, []); groups.get(c.group_name)!.push(c); }

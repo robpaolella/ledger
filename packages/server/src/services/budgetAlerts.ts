@@ -31,7 +31,7 @@ export function checkBudgetExceeded(
     : '';
   const candidates = sqlite.prepare(`
     SELECT id, display_name FROM categories
-    WHERE type IN ('expense', 'savings') AND COALESCE(exclude_from_budget, 0) = 0 ${catFilter}
+    WHERE type = 'expense' AND COALESCE(exclude_from_budget, 0) = 0 ${catFilter}
   `).all(...(categoryIds ?? [])) as { id: number; display_name: string }[];
   if (candidates.length === 0) return;
 
@@ -64,7 +64,7 @@ export function checkBudgetExceeded(
     const stored = budgetMap.get(c.id);
     const budgeted = effectiveBudgetedAmount(stored?.amount ?? 0, !!stored?.override, floors.get(c.id)?.amount);
     if (budgeted <= 0) continue;
-    // Expense + savings actuals are positive outflow magnitudes (refund rows net out).
+    // Expense actuals are positive outflow magnitudes (refund rows net out).
     const actual = actualMap.get(c.id) ?? 0;
     const overage = actual - budgeted;
     if (overage <= EPSILON) continue;

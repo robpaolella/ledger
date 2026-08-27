@@ -226,7 +226,7 @@ router.get('/', (req: Request, res: Response) => {
       }
       conditions.push(sql`(${sql.join(orParts, sql` OR `)})`);
     }
-    if (type === 'income' || type === 'expense' || type === 'savings') {
+    if (type === 'income' || type === 'expense') {
       conditions.push(
         or(
           eq(categories.type, type),

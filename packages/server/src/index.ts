@@ -17,11 +17,11 @@ import { migrateTransactionSplits } from './db/migrate-transaction-splits.js';
 import { migrateBudgetTemplatesRecurring } from './db/migrate-budget-templates-recurring.js';
 import { migrateDismissedTransfers } from './db/migrate-dismissed-transfers.js';
 import { migratePayCycles } from './db/migrate-pay-cycles.js';
-import { migrateSavingsCategories } from './db/migrate-savings-categories.js';
 import { migrateMerchants } from './db/migrate-merchants.js';
 import { migrateMerchantAliases } from './db/migrate-merchant-aliases.js';
 import { migrateMerchantRulePrefs } from './db/migrate-merchant-rule-prefs.js';
 import { migrateTransferLinks } from './db/migrate-transfer-links.js';
+import { migrateSavingsRetire } from './db/migrate-savings-retire.js';
 import { linkTransfers } from './services/transferLinker.js';
 import { migrateTransferCategoryDedupe } from './db/migrate-transfer-category-dedupe.js';
 import { migrateAccountInstitution } from './db/migrate-account-institution.js';
@@ -93,7 +93,6 @@ migrateTransactionSplits(sqlite);
 migrateBudgetTemplatesRecurring(sqlite);
 migrateDismissedTransfers(sqlite);
 migratePayCycles(sqlite);
-migrateSavingsCategories(sqlite);
 migrateMerchants(sqlite); // after splits — splits rebuilds the transactions table
 migrateSplitMerchant(sqlite); // after splits (table) + merchants (FK target)
 migrateAccountInstitution(sqlite);
@@ -129,6 +128,7 @@ try {
 }
 migrateTransferCategoryDedupe(sqlite); // last — folds a duplicate Transfers > Transfer onto the canonical row
 enforceTransferBudgetExclusion(sqlite); // invariant: transfers are never budgeted
+migrateSavingsRetire(sqlite);         // fold the retired Savings section into Transfers
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));

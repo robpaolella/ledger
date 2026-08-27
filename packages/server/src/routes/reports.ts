@@ -66,7 +66,6 @@ router.get('/annual', (req: Request, res: Response) => {
     // Income is stored as negative, so we take abs
     const incomeByCategory: Record<string, number[]> = {};
     const expensesByGroup: Record<string, Record<string, number[]>> = {};
-    const savingsByGroup: Record<string, Record<string, number[]>> = {};
 
     for (const row of rows) {
       const monthIdx = row.month - 1;
@@ -75,16 +74,11 @@ router.get('/annual', (req: Request, res: Response) => {
           incomeByCategory[row.sub_name] = new Array(12).fill(0);
         }
         incomeByCategory[row.sub_name][monthIdx] += Math.abs(row.total);
-      } else if (row.type === 'savings') {
-        // Savings contributions are outflows (positive), like expenses, but roll
-        // up in their own section so Income − Expenses − Savings reconciles.
-        if (!savingsByGroup[row.group_name]) {
-          savingsByGroup[row.group_name] = {};
-        }
-        if (!savingsByGroup[row.group_name][row.sub_name]) {
-          savingsByGroup[row.group_name][row.sub_name] = new Array(12).fill(0);
-        }
-        savingsByGroup[row.group_name][row.sub_name][monthIdx] += row.total;
+      } else if (row.type === 'transfer') {
+        // Money between the user's own accounts is not spending. Unlike /period
+        // this endpoint has no exclude_from_budget filter, so without this branch
+        // every transfer would land in expensesByGroup below.
+        continue;
       } else {
         if (!expensesByGroup[row.group_name]) {
           expensesByGroup[row.group_name] = {};
@@ -110,23 +104,14 @@ router.get('/annual', (req: Request, res: Response) => {
       }
     }
 
-    const monthlySavingsTotals = new Array(12).fill(0);
-    for (const group of Object.values(savingsByGroup)) {
-      for (const vals of Object.values(group)) {
-        for (let i = 0; i < 12; i++) monthlySavingsTotals[i] += vals[i];
-      }
-    }
-
     const monthlyNetTotals = monthlyIncomeTotals.map((inc, i) => inc - monthlyExpenseTotals[i]);
 
     res.json({
       data: {
         incomeByCategory,
         expensesByGroup,
-        savingsByGroup,
         monthlyIncomeTotals,
         monthlyExpenseTotals,
-        monthlySavingsTotals,
         monthlyNetTotals,
       },
     });
@@ -157,7 +142,7 @@ router.get('/period', (req: Request, res: Response) => {
     const groupNames = req.query.groupNames ? csvStrs(req.query.groupNames) : [];
     const amountOp = req.query.amountOp as string | undefined;
     const txnType = req.query.txnType as string | undefined; // debits | credits (by sign)
-    const catType = req.query.catType as string | undefined; // income | expense | savings (by category type)
+    const catType = req.query.catType as string | undefined; // income | expense (by category type)
 
     const conditions: string[] = ['l.date >= ?', 'l.date <= ?'];
     const params: (string | number)[] = [start, end];
@@ -186,7 +171,7 @@ router.get('/period', (req: Request, res: Response) => {
     // Sign convention: positive stored = money out (debit), negative = money in (credit).
     if (txnType === 'debits') conditions.push('l.amount > 0');
     else if (txnType === 'credits') conditions.push('l.amount < 0');
-    if (catType === 'income' || catType === 'expense' || catType === 'savings') { conditions.push('c.type = ?'); params.push(catType); }
+    if (catType === 'income' || catType === 'expense') { conditions.push('c.type = ?'); params.push(catType); }
     // Categories flagged "hidden from budget" are excluded from every Reports
     // rollup (KPIs, flow, breakdown, timeline). A group whose categories are all
     // hidden then has no rows and won't render. Only the Transactions page shows
@@ -267,7 +252,7 @@ router.get('/period', (req: Request, res: Response) => {
       a.buckets[bi] += r.total;
     }
     // Sign per type: income stored negative → positive magnitude (clamp per bucket);
-    // expenses/savings keep raw net (outflow positive).
+    // expenses keep raw net (outflow positive).
     const categoriesOut = Array.from(aggMap.values()).map((a) => {
       const isIncome = a.type === 'income';
       const b = a.buckets.map((v) => (isIncome ? (v < 0 ? -v : 0) : v));
@@ -278,9 +263,11 @@ router.get('/period', (req: Request, res: Response) => {
     const sumType = (t: string) => categoriesOut.filter((c) => c.type === t).reduce((x, c) => x + c.total, 0);
     const income = sumType('income');
     const expenses = sumType('expense');
-    const savings = sumType('savings');
     const net = income - expenses;
-    const savingsRate = income > 0 ? savings / income : 0;
+    // What you kept: income you did not spend. Money moved into a savings account
+    // is a transfer and is excluded from both terms, so it simply stays in `net`.
+    // Goes negative when you outspend your income — that is worth showing.
+    const savingsRate = income > 0 ? net / income : 0;
     const incomeSourceCount = categoriesOut.filter((c) => c.type === 'income' && c.total > 0).length;
     // Distinct calendar months the range touches (for avg/mo figures).
     const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
@@ -290,7 +277,7 @@ router.get('/period', (req: Request, res: Response) => {
         range: { start, end, months },
         buckets,
         categories: categoriesOut,
-        kpis: { income, expenses, savings, net, savingsRate, incomeSourceCount },
+        kpis: { income, expenses, net, savingsRate, incomeSourceCount },
       },
     });
   } catch (err) {

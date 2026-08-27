@@ -231,7 +231,7 @@ function TransactionForm({
   const categoryRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  // Income/expense/savings are all selectable; sign is derived from the chosen
+  // Income and expense are both selectable; sign is derived from the chosen
   // category's type (no manual Type toggle). Transfers are auto-labeled by sync,
   // not hand-picked, so they're excluded from the manual picker.
   const filteredCategories = useMemo(() => {
@@ -249,7 +249,7 @@ function TransactionForm({
   })();
 
   // Split legs inherit the parent's single sign, so only offer categories in the
-  // SAME direction (income → income; expense/savings → expense/savings).
+  // SAME direction (income → income; expense → expense).
   // Offering a cross-type category would persist a leg whose stored sign
   // contradicts its category (e.g. an income leg stored positive). The opposite
   // direction is reached only through SplitEditor's dedicated reimbursement row.
@@ -325,8 +325,8 @@ function TransactionForm({
       return;
     }
 
-    // Sign derives from the category type (income stored negative, expense/
-    // savings positive), preserving the user's entered sign so refunds/reversals
+    // Sign derives from the category type (income stored negative, expenses
+    // positive), preserving the user's entered sign so refunds/reversals
     // survive. In split mode there's no single category → use derivedType.
     const catType = splitMode ? derivedType : (categories.find((c) => c.id === categoryId)?.type ?? 'expense');
     const finalAmount = catType === 'income' ? -parsedAmount : parsedAmount;
@@ -1297,7 +1297,7 @@ export default function TransactionsPage() {
   );
   // The detail split modal applies one sign to every leg, so its category picker
   // must offer only same-direction categories (income → income;
-  // expense/savings → expense/savings) — otherwise a leg is stored with a sign
+  // expense → expense) — otherwise a leg is stored with a sign
   // that contradicts its category. Direction comes from the transaction's
   // category type (not its money-sign, so refunds/reversals stay in-family).
   const detailBaseType: 'income' | 'expense' =

@@ -2,7 +2,7 @@
 
 export type AccountType = 'checking' | 'savings' | 'credit' | 'investment' | 'retirement' | 'venmo' | 'cash';
 export type AccountClassification = 'liquid' | 'investment' | 'liability';
-export type CategoryType = 'income' | 'expense' | 'savings' | 'transfer';
+export type CategoryType = 'income' | 'expense' | 'transfer';
 
 // === Database Row Interfaces ===
 
