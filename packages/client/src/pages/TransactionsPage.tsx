@@ -733,6 +733,10 @@ export default function TransactionsPage() {
   // Bulk edit mode
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // Anchor for shift-click range selection: the last row clicked WITHOUT shift,
+  // or the far end of the last range. Ranges extend from here, so an earlier
+  // selection made before a gap is never swallowed by the range.
+  const selectionAnchor = useRef<number | null>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkMerchant, setBulkMerchant] = useState('');
   const [bulkDate, setBulkDate] = useState('');
@@ -1230,10 +1234,16 @@ export default function TransactionsPage() {
   const exitBulkMode = () => {
     setBulkMode(false);
     setSelectedIds(new Set());
+    selectionAnchor.current = null;
     setBulkEditOpen(false);
     setBulkConfirmDelete(false);
   };
   const openBulkEdit = () => { if (selectedIds.size > 0) setBulkEditOpen(true); };
+
+  // Net of the selected rows, in the list's sign convention (positive = money
+  // out). Only loaded transactions count — a stale id from a since-changed filter
+  // contributes nothing rather than a wrong figure.
+  const selectedTotal = transactions.reduce((sum, t) => (selectedIds.has(t.id) ? sum + t.amount : sum), 0);
 
   // Apply all set fields (merchant / category / date) in a single bulk update.
   const applyBulkEdit = async () => {
@@ -1337,6 +1347,36 @@ export default function TransactionsPage() {
     else dateGroups.push({ date: t.date, rows, net: dayNet(t) });
   }
   const displayRows = dateGroups.flatMap((g) => g.rows); // flat, split-expanded (mobile)
+  // Visual order, one entry per transaction: a split parent renders one row per
+  // leg but is a single selectable item, so ranges must not count it twice.
+  const orderedTxnIds: number[] = [];
+  {
+    const seen = new Set<number>();
+    for (const r of displayRows) if (!seen.has(r.t.id)) { seen.add(r.t.id); orderedTxnIds.push(r.t.id); }
+  }
+
+  /**
+   * Row click in bulk mode. Shift extends from the anchor to the clicked row and
+   * ADDS that span — anything selected before the anchor stays put, so selecting
+   * 1–2, then 7, then shift-clicking 10 gives 1, 2, 7, 8, 9, 10.
+   * Falls back to a plain toggle when there is no anchor, or when the anchor has
+   * scrolled out of the current result set (filter or date change).
+   */
+  const selectRow = (id: number, shiftKey: boolean) => {
+    const anchor = selectionAnchor.current;
+    const from = anchor == null ? -1 : orderedTxnIds.indexOf(anchor);
+    const to = orderedTxnIds.indexOf(id);
+    if (!shiftKey || from < 0 || to < 0 || from === to) {
+      toggleSelect(id);
+      selectionAnchor.current = id;
+      return;
+    }
+    const [lo, hi] = from < to ? [from, to] : [to, from];
+    const span = orderedTxnIds.slice(lo, hi + 1);
+    setSelectedIds((prev) => new Set([...prev, ...span]));
+    // The far end becomes the new anchor so a further shift-click keeps extending.
+    selectionAnchor.current = id;
+  };
 
   // Fork glyph: one trunk in from the left splitting into two arrowed branches
   // (visually distinct from the toolbar Sort icon's opposed vertical arrows).
@@ -1358,8 +1398,8 @@ export default function TransactionsPage() {
       const { text: sAmt, className: sClass } = fmtTransaction(split.amount, split.type);
       return (
         <div key={`${t.id}-split-${split.id}`}
-          onClick={() => { if (bulkMode) toggleSelect(t.id); else if (canEdit) openDetail(t, split); }}
-          className="flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40"
+          onClick={(e) => { if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t, split); }}
+          className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 ${bulkMode ? 'select-none' : ''}`}
           style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined, boxShadow: 'inset 3px 0 0 color-mix(in srgb, var(--primary) 30%, transparent)' }}>
           {bulkMode && (
             <span className="w-5 h-5 shrink-0 rounded-[6px] flex items-center justify-center border-[1.5px]" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
@@ -1395,8 +1435,8 @@ export default function TransactionsPage() {
     const catMatches = categories.filter((c) => `${c.sub_name} ${c.group_name}`.toLowerCase().includes(cellSearch.toLowerCase())).slice(0, 60);
     return (
       <div key={t.id}
-        onClick={() => { if (bulkMode) toggleSelect(t.id); else if (canEdit) openDetail(t); }}
-        className="flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40"
+        onClick={(e) => { if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t); }}
+        className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 ${bulkMode ? 'select-none' : ''}`}
         style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined }}>
         {bulkMode && (
           <span className="w-5 h-5 shrink-0 rounded-[6px] flex items-center justify-center border-[1.5px]" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
@@ -1692,6 +1732,16 @@ export default function TransactionsPage() {
                 {selectedIds.size > 0 && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14"/></svg>}
               </button>
               <span className="text-base font-bold">{selectedIds.size} selected</span>
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-content-3">·</span>
+                  {/* Same convention as the date-group net: money in reads as +$X. */}
+                  <span className="font-mono text-[15px] font-bold tabular-nums"
+                    style={{ color: selectedTotal < 0 ? 'var(--positive)' : 'var(--text)' }}>
+                    {selectedTotal < 0 ? `+${fmt(Math.abs(selectedTotal))}` : fmt(selectedTotal)}
+                  </span>
+                </>
+              )}
               <span className="text-[13px] text-content-3">(ESC)</span>
             </div>
             <div className="flex items-center gap-2.5">
