@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { normalizeMerchantName } from './merchantNormalize.js';
+import { detectTransferSignal, type AccountTokens } from './transferSignal.js';
 
 /**
  * Unified auto-categorization resolver. Replaces the two divergent, buggy copies
@@ -7,11 +8,19 @@ import { normalizeMerchantName } from './merchantNormalize.js';
  *
  * Precedence (highest → lowest), with a confidence in [0,1]:
  *   1. User category_rules (merchant | contains | regex)          conf 1.0
- *   2. Per-merchant majority vote from history (dominance-scaled) conf = share*
- *   3. Text-history majority vote (legacy / merchant-less rows)   conf = share*0.9
- *   4. Bundled heuristic keyword rules, SKIPPING any (group,sub)
+ *   2. Strong transfer / card-payment signal (transferSignal.ts)  conf 0.9
+ *   3. Per-merchant majority vote from history (dominance-scaled) conf = share*
+ *   4. Text-history majority vote (legacy / merchant-less rows)   conf = share*0.9
+ *   5. Bundled heuristic keyword rules, SKIPPING any (group,sub)
  *      that doesn't resolve to a real category in this DB         conf 0.6
- *   5. Nothing                                                    conf 0.0
+ *   6. Weak transfer / card-payment signal                        conf 0.6
+ *   7. Nothing                                                    conf 0.0
+ *
+ * The transfer signal sits on BOTH sides of history on purpose. Structural bank
+ * phrasing ("online transfer to CHK ...3732") is better evidence than anything
+ * history holds, and at 0.9 it clears REVIEW_THRESHOLD so a correct answer stops
+ * queueing for confirmation. A bare "payment" is not, so it waits until every
+ * learned source has passed. See services/transferSignal.ts.
  *
  * (*) single-sample history is capped below the review threshold so a one-off
  * doesn't masquerade as certain. `buildCategorizer` loads everything ONCE; the
@@ -21,7 +30,13 @@ import { normalizeMerchantName } from './merchantNormalize.js';
 export interface CategorizeInput {
   description: string;
   payee?: string | null;
+  /** Ledger sign: positive = money out. Used by the transfer signal for direction. */
   amount: number;
+  /** Raw statement text where the source kept it — carries most of the transfer signal. */
+  bankDescription?: string | null;
+  /** Destination account context, when the caller knows it. */
+  accountClassification?: string | null;
+  accountType?: string | null;
 }
 
 export interface CategorizeResult {
@@ -29,7 +44,7 @@ export interface CategorizeResult {
   groupName: string | null;
   subName: string | null;
   confidence: number;
-  source: 'rule' | 'merchant-history' | 'text-history' | 'heuristic' | 'llm' | 'none';
+  source: 'rule' | 'transfer-signal' | 'merchant-history' | 'text-history' | 'heuristic' | 'llm' | 'none';
 }
 
 // Heuristic keyword rules, keyed to (group, sub). Any pair that doesn't resolve
@@ -62,6 +77,26 @@ const HEURISTIC_RULES: HeuristicRule[] = [
 const REVIEW_THRESHOLD = 0.8;
 export { REVIEW_THRESHOLD };
 
+/** Above REVIEW_THRESHOLD: a structural transfer signal is acted on unattended. */
+const STRONG_TRANSFER_CONFIDENCE = 0.9;
+/** Below it, and equal to the heuristic tier: a weak signal always gets reviewed. */
+const WEAK_TRANSFER_CONFIDENCE = 0.6;
+
+/**
+ * When merchant history is this consistent, it outranks a strong TRANSFER
+ * signal. Bank phrasing can only say that money moved in a transfer's shape —
+ * it cannot say whose account it landed in. Rent wired to a landlord every
+ * month reads identically to a move between the user's own accounts, and the
+ * only thing that knows the difference is the user having filed that merchant
+ * the same way before.
+ *
+ * Card payments are exempt: money arriving on a credit card under a payment
+ * word has no competing reading, and letting history overrule it is precisely
+ * how a card payment once got filed as Dining/Eating Out.
+ */
+const HISTORY_OVERRIDE_MIN_SAMPLES = 2;
+const HISTORY_OVERRIDE_MIN_SHARE = 0.8;
+
 interface CatMeta { groupName: string; subName: string; }
 interface LoadedRule {
   matchType: 'merchant' | 'contains' | 'regex';
@@ -84,6 +119,31 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
   for (const c of cats) {
     catById.set(c.id, { groupName: c.group_name, subName: c.sub_name });
     catLookup.set(`${c.group_name}:${c.sub_name}`, c.id);
+  }
+
+  // --- transfer signal targets: resolved by (type, sub_name) so a group rename
+  //     doesn't silently disable the stage. Missing → the stage is skipped
+  //     entirely, the same skip-unresolved discipline the heuristics use. ---
+  const transferCats = sqlite.prepare(
+    "SELECT id, sub_name FROM categories WHERE type = 'transfer'"
+  ).all() as { id: number; sub_name: string }[];
+  const transferCatId = transferCats.find((c) => c.sub_name === 'Transfer')?.id ?? null;
+  // A ledger without a dedicated card-payment leaf files them under Transfer.
+  const cardPaymentCatId = transferCats.find((c) => c.sub_name === 'Credit Card Payment')?.id ?? transferCatId;
+
+  // --- the user's own account numbers, for corroborating a weak signal ---
+  const acctRows = sqlite.prepare(
+    'SELECT name, last_four, classification, type FROM accounts WHERE is_active = 1'
+  ).all() as { name: string | null; last_four: string | null; classification: string | null; type: string | null }[];
+  const accountTokens: AccountTokens = { all: [], cards: [], names: [] };
+  for (const a of acctRows) {
+    const name = (a.name ?? '').trim().toLowerCase();
+    if (name && !accountTokens.names.includes(name)) accountTokens.names.push(name);
+    // Four digits exactly: anything else (a plan number like '3184C') can't be
+    // matched safely against free-form statement text.
+    if (!a.last_four || !/^\d{4}$/.test(a.last_four)) continue;
+    accountTokens.all.push(a.last_four);
+    if (a.classification === 'liability' && a.type === 'credit') accountTokens.cards.push(a.last_four);
   }
 
   // --- user rules (highest priority first) ---
@@ -170,17 +230,35 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
         if (hit) return result(r.categoryId, 1.0, 'rule');
       }
 
-      // 2. Per-merchant majority vote — conf = dominance (single-sample capped < threshold)
-      if (merchantId != null) {
-        const dist = merchantHist.get(merchantId);
-        const dom = dist && dominant(dist);
-        if (dom) {
-          const conf = dom.total >= 2 ? dom.share : Math.min(dom.share, 0.75);
-          return result(dom.categoryId, conf, 'merchant-history');
-        }
+      const signal = transferCatId == null ? null : detectTransferSignal({
+        description: primary,
+        bankDescription: input.bankDescription ?? (input.description !== primary ? input.description : null),
+        amount: input.amount,
+        accountClassification: input.accountClassification,
+        accountType: input.accountType,
+      }, accountTokens);
+      const signalCatId = signal?.kind === 'card-payment' ? cardPaymentCatId : transferCatId;
+
+      const merchantDist = merchantId != null ? merchantHist.get(merchantId) : undefined;
+      const merchantDom = merchantDist ? dominant(merchantDist) : null;
+
+      // 2. Strong transfer / card-payment signal — conf 0.9, above the review bar
+      if (signal?.strength === 'strong' && signalCatId != null) {
+        const settledElsewhere = signal.kind === 'transfer'
+          && merchantDom != null
+          && merchantDom.categoryId !== signalCatId
+          && merchantDom.total >= HISTORY_OVERRIDE_MIN_SAMPLES
+          && merchantDom.share >= HISTORY_OVERRIDE_MIN_SHARE;
+        if (!settledElsewhere) return result(signalCatId, STRONG_TRANSFER_CONFIDENCE, 'transfer-signal');
       }
 
-      // 3. Text-history majority vote (legacy / merchant-less) — conf = dominance * 0.9
+      // 3. Per-merchant majority vote — conf = dominance (single-sample capped < threshold)
+      if (merchantDom) {
+        const conf = merchantDom.total >= 2 ? merchantDom.share : Math.min(merchantDom.share, 0.75);
+        return result(merchantDom.categoryId, conf, 'merchant-history');
+      }
+
+      // 4. Text-history majority vote (legacy / merchant-less) — conf = dominance * 0.9
       const textDist = textHist.get(descLower) || (primaryLower !== descLower ? textHist.get(primaryLower) : undefined);
       const textDom = textDist && dominant(textDist);
       if (textDom) {
@@ -188,7 +266,7 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
         return result(textDom.categoryId, base * 0.9, 'text-history');
       }
 
-      // 4. Heuristic keyword rules (skip unresolved (group,sub)) — conf 0.6
+      // 5. Heuristic keyword rules (skip unresolved (group,sub)) — conf 0.6
       for (const h of HEURISTIC_RULES) {
         if (h.pattern.test(primary) || h.pattern.test(input.description)) {
           const catId = catLookup.get(`${h.groupName}:${h.subName}`);
@@ -197,7 +275,12 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
         }
       }
 
-      // 5. Nothing
+      // 6. Weak transfer / card-payment signal — conf 0.6, always reviewed
+      if (signal?.strength === 'weak' && signalCatId != null) {
+        return result(signalCatId, WEAK_TRANSFER_CONFIDENCE, 'transfer-signal');
+      }
+
+      // 7. Nothing
       return { categoryId: null, groupName: null, subName: null, confidence: 0, source: 'none' };
     },
   };

@@ -230,7 +230,13 @@ export async function runSyncPipeline(opts: {
           const catItems = newTxns.map((t) => ({
             description: t.payee || t.description,
             payee: t.payee || undefined,
+            // The raw statement line carries the transfer signal — account
+            // numbers, "Online Transfer to CHK ...3732" — that the cleaned
+            // payee has already thrown away.
+            bankDescription: t.description,
             amount: convertToLedgerSign(parseFloat(t.amount), classification),
+            accountClassification: classification,
+            accountType: link.account_type,
           }));
           const catResponse = catItems.map((it) => categorizer.categorize(it));
 

@@ -136,17 +136,35 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
 // POST /api/import/categorize
 router.post('/categorize', requirePermission('import.csv'), async (req: Request, res: Response) => {
   try {
-    const { items } = req.body as { items: { description: string; amount: number; payee?: string }[] };
+    const { items, accountId } = req.body as {
+      items: { description: string; amount: number; payee?: string }[];
+      accountId?: number;
+    };
     if (!items || !Array.isArray(items)) {
       res.status(400).json({ error: 'items array is required' });
       return;
     }
 
-    // Unified resolver (shared with bank sync): user rules → per-merchant majority
-    // vote → text-history → skip-unresolved heuristic → none.
+    // Account context is optional — the wizard sends it once the target account
+    // is chosen. Without it the transfer signal still reads the text; it just
+    // can't use direction, so a card payment stays a weak guess.
+    const account = accountId
+      ? sqlite.prepare('SELECT classification, type FROM accounts WHERE id = ?').get(accountId) as
+        { classification: string | null; type: string | null } | undefined
+      : undefined;
+
+    // Unified resolver (shared with bank sync): user rules, strong transfer
+    // signal, per-merchant majority vote, text-history, skip-unresolved
+    // heuristic, weak transfer signal, none.
     const categorizer = buildCategorizer(sqlite);
     const priors = items.map((item) =>
-      categorizer.categorize({ description: item.description, payee: item.payee, amount: item.amount }));
+      categorizer.categorize({
+        description: item.description,
+        payee: item.payee,
+        amount: item.amount,
+        accountClassification: account?.classification,
+        accountType: account?.type,
+      }));
 
     // LLM second opinion on everything below rule-certainty (same stage as bank
     // sync; no account context in the CSV wizard). Failure → priors stand.

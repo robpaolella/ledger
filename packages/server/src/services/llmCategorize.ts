@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { CategorizeResult } from './categorize.js';
+import { REVIEW_THRESHOLD, type CategorizeResult } from './categorize.js';
 import { getConfig } from './appConfig.js';
 
 /**
@@ -259,6 +259,14 @@ export function parseVerdicts(content: string, validIds: Set<number>): Map<numbe
 export function mergeLlmResult(prior: CategorizeResult, llm: LlmVerdict | undefined): CategorizeResult {
   if (!llm || llm.categoryId == null) return prior;             // abstain/missing → prior
   const trusted = Math.min(llm.confidence, LLM_TRUST_CAP);
+  // A strong transfer signal is structural evidence read off the statement line
+  // itself, not a guess to be outbid. The comparison below is against the RAW
+  // model score, and a small local model reports ~0.95 on everything — so
+  // without this it would reliably overturn the signal and store the result at
+  // 0.75, back in the review queue. This is exactly how "RTP Incoming Payment"
+  // became Take Home Pay and a card payment became Tax Refunds.
+  const structural = prior.source === 'transfer-signal' && prior.confidence >= REVIEW_THRESHOLD;
+  if (structural && llm.categoryId !== prior.categoryId) return prior;
   if (llm.categoryId === prior.categoryId) {
     // Independent agreement is evidence — raise confidence, keep provenance.
     return { ...prior, confidence: Math.max(prior.confidence, trusted) };

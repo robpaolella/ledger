@@ -81,6 +81,11 @@ async function main() {
   assert.equal(m.categoryId, 11, 'lower raw score loses to the prior');
   m = mergeLlmResult(prior(11, 0.95, 'merchant-history'), { categoryId: 11, confidence: 0.9 });
   assert.equal(m.confidence, 0.95, 'agreement never LOWERS a strong prior');
+  m = mergeLlmResult(prior(11, 0.9, 'transfer-signal'), { categoryId: 10, confidence: 0.99 });
+  assert.equal(m.categoryId, 11, 'a strong transfer signal is not up for revision, at any raw score');
+  assert.equal(m.source, 'transfer-signal', '…and keeps its provenance');
+  m = mergeLlmResult(prior(11, 0.6, 'transfer-signal'), { categoryId: 10, confidence: 0.9 });
+  assert.equal(m.categoryId, 10, 'a WEAK transfer signal is still revisable');
   m = mergeLlmResult(prior(null, 0, 'none'), { categoryId: 12, confidence: 0.7 });
   assert.equal(m.categoryId, 12, 'fills uncategorized');
   assert.ok(m.confidence < 0.8, 'uncategorized fill lands in review');

@@ -275,7 +275,20 @@ export default function ImportPage() {
     try {
       const res = await apiFetch<{ data: { description: string; suggestedCategoryId: number | null; confidence: number; source?: string }[] }>(
         '/import/categorize',
-        { method: 'POST', body: JSON.stringify({ items: items.map((it) => ({ description: it.description, amount: it.amount, venmoNote: it.venmoNote })) }) },
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            accountId: csvAccountId,
+            // Ledger sign (positive = money out), matching what the row will be
+            // imported as. The resolver reads direction to tell a card payment
+            // from a card refund, so an unflipped amount would mislead it.
+            items: items.map((it) => ({
+              description: it.description,
+              amount: sign === 'bank' ? -it.amount : it.amount,
+              venmoNote: it.venmoNote,
+            })),
+          }),
+        },
       );
       const rows: ImpCsvRow[] = res.data.map((cat, i) => {
         const src = items[i];
