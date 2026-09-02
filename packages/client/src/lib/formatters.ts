@@ -1,3 +1,8 @@
+/** Today's date as YYYY-MM-DD in the browser's local timezone (not UTC). */
+export function todayYmd(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /**
  * Format a number as full currency: $1,234.56
  * Returns "—" for zero values.

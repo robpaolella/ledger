@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { fmt, fmtTransaction } from '../lib/formatters';
+import { fmt, fmtTransaction, todayYmd } from '../lib/formatters';
 import { getCategoryColorHex, getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -192,7 +192,7 @@ function TransactionForm({
   onClose: () => void;
   duplicateMatch?: DuplicateMatch | null;
 }) {
-  const [date, setDate] = useState(transaction?.date ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(transaction?.date ?? todayYmd());
   const [accountId, setAccountId] = useState<number>(transaction?.account.id ?? (accounts[0]?.id ?? 0));
   const [merchant, setMerchant] = useState(transaction ? vendorLabel(transaction) : '');
   const [description, setDescription] = useState(transaction?.description ?? '');
@@ -593,6 +593,12 @@ export default function TransactionsPage() {
 
   // Filters
   const [search, setSearch] = useState('');
+  // The list fetches on the debounced value so typing doesn't fire a request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
   const [filterAccount, setFilterAccount] = useState<string[]>([]);
   const [filterType, setFilterType] = useState('All');
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
@@ -660,7 +666,7 @@ export default function TransactionsPage() {
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth();
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const fmt = (d: Date) => todayYmd(d);
     const monthStart = (yr: number, mo: number) => `${yr}-${String(mo + 1).padStart(2, '0')}-01`;
     const monthEnd = (yr: number, mo: number) => fmt(new Date(yr, mo + 1, 0));
     const q = Math.floor(m / 3);
@@ -715,6 +721,16 @@ export default function TransactionsPage() {
       const id = parseInt(rev, 10);
       setSearchParams({}, { replace: true });
       apiFetch<{ data: Transaction }>(`/transactions/${id}`).then((r) => openDetail(r.data)).catch(() => {});
+      return;
+    }
+    // Import lands here with the range it just pulled (?startDate&endDate).
+    const sd = searchParams.get('startDate');
+    const ed = searchParams.get('endDate');
+    if (sd || ed) {
+      setDatePreset('custom');
+      setCustomStart(sd ?? '');
+      setCustomEnd(ed ?? '');
+      setSearchParams({}, { replace: true });
     }
     // openDetail is intentionally omitted (stable enough; guarded one-shot via param clear)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -740,7 +756,11 @@ export default function TransactionsPage() {
   const [bulkCategoryId, setBulkCategoryId] = useState<number | ''>('');
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false);
 
+  // Monotonic request counter: a slow response for an older filter set must not
+  // overwrite the list rendered for the current one.
+  const loadSeq = useRef(0);
   const loadTransactions = useCallback(async () => {
+    const seq = ++loadSeq.current;
     const params = new URLSearchParams();
     const { startDate, endDate } = getDateRange();
     if (startDate) params.set('startDate', startDate);
@@ -749,7 +769,7 @@ export default function TransactionsPage() {
     // growing `limit` extends the list and edits/deletes preserve the window.
     params.set('limit', limit.toString());
     params.set('offset', '0');
-    if (search) params.set('search', search);
+    if (debouncedSearch) params.set('search', debouncedSearch);
     if (filterAccount.length) params.set('accountIds', filterAccount.join(','));
     if (filterType !== 'All') params.set('type', filterType.toLowerCase());
     if (filterCategory.length > 0) {
@@ -768,10 +788,16 @@ export default function TransactionsPage() {
     params.set('sortBy', sortBy);
     params.set('sortOrder', sortOrder);
 
-    const res = await apiFetch<{ data: Transaction[]; total: number }>(`/transactions?${params.toString()}`);
-    setTransactions(res.data);
-    setTotal(res.total);
-  }, [getDateRange, search, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder]);
+    try {
+      const res = await apiFetch<{ data: Transaction[]; total: number }>(`/transactions?${params.toString()}`);
+      if (seq !== loadSeq.current) return;
+      setTransactions(res.data);
+      setTotal(res.total);
+    } catch (e) {
+      if (seq !== loadSeq.current) return;
+      addToast(e instanceof Error ? e.message : 'Failed to load transactions', 'error');
+    }
+  }, [getDateRange, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder, addToast]);
 
   useEffect(() => {
     const el = pageHeaderRef.current;
@@ -799,8 +825,10 @@ export default function TransactionsPage() {
   }, [headerH, isMobile]);
 
   const loadMerchants = useCallback(async () => {
-    const res = await apiFetch<{ data: Merchant[] }>('/merchants');
-    setMerchants(res.data);
+    try {
+      const res = await apiFetch<{ data: Merchant[] }>('/merchants');
+      setMerchants(res.data);
+    } catch { /* non-critical — picker keeps the last list */ }
   }, []);
 
   const loadReviewCount = useCallback(async () => {
@@ -819,15 +847,17 @@ export default function TransactionsPage() {
   }, []);
 
   const loadMeta = useCallback(async () => {
-    const [acctRes, catRes, merchRes] = await Promise.all([
-      apiFetch<{ data: Account[] }>('/accounts'),
-      apiFetch<{ data: Category[] }>('/categories'),
-      apiFetch<{ data: Merchant[] }>('/merchants'),
-    ]);
-    setAccounts(acctRes.data);
-    setCategories(catRes.data);
-    setMerchants(merchRes.data);
-  }, []);
+    try {
+      const [acctRes, catRes, merchRes] = await Promise.all([
+        apiFetch<{ data: Account[] }>('/accounts'),
+        apiFetch<{ data: Category[] }>('/categories'),
+        apiFetch<{ data: Merchant[] }>('/merchants'),
+      ]);
+      setAccounts(acctRes.data);
+      setCategories(catRes.data);
+      setMerchants(merchRes.data);
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load accounts and categories', 'error'); }
+  }, [addToast]);
 
   const SORT_OPTIONS: { by: string; order: 'asc' | 'desc'; label: string }[] = [
     { by: 'date', order: 'desc', label: 'Date (new → old)' },
@@ -1130,7 +1160,7 @@ export default function TransactionsPage() {
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { loadUsers(); }, [loadUsers]);
-  useEffect(() => { setLimit(PAGE); }, [datePreset, customStart, customEnd, search, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview]);
+  useEffect(() => { setLimit(PAGE); }, [datePreset, customStart, customEnd, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
   useEffect(() => { loadReviewCount(); }, [loadReviewCount, transactions]);
   useEffect(() => { detailSplitIdRef.current = detailSplitId; }, [detailSplitId]);
@@ -2101,9 +2131,9 @@ export default function TransactionsPage() {
                               <button onClick={markReviewed} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>
                             </div>
                             <div className="text-[12px] font-semibold text-content-3 mb-1">Assign to</div>
-                            <select value={detail.review?.assignee?.id ?? ''} onChange={(e) => e.target.value && patchReview({ assigneeId: parseInt(e.target.value, 10) })}
+                            <select value={detail.review?.assignee?.id ?? ''} onChange={(e) => patchReview({ assigneeId: e.target.value ? parseInt(e.target.value, 10) : null })}
                               className="w-full h-10 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none mb-3">
-                              {!detail.review?.assignee && <option value="" disabled>Select assignee…</option>}
+                              <option value="">Unassigned</option>
                               {householdUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
                             </select>
                             <div className="text-[12px] font-semibold text-content-3 mb-1">Review note</div>

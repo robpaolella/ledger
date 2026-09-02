@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { apiFetch } from '../lib/api';
+import { todayYmd } from '../lib/formatters';
 import { useToast } from '../context/ToastContext';
 import ResponsiveModal from './ResponsiveModal';
 
@@ -25,7 +26,7 @@ interface SyncCandidate {
 interface BalanceUpdate { accountId: number; currentBalance: number; balanceDate: string }
 interface HoldingsUpdate { accountId: number; holdings: { symbol: string; description: string; shares: number; costBasis: number; marketValue: number }[] }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+const iso = (d: Date) => todayYmd(d);
 const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
 const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
 

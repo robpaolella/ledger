@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import LedgerLogo from './LedgerLogo';
 import NotificationBell, { useUnreadNotifications } from './NotificationBell';
 import { NAV_ITEMS, icons } from '../lib/navItems';
-import { apiFetch } from '../lib/api';
+import { useOpenReviewCount } from '../hooks/useOpenReviewCount';
 
 const RAIL = 64;   // collapsed rail width
 const FULL = 236;  // expanded width
@@ -49,7 +49,7 @@ export default function Sidebar() {
   const [focusWithin, setFocusWithin] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [reviewCount, setReviewCount] = useState(0);
+  const reviewCount = useOpenReviewCount();
   const unreadCount = useUnreadNotifications();
   const leaveTimer = useRef<number | null>(null);
 
@@ -83,15 +83,6 @@ export default function Sidebar() {
       return next;
     });
   };
-
-  // Sidebar Review badge = open-review count; refetch on navigation AND on a
-  // 'reviews-changed' event (approving/flagging on the current page doesn't change the route).
-  useEffect(() => {
-    const refetch = () => apiFetch<{ data: { open: number } }>('/reviews/count').then((r) => setReviewCount(r.data.open)).catch(() => {});
-    refetch();
-    window.addEventListener('reviews-changed', refetch);
-    return () => window.removeEventListener('reviews-changed', refetch);
-  }, [location.pathname]);
 
   return (
     <>

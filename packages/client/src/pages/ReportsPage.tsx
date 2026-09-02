@@ -409,7 +409,7 @@ export default function ReportsPage() {
 
   // ── TRANSACTIONS card (client group-by-day + sort) ──
   const dayGroups = (() => {
-    const type = focusObj ? focusObj.group.type : 'expense';
+    const type = focusObj ? focusObj.group.type : filters.type === 'Income' ? 'income' : 'expense';
     const rowSort = txnSort === 'amt_desc' ? (a: Txn, b: Txn) => Math.abs(b.amount) - Math.abs(a.amount)
       : txnSort === 'amt_asc' ? (a: Txn, b: Txn) => Math.abs(a.amount) - Math.abs(b.amount) : null;
     const dateAsc = txnSort === 'date_asc';

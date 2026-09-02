@@ -10,7 +10,7 @@ import Dropdown from '../components/Dropdown';
 import { OwnerBadge, SharedBadge, initOwnerSlots } from '../components/badges';
 import { VendorAvatar, SegmentedControl } from '../components/primitives';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
-import { timeAgo } from '../lib/formatters';
+import { timeAgo, todayYmd } from '../lib/formatters';
 
 // ---- types ----
 interface Account {
@@ -91,19 +91,23 @@ export default function AccountsPage() {
   // refresh (bank sync) + add-account modals
   const [showRefresh, setShowRefresh] = useState(false);
   const [hasSimplefin, setHasSimplefin] = useState(false);
-  type SyncBal = { accountId: number; accountName: string; currentBalance: number; simplefinBalance: number; balanceDate: string; holdings?: unknown[] };
+  type SyncBal = { accountId: number; accountName: string; simplefinBalance: number; balanceDate: string; holdings?: unknown[] };
   const [syncBalances, setSyncBalances] = useState<SyncBal[]>([]);
   const [syncSel, setSyncSel] = useState<Set<number>>(new Set());
   const [syncLoading, setSyncLoading] = useState(false);
 
   const loadData = useCallback(async () => {
-    const res = await apiFetch<{ data: NetWorthData }>('/networth/summary');
-    setData(res.data);
-  }, []);
+    try {
+      const res = await apiFetch<{ data: NetWorthData }>('/networth/summary');
+      setData(res.data);
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load accounts', 'error'); }
+  }, [addToast]);
   const loadHistory = useCallback(async (r: string, sel: Set<number> | null) => {
     const q = sel ? `&accountIds=${Array.from(sel).join(',')}` : '';
-    const res = await apiFetch<{ data: { points: HistoryPoint[] } }>(`/networth/history?range=${r}${q}`);
-    setHistory(res.data.points);
+    try {
+      const res = await apiFetch<{ data: { points: HistoryPoint[] } }>(`/networth/history?range=${r}${q}`);
+      setHistory(res.data.points);
+    } catch { setHistory([]); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -157,7 +161,7 @@ export default function AccountsPage() {
   // ---- asset modal ----
   const openAsset = (a: Asset | 'new') => {
     setAssetModal(a);
-    if (a === 'new') setAf({ name: '', purchaseDate: new Date().toISOString().slice(0, 10), cost: '', salvageValue: '0', method: 'declining_balance', rate: '20', life: '5' });
+    if (a === 'new') setAf({ name: '', purchaseDate: todayYmd(), cost: '', salvageValue: '0', method: 'declining_balance', rate: '20', life: '5' });
     else setAf({ name: a.name, purchaseDate: a.purchaseDate, cost: String(a.cost), salvageValue: String(a.salvageValue), method: a.depreciationMethod, rate: a.decliningRate != null ? String(a.decliningRate) : '20', life: String(a.lifespanYears || 5) });
   };
   const saveAsset = async () => {
@@ -191,9 +195,14 @@ export default function AccountsPage() {
   };
   const applyRefresh = async () => {
     const sel = syncBalances.filter((b) => syncSel.has(b.accountId));
-    await apiFetch('/simplefin/commit', { method: 'POST', body: JSON.stringify({ transactions: [], balanceUpdates: sel.map((b) => ({ accountId: b.accountId, balance: b.simplefinBalance, date: b.balanceDate })), holdingsUpdates: [] }) });
+    try {
+      await apiFetch('/simplefin/commit', { method: 'POST', body: JSON.stringify({ transactions: [], balanceUpdates: sel.map((b) => ({ accountId: b.accountId, balance: b.simplefinBalance, date: b.balanceDate })), holdingsUpdates: [] }) });
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to update balances', 'error'); return; }
     addToast(`Updated ${sel.length} balance${sel.length !== 1 ? 's' : ''}`); setShowRefresh(false); await loadData(); loadHistory(range, selected);
   };
+  // GET /simplefin/balances carries only the bank-side figure; the current
+  // balance comes from the accounts already loaded on this page.
+  const currentBalanceOf = (accountId: number) => data?.accounts.find((a) => a.accountId === accountId)?.balance ?? 0;
 
   const canEdit = hasPermission('accounts.edit');
   const acctColor = (cls: string) => cls === 'liability' ? 'var(--negative)' : cls === 'investment' ? 'var(--c-teal)' : 'var(--c-blue)';
@@ -459,7 +468,7 @@ export default function AccountsPage() {
                   className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-2 cursor-pointer">
                   {chkbox(syncSel.has(b.accountId))}
                   <span className="flex-1 truncate text-sm font-medium">{b.accountName}</span>
-                  <span className="text-sm text-content-3 tabular-nums">{money(b.currentBalance)}</span>
+                  <span className="text-sm text-content-3 tabular-nums">{money(currentBalanceOf(b.accountId))}</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                   <span className="text-sm font-semibold tabular-nums">{money(b.simplefinBalance)}</span>
                 </div>

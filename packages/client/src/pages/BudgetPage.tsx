@@ -6,6 +6,7 @@ import Spinner from '../components/Spinner';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { SegmentedControl, BudgetBar } from '../components/primitives';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 // Recurring overlay meta on a budget row (null when no recurring items apply).
 interface RecMeta { amount: number; itemCount: number; items: { label: string; cadence: string }[] }
@@ -90,6 +91,7 @@ function nextMonth(d: Date): Date {
 
 export default function BudgetPage() {
   const { hasPermission } = useAuth();
+  const { addToast } = useToast();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   const navigate = useNavigate();
   const canEditBudgets = hasPermission('budgets.edit');
@@ -106,18 +108,22 @@ export default function BudgetPage() {
   const [editOverride, setEditOverride] = useState(false); // per-month sub-floor override
 
   const loadData = useCallback(async () => {
-    const res = await apiFetch<{ data: BudgetSummary }>(
-      `/budgets/summary?month=${monthStr(month)}`
-    );
-    setData(res.data);
-  }, [month]);
+    try {
+      const res = await apiFetch<{ data: BudgetSummary }>(
+        `/budgets/summary?month=${monthStr(month)}`
+      );
+      setData(res.data);
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load budget', 'error'); }
+  }, [month, addToast]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const loadAnnual = useCallback(async () => {
-    const res = await apiFetch<{ data: AnnualSummary }>(`/budgets/annual?year=${month.getFullYear()}`);
-    setAnnualData(res.data);
-  }, [month]);
+    try {
+      const res = await apiFetch<{ data: AnnualSummary }>(`/budgets/annual?year=${month.getFullYear()}`);
+      setAnnualData(res.data);
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load annual budget', 'error'); }
+  }, [month, addToast]);
 
   useEffect(() => { if (view === 'year') loadAnnual(); }, [view, loadAnnual]);
 
@@ -158,14 +164,16 @@ export default function BudgetPage() {
     if (applyForward) {
       for (let m = bm; m <= 11; m++) months.push(`${by}-${String(m + 1).padStart(2, '0')}`);
     }
-    await Promise.all(months.map((mo) =>
-      apiFetch('/budgets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Override is this-month-only; future months (apply-forward) reset to non-override.
-        body: JSON.stringify({ categoryId: editModal.categoryId, month: mo, amount: stored, override: mo === editModal.targetMonth ? override : 0 }),
-      })
-    ));
+    try {
+      await Promise.all(months.map((mo) =>
+        apiFetch('/budgets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // Override is this-month-only; future months (apply-forward) reset to non-override.
+          body: JSON.stringify({ categoryId: editModal.categoryId, month: mo, amount: stored, override: mo === editModal.targetMonth ? override : 0 }),
+        })
+      ));
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to save budget', 'error'); return; }
     closeEdit();
     await loadData();
     if (view === 'year') await loadAnnual();
@@ -361,7 +369,12 @@ export default function BudgetPage() {
                   {i > 0 && <div className="h-px bg-line my-[18px]" />}
                   <div className="flex items-center justify-between mb-2.5"><span className="text-[15px] font-bold">{b.label}</span><span className="text-[13px] text-content-3 tabular-nums">{fmtWhole(b.planned)} planned</span></div>
                   <div className="h-[7px] rounded-full bg-surface-2 overflow-hidden mb-2"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--positive)' }} /></div>
-                  <div className="flex items-center justify-between text-sm"><span className="font-semibold">{fmtWhole(b.actual)} {b.verb}</span><span className="text-content-3"><span className="text-positive font-bold tabular-nums">{fmtWhole(rem)}</span> remaining</span></div>
+                  <div className="flex items-center justify-between text-sm"><span className="font-semibold">{fmtWhole(b.actual)} {b.verb}</span>
+                    {rem >= 0
+                      ? <span className="text-content-3"><span className="text-positive font-bold tabular-nums">{fmtWhole(rem)}</span> remaining</span>
+                      /* Exceeding plan is only bad for expenses — earning past it stays green (mirrors the dashboard BudgetCard). */
+                      : <span className="text-content-3"><span className={`font-bold tabular-nums ${b.label === 'Income' ? 'text-positive' : 'text-negative'}`}>{fmtWhole(-rem)}</span> over</span>}
+                  </div>
                 </div>
               );
             })}

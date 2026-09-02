@@ -1,6 +1,7 @@
 /** Bank Sync · Step 1 — Select & Fetch (docs/Import Flow §BANK SYNC step 1). */
 import { useMemo, useState } from 'react';
 import { VendorAvatar } from '../primitives';
+import { todayYmd } from '../../lib/formatters';
 import { ImpCheckbox } from './cells';
 import { BUCKETS, ownerColor, type SyncAccount } from './types';
 
@@ -13,7 +14,7 @@ const RANGE_OPTIONS = [
   { value: 'lastmonth', label: 'Last month' },
 ];
 
-function iso(d: Date): string { return d.toISOString().slice(0, 10); }
+function iso(d: Date): string { return todayYmd(d); }
 function daysAgo(n: number): Date { const d = new Date(); d.setDate(d.getDate() - n); return d; }
 
 export function computeRange(preset: string): { startDate: string; endDate: string } {
@@ -41,7 +42,7 @@ function syncedLabel(at: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const fieldCls = 'h-[42px] bg-surface border border-line rounded-[12px] text-content font-sans';
+const fieldCls = 'h-11 bg-surface border border-line rounded-[11px] text-content font-sans';
 
 export default function BankSyncSelect({
   accounts, fetching, onFetch,
@@ -228,7 +229,7 @@ export default function BankSyncSelect({
         <div className="border border-line rounded-[16px] bg-surface p-5 shadow-sm">
           <div className="font-mono text-[11px] tracking-[0.08em] uppercase text-content-3 mb-3">Fetch window</div>
           <div className="relative">
-            <select value={range} onChange={(e) => setRange(e.target.value)} className="w-full h-[46px] pl-4 pr-10 bg-surface-2 border border-line-strong rounded-[12px] text-content font-sans font-semibold text-[15px] cursor-pointer appearance-none">
+            <select value={range} onChange={(e) => setRange(e.target.value)} className="w-full h-11 pl-4 pr-10 bg-surface-2 border border-line-strong rounded-[11px] text-content font-sans font-semibold text-[15px] cursor-pointer appearance-none">
               {RANGE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-[15px] top-1/2 -translate-y-1/2 pointer-events-none"><path d="m6 9 6 6 6-6" /></svg>
@@ -257,7 +258,7 @@ export default function BankSyncSelect({
         </div>
 
         <button onClick={doFetch} disabled={selectedTotal === 0 || fetching}
-          className="h-[52px] rounded-[13px] text-on-primary font-sans font-bold text-[15px] shadow-sm flex items-center justify-center gap-2.5 transition-opacity"
+          className="h-12 rounded-[11px] text-on-primary font-sans font-bold text-[15px] shadow-sm flex items-center justify-center gap-2.5 transition-opacity"
           style={{ background: selectedTotal === 0 ? 'var(--surface-2)' : 'var(--primary)', cursor: selectedTotal === 0 ? 'not-allowed' : 'pointer', opacity: selectedTotal === 0 ? 0.6 : fetching ? 0.7 : 1 }}>
           {fetching ? 'Fetching…' : selectedTotal === 0 ? 'Select accounts to fetch' : `Fetch transactions (${selectedTotal})`}
           {!fetching && selectedTotal > 0 && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>}

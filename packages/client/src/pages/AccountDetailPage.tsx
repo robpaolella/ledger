@@ -9,7 +9,7 @@ import CurrencyInput from '../components/CurrencyInput';
 import Dropdown from '../components/Dropdown';
 import { VendorAvatar } from '../components/primitives';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
-import { timeAgo, fmtTransaction } from '../lib/formatters';
+import { timeAgo, fmtTransaction, todayYmd } from '../lib/formatters';
 import { getCategoryEmoji, getCategoryColorHex } from '../lib/categoryMeta';
 
 // ---- types ----
@@ -108,27 +108,35 @@ export default function AccountDetailPage() {
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
 
-  const loadMeta = useCallback(async () => {
+  // Each loader takes an `alive` probe so a response for a previous account id
+  // (fast navigation between accounts) can't land on top of the current one.
+  const loadMeta = useCallback(async (alive: () => boolean = () => true) => {
     try {
       const res = await apiFetch<{ data: { accounts: AccountMeta[] } }>('/networth/summary');
+      if (!alive()) return;
       setMeta(res.data.accounts.find((a) => a.accountId === id) ?? null);
-    } catch { setMeta(null); }
-    finally { setMetaLoaded(true); }
+    } catch { if (alive()) setMeta(null); }
+    finally { if (alive()) setMetaLoaded(true); }
   }, [id]);
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (alive: () => boolean = () => true) => {
     try {
       const res = await apiFetch<{ data: Snapshot[] }>(`/balances/history?accountId=${id}`);
-      setSnapshots(res.data);
-    } catch { setSnapshots([]); }
+      if (alive()) setSnapshots(res.data);
+    } catch { if (alive()) setSnapshots([]); }
   }, [id]);
-  const loadTxns = useCallback(async () => {
+  const loadTxns = useCallback(async (alive: () => boolean = () => true) => {
     try {
-      const res = await apiFetch<{ data: Txn[]; total: number }>(`/transactions?accountId=${id}&limit=14`);
-      setTxns(res.data); setTxnTotal(res.total);
-    } catch { setTxns([]); setTxnTotal(0); }
+      const res = await apiFetch<{ data: Txn[]; total: number }>(`/transactions?accountIds=${id}&limit=14`);
+      if (alive()) { setTxns(res.data); setTxnTotal(res.total); }
+    } catch { if (alive()) { setTxns([]); setTxnTotal(0); } }
   }, [id]);
 
-  useEffect(() => { setMetaLoaded(false); loadMeta(); loadHistory(); loadTxns(); }, [loadMeta, loadHistory, loadTxns]);
+  useEffect(() => {
+    let cancelled = false;
+    const alive = () => !cancelled;
+    setMetaLoaded(false); loadMeta(alive); loadHistory(alive); loadTxns(alive);
+    return () => { cancelled = true; };
+  }, [loadMeta, loadHistory, loadTxns]);
 
   const isLiability = meta?.classification === 'liability';
   const points = useMemo(() => buildSeries(snapshots, range, isLiability), [snapshots, range, isLiability]);
@@ -157,7 +165,7 @@ export default function AccountDetailPage() {
     const balance = parseFloat(balanceInput);
     if (isNaN(balance)) { addToast('Enter a valid balance', 'error'); return; }
     try {
-      await apiFetch('/balances', { method: 'POST', body: JSON.stringify({ accountId: meta.accountId, date: new Date().toISOString().slice(0, 10), balance }) });
+      await apiFetch('/balances', { method: 'POST', body: JSON.stringify({ accountId: meta.accountId, date: todayYmd(), balance }) });
       setBalanceOpen(false); addToast('Balance updated');
       await Promise.all([loadMeta(), loadHistory()]);
     } catch { addToast('Failed to update balance', 'error'); }

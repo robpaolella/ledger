@@ -9,6 +9,7 @@ import { VendorAvatar, SegmentedControl } from '../components/primitives';
 import KPICard from '../components/KPICard';
 import CurrencyInput from '../components/CurrencyInput';
 import ResponsiveModal from '../components/ResponsiveModal';
+import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import MerchantPicker, { type MerchantOption } from '../components/MerchantPicker';
 
 type Kind = 'monthly' | 'semi_monthly' | 'biweekly' | 'weekly' | 'every_n_months' | 'custom_months';
@@ -112,9 +113,9 @@ export default function RecurringPage() {
     try { const r = await apiFetch<{ data: RItem[] }>('/recurring'); setItems(r.data); }
     catch { addToast('Failed to load recurring items', 'error'); }
   }, [addToast]);
-  const loadMonth = useCallback(async () => {
-    try { const r = await apiFetch<{ data: MonthView }>(`/recurring/occurrences?month=${month}`); setMonthView(r.data); }
-    catch { addToast('Failed to load occurrences', 'error'); }
+  const loadMonth = useCallback(async (alive: () => boolean = () => true) => {
+    try { const r = await apiFetch<{ data: MonthView }>(`/recurring/occurrences?month=${month}`); if (alive()) setMonthView(r.data); }
+    catch { if (alive()) addToast('Failed to load occurrences', 'error'); }
   }, [month, addToast]);
   const loadMeta = useCallback(async () => {
     try {
@@ -131,7 +132,14 @@ export default function RecurringPage() {
   useEffect(() => { loadItems(); }, [loadItems]);
   // Clear the prior month's data on change so the summary strip never shows stale
   // numbers under the new month's header while the fetch is in flight.
-  useEffect(() => { setLoading(true); setMonthView(null); loadMonth().finally(() => setLoading(false)); }, [loadMonth]);
+  // A stale response from a quickly-skipped month is dropped via the `alive` probe.
+  useEffect(() => {
+    let cancelled = false;
+    const alive = () => !cancelled;
+    setLoading(true); setMonthView(null);
+    loadMonth(alive).finally(() => { if (alive()) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [loadMonth]);
 
   const refresh = async () => { await Promise.all([loadItems(), loadMonth()]); };
 
@@ -251,7 +259,7 @@ export default function RecurringPage() {
                 <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(exp.paid)} paid</span><span>{fmt(exp.remaining)} remaining</span></div>
               </div>
               <div className="px-6 py-4 border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><span className={`text-[15px] font-extrabold tabular-nums ${net >= 0 ? 'text-positive' : 'text-negative'}`}>{net >= 0 ? '+' : ''}{fmt(net)}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><span className={`text-[15px] font-extrabold tabular-nums ${net >= 0 ? 'text-positive' : 'text-negative'}`}>{net > 0 ? '+' : ''}{fmt(net)}</span></div>
                 {bar(net >= 0 ? net : 0, Math.max(inc.total, 1), 'var(--positive)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(inc.total)} in</span><span>{fmt(exp.total)} out</span></div>
               </div>
@@ -273,7 +281,7 @@ export default function RecurringPage() {
                         <span className="font-bold text-sm">{g.title}</span>
                         <span className="text-[12px] text-content-3">{g.list.length} item{g.list.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <span className={`font-bold text-sm tabular-nums ${g.net >= 0 ? 'text-positive' : 'text-content'}`}>{g.net >= 0 ? '+' : ''}{fmt(g.net)}</span>
+                      <span className={`font-bold text-sm tabular-nums ${g.net >= 0 ? 'text-positive' : 'text-content'}`}>{g.net > 0 ? '+' : ''}{fmt(g.net)}</span>
                     </div>
                     {g.list.map(occRow)}
                   </div>
@@ -335,7 +343,7 @@ function CalendarGrid({ month, today, occByDay, onOcc }: {
                     return (
                       <button key={`${o.itemId}-${o.date}`} onClick={() => onOcc(o)} title={`${o.label} · ${o.subName}`}
                         className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] font-semibold text-left truncate"
-                        style={{ background: o.type === 'income' ? 'color-mix(in srgb, var(--positive) 18%, transparent)' : `color-mix(in srgb, ${color} 16%, transparent)`, color: o.type === 'income' ? 'var(--positive)' : 'var(--content)' }}>
+                        style={{ background: o.type === 'income' ? 'color-mix(in srgb, var(--positive) 18%, transparent)' : `color-mix(in srgb, ${color} 16%, transparent)`, color: o.type === 'income' ? 'var(--positive)' : 'var(--text)' }}>
                         <span className="leading-none">{o.type === 'income' ? '💵' : getCategoryEmoji(o.subName)}</span>
                         <span className="tabular-nums truncate">{fmt(o.amount)}</span>
                       </button>
@@ -407,7 +415,6 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
   // past one (which would render "Next: … · N days ago").
   const next = monthOcc.filter((o) => o.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
   const del = async () => {
-    if (!confirm(`Delete recurring item "${item.label}"?`)) return;
     try { await apiFetch(`/recurring/${item.id}`, { method: 'DELETE' }); addToast('Recurring item deleted'); onDeleted(); }
     catch { addToast('Failed to delete', 'error'); }
   };
@@ -442,7 +449,7 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
           {canEdit && (
             <div className="mt-6 flex flex-col gap-2.5">
               <button onClick={onEdit} className="w-full h-11 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm">Edit recurring</button>
-              <button onClick={del} className="w-full h-11 rounded-[11px] font-bold text-sm" style={{ border: '1px solid color-mix(in srgb, var(--negative) 40%, var(--line))', color: 'var(--negative)', background: 'transparent' }}>Delete</button>
+              <ConfirmDeleteButton onConfirm={del} variant="block" />
             </div>
           )}
         </div>

@@ -73,7 +73,7 @@ export const MORE_MENU_ITEMS: NavItem[] = [
   { to: '/reports', label: 'Reports', icon: icons.reports },
   { to: '/recurring', label: 'Recurring', icon: icons.recurring },
   { to: '/investments', label: 'Investments', icon: icons.investments },
-  { to: '/reviews', label: 'Reviews', icon: icons.reviews },
+  { to: '/reviews', label: 'Review', icon: icons.reviews },
   { to: '/settings', label: 'Settings', icon: icons.settings },
   { to: '/import', label: 'Import', icon: icons.import },
 ];
