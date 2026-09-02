@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { sqlite } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { resolveReview } from '../services/reviews.js';
+import { unsafeRegexReason } from '../utils/validate.js';
 
 const router = Router();
 
@@ -66,6 +67,8 @@ router.post('/', requirePermission('transactions.edit'), (req: Request, res: Res
     // Validate a regex pattern up-front so a broken rule can't be stored.
     let regex: RegExp | null = null;
     if (matchType === 'regex') {
+      const unsafe = unsafeRegexReason(pat);
+      if (unsafe) return res.status(400).json({ error: unsafe });
       try { regex = new RegExp(pat, 'i'); } catch { return res.status(400).json({ error: 'Invalid regular expression' }); }
     }
     if (matchType === 'merchant' && isNaN(Number(pat))) {
@@ -126,7 +129,9 @@ router.post('/', requirePermission('transactions.edit'), (req: Request, res: Res
 router.delete('/:id', requirePermission('transactions.edit'), (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    sqlite.prepare('DELETE FROM category_rules WHERE id = ?').run(id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid rule id' });
+    const result = sqlite.prepare('DELETE FROM category_rules WHERE id = ?').run(id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Rule not found' });
     res.json({ data: { id } });
   } catch (err) {
     console.error('DELETE /category-rules/:id error:', err);

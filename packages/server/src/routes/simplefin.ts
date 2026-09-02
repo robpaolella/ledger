@@ -3,13 +3,14 @@ import { db, sqlite } from '../db/index.js';
 import {
   simplefinConnections,
   simplefinLinks,
-  simplefinHoldings,
   accounts,
 } from '../db/schema.js';
 import { eq, or, isNull } from 'drizzle-orm';
 import { claimAccessUrl, fetchAccounts } from '../services/simplefin.js';
 import { runSyncPipeline, commitSync, withSyncLock, type CommitPayload } from '../services/simplefinSync.js';
 import { requirePermission } from '../middleware/permissions.js';
+
+import { deleteLinksCascade, linkIdsForConnection } from '../services/simplefinLinks.js';
 
 const router = Router();
 
@@ -133,6 +134,8 @@ router.put('/connections/:id', requirePermission('simplefin.manage'), async (req
     }
 
     const { label, accessUrl, setupToken } = req.body;
+    if (label !== undefined && (typeof label !== 'string' || !label.trim())) { res.status(400).json({ error: 'label cannot be empty' }); return; }
+    if (accessUrl !== undefined && typeof accessUrl === 'string' && !accessUrl.trim() && !setupToken) { res.status(400).json({ error: 'accessUrl cannot be empty' }); return; }
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if (label !== undefined) updates.label = label;
@@ -172,24 +175,11 @@ router.delete('/connections/:id', requirePermission('simplefin.manage'), (req: R
       return;
     }
 
-    // Delete holdings for links under this connection
-    const links = db.select({ id: simplefinLinks.id })
-      .from(simplefinLinks)
-      .where(eq(simplefinLinks.simplefin_connection_id, id))
-      .all();
-    const linkIds = links.map((l) => l.id);
-
-    if (linkIds.length > 0) {
-      for (const linkId of linkIds) {
-        db.delete(simplefinHoldings).where(eq(simplefinHoldings.simplefin_link_id, linkId)).run();
-      }
-    }
-
-    // Delete links
-    db.delete(simplefinLinks).where(eq(simplefinLinks.simplefin_connection_id, id)).run();
-
-    // Delete connection
-    db.delete(simplefinConnections).where(eq(simplefinConnections.id, id)).run();
+    // Links (with their holdings + history) and the connection go together.
+    sqlite.transaction(() => {
+      deleteLinksCascade(sqlite, linkIdsForConnection(sqlite, id));
+      db.delete(simplefinConnections).where(eq(simplefinConnections.id, id)).run();
+    })();
 
     res.json({ data: { message: 'Connection removed' } });
   } catch (err) {
@@ -226,11 +216,12 @@ router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
     const linkMap = new Map(existingLinks.map((l) => [l.simplefin_account_id, l]));
 
     // Clean up any orphaned links (pointing to inactive accounts)
-    sqlite.prepare(`
-      DELETE FROM simplefin_links
-      WHERE simplefin_connection_id = ?
-        AND account_id IN (SELECT id FROM accounts WHERE is_active = 0)
-    `).run(id);
+    const orphans = (sqlite.prepare(`
+      SELECT sl.id FROM simplefin_links sl
+      WHERE sl.simplefin_connection_id = ?
+        AND sl.account_id IN (SELECT id FROM accounts WHERE is_active = 0)
+    `).all(id) as { id: number }[]).map((r) => r.id);
+    deleteLinksCascade(sqlite, orphans);
 
     const data = response.accounts.map((acct) => {
       const link = linkMap.get(acct.id);
@@ -334,6 +325,12 @@ router.post('/links', requirePermission('simplefin.manage'), (req: Request, res:
       res.status(400).json({ error: 'simplefinConnectionId, simplefinAccountId, accountId, and simplefinAccountName are required' });
       return;
     }
+    const conn = db.select().from(simplefinConnections).where(eq(simplefinConnections.id, Number(simplefinConnectionId))).get();
+    if (!conn) { res.status(404).json({ error: 'Connection not found' }); return; }
+    if (conn.user_id !== null && conn.user_id !== req.user!.userId) { res.status(403).json({ error: 'Not authorized to use this connection' }); return; }
+    if (!sqlite.prepare('SELECT 1 FROM accounts WHERE id = ? AND is_active = 1').get(accountId)) { res.status(400).json({ error: 'accountId does not exist' }); return; }
+    const taken = sqlite.prepare('SELECT id, account_id FROM simplefin_links WHERE simplefin_connection_id = ? AND simplefin_account_id = ?').get(Number(simplefinConnectionId), String(simplefinAccountId)) as { id: number; account_id: number } | undefined;
+    if (taken) { res.status(409).json({ error: 'That SimpleFIN account is already linked to a Ledger account' }); return; }
 
     // Investment accounts default auto-import off — the sync pipeline never
     // imports their transactions anyway; liquid/liability default on.
@@ -402,6 +399,8 @@ router.patch('/links/:id', requirePermission('simplefin.manage'), (req: Request,
       res.status(404).json({ error: 'Link not found' });
       return;
     }
+    const owner = db.select().from(simplefinConnections).where(eq(simplefinConnections.id, link.simplefin_connection_id)).get();
+    if (owner && owner.user_id !== null && owner.user_id !== req.user!.userId) { res.status(403).json({ error: 'Not authorized to change this link' }); return; }
 
     db.update(simplefinLinks).set({ auto_import: autoImport ? 1 : 0 }).where(eq(simplefinLinks.id, id)).run();
 
@@ -422,11 +421,10 @@ router.delete('/links/:id', requirePermission('simplefin.manage'), (req: Request
       res.status(404).json({ error: 'Link not found' });
       return;
     }
+    const owner = db.select().from(simplefinConnections).where(eq(simplefinConnections.id, link.simplefin_connection_id)).get();
+    if (owner && owner.user_id !== null && owner.user_id !== req.user!.userId) { res.status(403).json({ error: 'Not authorized to remove this link' }); return; }
 
-    // Delete associated holdings
-    db.delete(simplefinHoldings).where(eq(simplefinHoldings.simplefin_link_id, id)).run();
-    // Delete the link
-    db.delete(simplefinLinks).where(eq(simplefinLinks.id, id)).run();
+    deleteLinksCascade(sqlite, [id]);
 
     res.json({ data: { message: 'Link removed' } });
   } catch (err) {

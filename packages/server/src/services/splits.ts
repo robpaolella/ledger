@@ -32,6 +32,7 @@ export function validateSplits(splits: SplitInput[], totalAmount: number): strin
   if (splits.length < 2) return 'At least 2 splits are required';
   for (const s of splits) {
     if (!s.categoryId) return 'Each split must have a category';
+    if (typeof s.amount !== 'number' || !Number.isFinite(s.amount)) return 'Split amounts must be numbers';
     if (s.amount === 0) return 'Split amounts cannot be zero';
   }
   const sum = splits.reduce((s, r) => s + r.amount, 0);

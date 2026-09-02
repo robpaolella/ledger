@@ -4,6 +4,7 @@ import { budgets, categories } from '../db/schema.js';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { getRecurringFloors, effectiveBudgetedAmount } from '../services/recurringBudget.js';
+import { isValidMonth, toFinite, toId } from '../utils/validate.js';
 
 const router = Router();
 
@@ -48,9 +49,19 @@ router.get('/', (req: Request, res: Response) => {
 // POST /api/budgets — upsert
 router.post('/', requirePermission('budgets.edit'), (req: Request, res: Response) => {
   try {
-    const { categoryId, month, amount } = req.body;
+    const categoryId = toId(req.body.categoryId);
+    const { month } = req.body;
+    const amount = toFinite(req.body.amount);
     if (!categoryId || !month || amount == null) {
-      res.status(400).json({ error: 'categoryId, month, and amount are required' });
+      res.status(400).json({ error: 'categoryId, month (YYYY-MM), and a numeric amount are required' });
+      return;
+    }
+    if (!isValidMonth(month)) { res.status(400).json({ error: 'month must be YYYY-MM' }); return; }
+    if (amount < 0) { res.status(400).json({ error: 'amount cannot be negative' }); return; }
+    const cat = sqlite.prepare('SELECT type, exclude_from_budget FROM categories WHERE id = ?').get(categoryId) as { type: string; exclude_from_budget: number } | undefined;
+    if (!cat) { res.status(400).json({ error: 'categoryId does not exist' }); return; }
+    if (cat.type === 'transfer' || cat.exclude_from_budget === 1) {
+      res.status(400).json({ error: 'That category is excluded from the budget' });
       return;
     }
     const override = req.body.override ? 1 : 0; // per-month sub-floor override

@@ -78,7 +78,7 @@ router.put('/:id', requirePermission('accounts.edit'), (req: Request, res: Respo
     const updates: string[] = [];
     const values: unknown[] = [];
     if (req.body?.name !== undefined) {
-      const name = req.body.name.toString().trim();
+      const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
       if (!name) { res.status(400).json({ error: 'name cannot be empty' }); return; }
       const dup = sqlite.prepare('SELECT id FROM financial_institutions WHERE LOWER(name) = LOWER(?) AND id <> ?').get(name, id);
       if (dup) { res.status(409).json({ error: 'An institution with that name already exists' }); return; }

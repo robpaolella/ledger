@@ -183,9 +183,6 @@ function validate(body: Record<string, unknown>): { error: string } | { value: V
 
   // Resolve a merchant from an explicit name or the label, so avatars/logos dedupe
   // with transaction merchants (findOrCreateMerchant returns null for blank).
-  const merchantName = typeof body.merchant === 'string' && body.merchant.trim() ? body.merchant : label;
-  const merchant_id = findOrCreateMerchant(merchantName);
-
   let user_id: number | null = null;
   if (body.userId !== undefined && body.userId !== null) {
     if (!Number.isInteger(body.userId)) return { error: 'invalid userId' };
@@ -193,6 +190,10 @@ function validate(body: Record<string, unknown>): { error: string } | { value: V
     if (!u) return { error: 'user not found' };
     user_id = body.userId as number;
   }
+
+  // Last, after every validation, so a rejected body can't leave a merchant behind.
+  const merchantName = typeof body.merchant === 'string' && body.merchant.trim() ? body.merchant : label;
+  const merchant_id = findOrCreateMerchant(merchantName);
 
   return { value: {
     type, label, merchant_id, category_id: categoryId as number, account_id, amount,

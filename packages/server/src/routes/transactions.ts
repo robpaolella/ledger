@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
 import { transactions, accounts, categories, transactionSplits, merchants } from '../db/schema.js';
-import { eq, and, gte, lte, like, or, sql, desc, asc, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, or, sql, desc, asc, inArray } from 'drizzle-orm';
 import { sanitize, sanitizeString } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
@@ -10,6 +10,7 @@ import { resolveReview, openReviewAssignees, syncReviewNotification } from '../s
 import { checkBudgetExceededForMonths } from '../services/budgetAlerts.js';
 import { recordCategoryFeedback } from '../services/feedback.js';
 import { validateSplits, saveSplits, resolveLegMerchantId } from '../services/splits.js';
+import { isValidYmd, likeEscape, clampInt } from '../utils/validate.js';
 
 const router = Router();
 
@@ -133,8 +134,8 @@ router.get('/', (req: Request, res: Response) => {
       sortBy = 'date', sortOrder = 'desc',
     } = req.query as Record<string, string | undefined>;
 
-    const limit = parseInt(limitStr || '50', 10);
-    const offset = parseInt(offsetStr || '0', 10);
+    const limit = clampInt(limitStr, 50, 1, 1000);
+    const offset = clampInt(offsetStr, 0, 0, 1_000_000);
 
     const conditions = [];
     if (startDate) conditions.push(gte(transactions.date, startDate));
@@ -236,15 +237,17 @@ router.get('/', (req: Request, res: Response) => {
     }
     if (owner) conditions.push(sql`EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = ${accounts.id} AND u.display_name = ${owner})`);
     if (search) {
+      // Escape LIKE wildcards so "100%" or "_" search for the literal text.
+      const needle = `%${likeEscape(search)}%`;
       conditions.push(
         or(
-          like(transactions.description, `%${search}%`),
-          like(transactions.note, `%${search}%`),
-          like(merchants.name, `%${search}%`),
+          sql`${transactions.description} LIKE ${needle} ESCAPE '\\'`,
+          sql`${transactions.note} LIKE ${needle} ESCAPE '\\'`,
+          sql`${merchants.name} LIKE ${needle} ESCAPE '\\'`,
           // Also match a split leg's OWN merchant, so search agrees with the
           // merchant filter (which resolves each leg's effective merchant).
-          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN merchants sm ON ts.merchant_id = sm.id WHERE ts.transaction_id = ${transactions.id} AND sm.name LIKE ${'%' + search + '%'})`,
-          sql`EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = ${transactions.id} AND ts.note LIKE ${'%' + search + '%'})`,
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts JOIN merchants sm ON ts.merchant_id = sm.id WHERE ts.transaction_id = ${transactions.id} AND sm.name LIKE ${needle} ESCAPE '\\')`,
+          sql`EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = ${transactions.id} AND ts.note LIKE ${needle} ESCAPE '\\')`,
         )!
       );
     }
@@ -510,6 +513,10 @@ router.post('/', requirePermission('transactions.create'), (req: Request, res: R
     if (!accountId || !date || !description || amount === undefined) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    if (!isValidYmd(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    if (!Number.isFinite(parsedAmount)) return res.status(400).json({ error: 'amount must be a number' });
+    if (!sqlite.prepare('SELECT 1 FROM accounts WHERE id = ?').get(accountId)) return res.status(400).json({ error: 'accountId does not exist' });
+    if (categoryId && !sqlite.prepare('SELECT 1 FROM categories WHERE id = ?').get(categoryId)) return res.status(400).json({ error: 'categoryId does not exist' });
 
     // Validate BEFORE any side effects, so a rejected request never creates an
     // orphan merchant row.
@@ -576,11 +583,20 @@ router.put('/:id', requirePermission('transactions.edit'), (req: Request, res: R
     }
 
     const newAmount = amount !== undefined ? parseFloat(amount) : existing[0].amount;
+    if (!Number.isFinite(newAmount)) return res.status(400).json({ error: 'amount must be a number' });
+    if (date !== undefined && !isValidYmd(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    if (accountId !== undefined && !sqlite.prepare('SELECT 1 FROM accounts WHERE id = ?').get(accountId)) return res.status(400).json({ error: 'accountId does not exist' });
+    if (categoryId && !sqlite.prepare('SELECT 1 FROM categories WHERE id = ?').get(categoryId)) return res.status(400).json({ error: 'categoryId does not exist' });
 
     // Validate before any side effects so a rejected request can't orphan a merchant.
     if (splits && splits.length > 0) {
       const err = validateSplits(splits, newAmount);
       if (err) return res.status(400).json({ error: err });
+    } else if (!categoryId && Math.abs(newAmount - existing[0].amount) > 0.005) {
+      // A split parent's amount is the sum of its legs: changing it without
+      // resending the legs would leave them out of balance.
+      const legs = sqlite.prepare('SELECT COUNT(*) AS n FROM transaction_splits WHERE transaction_id = ?').get(id) as { n: number };
+      if (legs.n > 0) return res.status(400).json({ error: 'This transaction is split — edit the split to change its amount' });
     }
 
     // Re-resolve merchant only when a merchant name was supplied; otherwise keep the link.
@@ -812,12 +828,28 @@ router.post('/bulk-update', requirePermission('transactions.bulk_edit'), (req: R
       res.status(400).json({ error: 'ids array is required' });
       return;
     }
+    if (!updates || typeof updates !== 'object') {
+      res.status(400).json({ error: 'updates object is required' });
+      return;
+    }
+    if (updates.date !== undefined && !isValidYmd(updates.date)) {
+      res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+      return;
+    }
+    if (updates.categoryId !== undefined && !sqlite.prepare('SELECT 1 FROM categories WHERE id = ?').get(updates.categoryId)) {
+      res.status(400).json({ error: 'categoryId does not exist' });
+      return;
+    }
 
     let affected = 0;
 
     // Handle description find & replace separately (needs per-row logic)
     if (updates.description) {
       const { find, replace } = updates.description;
+      if (typeof find !== 'string' || find === '' || typeof replace !== 'string') {
+        res.status(400).json({ error: 'description.find must be non-empty text' });
+        return;
+      }
       const rows = db.select({ id: transactions.id, description: transactions.description })
         .from(transactions)
         .where(inArray(transactions.id, ids))

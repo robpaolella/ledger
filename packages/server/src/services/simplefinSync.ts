@@ -1,4 +1,6 @@
 import { sqlite } from '../db/index.js';
+import { validateSplits } from './splits.js';
+import { localYmd } from '../utils/validate.js';
 import { simplefinConnections, simplefinLinks } from '../db/schema.js';
 import { fetchAccounts } from './simplefin.js';
 import { convertToLedgerSign } from './signConversion.js';
@@ -381,7 +383,17 @@ export function commitSync(payload: CommitPayload): CommitResult {
   let balanceCount = 0;
   let holdingsCount = 0;
   const now = new Date().toISOString();
-  const today = now.slice(0, 10);
+  // Snapshots are keyed by the server's LOCAL date, like the daily scheduler,
+  // so an evening manual sync doesn't write "tomorrow" and get overwritten.
+  const today = localYmd();
+
+  // Every split leg set must balance before anything is written.
+  for (const t of txns ?? []) {
+    if (t.splits && t.splits.length > 0) {
+      const err = validateSplits(t.splits, t.amount);
+      if (err) throw new Error(`Split rejected for "${t.description}": ${err}`);
+    }
+  }
 
   const commitTxn = sqlite.transaction(() => {
     // Insert transactions

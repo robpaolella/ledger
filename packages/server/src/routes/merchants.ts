@@ -90,8 +90,9 @@ router.patch('/:id', requirePermission('transactions.edit'), (req: Request, res:
 // instead of recreating it (see db/merchants.ts resolveMerchantId).
 router.post('/merge', requirePermission('transactions.edit'), (req: Request, res: Response) => {
   try {
-    const { sourceId, targetId, keepAlias } = req.body as { sourceId?: number; targetId?: number; keepAlias?: boolean };
-    if (!sourceId || !targetId || sourceId === targetId) {
+    const body = req.body as { sourceId?: number | string; targetId?: number | string; keepAlias?: boolean };
+    const sourceId = Number(body.sourceId), targetId = Number(body.targetId), keepAlias = body.keepAlias;
+    if (!Number.isInteger(sourceId) || !Number.isInteger(targetId) || sourceId <= 0 || targetId <= 0 || sourceId === targetId) {
       return res.status(400).json({ error: 'distinct sourceId and targetId are required' });
     }
     const both = db.select().from(merchants).where(sql`${merchants.id} IN (${sourceId}, ${targetId})`).all();
@@ -106,6 +107,9 @@ router.post('/merge', requirePermission('transactions.edit'), (req: Request, res
       db.update(transactions).set({ merchant_id: targetId }).where(eq(transactions.merchant_id, sourceId)).run();
       // Repoint split legs too, or the FK (foreign_keys=ON) blocks the delete.
       db.update(transactionSplits).set({ merchant_id: targetId }).where(eq(transactionSplits.merchant_id, sourceId)).run();
+      // Everything else that references the source (no cascade on these FKs).
+      sqlite.prepare('UPDATE category_feedback SET merchant_id = ? WHERE merchant_id = ?').run(targetId, sourceId);
+      sqlite.prepare('UPDATE recurring_items SET merchant_id = ? WHERE merchant_id = ?').run(targetId, sourceId);
       // Alias bookkeeping — all of it BEFORE the source row goes, or ON DELETE
       // CASCADE takes the rows with it.
       if (keepAlias !== false && aliasKey && aliasKey !== targetKey) {
@@ -153,6 +157,8 @@ router.delete('/:id', requirePermission('transactions.edit'), (req: Request, res
       db.update(transactions).set({ merchant_id: null }).where(eq(transactions.merchant_id, id)).run();
       // Unlink split legs too (they'd otherwise dangle / block the FK delete).
       db.update(transactionSplits).set({ merchant_id: null }).where(eq(transactionSplits.merchant_id, id)).run();
+      sqlite.prepare('UPDATE category_feedback SET merchant_id = NULL WHERE merchant_id = ?').run(id);
+      sqlite.prepare('UPDATE recurring_items SET merchant_id = NULL WHERE merchant_id = ?').run(id);
       // Drop any merchant rule pointing at this id so it doesn't dangle.
       sqlite.prepare("DELETE FROM category_rules WHERE match_type = 'merchant' AND pattern = ?").run(String(id));
       db.delete(merchants).where(eq(merchants.id, id)).run();

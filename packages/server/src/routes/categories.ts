@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
-import { categories, transactions } from '../db/schema.js';
-import { eq, asc, sql } from 'drizzle-orm';
+import { categories } from '../db/schema.js';
+import { eq, asc } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 
 const router = Router();
@@ -235,15 +235,36 @@ router.delete('/:id', requirePermission('categories.delete'), (req: Request, res
     res.status(404).json({ error: 'Category not found' });
     return;
   }
-  const txCount = db.select({ count: sql<number>`count(*)` })
-    .from(transactions)
-    .where(eq(transactions.category_id, id))
-    .get();
-  if (txCount && txCount.count > 0) {
-    res.status(400).json({ error: 'Cannot delete category with existing transactions' });
-    return;
+  // Anything that would still point at the category blocks the delete with a
+  // reason (every FK here is RESTRICT, so a bare DELETE would be a 500).
+  const blockers: [string, string][] = [
+    ['transactions', 'SELECT COUNT(*) AS n FROM transactions WHERE category_id = ?'],
+    ['split legs', 'SELECT COUNT(*) AS n FROM transaction_splits WHERE category_id = ?'],
+    ['budget rows', 'SELECT COUNT(*) AS n FROM budgets WHERE category_id = ?'],
+    ['recurring items', 'SELECT COUNT(*) AS n FROM recurring_items WHERE category_id = ?'],
+    ['category rules', 'SELECT COUNT(*) AS n FROM category_rules WHERE category_id = ?'],
+  ];
+  for (const [what, q] of blockers) {
+    let n: number;
+    try { n = (sqlite.prepare(q).get(id) as { n: number }).n; } catch { n = 0; }
+    if (n > 0) {
+      res.status(400).json({ error: `Cannot delete a category with ${n} ${what} — move them first` });
+      return;
+    }
   }
-  db.delete(categories).where(eq(categories.id, id)).run();
+  // Logs and dormant tables are cleaned up rather than blocking.
+  sqlite.transaction(() => {
+    for (const q of [
+      'DELETE FROM category_feedback WHERE prior_category_id = ? OR corrected_category_id = ?',
+      'DELETE FROM budget_alerts WHERE category_id = ?',
+      'DELETE FROM budget_templates WHERE category_id = ?',
+      'DELETE FROM budget_recurring WHERE category_id = ?',
+      'DELETE FROM pay_cycles WHERE category_id = ?',
+    ]) {
+      try { const stmt = sqlite.prepare(q); if (q.includes('?', q.indexOf('?') + 1)) stmt.run(id, id); else stmt.run(id); } catch { /* table absent */ }
+    }
+    db.delete(categories).where(eq(categories.id, id)).run();
+  })();
   res.json({ data: { message: 'Category deleted' } });
 });
 

@@ -138,6 +138,7 @@ router.post('/flag', requirePermission('transactions.edit'), (req: Request, res:
     if (!transactionId) return res.status(400).json({ error: 'transactionId is required' });
     const txn = sqlite.prepare('SELECT id FROM transactions WHERE id = ?').get(transactionId);
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
+    if (assigneeId != null && !sqlite.prepare('SELECT 1 FROM users WHERE id = ? AND is_active = 1').get(assigneeId)) return res.status(400).json({ error: 'assigneeId is not an active user' });
     sqlite.transaction(() => {
       // A user-created review with no explicit assignee goes to the creator.
       flagReview(sqlite, { txnId: transactionId, reason: 'manual', flaggedBy: req.user!.userId, assigneeId: assigneeId ?? req.user!.userId, note: note ?? null });
@@ -175,6 +176,8 @@ router.patch('/:transactionId', requirePermission('transactions.edit'), (req: Re
     const existing = sqlite.prepare('SELECT status FROM transaction_reviews WHERE transaction_id = ?').get(txnId) as { status: string } | undefined;
     if (!existing) return res.status(404).json({ error: 'Review not found' });
     const { assigneeId, note, status } = req.body as { assigneeId?: number | null; note?: string | null; status?: string };
+    if (assigneeId != null && !sqlite.prepare('SELECT 1 FROM users WHERE id = ? AND is_active = 1').get(assigneeId)) return res.status(400).json({ error: 'assigneeId is not an active user' });
+    if (status !== undefined && status !== 'open' && status !== 'resolved') return res.status(400).json({ error: 'status must be open or resolved' });
 
     sqlite.transaction(() => {
       if (status === 'resolved' && existing.status === 'open') recordConfirmation(txnId, req.user!.userId);

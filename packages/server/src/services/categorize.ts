@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { normalizeMerchantName } from './merchantNormalize.js';
 import { detectTransferSignal, type AccountTokens } from './transferSignal.js';
+import { unsafeRegexReason } from '../utils/validate.js';
 
 /**
  * Unified auto-categorization resolver. Replaces the two divergent, buggy copies
@@ -157,6 +158,7 @@ export function buildCategorizer(sqlite: Database.Database): Categorizer {
     const mt = (r.match_type === 'contains' || r.match_type === 'regex') ? r.match_type : 'merchant';
     let regex: RegExp | undefined;
     if (mt === 'regex') {
+      if (unsafeRegexReason(r.pattern)) continue; // a stored pattern predating the safety check
       try { regex = new RegExp(r.pattern, 'i'); } catch { continue; } // drop invalid regex
     }
     rules.push({ matchType: mt, pattern: r.pattern, categoryId: r.category_id, meta, regex });
