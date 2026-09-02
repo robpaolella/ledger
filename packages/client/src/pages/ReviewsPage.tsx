@@ -36,24 +36,30 @@ const AV_COLOR: Record<string, string> = {
 };
 const initialOf = (s: string) => (s.trim()[0] || '?').toUpperCase();
 const colorVar = (s: string) => `var(${AV_COLOR[initialOf(s)] || '--c-blue'})`;
+// Household users get a stable hue by id (not by initial — two "J"s would collide).
+const USER_COLORS = ['--c-blue', '--c-violet', '--c-teal', '--c-amber', '--c-rose', '--c-green', '--c-indigo', '--c-orange', '--c-fuchsia'];
+const userColor = (id: number) => `var(${USER_COLORS[Math.abs(id) % USER_COLORS.length]})`;
+/** Sentinel id for the "Unassigned" bucket in the Users filter. */
+const UNASSIGNED = 0;
 const tint = (v: string) => `color-mix(in srgb, ${v} 16%, transparent)`;
 const money = (v: number) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const parseDate = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
 const friendlyDate = (ymd: string) => parseDate(ymd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-function Avatar({ seed, size = 24, font = 11 }: { seed: string; size?: number; font?: number }) {
-  const c = colorVar(seed);
+function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: string; size?: number; font?: number }) {
+  const c = color ?? colorVar(seed);
   return <span className="flex-none rounded-full inline-flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: font, background: tint(c), color: c }}>{initialOf(seed)}</span>;
 }
 
 export default function ReviewsPage() {
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const canEdit = hasPermission('transactions.edit');
   const { addToast } = useToast();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   const [searchParams] = useSearchParams();
 
   const [rows, setRows] = useState<ReviewRow[]>([]);
+  const [openTotal, setOpenTotal] = useState(0); // server-side open count (the list itself is capped)
   const [users, setUsers] = useState<HUser[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [initialLoading, setInitialLoading] = useState(true); // only ever set on first mount
@@ -61,10 +67,16 @@ export default function ReviewsPage() {
   const [busy, setBusy] = useState(false);
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [selUsers, setSelUsers] = useState<Set<number>>(() => {
-    const me = searchParams.get('assignee');
-    return me && !isNaN(Number(me)) ? new Set([Number(me)]) : new Set();
-  });
+  // ?assignee=<id> | me | unassigned — deep links from the dashboard card + notifications.
+  const assigneeParam = searchParams.get('assignee');
+  const paramToUsers = useCallback((raw: string | null): Set<number> => {
+    if (!raw) return new Set();
+    if (raw === 'me') return user ? new Set([user.id]) : new Set();
+    if (raw === 'unassigned') return new Set([UNASSIGNED]);
+    return !isNaN(Number(raw)) ? new Set([Number(raw)]) : new Set();
+  }, [user]);
+  const [selUsers, setSelUsers] = useState<Set<number>>(() => paramToUsers(assigneeParam));
+  useEffect(() => { setSelUsers(paramToUsers(assigneeParam)); }, [assigneeParam, paramToUsers]);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [menu, setMenu] = useState<'date' | 'users' | null>(null);
@@ -91,7 +103,7 @@ export default function ReviewsPage() {
     const seq = ++loadSeqRef.current; // drop out-of-order responses so a stale list can't resurrect removed rows
     try {
       const res = await apiFetch<{ data: ReviewRow[]; total: number }>('/reviews?status=open&limit=500');
-      if (seq === loadSeqRef.current) setRows(res.data);
+      if (seq === loadSeqRef.current) { setRows(res.data); setOpenTotal(res.total ?? res.data.length); }
     } catch { addToast('Failed to load reviews', 'error'); }
     finally { setInitialLoading(false); setRefreshing(false); }
   }, [addToast]);
@@ -106,7 +118,9 @@ export default function ReviewsPage() {
   // ---- filters ----
   const passDate = useCallback((ymd: string) => {
     if (dateFilter === 'all') return true;
-    const now = new Date();
+    // Presets are whole days: compare against local midnight so a transaction
+    // dated exactly N days ago stays in "Last N days" all day.
+    const now = new Date(); now.setHours(0, 0, 0, 0);
     const d = parseDate(ymd); const ts = d.getTime(); const DAY = 86400000;
     if (dateFilter === '7') return ts >= now.getTime() - 7 * DAY;
     if (dateFilter === '30') return ts >= now.getTime() - 30 * DAY;
@@ -116,12 +130,13 @@ export default function ReviewsPage() {
   }, [dateFilter]);
   const q = search.trim().toLowerCase();
   const passSearch = (r: ReviewRow) => !q || (r.transaction.merchant?.name || r.transaction.description).toLowerCase().includes(q) || (r.transaction.category?.subName ?? '').toLowerCase().includes(q);
-  const passUser = (r: ReviewRow) => selUsers.size === 0 || (r.assignee != null && selUsers.has(r.assignee.id));
+  const passUser = (r: ReviewRow) => selUsers.size === 0 || (r.assignee ? selUsers.has(r.assignee.id) : selUsers.has(UNASSIGNED));
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
   const anyFilter = dateFilter !== 'all' || selUsers.size > 0 || q !== '';
   const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
-  const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) if (r.assignee) m.set(r.assignee.id, (m.get(r.assignee.id) ?? 0) + 1); return m; }, [rows]);
+  const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
+  const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
   const groups = useMemo(() => {
     const by = new Map<string, ReviewRow[]>();
     for (const r of shown) { const k = r.transaction.date; if (!by.has(k)) by.set(k, []); by.get(k)!.push(r); }
@@ -210,7 +225,11 @@ export default function ReviewsPage() {
 
   const resetFilters = () => { setDateFilter('all'); setSelUsers(new Set()); setSearch(''); setSearchOpen(false); };
   const dateLabel = dateFilter === 'all' ? 'Date' : DATE_DEFS.find(([v]) => v === dateFilter)![1];
-  const usersLabel = selUsers.size === 1 ? (users.find((u) => selUsers.has(u.id))?.displayName ?? 'Users') : 'Users';
+  const usersLabel = selUsers.size === 1
+    ? (selUsers.has(UNASSIGNED) ? 'Unassigned' : (users.find((u) => selUsers.has(u.id))?.displayName ?? 'Users'))
+    : 'Users';
+  // One overlay at a time: opening a header menu closes any row popover.
+  const toggleMenu = (which: 'date' | 'users') => { setEditAssign(null); setEditCat(null); setMenu((m) => (m === which ? null : which)); };
   const ctrl = 'h-10 flex items-center gap-2 rounded-[11px] bg-surface border text-sm font-semibold whitespace-nowrap';
   const anyOverlay = menu !== null || editAssign !== null || editCat !== null;
 
@@ -222,7 +241,7 @@ export default function ReviewsPage() {
           <span className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Review</span>
           <span className="inline-flex items-center gap-1.5 h-[26px] px-[11px] rounded-full text-[12px] font-bold" style={{ background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
-            {rows.length} flagged
+            {openTotal} flagged
           </span>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -237,7 +256,7 @@ export default function ReviewsPage() {
           )}
           {/* date filter */}
           <div className="relative">
-            <button onClick={() => setMenu((m) => (m === 'date' ? null : 'date'))} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'date' ? 'var(--primary)' : 'var(--line-strong)' }}>
+            <button onClick={() => toggleMenu('date')} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'date' ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
               {dateLabel}
               {dateFilter !== 'all' && <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--primary)' }} />}
@@ -259,7 +278,7 @@ export default function ReviewsPage() {
           </div>
           {/* users filter */}
           <div className="relative">
-            <button onClick={() => setMenu((m) => (m === 'users' ? null : 'users'))} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'users' ? 'var(--primary)' : 'var(--line-strong)' }}>
+            <button onClick={() => toggleMenu('users')} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'users' ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>
               {usersLabel}
               {selUsers.size > 0 && <span className="min-w-[18px] h-[18px] px-[5px] rounded-full text-[11px] font-bold inline-flex items-center justify-center bg-primary text-on-primary">{selUsers.size}</span>}
@@ -278,12 +297,25 @@ export default function ReviewsPage() {
                       <span className="w-[19px] h-[19px] flex-none rounded-[6px] border-[1.5px] flex items-center justify-center" style={{ borderColor: on ? 'var(--primary)' : 'var(--line-strong)', background: on ? 'var(--primary)' : 'var(--surface)' }}>
                         {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
                       </span>
-                      <Avatar seed={u.displayName} />
+                      <Avatar seed={u.displayName} color={userColor(u.id)} />
                       <span className="flex-1 text-sm font-semibold text-content">{u.displayName}</span>
                       <span className="font-mono text-[12px] text-content-3">{userCount.get(u.id) ?? 0}</span>
                     </div>
                   );
                 })}
+                {unassignedCount > 0 && (() => {
+                  const on = selUsers.has(UNASSIGNED);
+                  return (
+                    <div onClick={() => setSelUsers((s) => { const n = new Set(s); if (n.has(UNASSIGNED)) n.delete(UNASSIGNED); else n.add(UNASSIGNED); return n; })} className="flex items-center gap-[11px] px-2.5 py-2 rounded-[9px] cursor-pointer" style={{ background: on ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : 'transparent' }}>
+                      <span className="w-[19px] h-[19px] flex-none rounded-[6px] border-[1.5px] flex items-center justify-center" style={{ borderColor: on ? 'var(--primary)' : 'var(--line-strong)', background: on ? 'var(--primary)' : 'var(--surface)' }}>
+                        {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
+                      </span>
+                      <span className="w-6 h-6 flex-none rounded-full border border-dashed border-line-strong" />
+                      <span className="flex-1 text-sm font-semibold text-content-2">Unassigned</span>
+                      <span className="font-mono text-[12px] text-content-3">{unassignedCount}</span>
+                    </div>
+                  );
+                })()}
                 {users.length === 0 && <div className="px-2.5 py-3 text-sm text-content-3">No users</div>}
               </div>
             )}
@@ -326,12 +358,13 @@ export default function ReviewsPage() {
               <div key={g.date}>
                 <div className="flex items-center justify-between px-6 py-[9px] bg-surface-2 border-t border-b border-line">
                   <span className="text-[13px] font-semibold text-content-2">{g.header}</span>
-                  <span className="font-mono text-[12px] text-content-3 tabular-nums">{g.rows.length} items</span>
+                  <span className="font-mono text-[12px] text-content-3 tabular-nums">{g.rows.length} {g.rows.length === 1 ? 'item' : 'items'}</span>
                 </div>
                 {g.rows.map((r) => {
                   const t = r.transaction;
                   const mLabel = t.merchant?.name || t.description;
-                  const reasonText = (r.note && r.note.trim()) || REASON_LABEL[r.reason] || 'Flagged for review';
+                  const reasonText = REASON_LABEL[r.reason] || 'Flagged for review';
+                  const noteText = r.note?.trim() || '';
                   const amt = fmtTransaction(t.amount, t.category?.type ?? 'expense');
                   return (
                     <div key={r.reviewId} onClick={() => openPanel(t.id)} className="group flex items-center gap-3.5 px-6 h-[60px] border-b border-line cursor-pointer hover:bg-surface-2 transition-colors">
@@ -341,6 +374,7 @@ export default function ReviewsPage() {
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-none"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
                           <span className="text-[12.5px] font-semibold truncate" style={{ color: 'var(--warning)' }}>{reasonText}</span>
+                          {noteText && <span className="text-[12.5px] text-content-3 truncate min-w-0" title={noteText}>· {noteText}</span>}
                         </div>
                       </div>
                       {/* category (inline-editable) */}
@@ -369,7 +403,7 @@ export default function ReviewsPage() {
                       {/* assignee / reassign */}
                       <div onClick={(e) => { e.stopPropagation(); if (canEdit) setEditAssign((v) => (v === t.id ? null : t.id)); setMenu(null); setEditCat(null); }}
                         className="flex-1 min-w-0 relative flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] border border-transparent hover:border-line-strong hover:bg-elevated transition-colors" style={{ cursor: canEdit ? 'pointer' : 'default' }}>
-                        {r.assignee ? <Avatar seed={r.assignee.displayName} /> : <span className="w-6 h-6 flex-none rounded-full border border-dashed border-line-strong" />}
+                        {r.assignee ? <Avatar seed={r.assignee.displayName} color={userColor(r.assignee.id)} /> : <span className="w-6 h-6 flex-none rounded-full border border-dashed border-line-strong" />}
                         <span className="text-[13.5px] font-semibold text-content-2 truncate">{r.assignee?.displayName ?? 'Unassigned'}</span>
                         {canEdit && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="flex-none"><path d="m6 9 6 6 6-6" /></svg>}
                         {editAssign === t.id && (
@@ -379,7 +413,7 @@ export default function ReviewsPage() {
                               const cur = r.assignee?.id === u.id;
                               return (
                                 <div key={u.id} onClick={() => reassign(t.id, u.id)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-[8px] text-sm font-semibold cursor-pointer" style={{ color: cur ? 'var(--primary)' : 'var(--text)', background: cur ? 'color-mix(in srgb, var(--primary) 12%, transparent)' : 'transparent' }}>
-                                  <Avatar seed={u.displayName} size={22} font={10} />{u.displayName}
+                                  <Avatar seed={u.displayName} color={userColor(u.id)} size={22} font={10} />{u.displayName}
                                 </div>
                               );
                             })}
@@ -403,18 +437,18 @@ export default function ReviewsPage() {
         </div>
       </div>
 
-      {anyOverlay && <div onClick={closeAll} className="fixed inset-0 z-[15]" />}
+      {anyOverlay && <div onClick={closeAll} className="fixed inset-0 z-[35]" />}
 
       {/* approve-all confirm */}
       {confirmAll && (
         <>
-          <div className="fixed inset-0 z-[80] bg-black/40" onClick={() => setConfirmAll(false)} />
+          <div className="fixed inset-0 z-[80]" style={{ background: 'var(--bg-modal)', backdropFilter: 'blur(3px)' }} onClick={() => setConfirmAll(false)} />
           <div className="fixed left-1/2 top-1/2 z-[90] w-[400px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 bg-elevated border border-line-strong rounded-[16px] shadow-md p-5">
             <h2 className="text-[17px] font-extrabold m-0 mb-1">Approve {shown.length} transaction{shown.length === 1 ? '' : 's'}?</h2>
             <p className="text-sm text-content-2 mb-5">This marks every transaction in the current view reviewed and clears it from the queue.</p>
             <div className="flex justify-end gap-2.5">
-              <button onClick={() => setConfirmAll(false)} className="h-10 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-              <button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} disabled={busy} className="h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Approve all</button>
+              <button onClick={() => setConfirmAll(false)} className="h-10 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+              <button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} disabled={busy} className="h-10 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Approve all</button>
             </div>
           </div>
         </>
@@ -423,14 +457,15 @@ export default function ReviewsPage() {
       {/* in-page transaction detail panel */}
       {detail && (
         <>
-          <div className="fixed inset-0 z-[70]" style={{ background: 'rgba(6,8,12,.5)' }} onClick={() => setDetail(null)} />
+          <div className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} onClick={() => setDetail(null)} />
           <div className="fixed top-0 right-0 bottom-0 z-[80] w-[420px] max-w-[calc(100vw-24px)] bg-surface border-l border-line shadow-md overflow-y-auto">
             {(() => {
               const d = detail;
               const loaded = d.account !== undefined;
               const amt = loaded ? fmtTransaction(d.amount, d.category?.type ?? 'expense') : null;
               const label = d.merchant?.name || d.description || '';
-              const fieldCls = 'w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none';
+              const fieldCls = 'w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer disabled:cursor-default';
+              const chevron = <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>;
               const labelCls = 'text-[11px] font-semibold text-content-3 mb-1.5';
               return (
                 <div className="p-5">
@@ -460,12 +495,15 @@ export default function ReviewsPage() {
                       )}
 
                       <div className={labelCls}>Category</div>
-                      <select value={d.category?.id ?? ''} onChange={(e) => e.target.value && setTxnCategory(d, parseInt(e.target.value, 10))} className={`${fieldCls} mb-4`} disabled={!canEdit}>
-                        <option value="">Uncategorized</option>
-                        {catGroups.map(([grp, cats]) => (
-                          <optgroup key={grp} label={grp}>{cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>
-                        ))}
-                      </select>
+                      <div className="relative mb-4">
+                        <select value={d.category?.id ?? ''} onChange={(e) => e.target.value && setTxnCategory(d, parseInt(e.target.value, 10))} className={fieldCls} disabled={!canEdit}>
+                          <option value="">Uncategorized</option>
+                          {catGroups.map(([grp, cats]) => (
+                            <optgroup key={grp} label={grp}>{cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>
+                          ))}
+                        </select>
+                        {chevron}
+                      </div>
 
                       <div className={labelCls}>Transaction note</div>
                       <textarea value={detailNote} onChange={(e) => setDetailNote(e.target.value)} disabled={!canEdit}
@@ -481,10 +519,13 @@ export default function ReviewsPage() {
                           {d.needsReview && (
                             <>
                               <div className={labelCls}>Assign to</div>
-                              <select value={d.review?.assignee?.id ?? ''} onChange={(e) => e.target.value && reassign(d.id, parseInt(e.target.value, 10))} className={`${fieldCls} mb-3`}>
-                                {!d.review?.assignee && <option value="" disabled>Select assignee…</option>}
-                                {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
-                              </select>
+                              <div className="relative mb-3">
+                                <select value={d.review?.assignee?.id ?? ''} onChange={(e) => e.target.value && reassign(d.id, parseInt(e.target.value, 10))} className={fieldCls}>
+                                  {!d.review?.assignee && <option value="" disabled>Select assignee…</option>}
+                                  {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                                </select>
+                                {chevron}
+                              </div>
                               <div className={labelCls}>Review note</div>
                               <textarea value={detailReviewNote} onChange={(e) => setDetailReviewNote(e.target.value)}
                                 onBlur={() => { if ((d.review?.note ?? '') !== detailReviewNote) saveReviewNote(d.id, detailReviewNote).then(() => refetchDetail(d.id)); }}

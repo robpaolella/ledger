@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import LedgerLogo from '../components/LedgerLogo';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import InlineNotification from '../components/InlineNotification';
 import TotpCodeInput from '../components/TotpCodeInput';
@@ -84,10 +84,10 @@ export default function LoginPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totpCode]);
 
-  // Already logged in — redirect to dashboard
+  // Already logged in — redirect to dashboard (declaratively: calling
+  // navigate() during render is a React error, not a redirect).
   if (user) {
-    navigate('/', { replace: true });
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   if (needs2FA) {
