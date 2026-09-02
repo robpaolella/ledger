@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
+import Spinner from '../components/Spinner';
 import { fmt } from '../lib/formatters';
 import { getCategoryEmoji, getCategoryColorHex, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
@@ -258,7 +259,7 @@ export default function RecurringPage() {
           </div>
 
           {loading ? (
-            <div className="bg-surface rounded-card border border-line shadow-sm p-10 text-center text-content-3 font-mono text-sm">Loading…</div>
+            <div className="bg-surface rounded-card border border-line shadow-sm"><Spinner /></div>
           ) : view === 'list' ? (
             groups.length === 0 ? (
               <div className="bg-surface rounded-card border border-line shadow-sm p-10 text-center text-content-3 text-sm">No recurring items this month.</div>

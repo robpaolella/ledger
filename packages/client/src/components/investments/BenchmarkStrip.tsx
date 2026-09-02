@@ -49,9 +49,13 @@ export default function BenchmarkStrip({ rangeLabel, portfolio, benchmarks, sele
           >
             <div className="flex items-center gap-[9px] mb-4">
               <span
-                className="w-[15px] h-[15px] shrink-0 rounded-full border-2 box-border"
-                style={{ borderColor: isSel ? 'var(--primary)' : 'var(--line-strong)', background: isSel ? 'var(--primary)' : 'transparent' }}
-              />
+                className="w-[17px] h-[17px] shrink-0 rounded-[5px] border-[1.5px] box-border flex items-center justify-center"
+                style={{ borderColor: isSel ? 'var(--primary)' : selectable ? 'var(--line-strong)' : 'transparent', background: isSel ? 'var(--primary)' : selectable ? 'var(--surface)' : 'color-mix(in srgb, var(--primary) 16%, transparent)' }}
+                aria-hidden="true"
+              >
+                {isSel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
+                {!selectable && <span className="w-[7px] h-[7px] rounded-[2px]" style={{ background: 'var(--primary)' }} />}
+              </span>
               <span className="text-[16px] font-bold">{c.name}</span>
             </div>
             <div className="flex gap-[34px]">

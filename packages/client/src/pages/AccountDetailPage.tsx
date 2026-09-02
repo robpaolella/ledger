@@ -183,7 +183,7 @@ export default function AccountDetailPage() {
         <div className="bg-surface border border-line rounded-card shadow-sm p-8 text-center">
           <div className="text-[15px] font-semibold text-content mb-1.5">This account doesn't exist</div>
           <div className="text-sm text-content-3 mb-4">It may have been removed, or the link is out of date.</div>
-          <Link to="/accounts" className="inline-flex items-center h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">Back to Accounts</Link>
+          <Link to="/accounts" className="inline-flex items-center h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">Back to accounts</Link>
         </div>
       </div>
     );

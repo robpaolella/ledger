@@ -47,25 +47,6 @@ input[type="number"] {
 .imp-scroll::-webkit-scrollbar-track { background: transparent; }
 .imp-scroll { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 
-/* Button hover effects */
-.btn-primary { transition: all 150ms ease; }
-.btn-primary:hover { background: var(--btn-primary-hover) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-.btn-secondary { transition: all 150ms ease; }
-.btn-secondary:hover { background: var(--btn-secondary-hover) !important; }
-
-.btn-destructive { transition: all 150ms ease; }
-.btn-destructive:hover { background: var(--btn-destructive-hover) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-.btn-destructive-light { transition: all 150ms ease; }
-.btn-destructive-light:hover { background: var(--btn-destructive-light-hover) !important; }
-
-.btn-success { transition: all 150ms ease; }
-.btn-success:hover { background: var(--btn-success-hover) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-.btn-ghost { transition: none; }
-.btn-ghost:hover { text-decoration: underline; }
-
 /* Clickable badge hover */
 .badge-clickable { transition: filter 150ms ease; cursor: pointer; }
 .badge-clickable:hover { filter: brightness(1.1); }

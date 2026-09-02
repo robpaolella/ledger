@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ResponsiveModal from './ResponsiveModal';
+import Spinner from './Spinner';
 import ImageCropModal from './ImageCropModal';
 import { VendorAvatar } from './primitives';
 import { apiFetch } from '../lib/api';
@@ -75,7 +76,7 @@ export default function InstitutionManager({ canEdit, onClose }: { canEdit: bool
         )}
         <div className="flex flex-col rounded-[12px] border border-line overflow-hidden" style={{ maxHeight: 420, overflowY: 'auto' }}>
           {loading ? (
-            <div className="px-4 py-6 text-sm text-content-3 text-center">Loading…</div>
+            <Spinner size={24} className="py-8" />
           ) : shown.length === 0 ? (
             <div className="px-4 py-6 text-sm text-content-3 text-center">No institutions.</div>
           ) : shown.map((i) => (
@@ -117,7 +118,7 @@ function InstitutionEditor({
   const [name, setName] = useState(institution?.name ?? '');
   const [domain, setDomain] = useState(institution?.domain ?? '');
   const [savedDomain, setSavedDomain] = useState(institution?.domain ?? ''); // persisted value /refresh-logo uses
-  const [color, setColor] = useState(institution?.color ?? '#4B5563');
+  const [color, setColor] = useState(institution?.color ?? '#64748b');
   const [logoUrl, setLogoUrl] = useState<string | null>(institution?.logo_url ?? null);
   const [busy, setBusy] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -247,9 +248,9 @@ function InstitutionEditor({
         <div>
           <label className="block text-[11px] font-medium text-content-2 mb-1">Brand color (monogram fallback)</label>
           <div className="flex items-center gap-2">
-            <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(color) ? color : '#4B5563'} onChange={(e) => setColor(e.target.value)}
+            <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(color) ? color : '#64748b'} onChange={(e) => setColor(e.target.value)}
               className="h-9 w-12 rounded-md border border-line bg-surface-2 cursor-pointer" />
-            <input value={color} onChange={(e) => setColor(e.target.value)} placeholder="#4B5563"
+            <input value={color} onChange={(e) => setColor(e.target.value)} placeholder="#64748b"
               className="flex-1 h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
           </div>
         </div>

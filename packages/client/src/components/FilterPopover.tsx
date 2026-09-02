@@ -18,7 +18,7 @@ const ACCOUNT_SECTIONS: { key: string; label: string }[] = [
 const sectionOf = (a: AccountOpt) => (ACCOUNT_SECTIONS.some((s) => s.key === a.classification) ? a.classification! : 'liquid');
 const Chk = ({ on }: { on: boolean }) => (
   <span className="w-[19px] h-[19px] shrink-0 rounded-[6px] border-[1.5px] flex items-center justify-center" style={{ borderColor: on ? 'var(--primary)' : 'var(--line-strong)', background: on ? 'var(--primary)' : 'transparent' }}>
-    {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
+    {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
   </span>
 );
 const RemoveBtn = ({ onClick }: { onClick: () => void }) => (

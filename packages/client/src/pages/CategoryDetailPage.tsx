@@ -239,7 +239,7 @@ export default function CategoryDetailPage() {
     return (
       <div className="text-center py-24 text-content-3">
         <p className="mb-4">{error ?? 'Category not found.'}</p>
-        <button onClick={() => navigate('/budget')} className="h-10 px-4 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">Back to Budget</button>
+        <button onClick={() => navigate('/budget')} className="h-10 px-4 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">Back to budget</button>
       </div>
     );
   }
@@ -374,19 +374,19 @@ export default function CategoryDetailPage() {
           <div className="border border-line rounded-card bg-surface overflow-hidden shadow-sm">
             <div className="text-[17px] font-bold" style={{ padding: '20px 24px 16px' }}>Summary</div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
-              <span className="text-sm text-content-2">Total Transactions</span>
+              <span className="text-sm text-content-2">Total transactions</span>
               <span className="text-[15px] font-semibold tabular-nums">{summary.count}</span>
             </div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
-              <span className="text-sm text-content-2">Average Transaction</span>
+              <span className="text-sm text-content-2">Average transaction</span>
               <span className={`text-[15px] font-semibold tabular-nums ${summary.avg.className}`}>{summary.avg.text}</span>
             </div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
-              <span className="text-sm text-content-2">Largest Transaction</span>
+              <span className="text-sm text-content-2">Largest transaction</span>
               <span className={`text-[15px] font-semibold tabular-nums ${summary.largest.className}`}>{summary.largest.text}</span>
             </div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
-              <span className="text-sm text-content-2">Total Amount</span>
+              <span className="text-sm text-content-2">Total amount</span>
               <span className={`text-[15px] font-bold tabular-nums ${summary.total.className}`}>{summary.total.text}</span>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Dropdown from '../components/Dropdown';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
+import { SegmentedControl } from '../components/primitives';
 import BenchmarkStrip, { type BenchmarkId } from '../components/investments/BenchmarkStrip';
 import PerformanceChart, { type PerfSeries } from '../components/investments/PerformanceChart';
 import AllocationView from '../components/investments/AllocationView';
@@ -48,7 +49,7 @@ const Notice = ({ children }: { children: ReactNode }) => (
 
 const chkbox = (checked: boolean) => (
   <span className="w-[18px] h-[18px] shrink-0 rounded-[6px] border-[1.5px] flex items-center justify-center" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
-    {checked && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
+    {checked && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
   </span>
 );
 
@@ -196,13 +197,8 @@ export default function InvestmentsPage() {
             </div>
 
             {/* tab pills */}
-            <div className="flex items-center gap-1 px-[26px] pb-[18px]">
-              {(['market', 'allocation'] as const).map((t) => (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`px-[18px] py-[9px] rounded-[10px] text-sm font-semibold ${tab === t ? 'bg-elevated text-content' : 'text-content-3'}`}>
-                  {t === 'market' ? 'Market' : 'Allocation'}
-                </button>
-              ))}
+            <div className="flex items-center px-[26px] pb-[18px]">
+              <SegmentedControl value={tab} onChange={(t) => setTab(t)} options={[{ value: 'market', label: 'Market' }, { value: 'allocation', label: 'Allocation' }]} />
             </div>
 
             {tab === 'market' ? (
