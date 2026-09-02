@@ -462,7 +462,7 @@ export default function BudgetPage() {
         else if (rec) { helper = `${fmt(floor)} recurring + ${fmt(extra)} extra`; helperColor = 'var(--text-2)'; }
         const clearToFloor = () => { setEditValue(String(floor)); setEditOverride(false); };
         return (
-        <div onClick={closeEdit} className="fixed inset-0 z-[80] flex items-center justify-center p-6" style={{ background: 'rgba(6,8,12,.6)', backdropFilter: 'blur(3px)' }}>
+        <div onClick={closeEdit} className="fixed inset-0 z-[80] flex items-center justify-center p-6" style={{ background: 'var(--bg-modal)', backdropFilter: 'blur(3px)' }}>
           <div onClick={(e) => e.stopPropagation()} className="w-[560px] max-w-full bg-elevated border border-line-strong rounded-[20px] shadow-md overflow-hidden">
             <div className="flex items-center gap-3.5 px-[22px] pt-5 pb-1">
               <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{editModal.emoji}</span>

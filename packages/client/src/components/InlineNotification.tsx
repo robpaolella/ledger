@@ -6,23 +6,43 @@ interface InlineNotificationProps {
   className?: string;
 }
 
-const typeStyles = {
-  success: 'bg-[var(--bg-inline-success)] border-[var(--bg-inline-success-border)] text-[var(--text-inline-success)]',
-  error: 'bg-[var(--bg-inline-error)] border-[var(--bg-inline-error-border)] text-[var(--text-inline-error)]',
-  warning: 'bg-[var(--bg-inline-warning)] border-[var(--bg-inline-warning-border)] text-[var(--text-inline-warning)]',
-  info: 'bg-[var(--bg-inline-info)] border-[var(--bg-inline-info-border)] text-[var(--text-inline-info)]',
+const TONE: Record<InlineNotificationProps['type'], string> = {
+  success: 'var(--positive)',
+  error: 'var(--negative)',
+  warning: 'var(--warning)',
+  info: 'var(--primary)',
 };
 
+const ICON: Record<InlineNotificationProps['type'], React.ReactNode> = {
+  success: <path d="M4 12l5 5L20 6" />,
+  error: <path d="M12 8v5M12 16.5h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />,
+  warning: <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />,
+  info: <path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z" />,
+};
+
+/** Tinted callout (design system: color-mix 12% fill, 35% border, solid text). */
 export default function InlineNotification({ type, message, dismissible, onDismiss, className = '' }: InlineNotificationProps) {
+  const tone = TONE[type];
   return (
-    <div className={`rounded-lg border text-[13px] px-3.5 py-2.5 flex items-center justify-between ${typeStyles[type]} ${className}`}>
-      <span>{message}</span>
+    <div
+      role={type === 'error' ? 'alert' : 'status'}
+      className={`flex items-start gap-2.5 rounded-[12px] border px-4 py-3 text-[13px] font-medium leading-snug ${className}`}
+      style={{
+        background: `color-mix(in srgb, ${tone} 12%, var(--surface))`,
+        borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
+        color: tone,
+      }}
+    >
+      <svg className="shrink-0 mt-[1px]" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{ICON[type]}</svg>
+      <span className="flex-1 min-w-0">{message}</span>
       {dismissible && onDismiss && (
         <button
+          type="button"
           onClick={onDismiss}
-          className="ml-2 bg-transparent border-none cursor-pointer font-bold text-[14px] leading-none text-current opacity-70 hover:opacity-100"
+          aria-label="Dismiss"
+          className="shrink-0 -mr-1 -my-0.5 w-6 h-6 flex items-center justify-center rounded-[6px] text-current opacity-70 hover:opacity-100"
         >
-          ×
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
       )}
     </div>

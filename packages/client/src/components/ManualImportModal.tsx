@@ -109,17 +109,25 @@ export default function ManualImportModal({ onClose, onImported }: { onClose: ()
   };
 
   return (
-    <ResponsiveModal isOpen={true} onClose={busy ? () => {} : onClose} title="Manual Import" maxWidth="30rem">
-      <div className="p-5 md:p-6">
-        <div className="hidden md:flex items-start justify-between mb-1">
-          <h2 className="text-[20px] font-extrabold tracking-tight text-content m-0">Manual Import</h2>
-          <button onClick={onClose} disabled={busy} className="w-9 h-9 -mt-1 -mr-1 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2 disabled:opacity-40">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    <ResponsiveModal
+      isOpen={true}
+      onClose={busy ? () => {} : onClose}
+      title="Manual import"
+      description="Pull transactions from all linked bank accounts for a date range. Duplicates are skipped; anything we can’t auto-categorize goes to your review queue."
+      maxWidth="30rem"
+      footer={(
+        <div className="flex items-center justify-end gap-2.5">
+          <button onClick={onClose} disabled={busy} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm disabled:opacity-40">Cancel</button>
+          <button onClick={runImport} disabled={busy}
+            className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover disabled:opacity-60 inline-flex items-center gap-2">
+            {busy && <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.5" /></svg>}
+            {busy ? 'Importing…' : 'Import'}
           </button>
         </div>
-        <p className="text-[13px] text-content-3 mb-5 leading-snug">Pull transactions from all linked bank accounts for a date range. Duplicates are skipped; anything we can’t auto-categorize goes to your review queue.</p>
-
-        <div className="text-[12px] font-bold uppercase tracking-wide text-content-3 mb-2">Date range</div>
+      )}
+    >
+      <div>
+        <div className="font-mono text-[11px] uppercase tracking-wide text-content-3 mb-2">Date range</div>
         <div className="flex flex-wrap gap-2 mb-4">
           {PRESETS.map((p) => (
             <button key={p.key} onClick={() => setPreset(p.key)}
@@ -144,14 +152,6 @@ export default function ManualImportModal({ onClose, onImported }: { onClose: ()
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2.5 mt-6">
-          <button onClick={onClose} disabled={busy} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm disabled:opacity-40">Cancel</button>
-          <button onClick={runImport} disabled={busy}
-            className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover disabled:opacity-60 inline-flex items-center gap-2">
-            {busy && <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.5" /></svg>}
-            {busy ? 'Importing…' : 'Import'}
-          </button>
-        </div>
       </div>
     </ResponsiveModal>
   );

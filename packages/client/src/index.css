@@ -12,21 +12,6 @@
   height: 100dvh;
 }
 
-.responsive-modal-panel {
-  position: relative;
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-  overflow: hidden;
-}
-
-.responsive-modal-content {
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-}
-
 /* Hide number input spinners globally */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
@@ -91,8 +76,8 @@ input[type="number"] {
 
 /* Input focus rings */
 input:focus, select:focus, textarea:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
   outline: none;
 }
 input.no-focus-ring:focus {
@@ -101,8 +86,8 @@ input.no-focus-ring:focus {
 }
 input.error:focus, select.error:focus, textarea.error:focus,
 input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[aria-invalid="true"]:focus {
-  border-color: var(--color-negative);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  border-color: var(--negative);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--negative) 20%, transparent);
 }
 
 /* Dark mode date input calendar icon */
@@ -287,7 +272,7 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   /* ---- Kept LITERAL until Wave 2 shell/auth redesign ---- */
   --bg-sidebar: #0f172a;
   --bg-zebra:   rgba(0,0,0,0.02);
-  --bg-modal:   rgba(0,0,0,0.5);
+  --bg-modal:   rgba(6,8,12,0.55);   /* the ONE modal / sheet / panel scrim */
   --nav-active-bg:    rgba(59,130,246,0.15);
   --nav-active-text:  #93c5fd;
   --nav-inactive-text:#94a3b8;

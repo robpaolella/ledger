@@ -14,30 +14,35 @@ import AccountsPage from './pages/AccountsPage';
 import AccountDetailPage from './pages/AccountDetailPage';
 import ImportPage from './pages/ImportPage';
 import SettingsPage from './pages/SettingsPage';
-import MockupPage from './pages/MockupPage';
-import QAPage from './pages/QAPage';
 import RecurringPage from './pages/RecurringPage';
 import InvestmentsPage from './pages/InvestmentsPage';
 import ReviewsPage from './pages/ReviewsPage';
 import MobileHeader from './components/MobileHeader';
 import BottomTabBar from './components/BottomTabBar';
 import Sidebar from './components/Sidebar';
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
+import Spinner from './components/Spinner';
 import { apiFetch } from './lib/api';
 import { loadCategoryEmojis } from './lib/categoryMeta';
 import { useIsMobile } from './hooks/useIsMobile';
+
+// Dev-only tooling pages: lazy so they never enter the production bundle.
+const MockupPage = lazy(() => import('./pages/MockupPage'));
+const QAPage = lazy(() => import('./pages/QAPage'));
+
+function FullScreenLoading() {
+  return (
+    <div className="min-h-screen bg-bg flex items-center justify-center">
+      <Spinner />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-main)] flex items-center justify-center">
-        <div className="text-[var(--text-secondary)] text-sm">Loading...</div>
-      </div>
-    );
-  }
+  if (isLoading) return <FullScreenLoading />;
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -104,23 +109,11 @@ function AppShell() {
           onClick={() => {
             window.dispatchEvent(new CustomEvent('open-add-transaction'));
           }}
-          className="mobile-only fixed z-10 flex items-center gap-1 cursor-pointer border-none"
-          style={{
-            left: '50%',
-            transform: 'translateX(-50%)',
-            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
-            background: 'var(--btn-primary-bg)',
-            color: 'var(--btn-primary-text)',
-            padding: '10px 24px',
-            borderRadius: 20,
-            fontSize: 13,
-            fontWeight: 600,
-            fontFamily: "'Hanken Grotesk', sans-serif",
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            whiteSpace: 'nowrap',
-          }}
+          className="mobile-only fixed z-10 flex items-center gap-1.5 h-11 px-5 rounded-full bg-primary text-on-primary font-bold text-sm shadow-md whitespace-nowrap"
+          style={{ left: '50%', transform: 'translateX(-50%)', bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
         >
-          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Transaction
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          Transaction
         </button>
       )}
       <BottomTabBar />
@@ -137,13 +130,7 @@ export default function App() {
       .catch(() => setSetupRequired(false));
   }, []);
 
-  if (setupRequired === null) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-main)] flex items-center justify-center">
-        <div className="text-[var(--text-secondary)] text-sm">Loading...</div>
-      </div>
-    );
-  }
+  if (setupRequired === null) return <FullScreenLoading />;
 
   return (
     <ThemeProvider>
@@ -154,8 +141,8 @@ export default function App() {
               <Route path="*" element={<SetupPage />} />
             ) : (
               <>
-                {import.meta.env.DEV && <Route path="/mockup" element={<MockupPage />} />}
-                {import.meta.env.DEV && <Route path="/qa" element={<QAPage />} />}
+                {import.meta.env.DEV && <Route path="/mockup" element={<Suspense fallback={<FullScreenLoading />}><MockupPage /></Suspense>} />}
+                {import.meta.env.DEV && <Route path="/qa" element={<Suspense fallback={<FullScreenLoading />}><QAPage /></Suspense>} />}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/setup-2fa" element={<ProtectedRoute><TwoFASetupPage /></ProtectedRoute>} />
                 <Route

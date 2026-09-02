@@ -102,7 +102,7 @@ export function SegmentedControl<T extends string>({
 }
 
 /* ------ Switch ------
- * 36×20 pill toggle (same pattern as the Settings permission toggles). */
+ * 44×26 pill toggle (design system): `--primary` on, `--line-strong` off. */
 export function Switch({
   checked, onChange, disabled = false, title,
 }: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean; title?: string }) {
@@ -111,13 +111,14 @@ export function Switch({
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={title}
       title={title}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative w-9 h-5 rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-      style={{ background: checked ? 'var(--color-positive)' : 'var(--bg-card-border)' }}
+      className="relative w-11 h-[26px] rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+      style={{ background: checked ? 'var(--primary)' : 'var(--line-strong)' }}
     >
-      <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: checked ? 17 : 2 }} />
+      <span className="absolute top-[3px] w-5 h-5 rounded-full bg-on-primary shadow-sm transition-all" style={{ left: checked ? 21 : 3 }} />
     </button>
   );
 }

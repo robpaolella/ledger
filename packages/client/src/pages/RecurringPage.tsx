@@ -415,7 +415,7 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
   );
   return (
     <>
-      <div onClick={onClose} className="fixed inset-0 z-[70]" style={{ background: 'rgba(6,8,12,.5)' }} />
+      <div onClick={onClose} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
       <div className="fixed top-0 right-0 bottom-0 z-[71] w-[420px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-line">
           <span className="text-[15px] font-extrabold tracking-tight">Recurring item</span>
