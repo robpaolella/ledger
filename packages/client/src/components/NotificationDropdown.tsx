@@ -142,7 +142,7 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
           {row.actionLabel && row.actionTarget?.startsWith('/') && (
             <button
               onClick={() => runAction(row)}
-              className="mt-2 h-7 px-2.5 rounded-lg bg-surface-2 border border-line text-[12px] font-semibold text-content hover:border-line-strong cursor-pointer transition-colors"
+              className="mt-2 h-8 px-3 rounded-[9px] bg-surface-2 border border-line text-[12px] font-semibold text-content hover:border-line-strong cursor-pointer transition-colors"
             >
               {row.actionLabel}
             </button>
@@ -160,7 +160,7 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
   };
 
   const sectionLabel = (label: string) => (
-    <div className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-content-3">{label}</div>
+    <div className="px-4 pt-3 pb-1 font-mono text-[11px] font-bold uppercase tracking-wide text-content-3">{label}</div>
   );
 
   return (

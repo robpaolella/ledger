@@ -300,7 +300,7 @@ export default function CategoryDetailPage() {
       {/* Period heading */}
       <div className="text-[26px] font-extrabold mb-[18px]" style={{ letterSpacing: '-.02em' }}>{selBucket?.periodLabel}</div>
 
-      <div className="grid gap-[22px] items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 340px' }}>
+      <div className="grid gap-[22px] items-start grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Transactions */}
         <div className="border border-line rounded-card bg-surface overflow-hidden shadow-sm">
           <div className="text-[17px] font-bold" style={{ padding: '20px 24px 16px' }}>Transactions</div>

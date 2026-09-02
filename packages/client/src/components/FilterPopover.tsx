@@ -86,19 +86,20 @@ export default function FilterPopover({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onCancel} />
-      <div className="absolute top-12 right-0 z-50 w-[820px] max-w-[calc(100vw-64px)] bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
+      {/* Phones: pinned under the app bar, full width. md+: anchored to the Filters button. */}
+      <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[820px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-184px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
         {/* header */}
-        <div className="flex border-b border-line">
-          <div className="w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-r border-line">Filters</div>
-          <div className="flex-1 flex items-center gap-2.5 px-5 border-r border-line">
+        <div className="flex flex-col md:flex-row border-b border-line">
+          <div className="md:w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-b md:border-b-0 md:border-r border-line">Filters</div>
+          <div className="flex-1 flex items-center gap-2.5 px-5 border-b md:border-b-0 md:border-r border-line">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${tab.toLowerCase()}…`} className="flex-1 h-12 bg-transparent outline-none text-sm text-content" />
           </div>
-          <div className="w-[240px] shrink-0 px-5 flex items-center text-sm font-semibold text-content-2">{count} filter{count === 1 ? '' : 's'} selected</div>
+          <div className="md:w-[240px] shrink-0 px-5 py-3 md:py-0 flex items-center text-sm font-semibold text-content-2">{count} filter{count === 1 ? '' : 's'} selected</div>
         </div>
-        {/* body: nav · checklist · selected summary */}
-        <div className="flex" style={{ minHeight: 380 }}>
-          <div className="w-[170px] shrink-0 p-3 border-r border-line flex flex-col gap-0.5">
+        {/* body: nav · checklist · selected summary (stacked on phones) */}
+        <div className="flex flex-col md:flex-row md:min-h-[380px] min-h-0 flex-1 overflow-y-auto md:overflow-visible">
+          <div className="md:w-[170px] shrink-0 p-3 border-b md:border-b-0 md:border-r border-line flex flex-row md:flex-col gap-0.5 overflow-x-auto">
             {NAV.map((n) => {
               const active = tab === n;
               return <button key={n} onClick={() => { setTab(n); setSearch(''); }} className="px-3.5 py-2.5 rounded-[9px] text-sm font-semibold text-left" style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent' }}>{n}</button>;
@@ -202,7 +203,7 @@ export default function FilterPopover({
             )}
           </div>
           {/* selected filters — ALL dimensions */}
-          <div className="w-[240px] shrink-0 p-4 overflow-auto" style={{ maxHeight: 440 }}>
+          <div className="md:w-[240px] shrink-0 p-4 border-t md:border-t-0 border-line md:overflow-auto md:max-h-[440px]">
             {count === 0 ? (
               <div className="text-content-3 text-sm">No filters selected yet.</div>
             ) : (

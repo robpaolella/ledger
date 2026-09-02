@@ -30,7 +30,7 @@ const NEW_TOKENS = new Set([
 
 // Ratchet baseline — the count of old-token refs at the end of Wave 0.
 // LOWER this as areas migrate; CI fails if the live count exceeds it.
-const BASELINE = Number(process.env.TOKEN_BASELINE ?? 263);
+const BASELINE = Number(process.env.TOKEN_BASELINE ?? 99);
 
 function walk(dir) {
   const out = [];

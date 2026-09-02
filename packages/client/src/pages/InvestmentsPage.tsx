@@ -35,11 +35,10 @@ interface HoldingsData {
 interface AcctMeta { id: number; name: string; classification: string }
 
 
-// "By asset class" — static, prototype parity (the design offers no alternatives).
+// "By asset class" — the only grouping offered, so it reads as a label, not a control.
 const StaticControl = ({ label }: { label: string }) => (
-  <div className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface-2 border border-line text-sm font-semibold text-content cursor-default select-none">
+  <div className="flex items-center h-10 px-3.5 rounded-[11px] bg-surface-2 border border-line text-sm font-semibold text-content-2 select-none">
     {label}
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
   </div>
 );
 

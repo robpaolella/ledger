@@ -54,7 +54,7 @@ export default function TransactionsCard({ dragHandleProps }: DashboardCardProps
           return (
             <div
               key={t.id}
-              onClick={() => navigate('/transactions')}
+              onClick={() => navigate(`/transactions?review=${t.id}`)}
               className="flex items-center gap-3.5 px-6 h-[46px] border-t border-line cursor-pointer hover:bg-surface-2/40"
             >
               <VendorAvatar name={vendor} src={t.merchant?.logoUrl || undefined} color={color} size={28} />

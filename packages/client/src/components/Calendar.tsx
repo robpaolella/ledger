@@ -29,8 +29,8 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
   const years: number[] = [];
   for (let y = today.getFullYear() - 12; y <= today.getFullYear() + 3; y++) years.push(y);
 
-  const navBtn = 'w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0';
-  const selectCls = 'h-9 px-3 pr-8 rounded-[9px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';
+  const navBtn = 'w-10 h-10 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 shrink-0';
+  const selectCls = 'h-10 px-3 pr-8 rounded-[10px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';
 
   return (
     <div>
@@ -52,7 +52,7 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
       </div>
 
       <div className="grid grid-cols-7 mb-1">
-        {WEEKDAYS.map((w) => <div key={w} className="text-center text-xs font-semibold text-content-3 py-1">{w}</div>)}
+        {WEEKDAYS.map((w) => <div key={w} className="text-center font-mono text-[11px] font-semibold uppercase tracking-wide text-content-3 py-1">{w}</div>)}
       </div>
 
       <div className="grid grid-cols-7 border-t border-l border-line rounded-[8px] overflow-hidden">

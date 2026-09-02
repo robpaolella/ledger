@@ -165,7 +165,7 @@ function SearchBox({ value, onChange, placeholder }: { value: string; onChange: 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-[38px] px-3 rounded-[9px] bg-surface-2 border border-line text-content font-sans text-sm outline-none"
+        className="w-full h-10 px-3 rounded-[10px] bg-surface-2 border border-line text-content font-sans text-sm outline-none"
       />
     </div>
   );

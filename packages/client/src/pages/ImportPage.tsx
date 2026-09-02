@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { Stepper, vendorColor, type ImpCategory } from '../components/import/cells';
+import { SegmentedControl } from '../components/primitives';
 import BankSyncSelect from '../components/import/BankSyncSelect';
 import SyncReview from '../components/import/SyncReview';
 import CsvUpload from '../components/import/CsvUpload';
@@ -457,18 +458,12 @@ export default function ImportPage() {
   const subtitle = mode === 'csv' ? 'Import a CSV from your bank, credit card, or Venmo.' : 'Pull new transactions directly from your connected accounts.';
 
   const toggle = (
-    <div className="flex bg-surface-2 border border-line rounded-[12px] p-1 gap-0.5 flex-none">
-      {([['csv', 'CSV Import'], ['sync', 'Bank Sync']] as const).map(([m, label]) => {
-        const active = mode === m;
-        return (
-          <div key={m} onClick={() => switchMode(m)}
-            className="px-[18px] py-2 rounded-[9px] text-[13px] cursor-pointer transition-colors"
-            style={{ background: active ? 'var(--elevated)' : 'transparent', boxShadow: active ? 'var(--shadow-sm)' : 'none', color: active ? 'var(--text)' : 'var(--text-2)', fontWeight: active ? 700 : 600 }}>
-            {label}
-          </div>
-        );
-      })}
-    </div>
+    <SegmentedControl
+      className="flex-none"
+      value={mode}
+      onChange={(m) => switchMode(m)}
+      options={[{ value: 'csv', label: 'CSV Import' }, { value: 'sync', label: 'Bank Sync' }]}
+    />
   );
 
   const csvOk = hasPermission('import.csv');

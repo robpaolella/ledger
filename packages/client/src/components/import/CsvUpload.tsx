@@ -21,7 +21,7 @@ export default function CsvUpload({
         <select
           value={accountId}
           onChange={(e) => onAccountChange(e.target.value ? parseInt(e.target.value, 10) : '')}
-          className="w-full h-[46px] pl-4 pr-10 bg-surface border border-line-strong rounded-[12px] font-sans font-semibold text-[15px] cursor-pointer appearance-none"
+          className="w-full h-11 pl-4 pr-10 bg-surface border border-line-strong rounded-[11px] font-sans font-semibold text-[15px] cursor-pointer appearance-none"
           style={{ color: accountId === '' ? 'var(--text-3)' : 'var(--text)' }}
         >
           <option value="">Select an account…</option>
@@ -44,9 +44,11 @@ export default function CsvUpload({
         <div className="text-[17px] font-bold text-content">Drop your CSV file here</div>
         <div className="text-sm text-content-3">or <span className="text-primary font-semibold">browse files</span></div>
         <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
-        <div className="flex gap-2 mt-3.5">
+        {/* Format hints — the exporter is detected from the file, so these are not choices. */}
+        <div className="flex items-center gap-2 mt-3.5" aria-hidden="true">
+          <span className="text-xs text-content-3">Works with</span>
           {['Chase', 'Venmo', 'Generic CSV'].map((f) => (
-            <div key={f} onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }} className="h-7 px-[13px] rounded-full flex items-center text-xs font-semibold bg-surface-2 border border-line text-content-2 cursor-pointer">{f}</div>
+            <span key={f} className="h-7 px-[13px] rounded-full flex items-center text-xs font-semibold bg-surface-2 border border-line text-content-2">{f}</span>
           ))}
         </div>
       </div>

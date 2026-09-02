@@ -20,7 +20,7 @@ export interface HoldingsGroup {
 }
 
 const PALETTE = ['var(--c-teal)', 'var(--c-blue)', 'var(--c-indigo)', 'var(--c-violet)', 'var(--c-fuchsia)', 'var(--c-green)', 'var(--c-orange)', 'var(--c-amber)', 'var(--c-rose)'];
-const GRID = { gridTemplateColumns: '2.4fr 1fr 1.1fr 1.2fr 0.9fr 1.2fr 28px' };
+const GRID = { gridTemplateColumns: '2.4fr 1fr 1.1fr 1.2fr 0.9fr 1.2fr' };
 
 const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const qty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 });
@@ -74,6 +74,9 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
         {controls && <div className="flex items-center gap-3">{controls}</div>}
       </div>
 
+      {/* Six columns need ~700px; on phones the table scrolls sideways inside the card. */}
+      <div className="overflow-x-auto">
+      <div className="min-w-[700px]">
       {/* column headers */}
       <div className="grid gap-4 px-[26px] py-3 border-y border-line text-[13px] text-content-3 font-semibold" style={GRID}>
         <span>Security</span>
@@ -82,7 +85,6 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
         <span className="text-right">Value</span>
         <span className="text-right">Weight</span>
         <span className="text-right">Past {rangeLabel}</span>
-        <span />
       </div>
 
       {groups.map((g) => {
@@ -115,7 +117,6 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
                 <div className="text-right font-semibold text-[14px] tabular-nums">{money(h.value)}</div>
                 <div className="text-right text-[14px] text-content-2 tabular-nums">{h.weightPct.toFixed(2)}%</div>
                 <div className="flex justify-end"><RangePill pct={h.rangePct} /></div>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m9 6 6 6-6 6" /></svg>
               </div>
             ))}
           </div>
@@ -130,7 +131,8 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
         <div className="text-right font-extrabold text-[15px] tabular-nums">{money(total.value)}</div>
         <div className="text-right font-bold text-[14px] text-content-2 tabular-nums">100.00%</div>
         <div className="flex justify-end"><RangePill pct={total.rangePct} /></div>
-        <div />
+      </div>
+      </div>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ const MORE_DESCRIPTIONS: Record<string, string> = {
   '/reports': 'Income & expense breakdown',
   '/recurring': 'Bills, income & subscriptions',
   '/investments': 'Holdings & portfolio',
+  '/reviews': 'Transactions waiting on someone',
   '/settings': 'Accounts, categories, users',
   '/import': 'CSV & bank sync import',
 };
@@ -28,7 +29,7 @@ export default function BottomTabBar() {
     <div className="mobile-only">
       {/* More Menu Bottom Sheet */}
       <BottomSheet isOpen={showMore} onClose={() => setShowMore(false)}>
-        <div className="flex flex-col" style={{ gap: 12 }}>
+        <div className="flex flex-col gap-3">
           {MORE_MENU_ITEMS.map((item) => {
             const active = isTabActive(item.to);
             return (
@@ -38,25 +39,20 @@ export default function BottomTabBar() {
                   navigate(item.to);
                   setShowMore(false);
                 }}
-                className="flex items-center cursor-pointer bg-surface border border-line rounded-[10px]"
-                style={{
-                  padding: '14px 16px',
-                  gap: 12,
-                  borderLeft: active ? '3px solid var(--primary)' : undefined,
-                }}
+                className={`flex items-center gap-3 px-4 py-3.5 cursor-pointer bg-surface border border-line rounded-[10px] ${active ? 'border-l-[3px] border-l-primary' : ''}`}
               >
-                <span style={{ fontSize: 20, flexShrink: 0, color: active ? 'var(--primary)' : 'var(--text-3)' }}>
+                <span className={`text-xl shrink-0 ${active ? 'text-primary' : 'text-content-3'}`}>
                   {item.icon}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--primary)' : 'var(--text)' }}>
+                  <div className={`text-sm font-semibold ${active ? 'text-primary' : 'text-content'}`}>
                     {item.label}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>
+                  <div className="text-[11px] text-content-2 mt-px">
                     {MORE_DESCRIPTIONS[item.to]}
                   </div>
                 </div>
-                <span style={{ color: 'var(--text-3)', fontSize: 14, flexShrink: 0 }}>›</span>
+                <span className="text-content-3 text-sm shrink-0">›</span>
               </div>
             );
           })}
@@ -65,8 +61,7 @@ export default function BottomTabBar() {
 
       {/* Tab Bar */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-40 flex justify-around items-center bg-surface border-t border-line select-none"
-        style={{ padding: '10px 0 max(22px, env(safe-area-inset-bottom))' }}
+        className="fixed bottom-0 left-0 right-0 z-40 flex justify-around items-center bg-surface border-t border-line select-none pt-2.5 pb-[max(22px,env(safe-area-inset-bottom))]"
       >
         {TAB_BAR_ITEMS.map((tab) => {
           const active = isTabActive(tab.to);
@@ -77,16 +72,10 @@ export default function BottomTabBar() {
                 navigate(tab.to);
                 setShowMore(false);
               }}
-              className="flex flex-col items-center justify-center cursor-pointer tab-bar-icon"
-              style={{
-                gap: 4,
-                color: active ? 'var(--primary)' : 'var(--text-3)',
-                minWidth: 64,
-                minHeight: 48,
-              }}
+              className={`flex flex-col items-center justify-center gap-1 min-w-16 min-h-12 cursor-pointer tab-bar-icon ${active ? 'text-primary' : 'text-content-3'}`}
             >
               {tab.icon}
-              <span style={{ fontSize: 10, fontWeight: active ? 600 : 400 }}>{tab.label}</span>
+              <span className={`text-[10px] ${active ? 'font-semibold' : 'font-normal'}`}>{tab.label}</span>
             </div>
           );
         })}
@@ -94,16 +83,10 @@ export default function BottomTabBar() {
         {/* More Tab */}
         <div
           onClick={() => setShowMore(!showMore)}
-          className="flex flex-col items-center justify-center cursor-pointer tab-bar-icon"
-          style={{
-            gap: 4,
-            color: (isMoreActive || showMore) ? 'var(--primary)' : 'var(--text-3)',
-            minWidth: 64,
-            minHeight: 48,
-          }}
+          className={`flex flex-col items-center justify-center gap-1 min-w-16 min-h-12 cursor-pointer tab-bar-icon ${(isMoreActive || showMore) ? 'text-primary' : 'text-content-3'}`}
         >
           {icons.more}
-          <span style={{ fontSize: 10, fontWeight: isMoreActive ? 600 : 400 }}>More</span>
+          <span className={`text-[10px] ${isMoreActive ? 'font-semibold' : 'font-normal'}`}>More</span>
         </div>
       </div>
     </div>

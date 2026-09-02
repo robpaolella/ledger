@@ -36,7 +36,7 @@ export default function BenchmarkStrip({ rangeLabel, portfolio, benchmarks, sele
     ...benchmarks,
   ];
   return (
-    <div className="grid grid-cols-4 border border-line rounded-[14px] overflow-hidden mb-[26px]">
+    <div className="grid grid-cols-2 md:grid-cols-4 border border-line rounded-[14px] overflow-hidden mb-[26px]">
       {cells.map((c, i) => {
         const selectable = c.id !== 'portfolio';
         const isSel = selectable && c.id === selected;
@@ -44,7 +44,7 @@ export default function BenchmarkStrip({ rangeLabel, portfolio, benchmarks, sele
           <div
             key={c.id}
             onClick={selectable ? () => onSelect(c.id as BenchmarkId) : undefined}
-            className={`px-[22px] py-5 ${i > 0 ? 'border-l border-line' : ''} ${selectable ? 'cursor-pointer' : ''}`}
+            className={`px-[22px] py-5 border-line ${i % 2 === 1 ? 'border-l' : i > 0 ? 'md:border-l' : ''} ${i >= 2 ? 'border-t md:border-t-0' : ''} ${selectable ? 'cursor-pointer' : ''}`}
             style={{ background: isSel ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined }}
           >
             <div className="flex items-center gap-[9px] mb-4">

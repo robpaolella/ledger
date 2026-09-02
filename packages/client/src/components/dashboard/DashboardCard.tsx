@@ -51,18 +51,17 @@ export function CardSection({ className = 'px-6 py-[22px]', children }: { classN
   return <div className={`border-t border-line ${className}`}>{children}</div>;
 }
 
-/** Dropdown-style header control (design's pill with a chevron-down). */
+/** Header pill. With `onClick` it is the design's dropdown-style control (chevron);
+ *  without one it renders as a static caption so nothing looks clickable that isn't. */
 export function CardHeaderControl({
   children, onClick, small = false,
 }: { children: ReactNode; onClick?: () => void; small?: boolean }) {
+  const cls = `flex items-center justify-between bg-surface-2 border border-line font-semibold whitespace-nowrap ${
+    small ? 'h-[38px] px-[13px] gap-2.5 rounded-[10px] text-[13px]' : 'h-10 px-3.5 gap-3 rounded-[11px] text-sm'
+  }`;
+  if (!onClick) return <div className={`${cls} text-content-2 select-none`}>{children}</div>;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center justify-between bg-surface-2 border border-line text-content font-semibold whitespace-nowrap cursor-pointer ${
-        small ? 'h-[38px] px-[13px] gap-2.5 rounded-[10px] text-[13px]' : 'h-10 px-3.5 gap-3 rounded-[11px] text-sm'
-      }`}
-    >
+    <button type="button" onClick={onClick} className={`${cls} text-content cursor-pointer`}>
       {children}
       <svg width={small ? 15 : 16} height={small ? 15 : 16} viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2">
         <path d="m6 9 6 6 6-6" />

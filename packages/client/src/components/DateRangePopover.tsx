@@ -77,17 +77,18 @@ export default function DateRangePopover({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-12 right-0 z-50 w-[660px] max-w-[calc(100vw-64px)] bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col">
-            <div className="flex">
-              <div className="w-[212px] shrink-0 border-r border-line">
+          {/* Phones: pinned under the app bar, full width. md+: anchored to the button. */}
+          <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-184px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
+            <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-y-auto md:overflow-visible">
+              <div className="md:w-[212px] shrink-0 border-b md:border-b-0 md:border-r border-line">
                 <div className="px-5 pt-[18px] pb-3 text-base font-extrabold tracking-tight border-b border-line">Date Range</div>
-                <div className="py-2">
+                <div className="py-2 flex flex-row md:flex-col overflow-x-auto md:overflow-visible">
                   {presets.map((p) => {
                     const on = value.preset === p.value;
                     return (
                       <div key={p.value} onClick={() => selectPreset(p.value)}
-                        className="px-5 py-2.5 text-[15px] font-medium cursor-pointer"
-                        style={{ color: on ? 'var(--primary)' : 'var(--text)', background: on ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent', borderLeft: `2px solid ${on ? 'var(--primary)' : 'transparent'}` }}>
+                        className="px-5 py-2.5 text-[15px] font-medium cursor-pointer whitespace-nowrap shrink-0 md:border-l-2"
+                        style={{ color: on ? 'var(--primary)' : 'var(--text)', background: on ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent', borderColor: on ? 'var(--primary)' : 'transparent' }}>
                         {p.label}
                       </div>
                     );

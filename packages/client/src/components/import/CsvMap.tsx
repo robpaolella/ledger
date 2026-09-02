@@ -43,7 +43,7 @@ export default function CsvMap({
         <div onClick={onBack} className="inline-flex items-center gap-[7px] text-[13px] font-semibold text-primary cursor-pointer">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>Back
         </div>
-        <button onClick={onNext} className="h-10 px-[22px] border-none rounded-[11px] bg-primary text-on-primary font-sans font-bold text-sm cursor-pointer flex items-center gap-2">
+        <button onClick={onNext} className="h-12 px-[22px] border-none rounded-[11px] bg-primary text-on-primary font-sans font-bold text-sm cursor-pointer flex items-center gap-2">
           Next<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         </button>
       </div>
