@@ -3,6 +3,9 @@ import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import ImageCropModal from './ImageCropModal';
+import ResponsiveModal from './ResponsiveModal';
+import Spinner from './Spinner';
+import { PanelHeader, Field, SelectShell, CheckBox, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './settings/ui';
 
 interface Merchant {
   id: number; name: string; logo_url: string | null; txn_count: number;
@@ -156,8 +159,9 @@ export default function MerchantsPanel() {
 
   return (
     <div>
-      <h1 className="text-[22px] font-extrabold tracking-tight m-0">Merchants</h1>
-      <p className="text-[14px] text-content-3 mt-1 mb-5">Rename, merge, and set logos for your merchants.</p>
+      <div className="mb-[22px]">
+        <PanelHeader title="Merchants" description="Every merchant from your transaction history. Edit how one displays throughout Ledger, set a rule for how it’s categorized, or merge merchants you don’t need." />
+      </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
         <div className="relative">
@@ -171,7 +175,8 @@ export default function MerchantsPanel() {
               <div className="fixed inset-0 z-30" onClick={() => setSortOpen(false)} />
               <div className="absolute top-12 left-0 z-40 w-[210px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
                 {([['count', 'Transaction count'], ['name', 'Name (A–Z)']] as const).map(([v, label]) => (
-                  <div key={v} onClick={() => { setSort(v); setSortOpen(false); }} className="flex items-center gap-2.5 px-3 py-2 rounded-[9px] text-sm font-medium cursor-pointer hover:bg-surface-2">
+                  <div key={v} onClick={() => { setSort(v); setSortOpen(false); }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-[9px] text-sm font-medium cursor-pointer hover:bg-surface-2"
+                    style={{ background: sort === v ? 'var(--surface-2)' : undefined, color: sort === v ? 'var(--text)' : 'var(--text-2)' }}>
                     <span className="w-4">{sort === v && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}</span>{label}
                   </div>
                 ))}
@@ -179,96 +184,97 @@ export default function MerchantsPanel() {
             </>
           )}
         </div>
-        <div className="h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3 w-[320px] max-w-full">
+        <div className="h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3.5 w-[320px] max-w-full">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${merchants.length} merchants…`} className="flex-1 bg-transparent outline-none text-sm text-content" />
         </div>
       </div>
 
       <div className="bg-surface border border-line rounded-[18px] shadow-sm overflow-hidden">
-        <div className="px-6 py-4 text-[15px] font-bold border-b border-line">{shown.length} merchants</div>
-        {loading ? <div className="p-8 text-center text-content-3 text-sm">Loading…</div>
-          : shown.length === 0 ? <div className="p-8 text-center text-content-3 text-sm">{search ? `No merchants match "${search}"` : 'No merchants yet.'}</div>
-          : shown.map((m, i) => (
+        <div className="px-6 py-[18px] flex items-baseline gap-2.5">
+          <span className="text-[17px] font-extrabold tracking-tight text-content">{search ? 'Matching merchants' : 'All merchants'}</span>
+          <span className="font-mono text-[13px] text-content-3">{shown.length}{search ? ` of ${merchants.length}` : ''}</span>
+        </div>
+        {loading ? <Spinner />
+          : shown.length === 0 ? <div className="px-6 py-14 text-center text-sm text-content-3 border-t border-line">{search ? `No merchants match “${search.trim()}”.` : 'No merchants yet — they appear as transactions are added or imported.'}</div>
+          : shown.map((m) => (
             <div key={m.id} onClick={canEdit ? () => openEdit(m) : undefined}
-              className={`group flex items-center gap-3 px-6 h-[68px] ${i > 0 ? 'border-t border-line' : ''} ${canEdit ? 'cursor-pointer hover:bg-surface-2' : ''} transition-colors`}>
+              className={`group flex items-center gap-4 px-6 h-[68px] border-t border-line ${canEdit ? 'cursor-pointer hover:bg-surface-2' : ''} transition-colors`}>
               <Avatar m={m} />
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-[15px] truncate">{m.name}</div>
-                <div className="text-[13px] font-semibold text-primary">{m.txn_count} transaction{m.txn_count === 1 ? '' : 's'}</div>
+                <div className="font-bold text-[15px] truncate">{m.name}</div>
+                <div className="text-[13px] text-primary mt-0.5">{m.txn_count} transaction{m.txn_count === 1 ? '' : 's'}</div>
               </div>
-              {canEdit && <button onClick={(e) => { e.stopPropagation(); openEdit(m); }} className="h-9 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-[13px] opacity-60 group-hover:opacity-100 transition-opacity">Edit</button>}
+              {canEdit && <button onClick={(e) => { e.stopPropagation(); openEdit(m); }} className={`${btnRow} opacity-60 group-hover:opacity-100 transition-opacity`}>{ICON.pencil}Edit</button>}
             </div>
           ))}
       </div>
 
       {/* Edit merchant modal */}
       {edit && (
-        <>
-          <div className="fixed inset-0 z-[80]" style={{ background: 'rgba(6,8,12,.66)' }} onClick={() => setEdit(null)} />
-          <div className="fixed left-1/2 top-1/2 z-[90] w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 bg-surface border border-line-strong rounded-[18px] shadow-md p-5">
-            <div className="flex items-center justify-between mb-4"><h2 className="text-[18px] font-extrabold m-0">Edit merchant</h2><button onClick={() => setEdit(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-2 border border-line-strong text-content-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button></div>
-            <div className="flex items-center gap-3 mb-4">
-              <Avatar m={edit} size={56} />
-              <div className="flex flex-col gap-1.5">
-                <button onClick={() => fileRef.current?.click()} className="h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-content font-semibold text-[13px]">Upload logo</button>
-                {edit.logo_url && <button onClick={removeLogo} className="text-[12px] text-negative font-semibold text-left">Remove</button>}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = ''; }} />
+        <ResponsiveModal isOpen onClose={() => setEdit(null)} title="Edit merchant" maxWidth="460px"
+          footer={(
+            <div className="flex items-center gap-2.5">
+              <button type="button" onClick={() => { setDel(edit); setMergeInto(''); setKeepAlias(true); }} className={btnDanger}>Merge &amp; delete</button>
+              <div className="ml-auto flex items-center gap-2.5">
+                <button type="button" onClick={() => setEdit(null)} className={btnSecondary}>Cancel</button>
+                <button type="button" onClick={saveName} disabled={busy} className={btnPrimary}>{busy ? 'Saving…' : 'Save changes'}</button>
               </div>
             </div>
-            <div className="text-[12px] font-semibold text-content-3 mb-1.5">Merchant name</div>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-5" />
+          )}>
+          <div className="flex flex-col gap-5">
+            <div className="flex items-center gap-4">
+              <Avatar m={edit} size={56} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => fileRef.current?.click()} className="text-[13px] font-semibold text-primary">{edit.logo_url ? 'Change logo' : 'Upload logo'}</button>
+                  {edit.logo_url && <button type="button" onClick={removeLogo} className="text-[13px] font-semibold text-negative">Remove</button>}
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = ''; }} />
+                </div>
+                <div className="text-[13px] text-content-3 mt-0.5">Shown wherever this merchant appears.</div>
+              </div>
+            </div>
+            <Field label="Merchant name">
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Merchant name" className={inputCls} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }} />
+            </Field>
             {/* Always categorize as — the merchant's durable rule, set from here or
                 from the prompt after recategorizing a transaction. */}
-            <div className="mb-5">
-              <div className="text-[12px] font-semibold text-content-3 mb-1.5">Always categorize as</div>
+            <Field
+              label="Always categorize as"
+              hint={edit.rule_id != null
+                ? 'New and existing transactions from this merchant use this category. Clear it to choose per transaction again.'
+                : 'Pick a category to apply it to this merchant’s transactions from now on.'}
+            >
               <div className="flex items-center gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <select
-                    value={edit.rule_category_id ?? ''}
-                    disabled={!canEdit || busy}
-                    onChange={(e) => { if (e.target.value) void setRule(Number(e.target.value)); }}
-                    className="w-full h-11 pl-3 pr-9 rounded-[10px] bg-surface-2 border border-line-strong text-content text-sm appearance-none cursor-pointer disabled:opacity-60">
+                <SelectShell className="flex-1 min-w-0">
+                  <select value={edit.rule_category_id ?? ''} disabled={!canEdit || busy} onChange={(e) => { if (e.target.value) void setRule(Number(e.target.value)); }} className={selectCls}>
                     <option value="">No rule — categorize each time</option>
-                    {Object.entries(categoryOptions.reduce<Record<string, CategoryOption[]>>((m, c) => {
-                      (m[c.group_name] ||= []).push(c); return m;
-                    }, {})).map(([group, subs]) => (
-                      <optgroup key={group} label={group}>
-                        {subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                      </optgroup>
+                    {Object.entries(categoryOptions.reduce<Record<string, CategoryOption[]>>((m, c) => { (m[c.group_name] ||= []).push(c); return m; }, {})).map(([group, subs]) => (
+                      <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>
                     ))}
                   </select>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><path d="m6 9 6 6 6-6" /></svg>
-                </div>
+                </SelectShell>
                 {edit.rule_id != null && canEdit && (
-                  <button onClick={clearRule} disabled={busy} title="Remove this rule"
-                    className="w-11 h-11 flex-none flex items-center justify-center rounded-[10px] border border-line-strong bg-surface-2 text-negative disabled:opacity-50">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                  <button type="button" onClick={clearRule} disabled={busy} title="Remove this rule"
+                    className="w-11 h-11 flex-none flex items-center justify-center rounded-[11px] border border-line-strong bg-surface-2 text-negative disabled:opacity-50">
+                    {ICON.x}
                   </button>
                 )}
               </div>
-              <p className="text-[12px] text-content-3 mt-1.5 mb-0">
-                {edit.rule_id != null
-                  ? 'New and existing transactions from this merchant use this category. Remove it with the ✕ to choose per transaction again.'
-                  : 'Pick a category to apply it to this merchant’s transactions from now on.'}
-              </p>
-              <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
-                <input type="checkbox" checked={edit.suppress_rule_suggest === 1} disabled={!canEdit}
-                  onChange={(e) => void toggleSuppress(e.target.checked)}
-                  className="w-4 h-4 flex-none accent-[var(--primary)] cursor-pointer" />
-                <span className="text-[13px] text-content-2">Don’t ask about this merchant when I change a category</span>
-              </label>
-            </div>
+            </Field>
+            <button type="button" role="checkbox" aria-checked={edit.suppress_rule_suggest === 1} disabled={!canEdit} onClick={() => void toggleSuppress(edit.suppress_rule_suggest !== 1)}
+              className="flex items-center gap-3 text-left disabled:opacity-60">
+              <CheckBox checked={edit.suppress_rule_suggest === 1} />
+              <span className="text-sm text-content-2">Don’t ask about this merchant when I change a category</span>
+            </button>
             {aliases.length > 0 && (
-              <div className="mb-5">
-                <div className="text-[12px] font-semibold text-content-3 mb-1.5">Also matches</div>
-                <p className="text-[12px] text-content-3 mt-0 mb-2">Imported transactions with these names land on this merchant.</p>
+              <Field label="Also matches" hint="Imported transactions with these statement names land on this merchant.">
                 <div className="flex flex-col gap-1.5">
                   {aliases.map((a) => (
-                    <div key={a.alias_name} className="flex items-center gap-2 h-9 pl-3 pr-1.5 rounded-[10px] bg-surface-2 border border-line">
-                      <span className="flex-1 min-w-0 truncate text-[13px] text-content">{a.alias_name}</span>
+                    <div key={a.alias_name} className="flex items-center gap-2 h-10 pl-3.5 pr-1.5 rounded-[10px] bg-surface-2 border border-line">
+                      <span className="flex-1 min-w-0 truncate text-[13px] font-mono text-content">{a.alias_name}</span>
                       {canEdit && (
-                        <button onClick={() => removeAlias(a.alias_name)} title={`Stop routing “${a.alias_name}” here`}
+                        <button type="button" onClick={() => removeAlias(a.alias_name)} title={`Stop routing “${a.alias_name}” here`}
                           className="w-7 h-7 flex-none flex items-center justify-center rounded-[8px] text-content-3 hover:text-content hover:bg-surface">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
                         </button>
@@ -276,45 +282,42 @@ export default function MerchantsPanel() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </Field>
             )}
-            <div className="flex items-center justify-between">
-              <button onClick={() => { setDel(edit); setMergeInto(''); setKeepAlias(true); }} className="text-[13px] font-semibold text-negative">Merge &amp; delete</button>
-              <div className="flex gap-2.5">
-                <button onClick={() => setEdit(null)} className="h-10 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-                <button onClick={saveName} disabled={busy} className="h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Save</button>
-              </div>
-            </div>
           </div>
-        </>
+        </ResponsiveModal>
       )}
 
       {/* Merge & delete modal */}
       {del && (
-        <>
-          <div className="fixed inset-0 z-[95]" style={{ background: 'rgba(6,8,12,.66)' }} onClick={() => setDel(null)} />
-          <div className="fixed left-1/2 top-1/2 z-[100] w-[420px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 bg-surface border border-line-strong rounded-[18px] shadow-md p-5">
-            <h2 className="text-[18px] font-extrabold m-0 mb-1">Merge &amp; delete</h2>
-            <p className="text-sm text-content-2 mb-4">There are <span className="font-semibold">{del.txn_count} transaction{del.txn_count === 1 ? '' : 's'}</span> tied to <span className="font-semibold">{del.name}</span>. Choose a merchant to reassign them to before deleting.</p>
-            <div className="text-[12px] font-semibold text-content-3 mb-1.5">Reassign transactions to</div>
-            <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} className="w-full h-11 px-3 rounded-[10px] bg-surface-2 border border-line-strong text-content text-sm mb-4">
-              <option value="">Select a merchant…</option>
-              {merchants.filter((x) => x.id !== del.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
-            <label className="flex items-start gap-2.5 mb-5 cursor-pointer select-none">
-              <input type="checkbox" checked={keepAlias} onChange={(e) => setKeepAlias(e.target.checked)}
-                className="mt-0.5 w-4 h-4 flex-none accent-[var(--primary)] cursor-pointer" />
-              <span className="text-[13px] text-content-2 leading-snug">
-                Keep routing future transactions
-                <span className="block text-[12px] text-content-3">Imports that would have become <span className="font-semibold">{del.name}</span> go to the merchant above instead.</span>
-              </span>
-            </label>
+        <ResponsiveModal isOpen onClose={() => setDel(null)} title="Delete merchant" maxWidth="460px"
+          footer={(
             <div className="flex justify-end gap-2.5">
-              <button onClick={() => setDel(null)} className="h-10 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-              <button onClick={doMerge} disabled={!mergeInto || busy} className="h-10 px-5 rounded-[10px] bg-negative text-white font-bold text-sm disabled:opacity-50">Delete</button>
+              <button type="button" onClick={() => setDel(null)} className={btnSecondary}>Cancel</button>
+              <button type="button" onClick={doMerge} disabled={!mergeInto || busy} className={`${btnPrimary} bg-negative hover:bg-negative`}>{busy ? 'Deleting…' : 'Delete merchant'}</button>
             </div>
+          )}>
+          <div className="flex flex-col gap-5">
+            <p className="text-sm text-content-2 m-0 leading-relaxed">
+              There {del.txn_count === 1 ? 'is' : 'are'} <span className="font-bold text-content">{del.txn_count} transaction{del.txn_count === 1 ? '' : 's'}</span> tied to <span className="font-bold text-content">{del.name}</span>. Choose a merchant to reassign them to before deleting.
+            </p>
+            <Field label="Reassign transactions to">
+              <SelectShell>
+                <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} className={selectCls}>
+                  <option value="">Select a merchant…</option>
+                  {merchants.filter((x) => x.id !== del.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+              </SelectShell>
+            </Field>
+            <button type="button" role="checkbox" aria-checked={keepAlias} onClick={() => setKeepAlias((v) => !v)} className="flex items-start gap-3 text-left">
+              <CheckBox checked={keepAlias} className="mt-0.5" />
+              <span className="text-sm text-content-2 leading-snug">
+                Keep routing future transactions
+                <span className="block text-[12.5px] text-content-3">Imports that would have become <span className="font-semibold">{del.name}</span> go to the merchant above instead.</span>
+              </span>
+            </button>
           </div>
-        </>
+        </ResponsiveModal>
       )}
 
       {cropFile && (
