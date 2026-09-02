@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fmt, fmtTransaction } from '../lib/formatters';
-import { getCategoryColor } from '../lib/categoryColors';
 import { getCategoryColorHex, getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +9,7 @@ import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
 import Calendar from '../components/Calendar';
 import PermissionGate from '../components/PermissionGate';
-import { CategoryBadge, NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
+import { NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
@@ -21,6 +20,7 @@ import type { FilterDraft } from '../components/filterModel';
 import DateRangePopover from '../components/DateRangePopover';
 import ManualImportModal from '../components/ManualImportModal';
 import MerchantPicker from '../components/MerchantPicker';
+import { chevronIcon, btnPrimary, btnSecondary } from '../components/settings/ui';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface DuplicateMatch {
@@ -155,6 +155,7 @@ interface Category {
 // Field wrapper with validation error display
 function Field({
   label,
+  required,
   error,
   children,
 }: {
@@ -165,9 +166,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">{label}</label>
+      <label className="block text-[13px] font-bold text-content mb-[7px]">{label}{required && <span className="text-content-3 font-medium"> *</span>}</label>
       {children}
-      {error && <span className="text-[10px] text-[#ef4444] mt-0.5 block">Required</span>}
+      {error && <span className="text-[12px] font-medium text-negative mt-1.5 block">Required</span>}
     </div>
   );
 }
@@ -381,24 +382,40 @@ function TransactionForm({
   const errAmount = showErrors && (amount === '' || isNaN(parsedAmount));
 
   const inputCls = (hasError: boolean) =>
-    `w-full px-3 py-2 border rounded-lg text-[13px] outline-none text-[var(--text-body)] ${
-      hasError ? 'border-[#ef4444] bg-[var(--bg-inline-error)]' : 'border-[var(--table-border)] bg-[var(--bg-input)]'
+    `w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border text-content text-sm outline-none placeholder:text-content-3 ${
+      hasError ? 'border-negative' : 'border-line-strong'
     }`;
+  const selectCls = (hasError: boolean) => `${inputCls(hasError)} pr-10 appearance-none cursor-pointer`;
 
   return (
-    <ResponsiveModal isOpen={true} onClose={onClose} maxWidth="32rem">
-      <h3 className="text-[15px] font-bold text-[var(--text-primary)] mb-4">
-        {transaction ? 'Edit Transaction' : 'Add Transaction'}
-      </h3>
-      <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
+    <ResponsiveModal
+      isOpen={true}
+      onClose={onClose}
+      title={transaction ? 'Edit transaction' : 'Add transaction'}
+      maxWidth="32rem"
+      footer={(
+        <div className="flex items-center gap-2.5">
+          {transaction && onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
+          <div className="ml-auto flex items-center gap-2.5">
+            <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
+            <button type="button" onClick={handleSaveClick} aria-disabled={!isValid}
+              className={`${btnPrimary} ${!isValid ? 'opacity-50' : ''} ${duplicateMatch && isValid ? 'bg-warning hover:bg-warning' : ''}`}>
+              {duplicateMatch ? 'Save anyway' : transaction ? 'Save changes' : 'Add transaction'}
+            </button>
+          </div>
+        </div>
+      )}
+    >
+      <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-2 gap-4">
           <Field label="Date" required error={errDate}>
             <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)}
               className={`${inputCls(!!errDate)} font-mono`} />
           </Field>
           <Field label="Account" required error={errAccount}>
+            <div className="relative">
             <select ref={accountRef} value={accountId} onChange={(e) => setAccountId(parseInt(e.target.value, 10))}
-              className={inputCls(!!errAccount)}>
+              className={selectCls(!!errAccount)}>
               <option value={0} disabled>Select account</option>
               {[...accountsByOwner.entries()].map(([owner, accts]) => (
                 <optgroup key={owner} label={owner}>
@@ -410,26 +427,31 @@ function TransactionForm({
                 </optgroup>
               ))}
             </select>
+            {chevronIcon}
+            </div>
           </Field>
         </div>
         <Field label="Merchant" required error={errMerchant}>
           <MerchantPicker value={merchant} merchants={merchants} onSelect={setMerchant}
             placeholder="Who was paid?" triggerClassName={inputCls(!!errMerchant)} />
         </Field>
-        <Field label="Statement (optional)">
-          <input ref={descRef} value={description} onChange={(e) => setDescription(e.target.value)}
-            placeholder="Raw bank statement text" className={inputCls(false)} />
-        </Field>
-        <Field label="Note (optional)">
-          <input value={note} onChange={(e) => setNote(e.target.value)}
-            className={inputCls(false)} />
-        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Statement">
+            <input ref={descRef} value={description} onChange={(e) => setDescription(e.target.value)}
+              placeholder="Raw bank text (optional)" className={inputCls(false)} />
+          </Field>
+          <Field label="Note">
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional"
+              className={inputCls(false)} />
+          </Field>
+        </div>
         <div>
           {!splitMode ? (
             <div>
               <Field label="Category" required error={errCategory}>
+                <div className="relative">
                 <select ref={categoryRef} value={categoryId} onChange={(e) => handleCategoryChange(parseInt(e.target.value, 10))}
-                  className={inputCls(!!errCategory)}>
+                  className={selectCls(!!errCategory)}>
                   <option value={0} disabled>Select category</option>
                   {groupedCategories.map((g) => (
                     <optgroup key={g.group} label={g.group}>
@@ -439,32 +461,28 @@ function TransactionForm({
                     </optgroup>
                   ))}
                 </select>
+                {chevronIcon}
+                </div>
               </Field>
-              <button onClick={handleEnterSplitMode}
-                className="text-[11px] text-[var(--color-accent)] bg-transparent border-none cursor-pointer mt-1 p-0 hover:underline">
+              <button type="button" onClick={handleEnterSplitMode}
+                className="text-[13px] font-semibold text-primary mt-2">
                 Split across categories
               </button>
             </div>
           ) : (
             <div>
-              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] mb-1">
-                Category <span className="text-[var(--color-accent)] normal-case font-normal">(split mode)</span>
+              <div className="text-[13px] font-bold text-content mb-[7px]">
+                Category <span className="text-primary font-semibold">· split</span>
               </div>
               {splits && splits.length >= 2 ? (
-                <div className="text-[12px] text-[var(--color-positive)] font-medium">
-                  ✓ {splits.length} categories assigned
-                  <button onClick={handleCancelSplit}
-                    className="ml-2 text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">
-                    Remove split
-                  </button>
+                <div className="text-[13px] text-positive font-semibold">
+                  {splits.length} categories assigned
+                  <button type="button" onClick={handleCancelSplit} className="ml-2.5 text-[13px] font-semibold text-content-3 hover:text-content">Remove split</button>
                 </div>
               ) : (
-                <div className="text-[12px] text-[var(--text-muted)]">
-                  Configure splits below
-                  <button onClick={handleCancelSplit}
-                    className="ml-2 text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">
-                    Cancel
-                  </button>
+                <div className="text-[13px] text-content-3">
+                  Configure the split below
+                  <button type="button" onClick={handleCancelSplit} className="ml-2.5 text-[13px] font-semibold text-content-3 hover:text-content">Cancel</button>
                 </div>
               )}
             </div>
@@ -499,18 +517,18 @@ function TransactionForm({
 
       {/* Duplicate Warning */}
       {duplicateMatch && (
-        <div className="mt-4 rounded-lg border border-[var(--bg-inline-warning-border)] bg-[var(--bg-inline-warning)] p-3">
+        <div className="mt-5 rounded-[12px] border p-3.5" style={{ background: 'color-mix(in srgb, var(--warning) 12%, var(--surface))', borderColor: 'color-mix(in srgb, var(--warning) 35%, transparent)' }}>
           <div className="flex items-start gap-2">
-            <svg className="w-4 h-4 text-[var(--color-warning)] mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <div className="flex-1">
               <div className="flex items-center justify-between">
-                <p className="text-[12px] font-semibold text-[var(--text-inline-warning)] m-0">
-                  Possible duplicate detected — click Save again to confirm
+                <p className="text-[13px] font-semibold text-warning m-0">
+                  Possible duplicate — save again to confirm
                 </p>
                 <button onClick={() => setDupeExpanded(!dupeExpanded)}
-                  className="bg-transparent border-none cursor-pointer p-0.5 text-[var(--text-inline-warning)]">
+                  className="bg-transparent border-none cursor-pointer p-0.5 text-warning">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                     style={{ transform: dupeExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
                     <polyline points="9 18 15 12 9 6" />
@@ -519,19 +537,19 @@ function TransactionForm({
               </div>
               {dupeExpanded && (
                 <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12px]">
-                  <span className="text-[var(--text-inline-warning)]">Date</span>
-                  <span className="font-mono text-[var(--text-inline-warning)]">{duplicateMatch.date}</span>
-                  <span className="text-[var(--text-inline-warning)]">Description</span>
-                  <span className="text-[var(--text-inline-warning)]">{duplicateMatch.description}</span>
-                  <span className="text-[var(--text-inline-warning)]">Amount</span>
-                  <span className="font-mono font-semibold text-[var(--text-inline-warning)]">{fmt(Math.abs(duplicateMatch.amount))}</span>
+                  <span className="text-warning">Date</span>
+                  <span className="font-mono text-warning">{duplicateMatch.date}</span>
+                  <span className="text-warning">Description</span>
+                  <span className="text-warning">{duplicateMatch.description}</span>
+                  <span className="text-warning">Amount</span>
+                  <span className="font-mono font-semibold text-warning">{fmt(Math.abs(duplicateMatch.amount))}</span>
                   {duplicateMatch.accountName && <>
-                    <span className="text-[var(--text-inline-warning)]">Account</span>
-                    <span className="text-[var(--text-inline-warning)]">{duplicateMatch.accountName}</span>
+                    <span className="text-warning">Account</span>
+                    <span className="text-warning">{duplicateMatch.accountName}</span>
                   </>}
                   {duplicateMatch.category && <>
-                    <span className="text-[var(--text-inline-warning)]">Category</span>
-                    <span className="text-[var(--text-inline-warning)]">{duplicateMatch.category}</span>
+                    <span className="text-warning">Category</span>
+                    <span className="text-warning">{duplicateMatch.category}</span>
                   </>}
                 </div>
               )}
@@ -540,27 +558,6 @@ function TransactionForm({
         </div>
       )}
 
-      <div className="flex gap-2 mt-5 justify-end">
-        {transaction && onDelete && (
-          <div className="mr-auto">
-            <ConfirmDeleteButton onConfirm={onDelete} />
-          </div>
-        )}
-        <button onClick={onClose}
-          className="px-4 py-2 text-[12px] font-semibold rounded-lg bg-[var(--btn-secondary-bg)] text-[var(--text-secondary)] border-none cursor-pointer btn-secondary">
-          Cancel
-        </button>
-        <button onClick={handleSaveClick}
-          className={`px-4 py-2 text-[12px] font-semibold rounded-lg border-none ${
-            isValid
-              ? duplicateMatch
-                ? 'bg-[var(--color-warning)] text-white cursor-pointer'
-                : 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] cursor-pointer btn-primary'
-              : 'bg-[var(--text-muted)] text-white cursor-not-allowed'
-          }`}>
-          {duplicateMatch ? 'Save Anyway' : 'Save'}
-        </button>
-      </div>
     </ResponsiveModal>
   );
 }
@@ -575,7 +572,6 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
-  const allGroupNames = useMemo(() => [...new Set(categories.map(c => c.group_name))], [categories]);
   const categoryGroups = useMemo(() => {
     const groups: { group: string; subs: { id: number; sub: string }[] }[] = [];
     const seen = new Set<string>();
@@ -1655,10 +1651,10 @@ export default function TransactionsPage() {
               Manual Import
             </button>
           </PermissionGate>
-          {/* Add */}
+          {/* Add (desktop — phones use the floating button) */}
           <PermissionGate permission="transactions.create" fallback="disabled">
             <button onClick={() => setEditing('new')}
-              className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover">
+              className="desktop-only flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
               Add
             </button>
@@ -1667,40 +1663,44 @@ export default function TransactionsPage() {
       </div>
 
       {isMobile ? (
-        /* Mobile: Standalone cards */
-        <div className="flex flex-col gap-1.5">
-          {displayRows.map(({ t, split }) => {
+        /* Mobile: one card of 64px rows (same anatomy as the desktop list) */
+        <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
+          {displayRows.map(({ t, split }, idx) => {
             const catType = split ? split.type : (t.category?.type ?? t.splits?.[0]?.type ?? 'expense');
             const { text: amtText, className: amtClass } = fmtTransaction(split ? split.amount : t.amount, catType);
+            const label = split ? splitVendorLabel(t, split) : vendorLabel(t);
+            const catName = split ? split.subName : t.category?.subName;
+            const catGroup = split ? split.groupName : t.category?.groupName;
             return (
               <div key={split ? `${t.id}-split-${split.id}` : t.id}
                 onClick={() => { if (hasPermission('transactions.edit')) openDetail(t, split); }}
-                className={`bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] px-3.5 py-2.5 flex justify-between items-center ${hasPermission('transactions.edit') ? 'cursor-pointer active:bg-[var(--bg-hover)]' : ''}`}>
-                <div className="flex-1 min-w-0 mr-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{split ? splitVendorLabel(t, split) : vendorLabel(t)}</span>
-                    {split && <span className="shrink-0 inline-flex items-center justify-center w-[16px] h-[16px] rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(10)}</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <span className="font-mono text-[10px] text-[var(--text-muted)]">{t.date}</span>
-                    <span className="text-[var(--text-muted)]">·</span>
-                    {split ? (
-                      <CategoryBadge name={split.subName} color={getCategoryColor(split.groupName, allGroupNames)} />
-                    ) : t.category ? (
-                      <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
-                    ) : null}
+                className={`flex items-center gap-3 px-4 h-16 ${idx > 0 ? 'border-t border-line' : ''} ${hasPermission('transactions.edit') ? 'cursor-pointer active:bg-surface-2' : ''}`}>
+                <VendorAvatar name={label} src={t.merchant?.logoUrl || undefined} color={catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)'} size={36} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[15px] font-semibold text-content truncate">{label}</span>
+                    {split && <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(10)}</span>}
                     {t.needsReview && !split && <NeedsReviewBadge />}
                   </div>
+                  <div className="flex items-center gap-1.5 text-[12px] text-content-3 min-w-0">
+                    {catName && (
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catGroup ? getCategoryColorHex(catGroup) : 'var(--text-3)' }} />
+                        <span className="truncate">{catName}</span>
+                      </span>
+                    )}
+                    <span className="font-mono shrink-0">{shortDate(t.date)}</span>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <div className={`text-[14px] font-mono font-semibold ${amtClass}`}>{amtText}</div>
-                  <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{accountLabel(t.account)}</div>
+                <div className="text-right shrink-0">
+                  <div className={`text-[15px] font-bold tabular-nums ${amtClass}`}>{amtText}</div>
+                  <div className="font-mono text-[11px] text-content-3 mt-0.5 max-w-[120px] truncate">{accountLabel(t.account)}</div>
                 </div>
               </div>
             );
           })}
           {transactions.length === 0 && (
-            <p className="text-center py-8 text-[var(--text-muted)] text-[13px]">No transactions found for this period</p>
+            <p className="text-center py-10 text-content-3 text-sm m-0">No transactions found for this period</p>
           )}
         </div>
       ) : (

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import CurrencyInput from './CurrencyInput';
 import { ReimbursementBadge } from './badges';
 
@@ -83,10 +83,14 @@ export default function SplitEditor({
   const remaining = +((Math.abs(totalAmount) - allocated).toFixed(2));
   const absTotalAmount = Math.abs(totalAmount);
 
-  // Keep parent in sync with current split state
+  // Keep parent in sync with current split state. Only `splits` drives the
+  // effect: the parent hands us a fresh onChange on every render, and depending
+  // on it looped (onChange → parent setState → new onChange → effect …).
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   useEffect(() => {
-    onChange?.(splits);
-  }, [splits, onChange]);
+    onChangeRef.current?.(splits);
+  }, [splits]);
 
   const isValid =
     Math.abs(remaining) < 0.01 &&
@@ -180,66 +184,57 @@ export default function SplitEditor({
       maximumFractionDigits: 2,
     });
 
-  const inputCls =
-    'w-full px-2 py-1.5 border rounded-md text-[12px] outline-none text-[var(--text-body)] border-[var(--table-border)] bg-[var(--bg-input)]';
+  const inputCls = 'w-full h-10 px-3 rounded-[10px] bg-surface border border-line-strong text-content text-sm outline-none';
+  const selectCls = `${inputCls} pr-9 appearance-none cursor-pointer`;
+  const chevron = <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-content-3" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>;
+  const balanced = Math.abs(remaining) < 0.01;
 
   return (
-    <div
-      className={`rounded-lg border border-[var(--bg-card-border)] bg-[var(--bg-hover)] ${compact ? 'p-2' : 'p-3'}`}
-    >
+    <div className={`rounded-[12px] border border-line bg-surface-2 ${compact ? 'p-3' : 'p-4'}`}>
       {/* Header */}
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--text-secondary)]">
-          Split Transaction — {fmt(totalAmount)}
-        </span>
+      <div className="flex justify-between items-center gap-3 mb-3">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-content-3">Split · {fmt(totalAmount)}</span>
         <button
+          type="button"
           onClick={() => setMode((m) => (m === '$' ? '%' : '$'))}
-          className="px-2 py-0.5 rounded text-[11px] font-semibold font-mono border border-[var(--bg-card-border)] bg-[var(--bg-card)] text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-hover)]"
+          className="h-7 px-2.5 rounded-lg text-[12px] font-semibold font-mono border border-line-strong bg-surface text-content-2 hover:text-content"
+          title={mode === '$' ? 'Enter percentages instead' : 'Enter amounts instead'}
         >
           {mode === '$' ? '$ → %' : '% → $'}
         </button>
       </div>
 
       {/* Split rows */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {splits.map((s, i) => {
           const isReimb = !!s.isReimbursement;
           const rowCategories = isReimb ? groupedExpenseCategories : groupedCategories;
           const isLastRow = i === splits.length - 1;
-
           return (
             <div key={i}>
-              <div className="flex gap-1.5 items-center">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <select
-                      value={s.categoryId ?? ''}
-                      onChange={(e) =>
-                        updateSplit(i, 'categoryId', parseInt(e.target.value))
-                      }
-                      className={`${inputCls} flex-1 ${compact ? 'text-[11px]' : ''}`}
-                    >
-                      <option value="" disabled>
-                        Select category...
-                      </option>
-                      {rowCategories.map((g) => (
-                        <optgroup key={g.group} label={g.group}>
-                          {g.cats.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.sub_name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1 min-w-0">
+                  <select
+                    value={s.categoryId ?? ''}
+                    onChange={(e) => updateSplit(i, 'categoryId', parseInt(e.target.value))}
+                    aria-label={`Split ${i + 1} category`}
+                    className={selectCls}
+                  >
+                    <option value="" disabled>Select category…</option>
+                    {rowCategories.map((g) => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {chevron}
                 </div>
-                <div className={compact ? 'w-[80px]' : 'w-[100px]'}>
+                <div className={compact ? 'w-[96px]' : 'w-[120px]'}>
                   {mode === '$' ? (
                     <CurrencyInput
                       value={rawAmounts[i] ?? (s.amount ? s.amount.toString() : '')}
                       onChange={(val) => handleAmountChange(i, val)}
-                      className={`${inputCls} font-mono text-right ${compact ? 'text-[11px]' : ''}`}
+                      className={`${inputCls} font-mono text-right tabular-nums`}
                       placeholder="0.00"
                     />
                   ) : (
@@ -247,57 +242,36 @@ export default function SplitEditor({
                       <input
                         type="text"
                         inputMode="decimal"
-                        value={
-                          absTotalAmount
-                            ? (() => {
-                                const pct = (s.amount / absTotalAmount) * 100;
-                                return Number.isInteger(Math.round(pct * 10) / 10) ? Math.round(pct).toString() : pct.toFixed(1);
-                              })()
-                            : ''
-                        }
-                        onChange={(e) =>
-                          handlePctChange(
-                            i,
-                            e.target.value.replace(/[^0-9.]/g, '')
-                          )
-                        }
+                        aria-label={`Split ${i + 1} percent`}
+                        value={absTotalAmount ? (() => { const pct = (s.amount / absTotalAmount) * 100; return Number.isInteger(Math.round(pct * 10) / 10) ? Math.round(pct).toString() : pct.toFixed(1); })() : ''}
+                        onChange={(e) => handlePctChange(i, e.target.value.replace(/[^0-9.]/g, ''))}
                         placeholder="0"
-                        className={`${inputCls} font-mono text-right pr-5 ${compact ? 'text-[11px]' : ''}`}
+                        className={`${inputCls} font-mono text-right tabular-nums pr-7`}
                       />
-                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)] font-mono pointer-events-none">
-                        %
-                      </span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-3 font-mono pointer-events-none">%</span>
                     </div>
                   )}
                 </div>
                 {splits.length > 2 && (
                   <button
+                    type="button"
                     onClick={() => removeSplit(i)}
-                    className="w-6 h-6 rounded flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer text-[16px] flex-shrink-0 hover:text-[var(--color-negative)] hover:bg-[var(--bg-card)]"
+                    aria-label="Remove split"
+                    className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 text-content-3 hover:text-negative hover:bg-surface"
                   >
-                    ×
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
                   </button>
                 )}
               </div>
-              {/* Reimbursement badge + reset below row */}
               {isReimb && (
-                <div className="flex items-center gap-2 mt-1 ml-0.5">
+                <div className="flex items-center gap-2.5 mt-1.5 ml-0.5">
                   <ReimbursementBadge />
-                  <button
-                    onClick={() => updateSplit(i, 'isReimbursement', false)}
-                    className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 btn-ghost"
-                  >
-                    Reset
-                  </button>
+                  <button type="button" onClick={() => updateSplit(i, 'isReimbursement', false)} className="text-[12px] font-semibold text-content-3 hover:text-content">Reset</button>
                 </div>
               )}
-              {/* Reimbursement link — only on last row when enabled and not already toggled */}
               {reimbursementEnabled && isLastRow && !isReimb && (
-                <button
-                  onClick={() => updateSplit(i, 'isReimbursement', true)}
-                  className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer mt-1 ml-0.5 p-0 btn-ghost"
-                >
-                  Reimbursement
+                <button type="button" onClick={() => updateSplit(i, 'isReimbursement', true)} className="text-[12px] font-semibold text-primary mt-1.5 ml-0.5">
+                  Mark as reimbursement
                 </button>
               )}
             </div>
@@ -307,57 +281,30 @@ export default function SplitEditor({
 
       {/* Add split */}
       <button
+        type="button"
         onClick={addSplit}
-        className="mt-1.5 w-full py-1 rounded-md text-[12px] border border-dashed border-[var(--bg-card-border)] bg-transparent text-[var(--color-accent)] cursor-pointer hover:bg-[var(--bg-card)]"
+        className="mt-2 w-full h-9 rounded-[10px] text-[13px] font-semibold border border-dashed border-line-strong bg-transparent text-primary hover:bg-surface"
       >
-        + Add Split
+        + Add split
       </button>
 
       {/* Footer */}
-      <div className="mt-2 flex justify-between items-center flex-wrap gap-2">
-        <div className="font-mono text-[12px]">
-          <span className="text-[var(--text-muted)]">Allocated: </span>
-          <span
-            className={`font-semibold ${
-              Math.abs(remaining) < 0.01
-                ? 'text-[var(--color-positive)]'
-                : remaining < 0
-                  ? 'text-[var(--color-negative)]'
-                  : 'text-[var(--text-primary)]'
-            }`}
-          >
-            {fmt(allocated)}
-          </span>
-          {Math.abs(remaining) >= 0.01 && (
-            <span
-              className={`ml-1.5 text-[11px] ${
-                remaining < 0
-                  ? 'text-[var(--color-negative)]'
-                  : 'text-[var(--color-warning)]'
-              }`}
-            >
-              ({remaining > 0 ? '+' : ''}
-              {fmt(Math.abs(remaining))}{' '}
-              {remaining > 0 ? 'remaining' : 'over'})
+      <div className="mt-3 flex justify-between items-center flex-wrap gap-2">
+        <div className="font-mono text-[12px] tabular-nums">
+          <span className="text-content-3">Allocated </span>
+          <span className={`font-semibold ${balanced ? 'text-positive' : remaining < 0 ? 'text-negative' : 'text-content'}`}>{fmt(allocated)}</span>
+          {!balanced && (
+            <span className={`ml-1.5 ${remaining < 0 ? 'text-negative' : 'text-warning'}`}>
+              ({remaining > 0 ? '+' : ''}{fmt(Math.abs(remaining))} {remaining > 0 ? 'remaining' : 'over'})
             </span>
           )}
         </div>
-        <div className="flex gap-1.5">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 rounded-md text-[12px] font-medium border border-[var(--bg-card-border)] bg-[var(--btn-secondary-bg)] text-[var(--text-primary)] cursor-pointer btn-secondary"
-          >
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} className="h-9 px-3.5 rounded-[10px] text-[13px] font-semibold border border-line-strong bg-surface text-content hover:bg-elevated">
             Cancel
           </button>
-          <button
-            onClick={handleApply}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-semibold border-none ${
-              isValid
-                ? 'bg-[var(--color-accent)] text-white cursor-pointer'
-                : 'bg-[var(--bg-card-border)] text-[var(--text-muted)] cursor-not-allowed opacity-60'
-            }`}
-          >
-            Apply Split
+          <button type="button" onClick={handleApply} disabled={!isValid} className="h-9 px-4 rounded-[10px] text-[13px] font-bold bg-primary text-on-primary disabled:opacity-50 disabled:cursor-not-allowed">
+            Apply split
           </button>
         </div>
       </div>

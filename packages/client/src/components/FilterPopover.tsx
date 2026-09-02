@@ -7,7 +7,7 @@ interface MerchantOpt { id: number; name: string; txn_count?: number; logo_url?:
 interface CategoryGroup { group: string; subs: { id: number; sub: string }[] }
 interface CategoryRow { id: number; group_name: string; sub_name: string }
 
-const NAV = ['Categories', 'Merchants', 'Accounts', 'Tags', 'Amount', 'Other'];
+const NAV_ALL = ['Categories', 'Merchants', 'Accounts', 'Amount', 'Other'];
 const accountLabel = (a: AccountOpt) => { const lf = a.lastFour ?? a.last_four; return lf ? `${a.name} (${lf})` : a.name; };
 // Same order and wording as the rest of the app (see components/import/types.ts).
 const ACCOUNT_SECTIONS: { key: string; label: string }[] = [
@@ -47,6 +47,8 @@ export default function FilterPopover({
   showNeedsReview?: boolean; // Transactions opts in to the "Needs review" dimension
 }) {
   useCategoryEmojis(); // re-render when stored category emojis load/change
+  // Reports has nothing under "Other" — only Transactions offers the needs-review flag.
+  const NAV = showNeedsReview ? NAV_ALL : NAV_ALL.filter((n) => n !== 'Other');
   const toggleCategory = (token: string) => setDraft((d) => ({ ...d, category: d.category.includes(token) ? d.category.filter((v) => v !== token) : [...d.category, token] }));
   const toggleGroup = (subs: { id: number }[]) => setDraft((d) => {
     const tokens = subs.map((s) => `sub:${s.id}`);
@@ -190,20 +192,13 @@ export default function FilterPopover({
                 ))
               )
             )}
-            {tab === 'Tags' && (
-              <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">Coming soon</div>
-            )}
-            {tab === 'Other' && (
-              showNeedsReview ? (
-                <div className="py-2">
-                  <button type="button" role="checkbox" aria-checked={!!draft.needsReview} onClick={() => setDraft((d) => ({ ...d, needsReview: !d.needsReview }))} className="flex items-center gap-3 w-full text-left px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
-                    <Chk on={!!draft.needsReview} /><span className="flex-1">Needs review only</span>
-                  </button>
-                  <p className="px-1 pt-1 text-[13px] text-content-3 leading-snug">Transactions auto-categorized with low confidence, or left uncategorized on import.</p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">Coming soon</div>
-              )
+            {tab === 'Other' && showNeedsReview && (
+              <div className="py-2">
+                <button type="button" role="checkbox" aria-checked={!!draft.needsReview} onClick={() => setDraft((d) => ({ ...d, needsReview: !d.needsReview }))} className="flex items-center gap-3 w-full text-left px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
+                  <Chk on={!!draft.needsReview} /><span className="flex-1">Needs review only</span>
+                </button>
+                <p className="px-1 pt-1 text-[13px] text-content-3 leading-snug">Transactions auto-categorized with low confidence, or left uncategorized on import.</p>
+              </div>
             )}
           </div>
           {/* selected filters — ALL dimensions */}
