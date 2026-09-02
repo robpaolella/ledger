@@ -78,7 +78,7 @@ export default function DateRangePopover({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           {/* Phones: pinned under the app bar, full width. md+: anchored to the button. */}
-          <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-184px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
+          <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
             <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-y-auto md:overflow-visible">
               <div className="md:w-[212px] shrink-0 border-b md:border-b-0 md:border-r border-line">
                 <div className="px-5 pt-[18px] pb-3 text-base font-extrabold tracking-tight border-b border-line">Date Range</div>

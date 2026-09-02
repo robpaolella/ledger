@@ -20,8 +20,12 @@ export default function SpendingCard({ dragHandleProps }: DashboardCardProps) {
   return (
     <DashboardCard
       title="Spending"
-      subtitle={series ? <span className="text-[20px] font-semibold text-content-2 tabular-nums">{usd2(total)} this month</span> : undefined}
+      subtitle={<>
+        {series && <span className="text-[20px] font-semibold text-content-2 tabular-nums">{usd2(total)} this month</span>}
+        <span className="md:hidden text-[13px] font-medium text-content-3">This month vs. last month</span>
+      </>}
       headerRight={<CardHeaderControl>This month vs. last month</CardHeaderControl>}
+      hideRightOnPhone
       dragHandleProps={dragHandleProps}
     >
       {error && !series ? (
@@ -29,7 +33,7 @@ export default function SpendingCard({ dragHandleProps }: DashboardCardProps) {
       ) : !series ? (
         <CardSkeleton lines={4} />
       ) : (
-        <CardSection className="px-6 pt-[22px] pb-3">
+        <CardSection className="px-4 md:px-6 pt-4 md:pt-[22px] pb-3">
           <SpendingTrendChart
             thisMonth={series.days.map((d) => d.cumulative)}
             lastMonth={series.prior.days.map((d) => d.cumulative)}

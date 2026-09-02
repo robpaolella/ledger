@@ -10,6 +10,9 @@ import Dropdown from '../components/Dropdown';
 import { VendorAvatar } from '../components/primitives';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
 import { timeAgo, fmtTransaction, todayYmd } from '../lib/formatters';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { ListRow } from '../components/ListRow';
+import PageHeader from '../components/PageHeader';
 import { getCategoryEmoji, getCategoryColorHex } from '../lib/categoryMeta';
 
 // ---- types ----
@@ -107,6 +110,7 @@ export default function AccountDetailPage() {
   // manual balance entry (moved from AccountsPage — rows there now navigate here)
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
+  const isMobile = useIsMobile();
 
   // Each loader takes an `alive` probe so a response for a previous account id
   // (fast navigation between accounts) can't land on top of the current one.
@@ -171,15 +175,18 @@ export default function AccountDetailPage() {
     } catch { addToast('Failed to update balance', 'error'); }
   };
 
-  const topBar = (title: ReactNode, right?: ReactNode) => (
-    <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 flex items-center justify-between gap-5 bg-bg border-b border-line">
-      <div className="flex items-center gap-[11px] min-w-0">
-        <Link to="/accounts" className="text-[20px] font-extrabold tracking-tight text-content-3 hover:text-content-2 whitespace-nowrap">Accounts</Link>
-        <svg className="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
-        {title}
-      </div>
-      {right}
-    </div>
+  // Desktop: "Accounts › [avatar] Name" in the page header. Phones: the name is
+  // the app-bar title with a back chevron, and the action sits in the bar.
+  const topBar = (title: ReactNode, right?: ReactNode, barTitle?: string) => (
+    <PageHeader mobileTitle={barTitle ?? 'Account'} mobileBack="/accounts" mobileActions={right}
+      left={!isMobile && (
+        <div className="flex items-center gap-[11px] min-w-0">
+          <Link to="/accounts" className="text-[20px] font-extrabold tracking-tight text-content-3 hover:text-content-2 whitespace-nowrap">Accounts</Link>
+          <svg className="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+          {title}
+        </div>
+      )}
+      right={isMobile ? undefined : right} stackRight={false} />
   );
 
   if (!metaLoaded) return <Spinner />;
@@ -187,7 +194,7 @@ export default function AccountDetailPage() {
   if (!meta) {
     return (
       <div className="pb-16">
-        {topBar(<span className="text-[20px] font-extrabold tracking-tight truncate">Account not found</span>)}
+        {topBar(<span className="text-[20px] font-extrabold tracking-tight truncate">Account not found</span>, undefined, 'Account not found')}
         <div className="bg-surface border border-line rounded-card shadow-sm p-8 text-center">
           <div className="text-[15px] font-semibold text-content mb-1.5">This account doesn't exist</div>
           <div className="text-sm text-content-3 mb-4">It may have been removed, or the link is out of date.</div>
@@ -216,16 +223,17 @@ export default function AccountDetailPage() {
         </>,
         <Link to={`/transactions?accountId=${meta.accountId}`}
           className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border border-line-strong text-sm font-semibold text-content shrink-0 hover:bg-surface-2">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-          Filters
-        </Link>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
+          <span className="hidden md:inline">Filters</span>
+        </Link>,
+        `${meta.name}${meta.lastFour ? ` (…${meta.lastFour})` : ''}`
       )}
 
       {/* balance trend */}
       <div className="bg-surface border border-line rounded-card shadow-sm mb-[22px]">
-        <div className="flex items-start justify-between gap-4 px-[26px] pt-[22px] pb-1">
-          <div>
-            <div className="font-mono text-[11px] uppercase tracking-[.1em] text-content-3 mb-2.5">Current balance</div>
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4 px-4 md:px-[26px] pt-4 md:pt-[22px] pb-1">
+          <div className="min-w-0">
+            <div className="font-mono text-[11px] uppercase tracking-[.1em] text-content-3 mb-2 md:mb-2.5">Current balance</div>
             <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{money(displayBalance)}</span>
               {delta != null && (
@@ -244,7 +252,7 @@ export default function AccountDetailPage() {
             <Dropdown value={range} options={RANGES.map((r) => ({ key: r.key, label: r.label }))} onChange={setRange} minWidth={140} />
           </div>
         </div>
-        <div className="px-[26px] pt-2 pb-3.5">
+        <div className="px-3 md:px-[26px] pt-2 pb-3.5">
           {points.length === 0 ? (
             <div className="h-[260px] flex items-center justify-center text-sm text-content-3">No balance history yet.</div>
           ) : (
@@ -257,7 +265,7 @@ export default function AccountDetailPage() {
       <div className="flex flex-wrap gap-[22px] items-start">
         {/* transactions */}
         <div className="flex-[2_1_460px] min-w-0 bg-surface border border-line rounded-card shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between gap-4 px-6 py-[18px]">
+          <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px]">
             <span className="text-[17px] font-extrabold tracking-tight">Transactions</span>
             <span className="text-[13px] font-semibold text-content-3 tabular-nums">{txns.length} most recent</span>
           </div>
@@ -269,6 +277,17 @@ export default function AccountDetailPage() {
               const color = getCategoryColorHex(cat.groupName);
               const vendor = t.merchant?.name ?? t.description;
               const amt = fmtTransaction(t.amount, cat.type);
+              if (isMobile) {
+                return (
+                  <ListRow key={t.id}
+                    avatar={{ name: vendor, src: t.merchant?.logoUrl, color }}
+                    title={vendor}
+                    subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(cat.subName)}</span><span className="truncate">{cat.label}</span></>}
+                    amount={amt.text} amountClass={amt.className}
+                    meta={<span className="font-mono">{new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    className="border-t" />
+                );
+              }
               return (
                 <div key={t.id} className="flex items-center gap-3.5 px-6 h-11 border-t border-line">
                   <span className="w-[84px] shrink-0 font-mono text-[12.5px] text-content-3">
@@ -292,7 +311,7 @@ export default function AccountDetailPage() {
         </div>
 
         {/* summary (right, per the design pack) */}
-        <div className="flex-[1_1_300px] min-w-[280px] md:sticky md:top-[88px] bg-surface border border-line rounded-card shadow-sm px-6 pt-[22px] pb-4">
+        <div className="flex-[1_1_300px] min-w-[280px] md:sticky md:top-[88px] bg-surface border border-line rounded-card shadow-sm px-4 md:px-6 pt-4 md:pt-[22px] pb-4">
           <div className="text-[17px] font-extrabold tracking-tight mb-2">Summary</div>
           {summaryRow('Institution', meta.institution ?? '—')}
           {summaryRow('Account type', SUBTYPE[meta.type] ?? meta.type)}

@@ -167,12 +167,15 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="fixed z-50 w-[360px] flex flex-col bg-elevated border border-line rounded-[12px] shadow-md overflow-hidden"
-        style={{
-          left: anchor.right + 10,
-          top: anchor.top,
-          maxHeight: Math.min(480, window.innerHeight - anchor.top - 12),
-        }}
+        className="fixed z-50 w-[360px] max-w-[calc(100vw-32px)] flex flex-col bg-elevated border border-line rounded-[12px] shadow-md overflow-hidden"
+        style={window.innerWidth < 768
+          // phones: full-width sheet under the app bar (the bell sits at the right edge)
+          ? { left: 16, right: 16, width: 'auto', top: 64, maxHeight: window.innerHeight - 96 }
+          : {
+            left: anchor.right + 10,
+            top: anchor.top,
+            maxHeight: Math.min(480, window.innerHeight - anchor.top - 12),
+          }}
         role="dialog"
         aria-label="Notifications"
       >

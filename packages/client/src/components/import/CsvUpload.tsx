@@ -45,7 +45,7 @@ export default function CsvUpload({
         <div className="text-sm text-content-3">or <span className="text-primary font-semibold">browse files</span></div>
         <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
         {/* Format hints — the exporter is detected from the file, so these are not choices. */}
-        <div className="flex items-center gap-2 mt-3.5" aria-hidden="true">
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5" aria-hidden="true">
           <span className="text-xs text-content-3">Works with</span>
           {['Chase', 'Venmo', 'Generic CSV'].map((f) => (
             <span key={f} className="h-7 px-[13px] rounded-full flex items-center text-xs font-semibold bg-surface-2 border border-line text-content-2">{f}</span>

@@ -399,12 +399,10 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 @media (max-width: 767px) {
   .desktop-only { display: none !important; }
   .mobile-main-content {
-    padding: 16px 16px 120px !important;
+    padding: 16px 16px 40px !important;
   }
-  .tab-bar-icon svg {
-    width: 22px;
-    height: 22px;
-  }
+  @keyframes drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
+  .drawer-in { animation: drawer-in 220ms cubic-bezier(.2,.8,.2,1); }
 
   /* Page title sizing */
   .page-title { font-size: 17px !important; }
@@ -414,6 +412,8 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   .touch-row { min-height: 44px; }
 
   /* Hide scrollbars on mobile */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .mobile-main-content::-webkit-scrollbar { display: none; }
   .mobile-main-content { -ms-overflow-style: none; scrollbar-width: none; }
 

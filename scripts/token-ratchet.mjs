@@ -20,7 +20,7 @@ const NEW_TOKENS = new Set([
   'bg', 'surface', 'surface-2', 'elevated', 'line', 'line-strong',
   'text', 'text-2', 'text-3',
   'primary', 'primary-hover', 'on-primary', 'ring',
-  'positive', 'negative', 'warning',
+  'positive', 'negative', 'warning', 'bg-modal',
   'content', 'content-2', 'content-3',
   'c-teal', 'c-green', 'c-blue', 'c-indigo', 'c-violet', 'c-fuchsia', 'c-rose', 'c-orange', 'c-amber',
   'own-robert', 'own-kathleen', 'own-shared',
@@ -30,7 +30,7 @@ const NEW_TOKENS = new Set([
 
 // Ratchet baseline — the count of old-token refs at the end of Wave 0.
 // LOWER this as areas migrate; CI fails if the live count exceeds it.
-const BASELINE = Number(process.env.TOKEN_BASELINE ?? 99);
+const BASELINE = Number(process.env.TOKEN_BASELINE ?? 90);
 
 function walk(dir) {
   const out = [];

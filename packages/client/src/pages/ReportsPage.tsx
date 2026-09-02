@@ -5,6 +5,9 @@ import { fmtTransaction } from '../lib/formatters';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
+import PageHeader from '../components/PageHeader';
+import { ListRow } from '../components/ListRow';
+import { useIsMobile } from '../hooks/useIsMobile';
 import FilterPopover from '../components/FilterPopover';
 import DateRangePopover from '../components/DateRangePopover';
 import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/filterModel';
@@ -113,6 +116,7 @@ function buildSections(cats: PeriodCat[], nBuckets: number): Record<string, Sect
 const cum = (arr: number[]) => { let s = 0; return arr.map((v) => (s += v)); };
 
 export default function ReportsPage() {
+  const isMobile = useIsMobile();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   // ── period ──
   const [preset, setPreset] = useState<Preset>('YTD');
@@ -460,15 +464,16 @@ export default function ReportsPage() {
     return groups;
   })();
 
+  const exportEl = (
+    <button onClick={exportCsv} title="Export CSV" className="w-10 h-10 shrink-0 flex items-center justify-center bg-surface border border-line-strong rounded-[11px] text-content-2 hover:bg-surface-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16" /></svg>
+          </button>
+  );
+
   return (
     <div className="pb-16">
       {/* Hero */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap bg-bg border-b border-line">
-        <div className="flex items-baseline gap-2.5">
-          <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Reports</h1>
-          <p className="text-[13px] text-content-3 m-0">{range.label}</p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader title="Reports" subtitle={range.label} mobileActions={exportEl} right={<>
           {/* Clear all — far left; shows whenever any filter is applied (matches Transactions). */}
           {(fCount > 0 || preset !== 'YTD') && (
             <button onClick={() => {
@@ -505,11 +510,8 @@ export default function ReportsPage() {
               />
             )}
           </div>
-          <button onClick={exportCsv} title="Export CSV" className="w-10 h-10 shrink-0 flex items-center justify-center bg-surface border border-line-strong rounded-[11px] text-content-2 hover:bg-surface-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16" /></svg>
-          </button>
-        </div>
-      </div>
+          {!isMobile && exportEl}
+        </>} />
 
       {/* KPI ROW */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-[22px]">
@@ -635,7 +637,7 @@ export default function ReportsPage() {
 
       {/* CATEGORY BREAKDOWN */}
       <div className="border border-line rounded-card bg-surface overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between gap-4" style={{ padding: '18px 26px 16px' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 px-4 sm:px-[26px] pt-4 sm:pt-[18px] pb-4">
           <div className="min-w-0">
             <div className="text-[17px] font-extrabold">Category breakdown</div>
             <div className="text-[13px] text-content-3 mt-0.5">{catHint}</div>
@@ -753,7 +755,7 @@ export default function ReportsPage() {
 
       {/* TRANSACTIONS */}
       <div className="mt-[22px] border border-line rounded-card bg-surface overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between gap-4" style={{ padding: '18px 26px 16px' }}>
+        <div className="flex items-center justify-between gap-4 px-4 sm:px-[26px] pt-4 sm:pt-[18px] pb-4">
           <div className="min-w-0">
             <div className="text-[17px] font-extrabold">Transactions</div>
             <div className="text-[13px] text-content-3 mt-0.5">{txnHint}</div>
@@ -795,6 +797,16 @@ export default function ReportsPage() {
                 const vendor = t.merchant?.name || t.description || '—';
                 const hue = subColor((vendor.charCodeAt(0) || 0));
                 const amt = fmtTransaction(t.amount, t.category?.type ?? 'expense');
+                if (isMobile) {
+                  return (
+                    <ListRow key={t.id} className="border-t-0 border-b"
+                      avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
+                      title={vendor}
+                      subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
+                      amount={amt.text} amountClass={amt.className}
+                      meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined} />
+                  );
+                }
                 return (
                   <div key={t.id} className="flex items-center gap-3.5 border-b border-line" style={{ padding: '0 26px', height: 44 }}>
                     <VendorAvatar name={vendor} src={t.merchant?.logoUrl || undefined} color={t.merchant?.logoUrl ? undefined : hue} size={26} />
@@ -808,7 +820,6 @@ export default function ReportsPage() {
                       <span className="truncate">{t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : '—'}</span>
                     </div>
                     <div className={`w-[118px] shrink-0 text-right font-bold text-[15px] tabular-nums ${amt.className}`}>{amt.text}</div>
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
                   </div>
                 );
               })}

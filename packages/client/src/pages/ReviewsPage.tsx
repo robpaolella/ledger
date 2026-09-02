@@ -3,6 +3,9 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
+import PageHeader from '../components/PageHeader';
+import { ListRow } from '../components/ListRow';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { fmtTransaction } from '../lib/formatters';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
@@ -53,6 +56,7 @@ function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: s
 }
 
 export default function ReviewsPage() {
+  const isMobile = useIsMobile();
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission('transactions.edit');
   const { addToast } = useToast();
@@ -237,15 +241,12 @@ export default function ReviewsPage() {
   return (
     <div>
       {/* top bar */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-0 flex items-center justify-between gap-5 flex-wrap bg-bg border-b border-line">
-        <div className="flex items-center gap-3.5">
-          <span className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Review</span>
+      <PageHeader className="!mb-0" title="Review" left={!isMobile && (
           <span className="inline-flex items-center gap-1.5 h-[26px] px-[11px] rounded-full text-[12px] font-bold" style={{ background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
             {openTotal} flagged
           </span>
-        </div>
-        <div className="flex items-center gap-2.5 flex-wrap">
+        )} right={<>
           {searchOpen ? (
             <div className="h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -328,13 +329,12 @@ export default function ReviewsPage() {
               Approve all
             </button>
           )}
-        </div>
-      </div>
+        </>} />
 
       {/* body card */}
-      <div className="pt-6 pb-16">
+      <div className="pt-5 md:pt-6 pb-16">
         <div className="border border-line rounded-[18px] bg-surface shadow-sm" style={{ overflow: 'visible' }}>
-          <div className="flex items-center justify-between gap-4 px-6 py-[18px]">
+          <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px]">
             <div className="flex items-baseline gap-2.5">
               <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} need review</span>
               {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Reset filters</span>}
@@ -357,7 +357,7 @@ export default function ReviewsPage() {
           ) : (
             groups.map((g) => (
               <div key={g.date}>
-                <div className="flex items-center justify-between px-6 py-[9px] bg-surface-2 border-t border-b border-line">
+                <div className="flex items-center justify-between px-4 md:px-6 py-[9px] bg-surface-2 border-t border-b border-line">
                   <span className="text-[13px] font-semibold text-content-2">{g.header}</span>
                   <span className="font-mono text-[12px] text-content-3 tabular-nums">{g.rows.length} {g.rows.length === 1 ? 'item' : 'items'}</span>
                 </div>
@@ -367,6 +367,21 @@ export default function ReviewsPage() {
                   const reasonText = REASON_LABEL[r.reason] || 'Flagged for review';
                   const noteText = r.note?.trim() || '';
                   const amt = fmtTransaction(t.amount, t.category?.type ?? 'expense');
+                  if (isMobile) {
+                    // Phones: two-line row; category/assignee edits happen in the detail panel.
+                    return (
+                      <ListRow key={r.reviewId} onClick={() => openPanel(t.id)} chevron className="border-t-0 border-b"
+                        avatar={{ name: mLabel, src: t.merchant?.logoUrl, color: colorVar(mLabel), size: 34 }}
+                        title={mLabel}
+                        subtitle={<>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-none"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0ZM12 9v4M12 17h.01" /></svg>
+                          <span className="font-semibold truncate" style={{ color: 'var(--warning)' }}>{reasonText}</span>
+                          {noteText && <span className="truncate">· {noteText}</span>}
+                        </>}
+                        amount={amt.text} amountClass={amt.className}
+                        meta={r.assignee?.displayName ?? 'Unassigned'} />
+                    );
+                  }
                   return (
                     <div key={r.reviewId} onClick={() => openPanel(t.id)} className="group flex items-center gap-3.5 px-6 h-[60px] border-b border-line cursor-pointer hover:bg-surface-2 transition-colors">
                       <VendorAvatar name={mLabel} src={t.merchant?.logoUrl || undefined} color={colorVar(mLabel)} size={30} />

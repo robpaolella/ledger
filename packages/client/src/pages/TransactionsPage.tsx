@@ -13,6 +13,8 @@ import { NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
+import PageHeader from '../components/PageHeader';
+import { ListRow, CategoryTag, GroupHeader } from '../components/ListRow';
 import SplitEditor from '../components/SplitEditor';
 import type { SplitRow } from '../components/SplitEditor';
 import FilterPopover from '../components/FilterPopover';
@@ -1565,28 +1567,18 @@ export default function TransactionsPage() {
     );
   };
 
-  return (
-    <div>
-      {/* Learn-a-rule prompt after recategorizing a merchant */}
-      {ruleSuggest && (
-        <div className="fixed left-1/2 bottom-7 z-[100] flex items-center gap-3 rounded-full bg-elevated px-4 py-2.5 shadow-md" style={{ transform: 'translateX(-50%)', border: '2px solid var(--primary)', maxWidth: 'calc(100vw - 48px)' }}>
-          <span className="text-sm text-content">Always categorize <span className="font-bold">{ruleSuggest.merchantName}</span> as <span className="font-bold">{ruleSuggest.categoryName}</span>?</span>
-          <button onClick={applyMerchantRule} className="h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
-          <button onClick={() => setRuleSuggest(null)} className="h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
-          <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
-            className="h-9 px-3 rounded-[10px] text-content-3 font-semibold text-sm hover:bg-surface-2 shrink-0">Never</button>
-        </div>
-      )}
-      {/* Header + consolidated top-right controls */}
-      <div ref={pageHeaderRef} className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 bg-bg border-b border-line flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-6">
-          <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Transactions</h1>
-          <div className="hidden md:flex items-center gap-5 text-[15px] font-semibold">
-            <span className="text-primary border-b-2 border-primary pb-0.5">All</span>
-            <Link to="/recurring" className="text-content-3 hover:text-content pb-0.5">Recurring</Link>
-          </div>
-        </div>
-        <div className="flex items-center gap-2.5 flex-wrap">
+  // Header controls, composed differently for desktop (one row) and phones
+  // (search field + filter icon, then date/sort chips; import/add in the app bar).
+  const filterPopoverEl = filterOpen && (
+              <FilterPopover
+                draft={filterDraft} setDraft={setFilterDraft}
+                categoryGroups={categoryGroups} accounts={accounts} merchants={merchants} categories={categories}
+                search={filterSearch} setSearch={setFilterSearch} tab={filterTab} setTab={setFilterTab}
+                onClear={clearFilters} onCancel={() => setFilterOpen(false)} onApply={applyFilters}
+                showNeedsReview
+              />
+            );
+  const nudgeEl = (<>
           {/* Needs-review nudge — jumps to the needs-review filter */}
           {reviewCount > 0 && (
             <Link
@@ -1599,12 +1591,16 @@ export default function TransactionsPage() {
               {reviewCount} to review
             </Link>
           )}
+  </>);
+  const clearEl = (<>
           {/* Clear all — shows whenever any filter/search/date is active */}
           {anyActive && (
             <button onClick={clearAll} className="h-10 px-2.5 text-primary hover:text-primary-hover font-semibold text-sm">
               Clear
             </button>
           )}
+  </>);
+  const searchEl = (<>
           {/* Search */}
           {searchOpen ? (
             <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2">
@@ -1620,6 +1616,8 @@ export default function TransactionsPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             </button>
           )}
+  </>);
+  const dateRangeEl = (<>
           {/* Date range overlay (shared DateRangePopover) */}
           <DateRangePopover
             presets={DATE_PRESETS.filter((p) => p.value !== 'custom')}
@@ -1630,6 +1628,8 @@ export default function TransactionsPage() {
             onOpen={() => { setSortOpen(false); setFilterOpen(false); setSearchOpen(false); }}
             onApply={(v) => { setDatePreset(v.preset); setCustomStart(v.start); setCustomEnd(v.end); }}
           />
+  </>);
+  const filtersEl = (<>
           {/* Filters overlay (design system) */}
           <div className="relative">
             <button onClick={openFilterPopover}
@@ -1638,16 +1638,10 @@ export default function TransactionsPage() {
               Filters
               {filterCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center">{filterCount}</span>}
             </button>
-            {filterOpen && (
-              <FilterPopover
-                draft={filterDraft} setDraft={setFilterDraft}
-                categoryGroups={categoryGroups} accounts={accounts} merchants={merchants} categories={categories}
-                search={filterSearch} setSearch={setFilterSearch} tab={filterTab} setTab={setFilterTab}
-                onClear={clearFilters} onCancel={() => setFilterOpen(false)} onApply={applyFilters}
-                showNeedsReview
-              />
-            )}
+            {filterPopoverEl}
           </div>
+  </>);
+  const sortEl = (<>
           {/* Sort */}
           <div className="relative">
             <button onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); }}
@@ -1673,62 +1667,102 @@ export default function TransactionsPage() {
               </>
             )}
           </div>
+  </>);
+  const importEl = (<>
           {/* Manual Import — on-demand SimpleFIN pull for a date range */}
           <PermissionGate permission="import.bank_sync">
             <button onClick={() => setImportOpen(true)} title="Pull transactions from your bank for a date range"
-              className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">
+              className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2" aria-label="Manual import">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-              Manual Import
+              <span className="hidden md:inline">Manual Import</span>
             </button>
           </PermissionGate>
-          {/* Add (desktop — phones use the floating button) */}
+  </>);
+  const addEl = (<>
+          {/* Add (phones: app-bar action) */}
           <PermissionGate permission="transactions.create" fallback="disabled">
             <button onClick={() => setEditing('new')}
-              className="desktop-only flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover">
+              className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover" aria-label="Add transaction">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              Add
+              <span className="hidden md:inline">Add</span>
             </button>
           </PermissionGate>
-        </div>
+  </>);
+  const phoneToolbar = (
+    <div className="w-full flex flex-col gap-2">
+      <div className="relative flex items-center h-11 rounded-[12px] bg-surface border border-line-strong pl-3 pr-1 gap-2">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" autoCapitalize="off"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
+        {search && (
+          <button onClick={() => setSearch('')} aria-label="Clear search" className="w-8 h-8 flex items-center justify-center text-content-3">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        )}
+        <button onClick={openFilterPopover} aria-label="Filters" className={`relative w-9 h-9 rounded-[9px] flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          {filterCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{filterCount}</span>}
+        </button>
+        {filterPopoverEl}
       </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {dateRangeEl}{sortEl}{nudgeEl}{clearEl}
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Learn-a-rule prompt after recategorizing a merchant */}
+      {ruleSuggest && (
+        <div className="fixed left-1/2 bottom-7 z-[100] flex items-center gap-3 rounded-full bg-elevated px-4 py-2.5 shadow-md" style={{ transform: 'translateX(-50%)', border: '2px solid var(--primary)', maxWidth: 'calc(100vw - 48px)' }}>
+          <span className="text-sm text-content">Always categorize <span className="font-bold">{ruleSuggest.merchantName}</span> as <span className="font-bold">{ruleSuggest.categoryName}</span>?</span>
+          <button onClick={applyMerchantRule} className="h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
+          <button onClick={() => setRuleSuggest(null)} className="h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
+          <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
+            className="h-9 px-3 rounded-[10px] text-content-3 font-semibold text-sm hover:bg-surface-2 shrink-0">Never</button>
+        </div>
+      )}
+      {/* Header + consolidated top-right controls */}
+      <PageHeader headerRef={pageHeaderRef} title="Transactions"
+        left={!isMobile && (
+          <div className="flex items-center gap-5 text-[15px] font-semibold">
+            <span className="text-primary border-b-2 border-primary pb-0.5">All</span>
+            <Link to="/recurring" className="text-content-3 hover:text-content pb-0.5">Recurring</Link>
+          </div>
+        )}
+        mobileActions={<>{importEl}{addEl}</>}
+        right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{sortEl}{importEl}{addEl}</>} />
 
       {isMobile ? (
-        /* Mobile: one card of 64px rows (same anatomy as the desktop list) */
+        /* Phones: the same day groups as the desktop list, on two-line rows */
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-          {displayRows.map(({ t, split }, idx) => {
-            const catType = split ? split.type : (t.category?.type ?? t.splits?.[0]?.type ?? 'expense');
-            const { text: amtText, className: amtClass } = fmtTransaction(split ? split.amount : t.amount, catType);
-            const label = split ? splitVendorLabel(t, split) : vendorLabel(t);
-            const catName = split ? split.subName : t.category?.subName;
-            const catGroup = split ? split.groupName : t.category?.groupName;
-            return (
-              <div key={split ? `${t.id}-split-${split.id}` : t.id}
-                onClick={() => { if (hasPermission('transactions.edit')) openDetail(t, split); }}
-                className={`flex items-center gap-3 px-4 h-16 ${idx > 0 ? 'border-t border-line' : ''} ${hasPermission('transactions.edit') ? 'cursor-pointer active:bg-surface-2' : ''}`}>
-                <VendorAvatar name={label} src={t.merchant?.logoUrl || undefined} color={catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)'} size={36} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[15px] font-semibold text-content truncate">{label}</span>
-                    {split && <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(10)}</span>}
-                    {t.needsReview && !split && <NeedsReviewBadge />}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[12px] text-content-3 min-w-0">
-                    {catName && (
-                      <span className="inline-flex items-center gap-1 min-w-0">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catGroup ? getCategoryColorHex(catGroup) : 'var(--text-3)' }} />
-                        <span className="truncate">{catName}</span>
-                      </span>
-                    )}
-                    <span className="font-mono shrink-0">{shortDate(t.date)}</span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className={`text-[15px] font-bold tabular-nums ${amtClass}`}>{amtText}</div>
-                  <div className="font-mono text-[11px] text-content-3 mt-0.5 max-w-[120px] truncate">{accountLabel(t.account)}</div>
-                </div>
-              </div>
-            );
-          })}
+          {dateGroups.map((g) => (
+            <div key={g.date}>
+              <GroupHeader label={formatDateHeader(g.date)} right={g.net < 0 ? `+${fmt(Math.abs(g.net))}` : fmt(g.net)} rightClass={g.net < 0 ? 'text-positive' : 'text-content-3'} className="first:border-t-0" />
+              {g.rows.map(({ t, split }) => {
+                const catType = split ? split.type : (t.category?.type ?? t.splits?.[0]?.type ?? 'expense');
+                const { text: amtText, className: amtClass } = fmtTransaction(split ? split.amount : t.amount, catType);
+                const label = split ? splitVendorLabel(t, split) : vendorLabel(t);
+                const catName = split ? split.subName : t.category?.subName;
+                const catGroup = split ? split.groupName : t.category?.groupName;
+                return (
+                  <ListRow key={split ? `${t.id}-split-${split.id}` : t.id}
+                    onClick={hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
+                    avatar={{ name: label, src: t.merchant?.logoUrl, color: catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)' }}
+                    title={label}
+                    titleExtra={<>
+                      {split && <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(11)}</span>}
+                      {t.needsReview && !split && <NeedsReviewBadge />}
+                    </>}
+                    subtitle={catName ? <CategoryTag color={catGroup ? getCategoryColorHex(catGroup) : undefined}>{catName}</CategoryTag> : <span className="text-content-3">Uncategorized</span>}
+                    amount={amtText} amountClass={amtClass}
+                    meta={<span className="font-mono">{accountLabel(t.account)}</span>}
+                  />
+                );
+              })}
+            </div>
+          ))}
           {transactions.length === 0 && (
             <p className="text-center py-10 text-content-3 text-sm m-0">No transactions found for this period</p>
           )}

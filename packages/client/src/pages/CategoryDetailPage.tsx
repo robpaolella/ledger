@@ -4,6 +4,9 @@ import { apiFetch } from '../lib/api';
 import { scopeTxnsToCategory, type ScopeLeg } from '../lib/categoryScope';
 import { fmtTransaction } from '../lib/formatters';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
+import PageHeader from '../components/PageHeader';
+import { ListRow } from '../components/ListRow';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import Spinner from '../components/Spinner';
 
@@ -92,6 +95,8 @@ export default function CategoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriodState] = useState<Period>('month');
+  const isMobile = useIsMobile();
+  const yAxisW = isMobile ? 44 : 56;
   const [sel, setSel] = useState<number | null>(null);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [txnTotal, setTxnTotal] = useState(0);
@@ -247,28 +252,29 @@ export default function CategoryDetailPage() {
   return (
     <div>
       {/* Sticky breadcrumb bar */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 flex items-center justify-between gap-4 bg-bg border-b border-line">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <button onClick={() => navigate('/budget')} className="text-xl font-bold text-content-3 hover:text-content transition-colors shrink-0">Budget</button>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
-          <span className="w-[30px] h-[30px] shrink-0 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center text-[15px] leading-none">{catEmoji}</span>
-          <span className="text-xl font-extrabold tracking-tight truncate">{catName}</span>
-        </div>
-        <SegmentedControl value={period} onChange={setPeriod}
-          options={[{ value: 'month', label: 'Monthly' }, { value: 'quarter', label: 'Quarterly' }, { value: 'year', label: 'Yearly' }]} />
-      </div>
+      <PageHeader mobileTitle={`${catEmoji} ${catName}`} mobileBack="/budget" left={!isMobile && (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button onClick={() => navigate('/budget')} className="text-xl font-bold text-content-3 hover:text-content transition-colors shrink-0">Budget</button>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
+            <span className="w-[30px] h-[30px] shrink-0 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center text-[15px] leading-none">{catEmoji}</span>
+            <span className="text-xl font-extrabold tracking-tight truncate">{catName}</span>
+          </div>
+        )} right={
+          <SegmentedControl value={period} onChange={setPeriod}
+            options={[{ value: 'month', label: 'Monthly' }, { value: 'quarter', label: 'Quarterly' }, { value: 'year', label: 'Yearly' }]} />
+        } />
 
       {/* Chart card */}
-      <div className="border border-line rounded-card bg-surface shadow-sm mb-[30px]" style={{ padding: '22px 28px 18px' }}>
+      <div className="border border-line rounded-card bg-surface shadow-sm mb-6 md:mb-[30px] pt-4 px-3 pb-3.5 md:pt-[22px] md:px-7 md:pb-[18px]">
         {/* Year bands */}
-        <div className="flex" style={{ paddingLeft: 56, marginBottom: 10 }}>
+        <div className="flex" style={{ paddingLeft: yAxisW, marginBottom: 10 }}>
           {chart.bands.map((band, i) => (
             <div key={`${band.label}-${i}`} className="font-mono text-[11px] text-content-3" style={{ flex: band.count, paddingLeft: 10, borderLeft: '1px solid var(--line)', letterSpacing: '.05em' }}>{band.label}</div>
           ))}
         </div>
         {/* Plot */}
-        <div className="flex" style={{ height: 290 }}>
-          <div className="relative shrink-0" style={{ width: 56 }}>
+        <div className="flex" style={{ height: isMobile ? 220 : 290 }}>
+          <div className="relative shrink-0" style={{ width: yAxisW }}>
             {chart.ticks.map((t, i) => (
               <div key={i} className="absolute font-mono text-[11px] text-content-3" style={{ right: 12, bottom: t.bottom, transform: 'translateY(50%)' }}>{t.label}</div>
             ))}
@@ -290,20 +296,23 @@ export default function CategoryDetailPage() {
           </div>
         </div>
         {/* X labels */}
-        <div className="flex" style={{ paddingLeft: 56, marginTop: 9, gap: 4 }}>
+        {/* Phones can't fit a label under every bar: keep every 3rd plus the selected one. */}
+        <div className="flex" style={{ paddingLeft: yAxisW, marginTop: 9, gap: 4 }}>
           {chart.bars.map((b, i) => (
-            <div key={i} className="text-center text-[11px] truncate" style={{ flex: 1, minWidth: 0, color: b.selected ? 'var(--text)' : 'var(--text-3)', fontWeight: b.selected ? 700 : 500 }}>{b.barLabel}</div>
+            <div key={i} className="text-center text-[11px] whitespace-nowrap overflow-visible" style={{ flex: 1, minWidth: 0, color: b.selected ? 'var(--text)' : 'var(--text-3)', fontWeight: b.selected ? 700 : 500 }}>
+              {!isMobile || chart.bars.length <= 6 || b.selected || (i % 3 === 0 && !chart.bars[i + 1]?.selected && !chart.bars[i - 1]?.selected) ? b.barLabel : ''}
+            </div>
           ))}
         </div>
       </div>
 
       {/* Period heading */}
-      <div className="text-[26px] font-extrabold mb-[18px]" style={{ letterSpacing: '-.02em' }}>{selBucket?.periodLabel}</div>
+      <div className="text-[22px] md:text-[26px] font-extrabold mb-4 md:mb-[18px]" style={{ letterSpacing: '-.02em' }}>{selBucket?.periodLabel}</div>
 
       <div className="grid gap-[22px] items-start grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Transactions */}
         <div className="border border-line rounded-card bg-surface overflow-hidden shadow-sm">
-          <div className="text-[17px] font-bold" style={{ padding: '20px 24px 16px' }}>Transactions</div>
+          <div className="text-[17px] font-bold px-4 md:px-6 pt-4 md:pt-5 pb-3 md:pb-4">Transactions</div>
           {txnsLoading ? (
             <div className="flex justify-center py-12 border-t border-line"><Spinner /></div>
           ) : days.length === 0 ? (
@@ -316,7 +325,7 @@ export default function CategoryDetailPage() {
             )}
             {days.map((d) => (
             <div key={d.label}>
-              <div className="flex items-center justify-between bg-surface-2 border-t border-b border-line" style={{ padding: '11px 24px' }}>
+              <div className="flex items-center justify-between bg-surface-2 border-t border-b border-line px-4 md:px-6 py-2 md:py-[11px]">
                 <span className="text-[13px] font-semibold text-content-2">{d.label}</span>
                 <span className={`text-[13px] font-semibold tabular-nums ${d.total.className}`}>{d.total.text}</span>
               </div>
@@ -325,6 +334,17 @@ export default function CategoryDetailPage() {
                 const hue = hueOf(vendor);
                 const subName = t.category?.subName ?? 'Uncategorized';
                 const amt = fmtTransaction(t.amount, t.category?.type ?? cfg.type);
+                if (isMobile) {
+                  return (
+                    <ListRow key={t.id}
+                      avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
+                      title={vendor}
+                      subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(subName)}</span><span className="truncate">{subName}</span></>}
+                      amount={amt.text} amountClass={amt.className}
+                      meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined}
+                      className="border-t-0 border-b" />
+                  );
+                }
                 return (
                   <div key={t.id} className="grid items-center border-b border-line" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,0.7fr)', gap: 16, padding: '13px 24px' }}>
                     <div className="flex items-center gap-3 min-w-0">

@@ -87,7 +87,7 @@ export default function FilterPopover({
     <>
       <div className="fixed inset-0 z-40" onClick={onCancel} />
       {/* Phones: pinned under the app bar, full width. md+: anchored to the Filters button. */}
-      <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[820px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-184px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
+      <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[820px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
         {/* header */}
         <div className="flex flex-col md:flex-row border-b border-line">
           <div className="md:w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-b md:border-b-0 md:border-r border-line">Filters</div>

@@ -18,13 +18,11 @@ import RecurringPage from './pages/RecurringPage';
 import InvestmentsPage from './pages/InvestmentsPage';
 import ReviewsPage from './pages/ReviewsPage';
 import MobileHeader from './components/MobileHeader';
-import BottomTabBar from './components/BottomTabBar';
 import Sidebar from './components/Sidebar';
 import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import Spinner from './components/Spinner';
 import { apiFetch } from './lib/api';
 import { loadCategoryEmojis } from './lib/categoryMeta';
-import { useIsMobile } from './hooks/useIsMobile';
 
 // Dev-only tooling pages: lazy so they never enter the production bundle.
 const MockupPage = lazy(() => import('./pages/MockupPage'));
@@ -57,11 +55,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 function AppShell() {
-  const location = useLocation();
   const { addToast } = useToast();
-  const isMobile = useIsMobile();
-
-  const showFab = isMobile && location.pathname === '/transactions';
 
   const handlePermissionDenied = useCallback((e: Event) => {
     const msg = (e as CustomEvent).detail || 'Permission denied';
@@ -104,19 +98,6 @@ function AppShell() {
           </Routes>
         </div>
       </div>
-      {showFab && (
-        <button
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent('open-add-transaction'));
-          }}
-          className="mobile-only fixed z-10 flex items-center gap-1.5 h-11 px-5 rounded-full bg-primary text-on-primary font-bold text-sm shadow-md whitespace-nowrap"
-          style={{ left: '50%', transform: 'translateX(-50%)', bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          Transaction
-        </button>
-      )}
-      <BottomTabBar />
     </div>
   );
 }

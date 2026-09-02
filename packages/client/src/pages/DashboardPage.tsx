@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import PageHeader from '../components/PageHeader';
 import { createPortal } from 'react-dom';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, closestCorners,
@@ -91,9 +92,7 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-16">
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 bg-bg border-b border-line">
-        <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">{greeting}</h1>
-      </div>
+      <PageHeader title={greeting} mobileTitle="Dashboard" />
 
       {isMobile ? (
         // Static single column on mobile — no drag-and-drop.

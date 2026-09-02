@@ -68,6 +68,7 @@ export default function RecurringCard({ dragHandleProps }: DashboardCardProps) {
       title="Recurring"
       subtitle={remaining != null ? <span className="text-[15px] font-semibold text-content-3 tabular-nums">{usd(remaining)} remaining due</span> : undefined}
       headerRight={<CardHeaderControl small>This month</CardHeaderControl>}
+      hideRightOnPhone
       dragHandleProps={dragHandleProps}
     >
       {error ? (
@@ -79,7 +80,7 @@ export default function RecurringCard({ dragHandleProps }: DashboardCardProps) {
       ) : (
         <div
           onClick={() => navigate('/recurring')}
-          className="flex items-center gap-3.5 px-6 h-[78px] border-t border-line cursor-pointer hover:bg-surface-2/40"
+          className="flex items-center gap-3.5 px-4 md:px-6 h-[78px] border-t border-line cursor-pointer hover:bg-surface-2/40"
         >
           <span className="relative w-11 h-11 flex-none">
             <VendorAvatar name={next.merchantName ?? next.label} src={next.merchantLogoUrl || undefined} size={44} />

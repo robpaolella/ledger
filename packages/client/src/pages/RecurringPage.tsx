@@ -10,6 +10,8 @@ import KPICard from '../components/KPICard';
 import CurrencyInput from '../components/CurrencyInput';
 import ResponsiveModal from '../components/ResponsiveModal';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
+import PageHeader from '../components/PageHeader';
+import { useIsMobile } from '../hooks/useIsMobile';
 import MerchantPicker, { type MerchantOption } from '../components/MerchantPicker';
 
 type Kind = 'monthly' | 'semi_monthly' | 'biweekly' | 'weekly' | 'every_n_months' | 'custom_months';
@@ -88,6 +90,7 @@ function cadenceLabel(it: { freq_kind: Kind; interval: number | null; months_jso
 }
 
 export default function RecurringPage() {
+  const isMobile = useIsMobile();
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
   useCategoryEmojis(); // re-render when stored category emojis load/change
@@ -184,13 +187,16 @@ export default function RecurringPage() {
     const color = getCategoryColorHex(o.groupName);
     return (
       <button key={`${o.itemId}-${o.date}`} onClick={() => { const it = items.find((i) => i.id === o.itemId); if (it) setPanel(it); }}
-        className="w-full flex items-center gap-4 px-5 h-[58px] border-b border-line text-left hover:bg-surface-2/40">
+        className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-5 min-h-16 md:min-h-0 md:h-[58px] py-2 md:py-0 border-b border-line text-left hover:bg-surface-2/40 active:bg-surface-2">
         <VendorAvatar name={o.merchantName ?? o.label} src={o.merchantLogoUrl || undefined} size={34} color={color} />
         <div className="min-w-0 flex-[1.3]">
           <div className="font-semibold text-[15px] truncate">{o.label}</div>
-          <div className="text-[12px] text-content-3 truncate">{cadenceLabel(items.find((i) => i.id === o.itemId) ?? { freq_kind: o.frequency, interval: null, months_json: null })}</div>
+          <div className="text-[12px] text-content-3 truncate">
+            {cadenceLabel(items.find((i) => i.id === o.itemId) ?? { freq_kind: o.frequency, interval: null, months_json: null })}
+            <span className="md:hidden">{o.accountName ? ` · ${o.accountName}` : ''}</span>
+          </div>
         </div>
-        <div className="w-[92px] shrink-0">
+        <div className="hidden md:block w-[92px] shrink-0">
           <div className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</div>
           <div className="text-[11px] text-content-3">{relativeLabel(o.date, today)}</div>
         </div>
@@ -199,7 +205,10 @@ export default function RecurringPage() {
           <span className="text-[15px] leading-none">{getCategoryEmoji(o.subName)}</span>
           <span className="truncate">{o.subName}</span>
         </div>
-        <div className={`w-[110px] shrink-0 text-right font-bold text-[15px] tabular-nums ${o.type === 'income' ? 'text-positive' : 'text-content'}`}>{amountText(o)}</div>
+        <div className="md:w-[110px] shrink-0 text-right">
+          <div className={`font-bold text-[15px] tabular-nums ${o.type === 'income' ? 'text-positive' : 'text-content'}`}>{amountText(o)}</div>
+          <div className="md:hidden text-[11.5px] tabular-nums mt-0.5"><span className="font-semibold" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</span><span className="text-content-3"> · {relativeLabel(o.date, today)}</span></div>
+        </div>
       </button>
     );
   };
@@ -216,28 +225,30 @@ export default function RecurringPage() {
   return (
     <div>
       {/* Header */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 bg-bg border-b border-line flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-6">
-          <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Recurring</h1>
-          <div className="flex items-center gap-5 text-[15px] font-semibold">
+      <PageHeader stackRight={false} title="Recurring"
+        mobileActions={canEdit && (
+          <button onClick={() => { setPanel(null); setModalOpen(true); }} aria-label="Add recurring">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        )}
+        left={<>
+          <div className="flex items-center gap-4 md:gap-5 text-[15px] font-semibold whitespace-nowrap">
             <button onClick={() => setTab('month')} className={tab === 'month' ? 'text-primary border-b-2 border-primary pb-0.5' : 'text-content-3 hover:text-content pb-0.5'}>This month</button>
             <button onClick={() => setTab('all')} className={tab === 'all' ? 'text-primary border-b-2 border-primary pb-0.5' : 'text-content-3 hover:text-content pb-0.5'}>All recurring</button>
           </div>
-        </div>
-        {canEdit && (
+        </>} right={canEdit && !isMobile && (
           <button onClick={() => { setPanel(null); setModalOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>Add recurring
           </button>
-        )}
-      </div>
+        )} />
 
       {tab === 'month' ? (
         <>
           {/* Summary + view toggle card */}
           <div className="bg-surface rounded-card border border-line shadow-sm mb-4">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4">
-              <span className="text-lg font-extrabold tracking-tight">{monthLabel(month)}</span>
-              <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 px-4 md:px-6 pt-4 md:pt-5 pb-4">
+              <span className="text-lg font-extrabold tracking-tight whitespace-nowrap">{monthLabel(month)}</span>
+              <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center">
                   <button onClick={() => setMonthOffset((o) => o - 1)} className="w-8 h-8 flex items-center justify-center rounded-l-[9px] border border-line text-content-2 hover:bg-surface-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg></button>
                   <button onClick={() => setMonthOffset((o) => o + 1)} className="w-8 h-8 flex items-center justify-center rounded-r-[9px] border-y border-r border-line text-content-2 hover:bg-surface-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
@@ -248,17 +259,17 @@ export default function RecurringPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-line">
-              <div className="px-6 py-4 sm:border-r border-line">
+              <div className="px-4 md:px-6 py-4 sm:border-r border-line">
                 <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><span className="text-[15px] font-extrabold tabular-nums text-positive">+{fmt(inc.total)}</span></div>
                 {bar(inc.paid, inc.total, 'var(--positive)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(inc.paid)} received</span><span>{fmt(inc.remaining)} remaining</span></div>
               </div>
-              <div className="px-6 py-4 sm:border-r border-line border-t sm:border-t-0">
+              <div className="px-4 md:px-6 py-4 sm:border-r border-line border-t sm:border-t-0">
                 <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Expenses</span><span className="text-[15px] font-extrabold tabular-nums">{fmt(exp.total)}</span></div>
                 {bar(exp.paid, exp.total, 'var(--primary)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(exp.paid)} paid</span><span>{fmt(exp.remaining)} remaining</span></div>
               </div>
-              <div className="px-6 py-4 border-t sm:border-t-0">
+              <div className="px-4 md:px-6 py-4 border-t sm:border-t-0">
                 <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><span className={`text-[15px] font-extrabold tabular-nums ${net >= 0 ? 'text-positive' : 'text-negative'}`}>{net > 0 ? '+' : ''}{fmt(net)}</span></div>
                 {bar(net >= 0 ? net : 0, Math.max(inc.total, 1), 'var(--positive)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(inc.total)} in</span><span>{fmt(exp.total)} out</span></div>
@@ -275,7 +286,7 @@ export default function RecurringPage() {
               <div className="flex flex-col gap-4">
                 {groups.map((g) => (
                   <div key={g.key} className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-line">
+                    <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-line">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full" style={{ background: g.dot }} />
                         <span className="font-bold text-sm">{g.title}</span>

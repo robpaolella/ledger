@@ -11,6 +11,8 @@ import { OwnerBadge, SharedBadge, initOwnerSlots } from '../components/badges';
 import { VendorAvatar, SegmentedControl } from '../components/primitives';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
 import { timeAgo, todayYmd } from '../lib/formatters';
+import PageHeader from '../components/PageHeader';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 // ---- types ----
 interface Account {
@@ -44,6 +46,7 @@ const RANGES: { key: string; label: string }[] = [
   { key: '1m', label: '1 month' }, { key: '3m', label: '3 months' }, { key: '6m', label: '6 months' },
   { key: '1y', label: '1 year' }, { key: 'all', label: 'All time' },
 ];
+const RANGE_SHORT: Record<string, string> = { '1m': '1M', '3m': '3M', '6m': '6M', '1y': '1Y', all: 'ALL' };
 const PERF: { key: 'netWorth' | 'assets' | 'liability'; label: string }[] = [
   { key: 'netWorth', label: 'Net worth' }, { key: 'assets', label: 'Assets' }, { key: 'liability', label: 'Liabilities' },
 ];
@@ -74,6 +77,7 @@ export default function AccountsPage() {
   const [data, setData] = useState<NetWorthData | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [range, setRange] = useState('1m');
+  const isMobile = useIsMobile();
   const [perf, setPerf] = useState<'netWorth' | 'assets' | 'liability'>('netWorth');
   const [summaryMode, setSummaryMode] = useState<'totals' | 'percent'>('totals');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -215,20 +219,15 @@ export default function AccountsPage() {
 
   const seg = (label: number, total: number) => summaryMode === 'percent' ? `${total ? Math.round((label / total) * 100) : 0}%` : money(label);
 
-  return (
-    <div className="pb-16">
-      {/* top bar */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 flex items-center justify-between gap-4 bg-bg border-b border-line">
-        <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Accounts</h1>
-        <div className="flex items-center gap-2.5">
+  const headerControls = (<>
           {/* Filters */}
           <div className="relative">
             <button onClick={openFilter}
-              className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border-2 text-sm font-semibold text-content"
+              className="relative flex items-center gap-2 h-10 px-2.5 md:px-4 rounded-[11px] bg-surface-2 border-2 text-sm font-semibold text-content"
               style={{ borderColor: filterOpen || filterActive ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-              Filters
-              {filterActive && <span className="min-w-5 h-5 px-1 inline-flex items-center justify-center rounded-full bg-primary text-on-primary text-[11px] font-bold">{filterCount}</span>}
+              <span className="hidden md:inline">Filters</span>
+              {filterActive && <span className="md:static absolute -top-1 -right-1 min-w-4 md:min-w-5 h-4 md:h-5 px-1 inline-flex items-center justify-center rounded-full bg-primary text-on-primary text-[10px] md:text-[11px] font-bold">{filterCount}</span>}
             </button>
             {filterOpen && (
               <>
@@ -261,14 +260,18 @@ export default function AccountsPage() {
           {hasSimplefin && (
             <button onClick={openRefresh} className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
-              Refresh all
+              <span className="hidden md:inline">Refresh all</span>
             </button>
           )}
-        </div>
-      </div>
+  </>);
+
+  return (
+    <div className="pb-16">
+      {/* top bar */}
+      <PageHeader stackRight={false} title="Accounts" right={isMobile ? undefined : headerControls} mobileActions={headerControls} />
 
       {/* net worth card */}
-      <div className="bg-surface border border-line rounded-card shadow-sm p-6 mb-5">
+      <div className="bg-surface border border-line rounded-card shadow-sm p-4 md:p-6 mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
           <div>
             <div className="font-mono text-[11px] uppercase tracking-wide text-content-3 mb-1">Net worth</div>
@@ -277,10 +280,20 @@ export default function AccountsPage() {
           </div>
           <div className="flex items-center gap-2.5">
             <Dropdown value={perf} options={PERF} onChange={(k) => setPerf(k as typeof perf)} minWidth={130} />
-            <Dropdown value={range} options={RANGES.map((r) => ({ key: r.key, label: r.label }))} onChange={setRange} minWidth={120} />
+            {!isMobile && <Dropdown value={range} options={RANGES.map((r) => ({ key: r.key, label: r.label }))} onChange={setRange} minWidth={120} />}
           </div>
         </div>
-        <AreaLineChart points={chartPoints} height={240} formatValue={(n) => { const a = Math.abs(n); return a >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${Math.round(n)}`; }} />
+        <AreaLineChart points={chartPoints} height={isMobile ? 200 : 240} formatValue={(n) => { const a = Math.abs(n); return a >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${Math.round(n)}`; }} />
+        {isMobile && (
+          <div className="flex items-center justify-between mt-3 -mx-1">
+            {RANGES.map((r) => (
+              <button key={r.key} onClick={() => setRange(r.key)} aria-pressed={range === r.key}
+                className={`h-8 px-3 rounded-full text-[13px] font-bold tabular-nums transition-colors ${range === r.key ? 'bg-surface-2 text-content' : 'text-content-3'}`}>
+                {RANGE_SHORT[r.key]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* two-column */}
@@ -297,24 +310,34 @@ export default function AccountsPage() {
             return (
               <div key={g.key} className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
                 <button onClick={() => setCollapsed((c) => { const n = new Set(c); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; })}
-                  className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-surface-2/40">
+                  className="w-full flex items-center gap-3 px-4 md:px-5 py-4 text-left hover:bg-surface-2/40">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" className="transition-transform" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}><path d="m6 9 6 6 6-6" /></svg>
-                  <span className="text-[17px] font-extrabold">{g.name}</span>
-                  <ChangeText v={chg} />
-                  <span className="ml-auto text-[17px] font-extrabold tabular-nums">{money(total)}</span>
+                  {/* phones: change line drops under the name instead of wrapping mid-row */}
+                  <span className="min-w-0 flex-1 flex flex-col md:flex-row md:items-baseline md:gap-2.5">
+                    <span className="text-[17px] font-extrabold truncate">{g.name}</span>
+                    <span className="text-[12.5px] md:text-sm truncate"><ChangeText v={chg} /></span>
+                  </span>
+                  <span className="ml-auto text-right shrink-0 flex flex-col">
+                    <span className="text-[17px] font-extrabold tabular-nums">{money(total)}</span>
+                    {g.key !== 'liability' && assetsTotal > 0 && <span className="md:hidden text-[12.5px] text-content-3 tabular-nums">{Math.round((total / assetsTotal) * 100)}% of assets</span>}
+                  </span>
                 </button>
                 {!isCollapsed && rows.map((a) => (
                   <div key={a.accountId} onClick={() => navigate(`/accounts/${a.accountId}`)}
-                    className="flex items-center gap-3.5 px-5 h-[74px] border-t border-line cursor-pointer hover:bg-surface-2/40">
+                    className="flex items-center gap-3 md:gap-3.5 px-4 md:px-5 h-[74px] border-t border-line cursor-pointer hover:bg-surface-2/40 active:bg-surface-2">
                     <VendorAvatar name={a.institution || a.name} src={a.logoUrl || undefined} color={a.institutionColor || acctColor(a.classification)} size={40} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span className="font-semibold text-[15px] truncate">{a.name}{a.lastFour ? ` (…${a.lastFour})` : ''}</span>
-                        {a.isShared ? <SharedBadge /> : a.owners[0] && <OwnerBadge user={a.owners[0]} />}
+                        {/* owner badge beside the name on desktop, under it on phones */}
+                        <span className="hidden md:inline-flex">{a.isShared ? <SharedBadge /> : a.owners[0] && <OwnerBadge user={a.owners[0]} />}</span>
                       </div>
-                      <div className="text-[13px] text-content-3">{a.institution ? `${a.institution} · ` : ''}{SUBTYPE[a.type] ?? a.type}</div>
+                      <div className="flex items-center gap-2 text-[13px] text-content-3 min-w-0">
+                        <span className="truncate">{a.institution ? `${a.institution} · ` : ''}{SUBTYPE[a.type] ?? a.type}</span>
+                        <span className="md:hidden inline-flex shrink-0">{a.isShared ? <SharedBadge /> : a.owners[0] && <OwnerBadge user={a.owners[0]} />}</span>
+                      </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <div className="font-bold text-[15px] tabular-nums">{money(a.classification === 'liability' ? -Math.abs(a.balance) : a.balance)}</div>
                       {a.lastUpdated && <div className="text-[12px] text-content-3">{timeAgo(a.lastUpdated)}</div>}
                     </div>
@@ -327,7 +350,7 @@ export default function AccountsPage() {
 
         {/* right: summary */}
         <div className="flex-[1_1_300px] min-w-[280px] md:sticky md:top-[76px]">
-          <div className="bg-surface border border-line rounded-card shadow-sm p-5">
+          <div className="bg-surface border border-line rounded-card shadow-sm p-4 md:p-5">
             <div className="flex items-center justify-between mb-5">
               <span className="text-[17px] font-extrabold">Summary</span>
               <SegmentedControl value={summaryMode} onChange={(v) => setSummaryMode(v)} options={[{ value: 'totals', label: 'Totals' }, { value: 'percent', label: 'Percent' }]} />
@@ -374,7 +397,7 @@ export default function AccountsPage() {
 
       {/* Physical Assets — full width (nothing flanks it on the right) */}
       <div className="mt-5 bg-surface border border-line rounded-card shadow-sm overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-4">
+        <div className="flex items-center gap-3 px-4 md:px-5 py-4">
           <span className="text-[17px] font-extrabold">Physical Assets</span>
           <span className="ml-auto text-[17px] font-extrabold tabular-nums">{money(physicalTotal)}</span>
           {canEdit && <button onClick={() => openAsset('new')} className="h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-sm font-semibold">Add</button>}
@@ -382,15 +405,18 @@ export default function AccountsPage() {
         {data.assets.length === 0 ? (
           <div className="px-5 pb-5 text-content-3 text-sm">No physical assets tracked.</div>
         ) : data.assets.map((a) => (
-          <div key={a.id} className="flex items-center gap-3 px-5 h-[62px] border-t border-line">
+          <div key={a.id} className="flex items-center gap-3 px-4 md:px-5 min-h-[62px] py-2.5 border-t border-line">
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-[15px] truncate">{a.name}</div>
-              <div className="font-mono text-[12px] text-content-3">Acquired {a.purchaseDate} · cost {money(a.cost)}</div>
+              <div className="font-mono text-[12px] text-content-3 truncate">Acquired {a.purchaseDate} · cost {money(a.cost)}</div>
             </div>
-            <span className="text-[12px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'color-mix(in srgb, var(--c-amber) 16%, transparent)', color: 'var(--c-amber)' }}>
+            <span className="hidden md:inline-flex text-[12px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'color-mix(in srgb, var(--c-amber) 16%, transparent)', color: 'var(--c-amber)' }}>
               {a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}
             </span>
-            <div className="w-28 text-right font-bold text-[15px] tabular-nums">{money(a.currentValue)}</div>
+            <div className="md:w-28 text-right shrink-0">
+              <div className="font-bold text-[15px] tabular-nums">{money(a.currentValue)}</div>
+              <div className="md:hidden text-[11px] font-semibold" style={{ color: 'var(--c-amber)' }}>{a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}</div>
+            </div>
             {canEdit && (
               <button onClick={() => openAsset(a)} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>

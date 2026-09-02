@@ -3,6 +3,7 @@ import Dropdown from '../components/Dropdown';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
 import { SegmentedControl } from '../components/primitives';
+import PageHeader from '../components/PageHeader';
 import BenchmarkStrip, { type BenchmarkId } from '../components/investments/BenchmarkStrip';
 import PerformanceChart, { type PerfSeries } from '../components/investments/PerformanceChart';
 import AllocationView from '../components/investments/AllocationView';
@@ -136,12 +137,7 @@ export default function InvestmentsPage() {
   return (
     <div className="pb-16">
       {/* top bar */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 flex items-center justify-between gap-4 bg-bg border-b border-line">
-        <div className="flex items-baseline gap-3">
-          <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Investments</h1>
-          <span className="text-sm font-semibold text-primary border-b-2 border-primary pb-0.5">Holdings</span>
-        </div>
-        {accounts.length > 0 && (
+      <PageHeader stackRight={false} title="Investments" left={<span className="text-sm font-semibold text-primary border-b-2 border-primary pb-0.5">Holdings</span>} right={accounts.length > 0 && (
           <div className="relative">
             <button onClick={() => setFilterOpen((o) => !o)}
               className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface-2 border text-sm font-semibold text-content"
@@ -168,8 +164,7 @@ export default function InvestmentsPage() {
               </>
             )}
           </div>
-        )}
-      </div>
+        )} />
 
       {empty ? (
         <div className="bg-surface border border-line rounded-card shadow-sm p-12 text-center">
@@ -180,8 +175,8 @@ export default function InvestmentsPage() {
         <>
           {/* performance / allocation card */}
           <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden mb-6">
-            <div className="flex items-center justify-between gap-4 px-[26px] pt-[22px] pb-[18px]">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-[26px] pt-4 md:pt-[22px] pb-4 md:pb-[18px]">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <span className="text-[19px] font-extrabold tracking-tight">{tab === 'market' ? 'Backtested performance' : 'Portfolio allocation'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 16v-4M12 8h.01" /></svg>
               </div>

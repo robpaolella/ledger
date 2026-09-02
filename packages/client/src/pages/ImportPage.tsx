@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { Stepper, vendorColor, type ImpCategory } from '../components/import/cells';
 import { SegmentedControl } from '../components/primitives';
+import { MobileBar } from '../components/PageHeader';
 import BankSyncSelect from '../components/import/BankSyncSelect';
 import SyncReview from '../components/import/SyncReview';
 import CsvUpload from '../components/import/CsvUpload';
@@ -476,11 +477,12 @@ export default function ImportPage() {
 
   return (
     <div className="font-sans">
-      {/* header */}
-      <div className="flex items-start justify-between gap-5" style={{ marginBottom: 22 }}>
-        <div>
-          <h1 className="text-[28px] font-extrabold tracking-[-0.02em] m-0 text-content">Import Transactions</h1>
-          <p className="text-sm text-content-3 mt-1.5 m-0">{subtitle}</p>
+      <MobileBar title="Import" />
+      {/* header (phones: the title is in the app bar) */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-5 mb-5 md:mb-[22px]">
+        <div className="min-w-0">
+          <h1 className="hidden md:block text-[28px] font-extrabold tracking-[-0.02em] m-0 text-content">Import Transactions</h1>
+          <p className="text-sm text-content-3 md:mt-1.5 m-0">{subtitle}</p>
         </div>
         {toggle}
       </div>

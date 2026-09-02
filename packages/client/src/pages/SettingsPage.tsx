@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -52,6 +54,12 @@ export default function SettingsPage() {
   const legacyTab = searchParams.get('tab');
   const panel = (rawPanel || (legacyTab === 'preferences' ? 'profile' : 'accounts')) as PanelId;
   const setPanel = (p: PanelId) => setSearchParams({ panel: p });
+  // Phones: /settings is an index of sections; picking one shows that panel
+  // full-width with a back link. Desktop keeps the two-column layout.
+  const isMobile = useIsMobile();
+  const showIndex = isMobile && !rawPanel && !legacyTab;
+  const showNav = !isMobile || showIndex;
+  const showPanel = !isMobile || !showIndex;
 
   const loadData = useCallback(async () => {
     try {
@@ -152,16 +160,20 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-7 bg-bg border-b border-line flex items-center gap-2.5">
-        <span className="text-content-3">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-        </span>
-        <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Settings</h1>
-      </div>
+      <PageHeader
+        mobileTitle={showIndex ? 'Settings' : (navSections.flatMap((sec) => sec.items).find((it) => it.id === panel)?.label ?? 'Settings')}
+        mobileBack={showIndex ? undefined : '/settings'}
+        left={!isMobile && (
+          <div className="flex items-center gap-2.5">
+            <span className="text-content-3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg></span>
+            <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Settings</h1>
+          </div>
+        )} />
 
       <div className="flex flex-col md:flex-row gap-7 items-start">
-        {/* settings nav */}
-        <nav className="w-full md:w-[268px] md:shrink-0 flex flex-col gap-[22px] md:sticky md:top-24" aria-label="Settings sections">
+        {/* settings nav (phones: the index) */}
+        {showNav && (
+        <nav className="w-full md:w-[268px] md:shrink-0 flex flex-col gap-4 md:gap-[22px] md:sticky md:top-24" aria-label="Settings sections">
           {navSections.map((sec) => (
             <div key={sec.title} className="bg-surface border border-line rounded-[16px] shadow-sm">
               <div className="px-[18px] pt-4 pb-2 font-mono text-[12px] tracking-[0.1em] uppercase text-content-3">{sec.title}</div>
@@ -170,10 +182,11 @@ export default function SettingsPage() {
                   const active = panel === it.id;
                   return (
                     <button key={it.id} type="button" onClick={() => setPanel(it.id)} aria-current={active ? 'page' : undefined}
-                      className="flex items-center gap-[11px] w-full text-left h-10 px-3 rounded-[10px] text-sm font-semibold transition-colors hover:bg-surface-2"
-                      style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 15%, transparent)' : undefined }}>
-                      <span className={active ? 'text-primary' : 'text-content-3'}>{NAV_ICON[it.id]}</span>
-                      {it.label}
+                      className="flex items-center gap-[11px] w-full text-left h-12 md:h-10 px-3 rounded-[10px] text-[15px] md:text-sm font-semibold transition-colors hover:bg-surface-2 active:bg-surface-2"
+                      style={{ color: active && !isMobile ? 'var(--primary)' : 'var(--text)', background: active && !isMobile ? 'color-mix(in srgb, var(--primary) 15%, transparent)' : undefined }}>
+                      <span className={active && !isMobile ? 'text-primary' : 'text-content-3'}>{NAV_ICON[it.id]}</span>
+                      <span className="flex-1">{it.label}</span>
+                      {isMobile && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>}
                     </button>
                   );
                 })}
@@ -181,8 +194,10 @@ export default function SettingsPage() {
             </div>
           ))}
         </nav>
+        )}
 
         {/* content pane */}
+        {showPanel && (
         <div className="flex-1 min-w-0 w-full">
           {panel === 'profile' && <ProfilePanel />}
           {panel === 'security' && <SecurityPanel />}
@@ -231,31 +246,36 @@ export default function SettingsPage() {
                   const canEdit = hasPermission('accounts.edit');
                   return (
                     <div key={a.id} onClick={() => { if (canEdit) setEditingAccount(a); }}
-                      className={`group/acct flex items-center gap-4 px-6 h-[72px] border-t border-line transition-colors ${canEdit ? 'cursor-pointer hover:bg-surface-2' : ''}`}>
+                      className={`group/acct flex items-center gap-3 md:gap-4 px-4 md:px-6 min-h-[72px] py-2.5 border-t border-line transition-colors ${canEdit ? 'cursor-pointer hover:bg-surface-2 active:bg-surface-2' : ''}`}>
                       <VendorAvatar name={a.institutionRef?.name || a.name} src={a.avatar_url || a.institutionRef?.logo_url || undefined} color={a.institutionRef?.color || 'var(--c-blue)'} size={38} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[15px] font-bold text-content truncate">{a.name}</span>
                           {a.last_four && <span className="font-mono text-[12px] text-content-3">…{a.last_four}</span>}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[13px] text-content-3">{TYPE_LABEL[a.type] ?? a.type}</span>
+                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                          <span className="text-[13px] text-content-3 truncate">{TYPE_LABEL[a.type] ?? a.type}</span>
                           {a.isShared ? <SharedBadge /> : (a.owners || []).map((o) => <OwnerBadge key={o.id} user={o} />)}
+                        </div>
+                        {/* phones: sync status reads as a caption under the name */}
+                        <div className="md:hidden flex items-center gap-1.5 mt-1 text-[12px] font-semibold min-w-0" style={{ color: link ? 'var(--positive)' : 'var(--text-3)' }}>
+                          {link ? ICON.link : ICON.unlink}<span className="truncate">{link ? sfLabel(link) : 'Not linked'}</span>
                         </div>
                       </div>
                       {link ? (
-                        <span className="inline-flex items-center gap-1.5 h-7 px-[11px] rounded-lg text-[12.5px] font-semibold max-w-[320px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }} title={sfLabel(link)}>
+                        <span className="hidden md:inline-flex items-center gap-1.5 h-7 px-[11px] rounded-lg text-[12.5px] font-semibold max-w-[320px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }} title={sfLabel(link)}>
                           {ICON.link}<span className="truncate">{sfLabel(link)}</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 h-7 px-[11px] rounded-lg text-[12.5px] font-semibold bg-surface-2 border border-line text-content-3">
+                        <span className="hidden md:inline-flex items-center gap-1.5 h-7 px-[11px] rounded-lg text-[12.5px] font-semibold bg-surface-2 border border-line text-content-3">
                           {ICON.unlink}Not linked
                         </span>
                       )}
-                      {canEdit && (
+                      {canEdit && !isMobile && (
                         <button type="button" onClick={(e) => { e.stopPropagation(); setEditingAccount(a); }}
                           className={`${btnRow} opacity-60 group-hover/acct:opacity-100 transition-opacity`}>{ICON.pencil}Edit</button>
                       )}
+                      {canEdit && isMobile && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>}
                     </div>
                   );
                 })}
@@ -269,6 +289,7 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {editingAccount !== null && (

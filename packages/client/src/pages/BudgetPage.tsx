@@ -6,6 +6,8 @@ import Spinner from '../components/Spinner';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { SegmentedControl, BudgetBar } from '../components/primitives';
 import { useAuth } from '../context/AuthContext';
+import { useIsMobile } from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 import { useToast } from '../context/ToastContext';
 
 // Recurring overlay meta on a budget row (null when no recurring items apply).
@@ -92,6 +94,7 @@ function nextMonth(d: Date): Date {
 export default function BudgetPage() {
   const { hasPermission } = useAuth();
   const { addToast } = useToast();
+  const isMobile = useIsMobile();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   const navigate = useNavigate();
   const canEditBudgets = hasPermission('budgets.edit');
@@ -225,14 +228,14 @@ export default function BudgetPage() {
   return (
     <div>
       {/* Top bar */}
-      <div className="sticky top-0 z-20 -mt-4 md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-4 mb-6 bg-bg border-b border-line flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-baseline gap-2.5">
-          <h1 className="page-title text-[22px] font-extrabold text-content tracking-tight leading-tight m-0">Budget</h1>
-          <p className="page-subtitle text-content-3 text-[13px] m-0">{subtitle}</p>
-        </div>
-        <div className="flex items-center gap-2.5 flex-wrap">
+      <PageHeader title="Budget" subtitle={subtitle} mobileTitle={subtitle}
+        mobileActions={<>
+          <button onClick={goPrev} aria-label="Previous"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button onClick={goNext} aria-label="Next"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+        </>}
+        right={<>
           <button onClick={goToday} className="h-10 px-4 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">Today</button>
-          <div className="flex items-center gap-0.5 h-10 px-1 bg-surface border border-line-strong rounded-[11px]">
+          {!isMobile && <div className="flex items-center gap-0.5 h-10 px-1 bg-surface border border-line-strong rounded-[11px]">
             <button onClick={goPrev} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2" aria-label="Previous">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
@@ -240,14 +243,83 @@ export default function BudgetPage() {
             <button onClick={goNext} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2" aria-label="Next">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </button>
-          </div>
+          </div>}
           <SegmentedControl value={view} onChange={setView}
             options={[{ value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} />
-        </div>
-      </div>
+        </>} />
 
       {/* ===== MONTH VIEW ===== */}
-      {isMonth ? (
+      {isMonth && isMobile ? (
+      /* ===== MONTH VIEW · PHONE ===== planned / remaining grid, one card per group */
+      <div>
+        <div className="-mx-4 -mt-5 mb-4 px-4 py-3 flex items-center justify-between" style={{ background: 'color-mix(in srgb, var(--positive) 14%, transparent)' }}>
+          <span className="text-[15px] font-extrabold">Left to budget</span>
+          <span className="text-[17px] font-extrabold tabular-nums" style={{ color: totals.leftToBudget < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(totals.leftToBudget)}</span>
+        </div>
+        {sections.map((sec) => (
+          <div key={sec.key} className="mb-6">
+            <div className="flex items-end justify-between px-3 mb-2">
+              <span className="text-[17px] font-bold">{sec.label}</span>
+              <div className="flex gap-2 font-mono text-[11px] uppercase tracking-wide text-content-3">
+                <span className="w-[76px] text-right">Planned</span><span className="w-[82px] text-right">Remaining</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              {sec.groups.map((g) => {
+                const groupKey = sec.key + '|' + g.groupName;
+                const gCollapsed = collapsedGroups[groupKey];
+                const gPlanned = g.subs.reduce((s, r) => s + r.budgeted, 0);
+                const gActual = g.subs.reduce((s, r) => s + r.actual, 0);
+                const gRem = gPlanned - gActual;
+                const showUn = showUnbudgeted[groupKey];
+                const unbudgeted = g.subs.filter((r) => r.budgeted === 0 && r.actual === 0);
+                const rows = showUn ? g.subs : g.subs.filter((r) => r.budgeted > 0 || r.actual > 0);
+                const pillTint = (v: number) => ({ background: `color-mix(in srgb, ${v < 0 ? 'var(--negative)' : 'var(--positive)'} 12%, transparent)`, color: v < 0 ? 'var(--negative)' : 'var(--positive)' });
+                return (
+                  <div key={groupKey} className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-3">
+                      <button type="button" onClick={() => setCollapsedGroups((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
+                        aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex-1 min-w-0 text-left font-bold text-[15px] truncate">{g.groupName}</button>
+                      <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{fmtWhole(gPlanned)}</span>
+                      <span className="w-[82px] text-right font-bold text-[15px] tabular-nums" style={{ color: gRem < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(gRem)}</span>
+                    </div>
+                    {!gCollapsed && rows.map((r) => {
+                      const rem = r.budgeted - r.actual;
+                      return (
+                        <div key={r.categoryId} className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
+                          <span className="w-7 shrink-0 text-center text-[16px] leading-none">{getCategoryEmoji(r.subName)}</span>
+                          <button type="button" onClick={() => drillSub(r.categoryId)} className="flex-1 min-w-0 text-left text-[15px] font-medium truncate">{r.subName}</button>
+                          <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden); }}
+                            disabled={!canEditBudgets}
+                            className="w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
+                            {fmtWhole(r.budgeted)}
+                          </button>
+                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(rem)}
+                            title={r.recurring ? `Recurring (minimum): ${r.recurring.items.map((i) => i.label).join(', ')}` : undefined}>
+                            {r.recurring && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>}
+                            {fmtWhole(rem)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {!gCollapsed && unbudgeted.length > 0 && (
+                      <button type="button" onClick={() => setShowUnbudgeted((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
+                        className="w-full flex items-center gap-2.5 px-3 py-3 border-t border-line text-content-3 text-left active:bg-surface-2">
+                        <span className="w-7 shrink-0 flex justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                        <span className="text-[13px] font-semibold">{showUn ? 'Hide' : 'Show'} {unbudgeted.length} unbudgeted</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      ) : isMonth ? (
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_316px] gap-5 items-start">
         {/* Budget table */}
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
@@ -332,7 +404,7 @@ export default function BudgetPage() {
                           })}
                           {unbudgeted.length > 0 && (
                             <div onClick={() => setShowUnbudgeted((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
-                              className="flex items-center gap-2.5 px-6 py-3 border-b border-line cursor-pointer text-content-3" style={{ paddingLeft: 52 }}>
+                              className="flex items-center gap-2.5 pl-11 md:pl-[52px] pr-4 md:pr-6 py-3 border-b border-line cursor-pointer text-content-3">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
                               <span className="text-[13px] font-semibold">{showUn ? 'Hide' : 'Show'} {unbudgeted.length} unbudgeted</span>
                             </div>
@@ -345,7 +417,7 @@ export default function BudgetPage() {
               </div>
             );
           })}
-          <div className="flex items-center justify-between px-6 py-4" style={{ background: 'color-mix(in srgb, var(--positive) 14%, transparent)' }}>
+          <div className="flex items-center justify-between px-4 md:px-6 py-4" style={{ background: 'color-mix(in srgb, var(--positive) 14%, transparent)' }}>
             <span className="text-base font-extrabold">Left to budget</span>
             <span className="text-lg font-extrabold tabular-nums" style={{ color: totals.leftToBudget < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(totals.leftToBudget)}</span>
           </div>

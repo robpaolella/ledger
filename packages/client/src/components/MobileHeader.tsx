@@ -1,29 +1,50 @@
+import { useCallback, useState } from 'react';
 import LedgerLogo from './LedgerLogo';
-import { useNavigate } from 'react-router-dom';
-import { icons } from '../lib/navItems';
-import { useOpenReviewCount } from '../hooks/useOpenReviewCount';
+import MobileNavDrawer from './MobileNavDrawer';
+import NotificationBell, { useUnreadNotifications } from './NotificationBell';
+import { MOBILE_BAR_SLOTS } from './PageHeader';
 
-/** Phone top bar: brand lockup + a shortcut to the review queue. Pages carry
- *  their own titles in the hero header, so the bar doesn't repeat them. The
- *  badge is the open-review count (same source as the sidebar's Review badge). */
+const ICON_BTN = 'relative w-10 h-10 rounded-[10px] flex items-center justify-center text-content-2 active:bg-surface-2';
+
+/**
+ * Phone app bar: [menu][bell] · page title · contextual actions. Pages fill the
+ * title/actions/back slots through <MobileBar> (see PageHeader). A page that
+ * supplies a back route replaces menu + bell with a back chevron; a page with
+ * no title shows the brand lockup.
+ */
 export default function MobileHeader() {
-  const open = useOpenReviewCount();
-  const navigate = useNavigate();
+  const [navOpen, setNavOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const unread = useUnreadNotifications();
+  const closeNav = useCallback(() => setNavOpen(false), []);
   return (
-    <div className="mobile-only sticky top-0 z-40 flex items-center justify-between bg-surface border-b border-line px-5 py-2.5">
-      <div className="flex items-center gap-2">
-        <LedgerLogo size={24} />
-        <span className="text-[17px] font-extrabold tracking-tight text-content">Ledger</span>
+    <>
+      <div className="mobile-only sticky top-0 z-40 flex items-center gap-1 bg-surface border-b border-line px-2 h-14">
+        {/* back slot (filled by detail pages) — hides the menu/bell cluster when present */}
+        <div id={MOBILE_BAR_SLOTS.back} className="peer/back flex items-center shrink-0 empty:hidden" />
+        <div className="flex items-center shrink-0 peer-[:not(:empty)]/back:hidden">
+          <button type="button" onClick={() => setNavOpen(true)} aria-label="Open menu" className={ICON_BTN}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <NotificationBell unreadCount={unread} open={bellOpen} onOpenChange={setBellOpen} buttonClassName={ICON_BTN} />
+        </div>
+
+        {/* title slot, centred; brand lockup when a page sets no title */}
+        <div className="flex-1 min-w-0 flex items-center justify-center px-1">
+          <div id={MOBILE_BAR_SLOTS.title} className="peer/title min-w-0 max-w-full text-center empty:hidden" />
+          <div className="flex items-center gap-2 peer-[:not(:empty)]/title:hidden">
+            <LedgerLogo size={22} />
+            <span className="text-[17px] font-extrabold tracking-tight text-content">Ledger</span>
+          </div>
+        </div>
+
+        {/* actions slot: pages drop their contextual buttons here; they render as bare 40px icon
+            buttons. Only direct children (or one wrapper deep, e.g. PermissionGate / popover anchors)
+            are restyled, so popovers opened from here keep their own chrome. */}
+        <div id={MOBILE_BAR_SLOTS.actions}
+          className="flex items-center justify-end gap-0.5 shrink-0 min-w-[84px] [&>button]:!h-10 [&>button]:!w-10 [&>button]:!min-w-0 [&>button]:!px-0 [&>button]:!border-0 [&>button]:!bg-transparent [&>button]:!text-content-2 [&>button]:!shadow-none [&>button]:!rounded-[10px] [&>button]:justify-center [&>*>button]:!h-10 [&>*>button]:!w-10 [&>*>button]:!min-w-0 [&>*>button]:!px-0 [&>*>button]:!border-0 [&>*>button]:!bg-transparent [&>*>button]:!text-content-2 [&>*>button]:!shadow-none [&>*>button]:!rounded-[10px] [&>*>button]:justify-center [&>a]:!h-10 [&>a]:!w-10 [&>a]:!px-0 [&>a]:!border-0 [&>a]:!bg-transparent [&>a]:!text-content-2 [&>a]:justify-center" />
       </div>
-      <button type="button" onClick={() => navigate('/reviews')} aria-label={open > 0 ? `Review queue, ${open} open` : 'Review queue'}
-        className="relative w-9 h-9 rounded-[9px] flex items-center justify-center text-content-3 hover:bg-surface-2 [&>svg]:w-[18px] [&>svg]:h-[18px]">
-        {icons.reviews}
-        {open > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center tabular-nums">
-            {open > 99 ? '99+' : open}
-          </span>
-        )}
-      </button>
-    </div>
+      <MobileNavDrawer open={navOpen} onClose={closeNav} />
+    </>
   );
 }

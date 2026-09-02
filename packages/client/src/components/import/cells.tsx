@@ -105,7 +105,8 @@ export function Stepper({ labels, activeIndex }: { labels: string[]; activeIndex
               >
                 {i + 1}
               </span>
-              <span className="font-bold text-sm" style={{ color: done ? 'var(--primary)' : 'var(--text-3)' }}>{label}</span>
+              {/* phones only have room for the current step's label */}
+              <span className={`font-bold text-sm ${i === activeIndex ? '' : 'hidden md:inline'}`} style={{ color: done ? 'var(--primary)' : 'var(--text-3)' }}>{label}</span>
             </div>
           );
         })}

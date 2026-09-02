@@ -62,12 +62,12 @@ export function CheckBox({ checked, className = '' }: { checked: boolean; classN
 /** Panel title block: 22/800 title + description + right-aligned actions. */
 export function PanelHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
       <div className="flex-1 min-w-0">
-        <h2 className="text-[22px] font-extrabold tracking-tight text-content m-0 leading-tight">{title}</h2>
+        <h2 className="hidden md:block text-[22px] font-extrabold tracking-tight text-content m-0 leading-tight">{title}</h2>
         {description && <p className="text-sm text-content-3 mt-1.5 m-0 max-w-[640px] leading-snug">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2.5 shrink-0">{actions}</div>}
+      {actions && <div className="flex items-center gap-2.5 shrink-0 flex-wrap">{actions}</div>}
     </div>
   );
 }
@@ -80,7 +80,7 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 /** Card header row: 17/800 title (+ optional trailing meta / actions). */
 export function CardHeader({ title, meta, actions, divider = false, className = '' }: { title: ReactNode; meta?: ReactNode; actions?: ReactNode; divider?: boolean; className?: string }) {
   return (
-    <div className={`flex items-center justify-between gap-4 px-6 py-[18px] ${divider ? 'border-b border-line' : ''} ${className}`}>
+    <div className={`flex items-center justify-between gap-3 md:gap-4 px-4 md:px-6 py-4 md:py-[18px] ${divider ? 'border-b border-line' : ''} ${className}`}>
       <div className="flex items-baseline gap-2.5 min-w-0">
         <span className="text-[17px] font-extrabold tracking-tight text-content truncate">{title}</span>
         {meta && <span className="font-mono text-[13px] text-content-3 shrink-0">{meta}</span>}

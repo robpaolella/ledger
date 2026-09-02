@@ -59,23 +59,3 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/recurring', label: 'Recurring', icon: icons.recurring },
   { to: '/investments', label: 'Investments', icon: icons.investments },
 ];
-
-// Tabs shown directly in the mobile bottom tab bar
-export const TAB_BAR_ITEMS: NavItem[] = [
-  { to: '/', label: 'Home', icon: icons.dashboard },
-  { to: '/transactions', label: 'Transactions', icon: icons.transactions },
-  { to: '/budget', label: 'Budget', icon: icons.budget },
-];
-
-// Items in the mobile "More" popover menu
-export const MORE_MENU_ITEMS: NavItem[] = [
-  { to: '/accounts', label: 'Accounts', icon: icons.accounts },
-  { to: '/reports', label: 'Reports', icon: icons.reports },
-  { to: '/recurring', label: 'Recurring', icon: icons.recurring },
-  { to: '/investments', label: 'Investments', icon: icons.investments },
-  { to: '/reviews', label: 'Review', icon: icons.reviews },
-  { to: '/settings', label: 'Settings', icon: icons.settings },
-  { to: '/import', label: 'Import', icon: icons.import },
-];
-
-export const MORE_ROUTES = MORE_MENU_ITEMS.map(i => i.to);
