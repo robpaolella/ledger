@@ -14,6 +14,7 @@
 import Database from 'better-sqlite3';
 import bcrypt from 'bcrypt';
 import path from 'path';
+import { findOrCreateMerchant } from './merchants.js';
 
 const dbPath = process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'ledger.db');
 const db = new Database(dbPath);
@@ -58,6 +59,24 @@ db.exec(`
 // Helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Relative dates: the fixtures below are written against Jan–Mar 2026. Shift
+// every date so the last fixture month (2026-03) lands on the current month,
+// which keeps "this month" views populated whenever the demo is seeded.
+// ---------------------------------------------------------------------------
+const FIXTURE_LAST = { y: 2026, m: 3 };
+const now = new Date();
+const MONTH_SHIFT = (now.getFullYear() - FIXTURE_LAST.y) * 12 + (now.getMonth() + 1 - FIXTURE_LAST.m);
+function rel(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const idx = y * 12 + (m - 1) + MONTH_SHIFT;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12) + 1;
+  if (d === undefined) return `${ny}-${String(nm).padStart(2, '0')}`;
+  const last = new Date(ny, nm, 0).getDate();
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
+
 function catId(groupName: string, subName: string): number {
   const row = db.prepare(
     'SELECT id FROM categories WHERE group_name = ? AND sub_name = ?'
@@ -74,9 +93,12 @@ function insertTx(
   amount: number,
   note?: string
 ): number {
+  // Demo descriptions are already clean merchant names ("Costco", "Netflix"), so
+  // link them 1:1 the way a user-entered transaction would be.
+  const merchantId = findOrCreateMerchant(description, db);
   const res = db.prepare(
-    'INSERT INTO transactions (account_id, date, description, category_id, amount, note) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(accountId, date, description, categoryId, amount, note ?? null);
+    'INSERT INTO transactions (account_id, date, description, category_id, merchant_id, amount, note) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(accountId, rel(date), description, categoryId, merchantId, amount, note ?? null);
   return Number(res.lastInsertRowid);
 }
 
@@ -470,6 +492,7 @@ console.log(`  Total transactions: ${txCount}`);
 console.log('Creating budgets...');
 
 const monthlyBudgets: Array<[number, number]> = [
+  [CAT.takeHomePay, 6500],
   [CAT.rent,         1400],
   [CAT.groceries,     600],
   [CAT.dining,        150],
@@ -501,7 +524,7 @@ for (const month of months) {
   for (const [catIdVal, amount] of monthlyBudgets) {
     db.prepare(
       'INSERT INTO budgets (category_id, month, amount) VALUES (?, ?, ?)'
-    ).run(catIdVal, month, amount);
+    ).run(catIdVal, rel(month), amount);
     budgetCount++;
   }
 }
@@ -553,7 +576,7 @@ const balances: Array<[number, string, number, string?]> = [
 for (const [acctId, date, balance, note] of balances) {
   db.prepare(
     'INSERT INTO balance_snapshots (account_id, date, balance, note) VALUES (?, ?, ?, ?)'
-  ).run(acctId, date, balance, note ?? null);
+  ).run(acctId, rel(date), balance, note ?? null);
 }
 
 console.log(`  Created ${balances.length} balance snapshots`);
@@ -624,6 +647,35 @@ for (const a of assetDefs) {
 }
 
 console.log(`  Created ${assetDefs.length} depreciable assets`);
+
+// ---------------------------------------------------------------------------
+// 8b. Recurring items — the household's fixed bills + paychecks, so the
+//     Recurring page and the budget's recurring floors have something to show.
+// ---------------------------------------------------------------------------
+console.log('Creating recurring items...');
+const recurringDefs: Array<{
+  type: 'income' | 'expense'; label: string; merchant: string; category: number; account: number;
+  amount: number; freq: 'monthly' | 'semi_monthly'; day?: number; days?: number[]; user: number;
+}> = [
+  { type: 'income',  label: 'Paycheck — John',   merchant: 'Direct Deposit — Payroll', category: CAT.takeHomePay, account: jChecking,  amount: 1750, freq: 'semi_monthly', days: [2, 16], user: johnId },
+  { type: 'income',  label: 'Paycheck — Jane',   merchant: 'Direct Deposit — Payroll', category: CAT.takeHomePay, account: jaChecking, amount: 1500, freq: 'semi_monthly', days: [2, 16], user: janeId },
+  { type: 'expense', label: 'Rent',              merchant: 'Oakwood Apartments',       category: CAT.rent,        account: jChecking,  amount: 1800, freq: 'monthly', day: 1,  user: johnId },
+  { type: 'expense', label: 'Car payment',       merchant: 'Honda Financial — Car Payment', category: CAT.autoLoan, account: jChecking, amount: 312, freq: 'monthly', day: 10, user: johnId },
+  { type: 'expense', label: 'Health insurance',  merchant: 'BlueCross BlueShield',     category: CAT.healthIns,   account: jaChecking, amount: 210, freq: 'monthly', day: 15, user: janeId },
+  { type: 'expense', label: 'Auto insurance',    merchant: 'GEICO — Auto Insurance',   category: CAT.autoIns,     account: jChecking,  amount: 128, freq: 'monthly', day: 15, user: johnId },
+  { type: 'expense', label: 'Phone',             merchant: 'T-Mobile',                 category: CAT.phone,       account: jaChecking, amount: 85,  freq: 'monthly', day: 8,  user: janeId },
+  { type: 'expense', label: 'Electricity',       merchant: 'Duke Energy',              category: CAT.power,       account: jChecking,  amount: 118, freq: 'monthly', day: 6,  user: johnId },
+  { type: 'expense', label: 'Internet',          merchant: 'Spectrum',                 category: CAT.internet,    account: jChecking,  amount: 70,  freq: 'monthly', day: 12, user: johnId },
+  { type: 'expense', label: 'Netflix',           merchant: 'Netflix',                  category: CAT.otherEnt,    account: jVisa,      amount: 15.49, freq: 'monthly', day: 20, user: johnId },
+];
+for (const r of recurringDefs) {
+  db.prepare(
+    `INSERT INTO recurring_items (type, label, merchant_id, category_id, account_id, amount, freq_kind, day, days_json, start_date, status, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`
+  ).run(r.type, r.label, findOrCreateMerchant(r.merchant, db), r.category, r.account, r.amount, r.freq,
+    r.day ?? null, r.days ? JSON.stringify(r.days) : null, rel('2026-01-01'), r.user);
+}
+console.log(`  Created ${recurringDefs.length} recurring items`);
 
 // ---------------------------------------------------------------------------
 // 9. Jane's member permissions (she's admin so these are mainly for display)

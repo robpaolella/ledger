@@ -6,43 +6,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { db, sqlite } from './db/index.js';
 import { uploadsDir } from './services/uploads.js';
-import { migrateAccountOwners } from './db/migrate-account-owners.js';
-import { migrateSimplefin } from './db/migrate-simplefin.js';
-import { migrateAssetsDepreciation } from './db/migrate-assets-depreciation.js';
-import { migrateRolesPermissions } from './db/migrate-roles-permissions.js';
-import { migrateDevStorage } from './db/migrate-dev-storage.js';
-import { migrate2FA } from './db/migrate-2fa.js';
-import { migrateCategorySortOrder } from './db/migrate-category-sort-order.js';
-import { migrateTransactionSplits } from './db/migrate-transaction-splits.js';
-import { migrateBudgetTemplatesRecurring } from './db/migrate-budget-templates-recurring.js';
-import { migrateDismissedTransfers } from './db/migrate-dismissed-transfers.js';
-import { migratePayCycles } from './db/migrate-pay-cycles.js';
-import { migrateMerchants } from './db/migrate-merchants.js';
-import { migrateMerchantAliases } from './db/migrate-merchant-aliases.js';
-import { migrateMerchantRulePrefs } from './db/migrate-merchant-rule-prefs.js';
-import { migrateTransferLinks } from './db/migrate-transfer-links.js';
-import { migrateSavingsRetire } from './db/migrate-savings-retire.js';
-import { linkTransfers } from './services/transferLinker.js';
-import { migrateTransferCategoryDedupe } from './db/migrate-transfer-category-dedupe.js';
-import { migrateAccountInstitution } from './db/migrate-account-institution.js';
-import { migrateTxnCategorize } from './db/migrate-txn-categorize.js';
-import { migrateSyncStatus } from './db/migrate-sync-status.js';
-import { migrateNotifications } from './db/migrate-notifications.js';
-import { migrateTransfersCategory, enforceTransferBudgetExclusion } from './db/migrate-transfers-category.js';
-import { migrateSplitMerchant } from './db/migrate-split-merchant.js';
-import { migrateRecurringItems } from './db/migrate-recurring-items.js';
-import { migrateBudgetOverride } from './db/migrate-budget-override.js';
-import { migrateTransactionReviews } from './db/migrate-transaction-reviews.js';
-import { migrateSettingsColumns } from './db/migrate-settings-columns.js';
-import { migrateCategoryGroups } from './db/migrate-category-groups.js';
-import { migrateFinancialInstitutions } from './db/migrate-financial-institutions.js';
-import { migrateVendorLogos } from './db/migrate-vendor-logos.js';
-import { migrateBankDescription } from './db/migrate-bank-description.js';
-import { migrateInvestments } from './db/migrate-investments.js';
-import { migrateNotificationCenter } from './db/migrate-notification-center.js';
-import { migrateAutoImport } from './db/migrate-auto-import.js';
-import { migrateCategoryFeedback } from './db/migrate-category-feedback.js';
-import { migrateAmazon } from './db/migrate-amazon.js';
+import { runMigrations } from './db/migrate.js';
 import { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
@@ -81,54 +45,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
 
-// Run migrations
-migrateAccountOwners(sqlite);
-migrateSimplefin(sqlite);
-migrateAssetsDepreciation(sqlite);
-migrateRolesPermissions(sqlite);
-migrateDevStorage(sqlite);
-migrate2FA(sqlite);
-migrateCategorySortOrder(sqlite);
-migrateTransactionSplits(sqlite);
-migrateBudgetTemplatesRecurring(sqlite);
-migrateDismissedTransfers(sqlite);
-migratePayCycles(sqlite);
-migrateMerchants(sqlite); // after splits — splits rebuilds the transactions table
-migrateSplitMerchant(sqlite); // after splits (table) + merchants (FK target)
-migrateAccountInstitution(sqlite);
-migrateTxnCategorize(sqlite);
-migrateSyncStatus(sqlite);
-migrateNotifications(sqlite);
-migrateTransfersCategory(sqlite);
-migrateRecurringItems(sqlite); // after categories/merchants/accounts/users (FK targets)
-migrateBudgetOverride(sqlite);
-migrateTransactionReviews(sqlite); // last table-creating migration — FK target transactions must be stable
-migrateSettingsColumns(sqlite);    // additive columns (category emoji/exclude, account avatar, merchant logo)
-migrateCategoryGroups(sqlite);     // first-class category_groups entity + backfill
-migrateFinancialInstitutions(sqlite); // financial_institutions table + accounts.institution_id + backfill
-migrateVendorLogos(sqlite);           // vendor_logos catalog + backfill merchant logos
-migrateBankDescription(sqlite);       // transactions.bank_description (verbatim statement text)
-migrateInvestments(sqlite);           // benchmark_prices + holdings_history (+seed) + symbol_meta
-migrateNotificationCenter(sqlite);    // review notifications → per-user aggregate + budget_alerts
-migrateAutoImport(sqlite);            // simplefin_links.auto_import (daily txn auto-import toggle)
-migrateCategoryFeedback(sqlite);      // category_feedback log + transactions.categorize_source
-migrateAmazon(sqlite);                // amazon_orders/items/charges/matches (order enrichment)
-migrateMerchantAliases(sqlite);       // merchant_aliases — merges keep routing future imports
-migrateMerchantRulePrefs(sqlite);     // merchants.suppress_rule_suggest ("never ask again")
-migrateTransferLinks(sqlite);         // transfer_links — the two legs of one money movement
-
-// Backfill/refresh transfer links on boot: cheap (bucketed by amount) and
-// self-healing, so history and anything imported outside a sync gets paired too.
-// Pairs the user has pulled apart are recorded as rejected and stay apart.
-try {
-  const { linked } = linkTransfers(sqlite);
-  if (linked > 0) console.log(`Linked ${linked} transfer pair(s).`);
-} catch (err) {
-  console.error('Transfer linking failed:', err instanceof Error ? err.message : err);
-}
-migrateTransferCategoryDedupe(sqlite); // last — folds a duplicate Transfers > Transfer onto the canonical row
-enforceTransferBudgetExclusion(sqlite); // invariant: transfers are never budgeted
-migrateSavingsRetire(sqlite);         // fold the retired Savings section into Transfers
+// Run migrations (the full ordered chain lives in db/migrate.ts, shared with the seed)
+runMigrations(sqlite);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(isProd ? { origin: false } : { origin: 'http://localhost:5173', credentials: true }));
