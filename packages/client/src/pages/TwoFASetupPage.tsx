@@ -1,22 +1,29 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import LedgerLogo from '../components/LedgerLogo';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../lib/api';
+import AuthShell from '../components/AuthShell';
 import InlineNotification from '../components/InlineNotification';
 import TotpCodeInput from '../components/TotpCodeInput';
 import Tooltip from '../components/Tooltip';
+import { btnPrimary, btnSecondary } from '../components/settings/ui';
 
-interface SetupData {
-  qrCodeUrl: string;
-  secret: string;
-  otpauthUri: string;
+interface SetupData { qrCodeUrl: string; secret: string; otpauthUri: string }
+
+async function copyText(text: string) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  }
 }
 
+/** Forced two-factor enrolment (an admin requires it for this role). */
 export default function TwoFASetupPage() {
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<'start' | 'scan' | 'verify' | 'backup'>('start');
+  const [step, setStep] = useState<'start' | 'scan' | 'backup'>('start');
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -28,233 +35,97 @@ export default function TwoFASetupPage() {
 
   // Auto-submit when 6 digits entered
   useEffect(() => {
-    if (verifyCode.length === 6 && step === 'scan' && !loading) {
-      handleVerify({ preventDefault: () => {} } as FormEvent);
-    }
+    if (verifyCode.length === 6 && step === 'scan' && !loading) handleVerify({ preventDefault: () => {} } as FormEvent);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifyCode]);
 
   const handleStartSetup = async () => {
-    setError('');
-    setLoading(true);
+    setError(''); setLoading(true);
     try {
       const res = await apiFetch<{ data: SetupData }>('/auth/2fa/setup', { method: 'POST' });
-      setSetupData(res.data);
-      setStep('scan');
+      setSetupData(res.data); setStep('scan');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start 2FA setup');
-    } finally {
-      setLoading(false);
-    }
+      setError(err instanceof Error ? err.message : 'Failed to start two-factor setup');
+    } finally { setLoading(false); }
   };
 
   const handleVerify = async (e: FormEvent) => {
     e.preventDefault();
     if (!setupData) return;
-    setError('');
-    setLoading(true);
+    setError(''); setLoading(true);
     try {
-      const res = await apiFetch<{ data: { backupCodes: string[] } }>('/auth/2fa/confirm', {
-        method: 'POST',
-        body: JSON.stringify({ token: verifyCode, secret: setupData.secret }),
-      });
-      setBackupCodes(res.data.backupCodes);
-      setStep('backup');
+      const res = await apiFetch<{ data: { backupCodes: string[] } }>('/auth/2fa/confirm', { method: 'POST', body: JSON.stringify({ token: verifyCode, secret: setupData.secret }) });
+      setBackupCodes(res.data.backupCodes); setStep('backup');
       await refreshUser();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed');
-    } finally {
-      setLoading(false);
-    }
+      setVerifyCode('');
+    } finally { setLoading(false); }
   };
 
-  const handleCopyBackupCodes = async () => {
-    const text = backupCodes.join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownloadBackupCodes = () => {
-    const text = `Ledger 2FA Backup Codes\nGenerated: ${new Date().toLocaleDateString()}\nUser: ${user?.username}\n\n${backupCodes.join('\n')}\n\nEach code can only be used once.`;
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ledger-backup-codes.txt';
-    a.click();
+  const downloadBackupCodes = () => {
+    const text = `Ledger backup codes\nGenerated: ${new Date().toLocaleDateString()}\nUser: ${user?.username}\n\n${backupCodes.join('\n')}\n\nEach code can only be used once.`;
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'ledger-backup-codes.txt'; a.click();
     URL.revokeObjectURL(url);
   };
 
-  const handleDone = () => {
-    navigate('/', { replace: true });
-  };
+  if (step === 'backup') {
+    return (
+      <AuthShell title="Two-factor authentication is on" description="Save these backup codes somewhere safe. Each one signs you in once if you lose access to your authenticator app." maxWidth={440}>
+        <div className="flex flex-col gap-4">
+          <InlineNotification type="warning" message="These codes won't be shown again." />
+          <div className="bg-surface-2 border border-line rounded-[12px] p-4 grid grid-cols-2 gap-1.5">
+            {backupCodes.map((code, i) => <code key={i} className="font-mono text-[14px] text-content text-center py-0.5">{code}</code>)}
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <button type="button" onClick={async () => { await copyText(backupCodes.join('\n')); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className={btnSecondary}>{copied ? 'Copied' : 'Copy all'}</button>
+            <button type="button" onClick={downloadBackupCodes} className={btnSecondary}>Download .txt</button>
+          </div>
+          <button type="button" onClick={() => navigate('/', { replace: true })} className={`${btnPrimary} w-full h-11`}>Continue to Ledger</button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (step === 'scan' && setupData) {
+    return (
+      <AuthShell title="Scan the QR code" description="Open your authenticator app, scan this code, then enter the 6-digit code it shows." maxWidth={440}>
+        <form onSubmit={handleVerify} className="flex flex-col gap-4">
+          {error && <InlineNotification type="error" message={error} />}
+          <div className="flex justify-center">
+            <div className="bg-white p-3 rounded-[12px]"><img src={setupData.qrCodeUrl} alt="Two-factor QR code" className="w-44 h-44 block" /></div>
+          </div>
+          <button type="button" onClick={() => { setShowSecret(!showSecret); setSecretCopied(false); }} className="text-[13px] font-semibold text-primary w-full text-center">
+            {showSecret ? 'Hide secret key' : "Can't scan? Enter the key manually"}
+          </button>
+          {showSecret && (
+            <div className="flex justify-center">
+              <Tooltip content={secretCopied ? 'Copied to clipboard' : 'Click to copy'}>
+                <button type="button" onClick={async () => { await copyText(setupData.secret); setSecretCopied(true); setTimeout(() => setSecretCopied(false), 2000); }}
+                  className="bg-surface-2 border border-line-strong rounded-[11px] px-4 py-2.5 hover:border-primary transition-colors">
+                  <code className="font-mono text-[12px] text-content break-all">{setupData.secret}</code>
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          <div className="text-[13px] font-bold text-content text-center">Verification code</div>
+          <TotpCodeInput value={verifyCode} onChange={setVerifyCode} autoFocus />
+          <button type="submit" disabled={loading || verifyCode.length !== 6} className={`${btnPrimary} w-full h-11 mt-1`}>{loading ? 'Verifying…' : 'Verify and enable'}</button>
+        </form>
+      </AuthShell>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-sidebar)] flex items-center justify-center font-sans">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-10">
-          <LedgerLogo size={40} />
-          <span className="text-gray-100 text-2xl font-bold tracking-tight">Ledger</span>
-        </div>
-
-        <div className="bg-[var(--bg-card)] rounded-xl p-8 shadow-lg">
-          {step === 'start' && (
-            <>
-              <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">Set Up Two-Factor Authentication</h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-2">
-                Your administrator requires two-factor authentication for your account.
-              </p>
-              <p className="text-sm text-[var(--text-secondary)] mb-6">
-                You'll need an authenticator app like Google Authenticator, Authy, or 1Password.
-              </p>
-
-              {error && <InlineNotification type="error" message={error} className="mb-4" />}
-
-              <button
-                onClick={handleStartSetup}
-                disabled={loading}
-                className="w-full py-2.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] rounded-lg text-sm font-semibold btn-primary transition-colors disabled:opacity-60"
-              >
-                {loading ? 'Setting up...' : 'Get Started'}
-              </button>
-            </>
-          )}
-
-          {step === 'scan' && setupData && (
-            <>
-              <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">Scan QR Code</h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-6">
-                Scan this QR code with your authenticator app, then enter the 6-digit code to verify.
-              </p>
-
-              {error && <InlineNotification type="error" message={error} className="mb-4" />}
-
-              {/* QR Code */}
-              <div className="flex justify-center mb-4">
-                <div className="bg-white p-3 rounded-lg">
-                  <img src={setupData.qrCodeUrl} alt="2FA QR Code" className="w-48 h-48" />
-                </div>
-              </div>
-
-              {/* Manual entry */}
-              <div className="mb-6">
-                <button
-                  type="button"
-                  onClick={() => { setShowSecret(!showSecret); setSecretCopied(false); }}
-                  className="text-xs text-[var(--color-accent)] hover:underline bg-transparent border-none cursor-pointer mb-2 w-full text-center"
-                >
-                  {showSecret ? 'Hide secret key' : "Can't scan? Enter manually"}
-                </button>
-                {showSecret && (
-                  <div className="flex justify-center">
-                  <Tooltip content={secretCopied ? '✓ Copied to clipboard' : 'Click to copy'}>
-                    <div
-                      className="bg-[var(--bg-input)] border border-[var(--bg-input-border)] rounded-lg px-4 py-2 text-center w-fit cursor-pointer hover:border-[var(--color-accent)] transition-colors"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(setupData.secret);
-                        } catch {
-                          const ta = document.createElement('textarea');
-                          ta.value = setupData.secret;
-                          ta.style.position = 'fixed';
-                          ta.style.opacity = '0';
-                          document.body.appendChild(ta);
-                          ta.select();
-                          document.execCommand('copy');
-                          document.body.removeChild(ta);
-                        }
-                        setSecretCopied(true);
-                        setTimeout(() => setSecretCopied(false), 2000);
-                      }}
-                    >
-                      <code className="text-[11px] font-mono text-[var(--text-primary)] break-all select-all">{setupData.secret}</code>
-                    </div>
-                  </Tooltip>
-                  </div>
-                )}
-              </div>
-
-              <form onSubmit={handleVerify}>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-3 uppercase tracking-wide text-center">
-                  Verification Code
-                </label>
-                <TotpCodeInput
-                  value={verifyCode}
-                  onChange={setVerifyCode}
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  disabled={loading || verifyCode.length !== 6}
-                  className="w-full mt-4 py-2.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] rounded-lg text-sm font-semibold btn-primary transition-colors disabled:opacity-60"
-                >
-                  {loading ? 'Verifying...' : 'Verify & Enable 2FA'}
-                </button>
-              </form>
-            </>
-          )}
-
-          {step === 'backup' && (
-            <>
-              <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">
-                <span className="text-[var(--color-positive)] mr-2">✓</span>
-                2FA Enabled
-              </h2>
-              <p className="text-sm text-[var(--text-secondary)] mb-2">
-                Save these backup codes in a safe place. Each code can only be used once.
-              </p>
-              <p className="text-xs text-[var(--color-negative)] font-medium mb-4">
-                ⚠ These codes won't be shown again.
-              </p>
-
-              <div className="bg-[var(--bg-input)] border border-[var(--bg-input-border)] rounded-lg p-4 mb-4">
-                <div className="grid grid-cols-2 gap-2">
-                  {backupCodes.map((code, i) => (
-                    <code key={i} className="text-sm font-mono text-[var(--text-primary)] text-center py-1">
-                      {code}
-                    </code>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={handleCopyBackupCodes}
-                  className="flex-1 py-2 rounded-lg text-xs font-semibold border border-[var(--bg-card-border)] bg-[var(--btn-secondary-bg)] text-[var(--text-primary)] cursor-pointer transition-colors hover:brightness-95"
-                >
-                  {copied ? '✓ Copied!' : 'Copy All'}
-                </button>
-                <button
-                  onClick={handleDownloadBackupCodes}
-                  className="flex-1 py-2 rounded-lg text-xs font-semibold border border-[var(--bg-card-border)] bg-[var(--btn-secondary-bg)] text-[var(--text-primary)] cursor-pointer transition-colors hover:brightness-95"
-                >
-                  Download .txt
-                </button>
-              </div>
-
-              <button
-                onClick={handleDone}
-                className="w-full py-2.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] rounded-lg text-sm font-semibold btn-primary transition-colors"
-              >
-                Continue to Ledger
-              </button>
-            </>
-          )}
-        </div>
+    <AuthShell title="Set up two-factor authentication" description="Your administrator requires a second sign-in step for your account.">
+      <div className="flex flex-col gap-5">
+        {error && <InlineNotification type="error" message={error} />}
+        <p className="text-sm text-content-2 m-0 leading-relaxed">
+          You'll need an authenticator app such as 1Password, Google Authenticator, or Authy. Ledger shows a QR code to scan, then asks for the 6-digit code the app generates.
+        </p>
+        <button type="button" onClick={handleStartSetup} disabled={loading} className={`${btnPrimary} w-full h-11`}>{loading ? 'Starting…' : 'Get started'}</button>
       </div>
-    </div>
+    </AuthShell>
   );
 }

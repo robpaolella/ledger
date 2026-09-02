@@ -7,6 +7,7 @@ interface TotpCodeInputProps {
   disabled?: boolean;
 }
 
+/** Six-box one-time-code input (auto-advance, paste, backspace). */
 export default function TotpCodeInput({ value, onChange, autoFocus = false, disabled = false }: TotpCodeInputProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = value.padEnd(6, '').slice(0, 6).split('');
@@ -33,18 +34,13 @@ export default function TotpCodeInput({ value, onChange, autoFocus = false, disa
   const handleChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value.replace(/\D/g, '');
     if (!input) return;
-
-    // If multiple characters pasted/typed into a single field
     if (input.length > 1) {
       const newDigits = [...digits];
-      for (let i = 0; i < input.length && index + i < 6; i++) {
-        newDigits[index + i] = input[i];
-      }
+      for (let i = 0; i < input.length && index + i < 6; i++) newDigits[index + i] = input[i];
       updateValue(newDigits);
       focusInput(Math.min(index + input.length, 5));
       return;
     }
-
     const newDigits = [...digits];
     newDigits[index] = input[0];
     updateValue(newDigits);
@@ -63,41 +59,36 @@ export default function TotpCodeInput({ value, onChange, autoFocus = false, disa
         updateValue(newDigits);
         focusInput(index - 1);
       }
-    } else if (e.key === 'ArrowLeft' && index > 0) {
-      e.preventDefault();
-      focusInput(index - 1);
-    } else if (e.key === 'ArrowRight' && index < 5) {
-      e.preventDefault();
-      focusInput(index + 1);
-    }
+    } else if (e.key === 'ArrowLeft' && index > 0) { e.preventDefault(); focusInput(index - 1); }
+    else if (e.key === 'ArrowRight' && index < 5) { e.preventDefault(); focusInput(index + 1); }
   };
 
   const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (!pasted) return;
-    const newDigits = pasted.padEnd(6, ' ').split('').slice(0, 6);
-    updateValue(newDigits);
+    updateValue(pasted.padEnd(6, ' ').split('').slice(0, 6));
     focusInput(Math.min(pasted.length, 5));
   };
 
   return (
-    <div className="flex gap-2 justify-center">
+    <div className="flex gap-2 justify-center" role="group" aria-label="Verification code">
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <input
           key={i}
           ref={(el) => { inputRefs.current[i] = el; }}
           type="text"
           inputMode="numeric"
-          autoComplete="off"
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
           maxLength={1}
+          aria-label={`Digit ${i + 1}`}
           value={digits[i]?.trim() || ''}
           onChange={(e) => handleChange(i, e)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
           disabled={disabled}
-          className="w-11 h-[52px] text-center text-xl font-mono font-semibold border border-[var(--bg-input-border)] rounded-lg bg-[var(--bg-input)] text-[var(--text-primary)] outline-none transition-all focus:border-[var(--color-accent)] focus:shadow-[0_0_0_3px_rgba(59,130,246,0.2)] disabled:opacity-50"
+          className="w-11 h-[52px] text-center text-xl font-mono font-semibold rounded-[11px] bg-surface-2 border border-line-strong text-content outline-none transition-colors focus:border-primary disabled:opacity-50"
           style={{ caretColor: 'transparent' }}
         />
       ))}
