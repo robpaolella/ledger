@@ -36,7 +36,8 @@ and `db:backup` / `db:restore` snapshot it.
 ## Layout
 - `packages/server/src/routes/` — REST endpoints; `middleware/` has JWT auth (`auth.ts`) and role/permission guards (`permissions.ts`).
 - `packages/server/src/services/` — SimpleFIN client, CSV/Venmo parsing, duplicate and transfer detection, sign conversion.
-- `packages/server/src/db/` — `schema.ts` (Drizzle), `seed.ts`, and `migrate-*.ts` scripts that `src/index.ts` runs at startup.
+- `packages/server/src/db/` — `schema.ts` (Drizzle), `seed.ts`, and `migrate-*.ts` scripts that `src/index.ts` runs at startup
+  (except `migrate-income-categories.ts`, run by hand via `npm run migrate:income`).
 - `packages/server/test/` — Vitest tests.
 - `packages/client/src/` — `pages/`, shared `components/`, `context/` (auth, toast), `lib/` (API client, formatters).
 - `.github/mockups/` — mockups served at `/mockup` in dev. `.github/qa/` — QA checklists served at `/qa`.
@@ -46,8 +47,10 @@ and `db:backup` / `db:restore` snapshot it.
 - **Releases:** push a `v*` tag. `.github/workflows/release.yml` runs the checks, then pushes
   `ghcr.io/robpaolella/ledger` and `robpaolella/ledger` (Docker Hub) with the version tag and `latest`.
   It needs the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repo secrets.
-- **Own server:** `npm run deploy` (`scripts/deploy.sh`) SSHes in, backs up the DB, rebuilds and
-  health-checks. `SERVER` and `APP_DIR` in the script are placeholders; set them before use.
+- **Own server:** `npm run deploy` (`scripts/deploy.sh`) pushes the current branch, SSHes in, backs
+  up the DB, rebuilds and health-checks. `SERVER` and `APP_DIR` in the script are placeholders; set
+  them before use. Run it from an up-to-date `main` after the PR merges. Its push is then a no-op.
+  If local `main` has unpushed commits, `.githooks/pre-push` refuses the push and the deploy stops.
 - Production SQLite lives on the `./data` volume. `JWT_SECRET` is auto-generated and persisted
   there if unset.
 
