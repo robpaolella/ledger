@@ -12,12 +12,12 @@
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w packages/server\" \"npm run dev -w packages/client\"",
     "seed": "npm run seed -w packages/server",
     "seed:prod": "npm run seed:prod -w packages/server",
-    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/client/tsconfig.json",
+    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.test.json && tsc --noEmit -p packages/client/tsconfig.json",
     "lint": "eslint packages/",
+    "test": "npm run test -w packages/server",
     "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client",
-    "validate": "npm run typecheck && npm run lint && npm run build",
+    "validate": "npm run typecheck && npm run lint && npm run test && npm run build",
     "start": "NODE_ENV=production node packages/server/dist/index.js",
-    "prepare": "husky || true",
     "db:reset": "bash scripts/db-reset.sh",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",
@@ -33,7 +33,6 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.3.0",
-    "husky": "^9.1.7",
     "typescript-eslint": "^8.56.1"
   }
 }
