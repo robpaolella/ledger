@@ -1,0 +1,2 @@
+- No automated test suite runs in CI (only typecheck/lint/build) — consider wiring the existing Puppeteer e2e script into CI or adding unit tests.
+- `scripts/deploy.sh` has unconfigured placeholder server values — either configure it for the real host or remove it if releases only happen via tagged Docker images.
