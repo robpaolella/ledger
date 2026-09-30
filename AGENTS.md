@@ -1,25 +1,39 @@
 # Ledger
 
-Self-hosted personal finance app for households (transactions, budgets, net worth, bank sync). Node/TypeScript monorepo, deployed as a single Docker image.
+Self-hosted personal finance app for households (transactions, budgets, net worth, asset
+depreciation, SimpleFIN bank sync). Node/TypeScript monorepo, deployed as a single Docker
+image.
 
 ## Stack
 - Frontend: React 19, TypeScript, Vite 7, Tailwind CSS 4
 - Backend: Express 5, TypeScript, Drizzle ORM
 - Database: SQLite (better-sqlite3), volume-mounted file
 - Auth: JWT + bcrypt
+- Tests: Vitest (`packages/server`)
 - Package manager: npm workspaces (`packages/shared`, `packages/server`, `packages/client`)
 - Node 20+, npm 9+
 
 ## Checks
-Run in this order before any PR (same as CI and the husky pre-push hook, which runs `npm run validate`):
+Run in this order before any PR (same as CI and the `.githooks/pre-push` hook, which runs
+`npm run validate`):
 ```
 npm run typecheck
 npm run lint
+npm run test
 npm run build
 ```
-There is no automated test suite in CI. One manual Puppeteer e2e script exists at
-`e2e/reimbursement-splits.e2e.cjs` but isn't wired into any npm script — run it directly
-with `node e2e/reimbursement-splits.e2e.cjs` if you touch that feature.
+Lint currently passes with `no-explicit-any` warnings (no errors) — don't let the count block
+a PR, but don't add new ones either. There's also a manual Puppeteer e2e script at
+`e2e/reimbursement-splits.e2e.cjs`, not wired into any npm script — run it directly with
+`node e2e/reimbursement-splits.e2e.cjs` if you touch that feature.
+
+## Setup after clone
+```
+git config core.hooksPath .githooks
+```
+This wires up `.githooks/pre-commit` and `.githooks/pre-push` (pre-push also refuses pushes
+to `main`/`master`, force pushes, and branch deletions). It's a manual step — nothing
+installs it automatically, so re-run it if hooks ever stop firing.
 
 ## Run locally
 ```
@@ -29,11 +43,19 @@ npm run dev        # server on :3001, client on :5173 (http://localhost:5173)
 
 ## Layout
 ```
-packages/client/   React SPA (Vite) — pages/, components/, context/, hooks/, lib/
-packages/server/   Express API — routes/, middleware/, services/, db/ (Drizzle schema + seed), utils/
-packages/shared/   Shared TypeScript types (src/types.ts)
-scripts/           db-backup, db-restore, db-reset, deploy, docker-*, build
-e2e/               Manual Puppeteer e2e test (not wired into CI)
+packages/client/src/   pages/, shared components/, context/ (auth, toast), lib/ (API client, formatters)
+packages/server/src/
+  routes/              REST endpoints
+  middleware/          auth.ts (JWT), permissions.ts (role/permission guards + 60s cache)
+  services/            SimpleFIN client, CSV/Venmo parsing, duplicate/transfer detection, sign conversion
+  db/                  schema.ts (Drizzle), seed.ts, migrate-*.ts (run at startup from index.ts,
+                       except migrate-income-categories.ts — run by hand via `npm run migrate:income`)
+packages/server/test/  Vitest tests
+packages/shared/src/   types.ts — shared TypeScript types
+.github/mockups/, .github/*.jsx   design mockups, served at /mockup in dev (import.meta.env.DEV only)
+.github/qa/, QAPage                manual QA checklist, served at /qa in dev
+scripts/                db-backup, db-restore, db-reset, deploy, docker-*, build
+e2e/                    manual Puppeteer e2e script (not wired into CI)
 ```
 
 ## Deploy
@@ -41,21 +63,28 @@ Releases build and publish automatically: pushing a `v*` tag triggers `.github/w
 which builds the Docker image and pushes it to both Docker Hub (`robpaolella/ledger`) and GHCR.
 `docker-compose.yml` pulls the Docker Hub image by default.
 
-`scripts/deploy.sh` is a template for pushing to a self-hosted server over SSH — it has
-placeholder `SERVER`/`APP_DIR` values and isn't configured for a real host. Don't assume
-it's wired to any actual server without checking with Robert first.
+`npm run deploy` (`scripts/deploy.sh`) is a template for pushing to a self-hosted server over
+SSH — it pushes the current branch, backs up the remote DB, rebuilds, and health-checks. It has
+placeholder `SERVER`/`APP_DIR` values and isn't configured for a real host. Don't assume it's
+wired to any actual server without checking with Robert first.
 
 ## Watch out for
 - Amount sign convention is not intuitive: positive = money out, negative = money in, for
   every category type. Never infer income/expense from the amount sign — check
-  `categories.type` instead. Full rule in `.github/copilot-instructions.md` under "Project Learnings".
+  `categories.type` instead, and use `fmtTransaction()` (`packages/client/src/lib/formatters.ts`)
+  for display. Card CSVs and bank CSVs use opposite signs, and some institutions write
+  negatives as `(123.45)`. Full rule in `.github/copilot-instructions.md` under "Project Learnings".
 - All visual/styling values (colors, spacing, component patterns) are defined in
-  `.github/design-system.jsx`, the single source of truth. Never hardcode hex colors or
-  category colors — use CSS custom properties and `getCategoryColor()`.
+  `.github/design-system.jsx`, the single source of truth (`.github/mobile-prototype.jsx` for
+  mobile layouts). Never hardcode hex colors or category colors — use CSS custom properties
+  and `getCategoryColor()`.
 - Permission checks: admin/owner bypass DB lookups entirely; member permissions are
-  cached for 60s and must be invalidated via `invalidatePermissionCache(userId)` on change.
+  cached for 60s (`CACHE_TTL_MS` in `permissions.ts`) and must be invalidated via
+  `invalidatePermissionCache(userId)` on change.
 - Migrations must be backward-compatible (run on both fresh and existing databases) and
   must never delete data without a backup step.
+- No `alert()`/`confirm()` in product UI — destructive actions use `ConfirmDeleteButton`.
+- `.npmrc` sets `legacy-peer-deps=true`. Keep it when changing dependencies.
 
 ## Reference material
 `.github/copilot-instructions.md` is a long-lived, actively maintained doc (written for
