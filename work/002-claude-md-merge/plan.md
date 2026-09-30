@@ -5,6 +5,6 @@
 - [x] Merge verified content into AGENTS.md; drop stale/superseded claims
 - [x] Replace CLAUDE.md with the one-line stub
 - [x] Confirm no `.claude/` directory exists
-- [ ] Run the repo's Checks
-- [ ] Review (`review` skill)
+- [x] Run the repo's Checks
+- [x] Review (`review` skill)
 - [ ] Open PR
