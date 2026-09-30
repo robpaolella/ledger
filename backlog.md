@@ -1,2 +1,3 @@
 - No automated test suite runs in CI (only typecheck/lint/build) — consider wiring the existing Puppeteer e2e script into CI or adding unit tests.
 - `scripts/deploy.sh` has unconfigured placeholder server values — either configure it for the real host or remove it if releases only happen via tagged Docker images.
+- AGENTS.md's Deploy section dropped some real operational detail that was in the old CLAUDE.md (dev DB path, db:reset/backup/restore scripts, release secrets needed, JWT_SECRET auto-generation) — fold back in if it turns out to matter in practice.
