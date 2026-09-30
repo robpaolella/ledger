@@ -8,6 +8,8 @@ import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
 import PermissionGate from '../components/PermissionGate';
 import BudgetTemplateModal from '../components/BudgetTemplateModal';
+import ActionMenu, { type ActionMenuItem } from '../components/ActionMenu';
+import PayCyclesModal from '../components/PayCyclesModal';
 import { getCategoryColor } from '../lib/categoryColors';
 import ScrollableList from '../components/ScrollableList';
 import { useAuth } from '../context/AuthContext';
@@ -71,6 +73,27 @@ interface RecurringImportRow {
   included: boolean;
 }
 
+interface PayCycleBreakdown {
+  label: string;
+  ownerName: string | null;
+  paydayCount: number;
+  perPaycheckAmount: number;
+  projectedAmount: number;
+}
+
+interface PayCycleImportRow {
+  categoryId: number;
+  subName: string;
+  projectedAmount: number;
+  importAmount: string;
+  existingAmount: number | null;
+  hasConflict: boolean;
+  action: ConflictAction;
+  included: boolean;
+  hasExtraPaycheck: boolean;
+  breakdown: PayCycleBreakdown[];
+}
+
 function monthStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -106,8 +129,10 @@ export default function BudgetPage() {
   const [importStep, setImportStep] = useState(0);
   const [templateRows, setTemplateRows] = useState<TemplateImportRow[]>([]);
   const [recurringRows, setRecurringRows] = useState<RecurringImportRow[]>([]);
+  const [payCycleRows, setPayCycleRows] = useState<PayCycleImportRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [payCyclesModalOpen, setPayCyclesModalOpen] = useState(false);
   const wizardScrollRef = useRef<HTMLDivElement>(null);
   const [wizardScrollable, setWizardScrollable] = useState(false);
 
@@ -123,7 +148,7 @@ export default function BudgetPage() {
     if (!importOpen) return;
     const frame = requestAnimationFrame(() => checkWizardScroll());
     return () => cancelAnimationFrame(frame);
-  }, [importOpen, importStep, templateRows, recurringRows, checkWizardScroll]);
+  }, [importOpen, importStep, templateRows, recurringRows, payCycleRows, checkWizardScroll]);
 
   useEffect(() => {
     apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((res) =>
@@ -174,10 +199,11 @@ export default function BudgetPage() {
       const currentMonth = monthStr(month);
       const monthNum = month.getMonth() + 1;
 
-      const [tplRes, recurRes, budgetRes] = await Promise.all([
+      const [tplRes, recurRes, budgetRes, projRes] = await Promise.all([
         apiFetch<{ data: any[] }>('/budget-templates'),
         apiFetch<{ data: any[] }>(`/budget-recurring?month=${monthNum}`),
         apiFetch<{ data: any[] }>(`/budgets?month=${currentMonth}`),
+        apiFetch<{ data: { categoryTotals: any[]; cycles: any[] } }>(`/pay-cycles/projection?month=${currentMonth}`),
       ]);
 
       const existingMap = new Map<number, number>();
@@ -209,8 +235,38 @@ export default function BudgetPage() {
         included: true,
       }));
 
+      // Group projected cycles by category for the per-category breakdown
+      const cyclesByCat = new Map<number, any[]>();
+      for (const cyc of projRes.data.cycles) {
+        const arr = cyclesByCat.get(cyc.categoryId) ?? [];
+        arr.push(cyc);
+        cyclesByCat.set(cyc.categoryId, arr);
+      }
+      const pcRows: PayCycleImportRow[] = projRes.data.categoryTotals.map((ct: any) => {
+        const existing = existingMap.get(ct.categoryId) ?? null;
+        return {
+          categoryId: ct.categoryId,
+          subName: ct.subName,
+          projectedAmount: ct.projectedAmount,
+          importAmount: String(ct.projectedAmount),
+          existingAmount: existing,
+          hasConflict: existing !== null,
+          action: 'overwrite' as ConflictAction,
+          included: true,
+          hasExtraPaycheck: !!ct.hasExtraPaycheck,
+          breakdown: (cyclesByCat.get(ct.categoryId) ?? []).map((c: any) => ({
+            label: c.label,
+            ownerName: c.ownerName,
+            paydayCount: c.paydayCount,
+            perPaycheckAmount: c.perPaycheckAmount,
+            projectedAmount: c.projectedAmount,
+          })),
+        };
+      });
+
       setTemplateRows(tRows);
       setRecurringRows(rRows);
+      setPayCycleRows(pcRows);
       setImportStep(0);
       setImportOpen(true);
     } catch {
@@ -245,6 +301,22 @@ export default function BudgetPage() {
         });
       }
 
+      // Pay-cycle income — pushed last so it wins by order over a template row
+      // targeting the same income category (overwrite). Earner summing already
+      // happened server-side, so default is 'overwrite' (idempotent), not 'add'.
+      for (const row of payCycleRows) {
+        if (!row.included) continue;
+        if (row.hasConflict && row.action === 'skip') continue;
+        const amt = parseFloat(row.importAmount);
+        if (isNaN(amt) || amt <= 0) continue;
+        items.push({
+          categoryId: row.categoryId,
+          amount: amt,
+          source: 'pay_cycle',
+          action: row.hasConflict ? row.action : 'overwrite',
+        });
+      }
+
       const res = await apiFetch<{ data: { created: number; updated: number; skipped: number } }>('/budgets/import', {
         method: 'POST',
         body: JSON.stringify({ month: monthStr(month), items }),
@@ -267,6 +339,11 @@ export default function BudgetPage() {
   const { income, expenseGroups, totals } = data;
   const incDiff = totals.actualIncome - totals.budgetedIncome;
   const expRemaining = totals.budgetedExpenses - totals.actualExpenses;
+  const incomeCategories = income.map((r) => ({ id: r.categoryId, subName: r.subName }));
+  const manageItems: ActionMenuItem[] = [
+    { key: 'template', label: 'Budget Template', description: 'Monthly template & recurring items', icon: '📋', onClick: () => setTemplateModalOpen(true) },
+    { key: 'paycycles', label: 'Pay Cycles', description: 'Biweekly & recurring paychecks', icon: '💸', onClick: () => setPayCyclesModalOpen(true) },
+  ];
 
   return (
     <div className={isMobile ? '' : 'flex flex-col'} style={isMobile ? undefined : { height: 'calc(100vh - 56px)' }}>
@@ -290,16 +367,17 @@ export default function BudgetPage() {
           {/* Action buttons */}
           <div className="flex gap-2 mb-2">
             <PermissionGate permission="budgets.edit" fallback="disabled">
-              <button onClick={() => setTemplateModalOpen(true)}
-                className="flex-1 text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-secondary min-h-[44px]">
-                Budget Template
+              <button onClick={openImportWizard}
+                className="flex-1 text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-primary min-h-[44px]">
+                Import Budget
               </button>
             </PermissionGate>
             <PermissionGate permission="budgets.edit" fallback="disabled">
-              <button onClick={openImportWizard}
-                className="flex-1 text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-primary min-h-[44px]">
-                Import from Template
-              </button>
+              <ActionMenu
+                label="Manage"
+                items={manageItems}
+                buttonClassName="flex-1 text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-3 py-2 cursor-pointer font-semibold btn-secondary min-h-[44px]"
+              />
             </PermissionGate>
           </div>
           {/* Scrollable owner chip row */}
@@ -327,19 +405,18 @@ export default function BudgetPage() {
         <div className="flex gap-3 items-center">
           <PermissionGate permission="budgets.edit" fallback="disabled">
             <button
-              onClick={() => setTemplateModalOpen(true)}
-              className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-3 py-1.5 cursor-pointer font-semibold btn-secondary"
-            >
-              Budget Template
-            </button>
-          </PermissionGate>
-          <PermissionGate permission="budgets.edit" fallback="disabled">
-            <button
               onClick={openImportWizard}
               className="text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-3 py-1.5 cursor-pointer font-semibold btn-primary"
             >
-              Import from Template
+              Import Budget
             </button>
+          </PermissionGate>
+          <PermissionGate permission="budgets.edit" fallback="disabled">
+            <ActionMenu
+              label="Manage"
+              items={manageItems}
+              buttonClassName="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-3 py-1.5 cursor-pointer font-semibold btn-secondary"
+            />
           </PermissionGate>
           <OwnerFilter value={owner} onChange={setOwner} users={users} />
           <div className="flex gap-2 items-center">
@@ -674,7 +751,7 @@ export default function BudgetPage() {
         {importStep === 0 && (
           <div>
             <div className="mb-1">
-              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 1 of 3 — Import Monthly Template</p>
+              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 1 of 4 — Import Monthly Template</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Importing into: {monthLabel(month)}</p>
             </div>
 
@@ -780,7 +857,7 @@ export default function BudgetPage() {
               </button>
               <button
                 onClick={() => setImportStep(1)}
-                disabled={templateRows.length === 0}
+                disabled={templateRows.length === 0 && recurringRows.length === 0 && payCycleRows.length === 0}
                 className="text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next →
@@ -792,7 +869,7 @@ export default function BudgetPage() {
         {importStep === 1 && (
           <div>
             <div className="mb-1">
-              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 2 of 3 — Recurring Items for {month.toLocaleString('en-US', { month: 'long' })}</p>
+              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 2 of 4 — Recurring Items for {month.toLocaleString('en-US', { month: 'long' })}</p>
               <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Select recurring items to include in this month's budget.</p>
             </div>
 
@@ -873,24 +950,135 @@ export default function BudgetPage() {
           </div>
         )}
 
-        {importStep === 2 && (() => {
+        {importStep === 2 && (
+          <div>
+            <div className="mb-1">
+              <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 3 of 4 — Expected Income</p>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Projected take-home for {monthLabel(month)} from your pay cycles. Adjust any amount before it's saved.</p>
+            </div>
+
+            {payCycleRows.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-[13px] text-[var(--text-muted)] mb-2">No pay cycles project income for {month.toLocaleString('en-US', { month: 'long' })}.</p>
+                <button className="text-[13px] text-[var(--color-accent)] hover:underline bg-transparent border-none cursor-pointer p-0"
+                  onClick={() => { setImportOpen(false); setPayCyclesModalOpen(true); }}>
+                  Set up pay cycles →
+                </button>
+              </div>
+            ) : (
+              <div className="relative" style={{ maxHeight: '60vh' }}>
+                <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar" style={{ maxHeight: '60vh' }}>
+                <div className="flex flex-col gap-2">
+                  {payCycleRows.map((row, idx) => (
+                    <div key={row.categoryId} className="rounded-lg border border-[var(--bg-card-border)] px-3 py-2.5" style={{ opacity: row.included ? 1 : 0.5 }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="flex items-center gap-2 min-w-0 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={row.included}
+                            onChange={() => setPayCycleRows(prev => prev.map((r, i) => i === idx ? { ...r, included: !r.included } : r))}
+                            className="w-4 h-4 cursor-pointer flex-shrink-0"
+                          />
+                          <span className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{row.subName}</span>
+                          {row.hasExtraPaycheck && <span className="text-[11px] text-[var(--color-warning)] flex-shrink-0">⚡ extra check</span>}
+                        </label>
+                        <div className="w-[100px] flex-shrink-0">
+                          <div className="flex items-center rounded border border-[var(--bg-input-border)] bg-[var(--bg-input)]">
+                            <span className="pl-2 text-[12px] font-mono text-[var(--text-muted)] flex-shrink-0 select-none">$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={row.importAmount}
+                              disabled={!row.included}
+                              onChange={(e) => setPayCycleRows(prev => prev.map((r, i) => i === idx ? { ...r, importAmount: e.target.value.replace(/[^0-9.]/g, '') } : r))}
+                              className="flex-1 min-w-0 text-right text-[12px] font-mono py-1.5 pr-2 bg-transparent outline-none border-none text-[var(--text-body)] disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      {row.breakdown.length > 0 && (
+                        <div className="text-[11px] text-[var(--text-muted)] mt-1.5 pl-6 leading-relaxed">
+                          {row.breakdown.map((b, i) => (
+                            <span key={i}>
+                              {i > 0 && <span className="opacity-50"> · </span>}
+                              {b.ownerName ?? 'Household'} ({b.label}) {b.paydayCount}×{fmt(b.perPaycheckAmount)} = {fmt(b.projectedAmount)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {row.hasConflict && (
+                        <div className="flex items-center gap-2 mt-2 pl-6">
+                          <span className="text-[11px] text-[var(--color-warning)]">Existing budget {fmt(row.existingAmount ?? 0)} —</span>
+                          <select
+                            value={row.action}
+                            onChange={(e) => setPayCycleRows(prev => prev.map((r, i) => i === idx ? { ...r, action: e.target.value as ConflictAction } : r))}
+                            className="text-[11px] font-semibold rounded-md px-2 py-0.5 border border-[var(--bg-input-border)] bg-[var(--bg-input)] text-[var(--text-primary)] outline-none cursor-pointer"
+                          >
+                            <option value="overwrite">Overwrite</option>
+                            <option value="add">Add to it</option>
+                            <option value="skip">Skip</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                </div>
+
+                {wizardScrollable && (
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 h-[40px] pointer-events-none" style={{ background: 'linear-gradient(to bottom, transparent, var(--bg-card))' }} />
+                    <button onClick={() => wizardScrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' })} className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[28px] h-[28px] rounded-full flex items-center justify-center border border-[var(--bg-card-border)] cursor-pointer scroll-arrow" style={{ background: 'var(--bg-card)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
+              <button
+                onClick={() => setImportStep(1)}
+                className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => setImportStep(3)}
+                className="text-[12px] text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-primary"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {importStep === 3 && (() => {
           const tplAdds = templateRows.filter(r => !r.hasConflict);
           const tplOverwrites = templateRows.filter(r => r.hasConflict && r.action === 'overwrite');
           const tplAddToExisting = templateRows.filter(r => r.hasConflict && r.action === 'add');
           const tplSkips = templateRows.filter(r => r.hasConflict && r.action === 'skip');
           const includedRecurring = recurringRows.filter(r => r.included && parseFloat(r.importAmount) > 0);
           const excludedRecurring = recurringRows.filter(r => !r.included);
-          const totalChanges = tplAdds.length + tplOverwrites.length + tplAddToExisting.length + includedRecurring.length;
+          const includedPayCycles = payCycleRows.filter(r => r.included && !(r.hasConflict && r.action === 'skip') && parseFloat(r.importAmount) > 0);
+          const payCycleCatIds = new Set(includedPayCycles.map(r => r.categoryId));
+          const incomeCollisions = templateRows.filter(r => r.categoryType === 'income' && !(r.hasConflict && r.action === 'skip') && payCycleCatIds.has(r.categoryId));
+          const totalChanges = tplAdds.length + tplOverwrites.length + tplAddToExisting.length + includedRecurring.length + includedPayCycles.length;
 
           return (
             <div>
               <div className="mb-1">
-                <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 3 of 3 — Review Changes</p>
+                <p className="text-[14px] font-bold text-[var(--text-primary)] m-0">Step 4 of 4 — Review Changes</p>
                 <p className="text-[12px] text-[var(--text-secondary)] mt-0.5 mb-3">Review the changes that will be applied to {monthLabel(month)}.</p>
               </div>
 
               <div className="relative" style={{ maxHeight: '60vh' }}>
                 <div ref={wizardScrollRef} onScroll={checkWizardScroll} className="overflow-y-auto overflow-x-hidden hide-scrollbar" style={{ maxHeight: '60vh' }}>
+              {incomeCollisions.length > 0 && (
+                <div className="bg-[var(--bg-inline-warning)] border border-[var(--bg-inline-warning-border)] rounded-lg px-3 py-2 mb-3 text-[12px] text-[var(--text-primary)]">
+                  {incomeCollisions.map(r => r.subName).join(', ')} {incomeCollisions.length === 1 ? 'is' : 'are'} set by both the template and pay cycles. The <b>pay cycle amount will be used</b> (applied last).
+                </div>
+              )}
               {/* Summary */}
               <div className="bg-[var(--bg-hover)] rounded-lg px-4 py-3 mb-4">
                 <div className="grid grid-cols-2 gap-2 text-[12px]">
@@ -904,6 +1092,8 @@ export default function BudgetPage() {
                   <span className="text-right font-semibold text-[var(--text-primary)]">{includedRecurring.length}</span>
                   <span className="text-[var(--text-muted)]">Recurring — excluded:</span>
                   <span className="text-right font-semibold text-[var(--text-muted)]">{excludedRecurring.length}</span>
+                  <span className="text-[var(--text-muted)]">Pay cycle income — included:</span>
+                  <span className="text-right font-semibold text-[#10b981]">{includedPayCycles.length}</span>
                   <span className="text-[var(--text-primary)] font-semibold border-t border-[var(--bg-card-border)] pt-2 mt-1">Total changes:</span>
                   <span className="text-right font-bold text-[var(--text-primary)] border-t border-[var(--bg-card-border)] pt-2 mt-1">{totalChanges}</span>
                 </div>
@@ -949,6 +1139,21 @@ export default function BudgetPage() {
                 </div>
               )}
 
+              {includedPayCycles.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-[#10b981] uppercase tracking-[0.04em] mb-1">Expected Income (Pay Cycles)</p>
+                  {includedPayCycles.map(row => (
+                    <div key={row.categoryId} className="flex justify-between px-3 py-1 text-[12px]">
+                      <span className="text-[var(--text-body)]">
+                        {row.subName}
+                        {row.hasConflict && <span className="text-[10px] text-[var(--text-muted)] ml-1">({row.action})</span>}
+                      </span>
+                      <span className="font-mono text-[#10b981]">{fmt(parseFloat(row.importAmount))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {totalChanges === 0 && (
                 <div className="text-center py-4">
                   <p className="text-[13px] text-[var(--text-muted)]">No changes to apply. All template items were skipped and no recurring items were included.</p>
@@ -968,7 +1173,7 @@ export default function BudgetPage() {
 
               <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--bg-card-border)]">
                 <button
-                  onClick={() => setImportStep(1)}
+                  onClick={() => setImportStep(2)}
                   className="text-[12px] text-[var(--btn-secondary-text)] bg-[var(--btn-secondary-bg)] border-none rounded-lg px-4 py-2 cursor-pointer font-semibold btn-secondary"
                 >
                   ← Back
@@ -986,6 +1191,12 @@ export default function BudgetPage() {
         })()}
       </ResponsiveModal>
       <BudgetTemplateModal isOpen={templateModalOpen} onClose={() => setTemplateModalOpen(false)} />
+      <PayCyclesModal
+        isOpen={payCyclesModalOpen}
+        onClose={() => setPayCyclesModalOpen(false)}
+        users={users}
+        incomeCategories={incomeCategories}
+      />
     </div>
   );
 }

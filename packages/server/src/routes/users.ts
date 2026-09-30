@@ -390,6 +390,11 @@ router.get('/:id/delete-preview', requireRole('admin'), (req: Request, res: Resp
       'SELECT COUNT(*) as cnt FROM simplefin_connections WHERE user_id = ?'
     ).get(id) as { cnt: number };
 
+    // Owned pay cycles (will be unassigned, not deleted, on permanent delete)
+    const payCyclesOwnedCount = sqlite.prepare(
+      'SELECT COUNT(*) as cnt FROM pay_cycles WHERE user_id = ?'
+    ).get(id) as { cnt: number };
+
     // Available owners (all active users except the one being deleted)
     const available = sqlite.prepare(
       'SELECT id, display_name FROM users WHERE is_active = 1 AND id != ? ORDER BY display_name'
@@ -412,6 +417,7 @@ router.get('/:id/delete-preview', requireRole('admin'), (req: Request, res: Resp
         })),
         coOwnedAccounts: coOwnedWithOwners,
         personalConnections: personalConnCount.cnt,
+        payCyclesOwned: payCyclesOwnedCount.cnt,
         availableOwners: available.map(u => ({ id: u.id, displayName: u.display_name })),
       },
     });
@@ -566,10 +572,16 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
         connectionsRemoved++;
       }
 
+      // 4b. Orphan owned pay cycles — preserve the projection, drop attribution
+      const payCyclesOrphaned = (sqlite.prepare(
+        'SELECT COUNT(*) as cnt FROM pay_cycles WHERE user_id = ?'
+      ).get(id) as { cnt: number }).cnt;
+      sqlite.prepare('UPDATE pay_cycles SET user_id = NULL WHERE user_id = ?').run(id);
+
       // 5. Delete the user row
       sqlite.prepare('DELETE FROM users WHERE id = ?').run(id);
 
-      return { accountsReassigned, coOwnershipRemoved: coOwnedCount, connectionsRemoved };
+      return { accountsReassigned, coOwnershipRemoved: coOwnedCount, connectionsRemoved, payCyclesOrphaned };
     });
 
     const result = txn();
@@ -583,6 +595,7 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
         accountsReassigned: result.accountsReassigned,
         coOwnershipRemoved: result.coOwnershipRemoved,
         connectionsRemoved: result.connectionsRemoved,
+        payCyclesOrphaned: result.payCyclesOrphaned,
       },
     });
   } catch (err) {

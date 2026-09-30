@@ -1091,6 +1091,7 @@ interface DeletePreview {
   soleOwnedAccounts: { id: number; name: string; lastFour: string | null; type: string; classification: string }[];
   coOwnedAccounts: { id: number; name: string; lastFour: string | null; remainingOwners: string[] }[];
   personalConnections: number;
+  payCyclesOwned: number;
   availableOwners: { id: number; displayName: string }[];
 }
 
@@ -1148,6 +1149,9 @@ function DeleteUserModal({ userId, onClose, onDeleted }: { userId: number; onClo
   }
   if (preview.personalConnections > 0) {
     summaryLines.push(`${preview.personalConnections} personal SimpleFIN connection${preview.personalConnections !== 1 ? 's' : ''} will be deleted.`);
+  }
+  if (preview.payCyclesOwned > 0) {
+    summaryLines.push(`${preview.payCyclesOwned} pay cycle${preview.payCyclesOwned !== 1 ? 's' : ''} will be unassigned (not deleted).`);
   }
 
   const handleDelete = async () => {

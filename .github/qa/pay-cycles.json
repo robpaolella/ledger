@@ -1,0 +1,155 @@
+{
+  "title": "Pay Cycles — Dynamic Take-Home Budgeting QA",
+  "storageKey": "qa-pay-cycles",
+  "testingOrder": "Start with Section 1 to reach the feature. Create cycles in Section 3, then test the import in Section 4. Sections 6 (mobile) and 7 (permissions/deletion) can be run last.",
+  "sections": [
+    {
+      "title": "1. Toolbar & Manage Menu",
+      "groups": [
+        {
+          "name": "Consolidated menu",
+          "items": [
+            "Budget page toolbar shows only two buttons: 'Import Budget' (primary) and 'Manage ▾' (secondary) — no separate 'Budget Template' button",
+            "'Import from Template' has been renamed to 'Import Budget'",
+            "Click 'Manage ▾' → dropdown opens below the button with a rotating chevron and two items: 'Budget Template' and 'Pay Cycles'",
+            "Click outside the open menu → it closes",
+            "Press Escape with the menu open → it closes",
+            "Manage → Budget Template opens the existing Budget Template modal (Template + Recurring tabs)",
+            "Manage → Pay Cycles opens the Pay Cycles modal"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "2. Managing Pay Cycles",
+      "groups": [
+        {
+          "name": "List view",
+          "items": [
+            "Empty state shows 'No pay cycles yet' with an '+ Add Pay Cycle' button",
+            "Existing cycles are grouped by earner (owner display name), 'Unassigned' group for cycles with no owner",
+            "Each cycle row shows label, frequency badge, target income category, and a schedule summary (amount/check, extra months for biweekly/weekly)",
+            "Inactive cycles show an '(inactive)' marker"
+          ]
+        },
+        {
+          "name": "Add / edit form",
+          "items": [
+            "Frequency = Weekly or Biweekly → shows an 'Anchor date' field (no day-of-month fields)",
+            "Frequency = Semi-monthly → shows two day-of-month pickers, each with a 'Last day of month' option",
+            "Frequency = Monthly → shows one day-of-month picker with a 'Last day of month' option",
+            "Income category select lists only income categories (default 'Take Home Pay')",
+            "Earner select lists household members plus a '— Household —' (unassigned) option",
+            "Per-paycheck amount uses the currency input (formats on blur)",
+            "Optional Starts / Ends (effective range) date fields are present",
+            "Active checkbox toggles whether the cycle is included in projections",
+            "Saving with an empty label → inline error 'Label is required'",
+            "Saving weekly/biweekly with no anchor date → inline error about anchor date",
+            "Saving amount 0 → inline error 'must be greater than 0'",
+            "Successful save → toast, returns to list, new/edited cycle appears",
+            "Delete uses the two-click confirm button; deleting removes the cycle with a toast"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "3. Schedule Correctness (Year Preview)",
+      "groups": [
+        {
+          "name": "Biweekly",
+          "items": [
+            "Biweekly, anchor 2026-01-02, $1,750 → preview says 26 paychecks/yr, $45,500/yr, extra in Jan & Jul",
+            "Change the anchor to a mid-year date (e.g. 2026-06-15) → the preview stays populated for ALL months (Jan–May are NOT blank), still 26 checks",
+            "The per-month bars highlight the two 3-paycheck months in the warning color"
+          ]
+        },
+        {
+          "name": "Weekly / Semi-monthly / Monthly",
+          "items": [
+            "Weekly, anchor 2026-01-02, $875 → 52 paychecks/yr, extra (5-check) months Jan/May/Jul/Oct",
+            "Semi-monthly (15th & Last day) → 24 paychecks/yr, 'Same number of paychecks every month'",
+            "Monthly (day 31) → 12 paychecks/yr; a monthly on the 31st still lands in February (clamped to the 28th)",
+            "Clearing the anchor for weekly/biweekly → preview says 'Enter an anchor date to preview the schedule'"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "4. Importing Expected Income",
+      "groups": [
+        {
+          "name": "Wizard flow",
+          "items": [
+            "Import Budget wizard now has 4 steps: Template → Recurring → Expected Income → Review",
+            "Step 3 'Expected Income' shows one row per income category with the summed projected take-home",
+            "Each row shows a per-earner breakdown (e.g. 'Robert (ABC Fitness) 3×$1,750 = $5,250 · Sarah … ')",
+            "A 3-paycheck month shows an '⚡ extra check' marker on the affected category",
+            "Amounts are editable; unchecking a row excludes it (row dims)",
+            "If a category already has a budget value, a skip/overwrite/add conflict select appears with the existing amount",
+            "No cycles configured → empty state with a 'Set up pay cycles →' link that opens the Pay Cycles modal",
+            "Review (step 4) lists included pay-cycle income under 'Expected Income (Pay Cycles)' and counts it in the summary"
+          ]
+        },
+        {
+          "name": "Applied result",
+          "items": [
+            "Apply a NORMAL month → Take Home Pay budget = sum of 2×each biweekly earner",
+            "Apply a 3-PAYCHECK month → Take Home Pay budget is higher by exactly one extra check",
+            "Budgeted Income KPI and the Income section reflect the imported value (stored positive)",
+            "Re-import the same month with default (Overwrite) → income budget is unchanged (no doubling)",
+            "Set a row's conflict action to 'Add to it' → re-import adds to the existing value",
+            "Collision: if the template and a pay cycle both target Take Home Pay, the review step shows a warning; pay cycles win (applied last)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "5. Edge Cases & Permissions",
+      "groups": [
+        {
+          "name": "Edge cases",
+          "items": [
+            "A cycle with an effective_end before the imported month → does not appear in Expected Income",
+            "An inactive cycle → does not appear in Expected Income",
+            "Two cycles targeting the same income category → summed into one row with both in the breakdown",
+            "Two earners with different anchors → their extra-paycheck months differ and each is reflected in the right month"
+          ]
+        },
+        {
+          "name": "Permissions",
+          "items": [
+            "Member WITHOUT budgets.edit → 'Manage' menu trigger and 'Import Budget' are disabled (faded, non-interactive)",
+            "Member WITH budgets.edit → can open the menu, manage pay cycles, and import"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "6. Mobile",
+      "groups": [
+        {
+          "name": "Responsive",
+          "items": [
+            "Mobile budget toolbar shows 'Import Budget' and 'Manage' as two full-width buttons",
+            "Tapping 'Manage' opens a bottom sheet listing Budget Template and Pay Cycles (icon + label + description)",
+            "Pay Cycles modal and the import wizard render as bottom sheets on mobile",
+            "Touch targets are at least 44px; the form is usable without the keyboard covering fields"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "7. User Deletion",
+      "groups": [
+        {
+          "name": "Dependency handling",
+          "items": [
+            "Delete-preview for a user who owns pay cycles lists 'N pay cycle(s) will be unassigned (kept in budget projections)'",
+            "After permanent deletion, the owned cycles remain but show under the 'Unassigned' group (owner cleared)",
+            "The unassigned cycles still contribute to the import projection"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -192,3 +192,25 @@ export const dismissedTransfers = sqliteTable('dismissed_transfers', {
 }, (table) => [
   uniqueIndex('dismissed_transfers_acct_sig_idx').on(table.account_id, table.signature),
 ]);
+
+// === Pay Cycles (dynamic take-home income schedules) ===
+// Feeds the budget import wizard's "Expected Income" step. amount is the
+// per-paycheck take-home, stored POSITIVE (income budget rows are positive,
+// unlike income transactions which are stored negative).
+export const payCycles = sqliteTable('pay_cycles', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  label: text('label').notNull(),
+  category_id: integer('category_id').notNull().references(() => categories.id), // target income category
+  user_id: integer('user_id').references(() => users.id), // nullable — owner/attribution
+  frequency: text('frequency').notNull(), // weekly | biweekly | semi_monthly | monthly
+  amount: real('amount').notNull(), // per-paycheck take-home, positive
+  anchor_date: text('anchor_date'), // 'YYYY-MM-DD' phase reference (weekly/biweekly)
+  day_of_month_1: integer('day_of_month_1'), // semi_monthly first day (0 = last day of month)
+  day_of_month_2: integer('day_of_month_2'), // semi_monthly second day (0 = last day of month)
+  day_of_month: integer('day_of_month'), // monthly day (0 = last day of month)
+  effective_start: text('effective_start'), // 'YYYY-MM-DD' inclusive lower bound, nullable
+  effective_end: text('effective_end'), // 'YYYY-MM-DD' inclusive upper bound, nullable
+  is_active: integer('is_active').notNull().default(1),
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+  updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
+});
