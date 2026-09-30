@@ -31,7 +31,7 @@ while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
   fi
 done
 
-[ "$STATUS" -eq 0 ] || echo "  See ~/.claude/git-workflow.md." >&2
+[ "$STATUS" -eq 0 ] || echo "  See /git/maestro/docs/git-workflow.md." >&2
 [ "$STATUS" -eq 0 ] || exit "$STATUS"
 
 # Project gate: the same typecheck, lint, test and build CI runs.
