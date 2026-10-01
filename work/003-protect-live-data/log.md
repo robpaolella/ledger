@@ -5,3 +5,5 @@
   750 KB against a 61 KB main file, so a copy of `ledger.db` alone loses recent changes.
 - A consistent backup (SQLite backup API) is at `~/ledger-backups/ledger-2026-09-30.db`,
   outside the repo.
+- Checks passed (typecheck, lint with the existing 17 warnings, 6 tests, build). Independent
+  review: no blocking items.
