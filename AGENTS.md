@@ -69,6 +69,10 @@ placeholder `SERVER`/`APP_DIR` values and isn't configured for a real host. Don'
 wired to any actual server without checking with Robert first.
 
 ## Watch out for
+- `data/` holds Robert's live financial data (`ledger.db` plus `ledger.db-wal`, which holds the
+  most recent changes). Never write to, reset, migrate or delete it, and never point the dev
+  server, Docker, tests or scripts at it; use test data or a copy. `npm run db:backup` copies
+  only `ledger.db` and misses recent data, so ask Robert before any backup or restore.
 - Amount sign convention is not intuitive: positive = money out, negative = money in, for
   every category type. Never infer income/expense from the amount sign — check
   `categories.type` instead, and use `fmtTransaction()` (`packages/client/src/lib/formatters.ts`)
