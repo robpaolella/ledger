@@ -90,7 +90,25 @@ wired to any actual server without checking with Robert first.
 - No `alert()`/`confirm()` in product UI — destructive actions use `ConfirmDeleteButton`.
 - `.npmrc` sets `legacy-peer-deps=true`. Keep it when changing dependencies.
 
+## Designs
+
+Approved clickable designs live in `design/<issue>-<name>/`. For their feature, they
+win on layout, content, wording, states, and behaviour. `DESIGN.md` summarizes the
+site-wide look; `.github/design-system.jsx` remains its authoritative source, with
+`.github/mobile-prototype.jsx` supplying mobile layout guidance. A feature design
+does not silently change that visual system.
+
+Use synthetic sample data only in designs and screenshots: this repository is public
+and Ledger holds Robert's real finances. Never use the live database as design data.
+This workflow supersedes the older new-mockup location instructions in the Copilot
+doc; existing `.github/mockups/` files remain reference material.
+
 ## Reference material
+
+- `PRODUCT.md`: users, roles, household workflows, and financial/product constraints.
+- `DESIGN.md`: the existing light/dark tokens and component/mobile patterns, summarized
+  from the authoritative design system rather than replacing it.
+
 `.github/copilot-instructions.md` is a long-lived, actively maintained doc (written for
 Copilot, but the content applies here too) covering the full design system, mobile
 responsive rules, permission system, and a dated "Project Learnings" log of real bugs and
