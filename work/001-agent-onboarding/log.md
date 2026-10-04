@@ -16,3 +16,8 @@
 - Proved the Checks section on a clean main: ran `npm install` (deps weren't installed),
   then `npm run typecheck` (clean), `npm run lint` (0 errors, 17 pre-existing warnings),
   `npm run build` (succeeds, all three workspaces). No source files were touched.
+- PR #43 merged 2026-09-30. `docs/projects.md` was updated separately in Maestro. Closing
+  out this plan's remaining checkboxes now; they were done but never ticked off.
+
+## 2026-10-04
+- Tidied stale plan.md checkboxes — all steps were already complete on main.
