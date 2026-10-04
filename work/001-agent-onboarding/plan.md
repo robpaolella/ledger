@@ -4,6 +4,6 @@
 - [x] Write AGENTS.md from the template
 - [x] Prove the Checks section passes on a clean main
 - [x] Add work/ and backlog.md
-- [ ] Review (`review` skill)
-- [ ] Open PR
-- [ ] Update /git/maestro/docs/projects.md (separate PR)
+- [x] Review (`review` skill)
+- [x] Open PR — #43, merged 2026-09-30
+- [x] Update /git/maestro/docs/projects.md — done separately, commit "docs: mark ledger agent-ready"
