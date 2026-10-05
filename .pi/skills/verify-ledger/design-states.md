@@ -41,7 +41,7 @@ Request a safe fixture extension as separate work when normal UI cannot reach it
 - Navigate through the sidebar or phone tabs/More. A direct `open` to the Doctor
   URL plus route also works, but always confirm the loaded heading and role. If a
   browser action reports success without changing the page, inspect again. With
-  chrome-devtools-axi 0.1.37, ref clicks can be no-ops: `run` with a inspected CSS
+  chrome-devtools-axi 0.1.37, ref clicks can be no-ops: `run` with an inspected CSS
   selector is a useful fallback (example below). Never accept blank-page evidence.
 - Desktop: sidebar **Dark mode / Light mode**. Phone: **More → Settings → Preferences
   → Switch to Dark Mode / Switch to Light Mode**, then return to the target page and
@@ -97,8 +97,8 @@ proof. These are state recipes, not permission to change app code during verific
 - **No connections:** Settings → Bank Sync has no seeded SimpleFIN connections.
   Capture that real empty state; never connect an outside account to populate it.
 - **Validation error:** Settings → Preferences → Change Password; enter a synthetic
-  new password and a different confirmation. Submit and capture the actual inline
-  mismatch error. Do not enter the correct current password or publish password values.
+  new password of at least eight characters (e.g. `sample-new-49`) and a different
+  confirmation (e.g. `sample-other-49`). Submit and capture “Passwords do not match”. Do not enter the correct current password or publish password values.
   Cancel/clear to reset. Required blank fields may be prevented by native validation
   or a disabled Save instead of an app error; do not relabel these as server errors.
 - **Permission denied:** As member, inspect Settings and Import's bank-sync controls.
