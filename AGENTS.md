@@ -27,6 +27,15 @@ a PR, but don't add new ones either. There's also a manual Puppeteer e2e script 
 `e2e/reimbursement-splits.e2e.cjs`, not wired into any npm script — run it directly with
 `node e2e/reimbursement-splits.e2e.cjs` if you touch that feature.
 
+## Verifying a change
+
+Use [.pi/skills/verify-ledger/SKILL.md](.pi/skills/verify-ledger/SKILL.md) to build and
+run Ledger on fresh throwaway sample data, check owner/admin/member access, capture
+phone and desktop evidence, and clean up. Never point verification at `data/` or a
+copied live database. The skill's feature map lists the main user flows; visible
+changes also follow Maestro's `design-check` skill. After building, run the helper's
+safety/lifecycle tests with `node --test .pi/skills/verify-ledger/*.test.mjs`.
+
 ## Setup after clone
 ```
 git config core.hooksPath .githooks
