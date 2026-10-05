@@ -46,25 +46,27 @@ async function serve(evidence) {
   let child;
   let control;
   let stopping = false;
-  async function cleanup() {
-    if (stopping) return;
-    stopping = true;
-    if (child && child.exitCode === null && child.signalCode === null) {
-      const exited = new Promise((done) => child.once('exit', done));
-      child.kill('SIGTERM');
-      const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
-      await exited; clearTimeout(timer);
-    }
-    rmSync(scratch, { recursive: true });
-    json(resolve(evidence, 'cleaned.json'), { scratch, childPid: child?.pid, cleaned: true });
-    closeSync(log);
-    control?.close();
+  let cleaning;
+  function cleanup() {
+    return cleaning ??= (async () => {
+      stopping = true;
+      if (child && child.exitCode === null && child.signalCode === null) {
+        const exited = new Promise((done) => child.once('exit', done));
+        child.kill('SIGTERM');
+        const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
+        await exited; clearTimeout(timer);
+      }
+      rmSync(scratch, { recursive: true });
+      json(resolve(evidence, 'cleaned.json'), { scratch, childPid: child?.pid, cleaned: true });
+      closeSync(log);
+      control?.close();
+    })();
   }
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
-    void cleanup().then(() => process.exit(0));
+    void cleanup().then(() => process.exit(0)).catch((error) => { console.error(error.message); process.exit(1); });
   });
   try {
-    // Snapshot built assets: another worker's rebuild cannot replace this app's files.
+    // Snapshot built assets so another rebuild cannot replace those assets.
     for (const pkg of ['server', 'client']) cpSync(resolve(repo, `packages/${pkg}/dist`), resolve(scratch, `packages/${pkg}/dist`), { recursive: true });
     writeFileSync(resolve(scratch, 'package.json'), '{"type":"module"}');
     symlinkSync(resolve(repo, 'node_modules'), resolve(scratch, 'node_modules'));
@@ -121,7 +123,7 @@ async function serve(evidence) {
     });
     await new Promise((done) => control.listen(0, '127.0.0.1', done));
     json(resolve(evidence, 'run.json'), { url, database, scratch, childPid: child.pid, supervisorPid: process.pid, control: `http://127.0.0.1:${control.address().port}`, token });
-    child.once('exit', () => { if (!stopping) void cleanup(); });
+    child.once('exit', () => { if (!stopping) void cleanup().catch((error) => { console.error(error.message); process.exitCode = 1; }); });
   } catch (error) {
     await cleanup();
     throw error;
@@ -144,10 +146,13 @@ export async function main(action, evidenceArg, extra = []) {
     if (build.error || build.status !== 0) throw new Error('Build failed; no database started. Use a fresh evidence folder to retry.');
     const log = openSync(resolve(evidence, 'launcher.log'), 'wx', 0o600);
     const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '_serve', evidence], { detached: true, stdio: ['ignore', log, log] });
-    closeSync(log); child.unref();
+    closeSync(log);
+    await new Promise((done, reject) => { child.once('spawn', done); child.once('error', reject); });
+    child.unref();
     for (let i = 0; i < 90; i++) {
       if (existsSync(file)) return main('doctor', evidence);
       if (existsSync(resolve(evidence, 'cleaned.json'))) throw new Error('Launch failed and cleaned up; inspect launcher.log and server.log');
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error('Supervisor exited; inspect launcher.log and cleanup marker');
       await sleep(500);
     }
     // The supervisor handles SIGTERM and removes only its in-memory scratch path.

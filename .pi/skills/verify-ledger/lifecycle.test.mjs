@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const helper = fileURLToPath(new URL('./run.mjs', import.meta.url));
@@ -11,8 +12,8 @@ async function until(check) {
 }
 function start() {
   const evidence = mkdtempSync('/tmp/ledger-lifecycle-');
-  const process = spawn(globalThis.process.execPath, [helper, '_serve', evidence], { env: { PATH: globalThis.process.env.PATH }, stdio: 'ignore' });
-  return { evidence, process };
+  const child = spawn(process.execPath, [helper, '_serve', evidence], { env: { PATH: process.env.PATH }, stdio: 'ignore' });
+  return { evidence, process: child };
 }
 async function state(run) {
   await until(() => existsSync(`${run.evidence}/run.json`) || run.process.exitCode !== null);
@@ -43,8 +44,13 @@ test('two owned instances, authenticated Doctor, tamper-safe cleanup, signal cle
     assert.equal(existsSync(`/proc/${a.childPid}`), false);
     assert.equal(readFileSync(`${sentinel}/keep`, 'utf8'), 'keep');
     assert.equal((await call(b, 'doctor')).status, 'PASS');
+    // Delay the app's exit so HTTP cleanup and SIGTERM overlap deterministically.
+    process.kill(b.childPid, 'SIGSTOP');
+    const cleaning = call(b, 'cleanup').catch(() => null); // supervisor may close the response on signal
+    await sleep(250);
     runs[1].process.kill('SIGTERM');
     await until(() => runs[1].process.exitCode !== null);
+    await cleaning;
     assert.equal(existsSync(b.scratch), false);
     assert.equal(existsSync(`/proc/${b.childPid}`), false);
     for (const run of runs) assert.equal(existsSync(`${run.evidence}/server.log`), true);
@@ -55,5 +61,27 @@ test('two owned instances, authenticated Doctor, tamper-safe cleanup, signal cle
       rmSync(run.evidence, { recursive: true });
     }
     rmSync(sentinel, { recursive: true });
+  }
+});
+
+test('public launch, doctor, cleanup and repeat cleanup commands', { timeout: 180_000 }, async () => {
+  const evidence = mkdtempSync('/tmp/ledger-cli-test-');
+  const cli = (action) => promisify(execFile)(process.execPath, [helper, action, evidence], {
+    env: { PATH: process.env.PATH, HOME: evidence }, timeout: 120_000, maxBuffer: 2_000_000,
+  });
+  let s;
+  try {
+    assert.match((await cli('launch')).stdout, /"status": "PASS"/);
+    s = JSON.parse(readFileSync(`${evidence}/run.json`, 'utf8'));
+    assert.match((await cli('doctor')).stdout, /limited member/);
+    assert.match((await cli('cleanup')).stdout, /"cleaned": true/);
+    assert.match((await cli('cleanup')).stdout, /already cleaned/);
+    await until(() => !existsSync(`/proc/${s.supervisorPid}`));
+    assert.equal(existsSync(`/proc/${s.childPid}`), false);
+    assert.equal(existsSync(s.scratch), false);
+    assert.equal(existsSync(`${evidence}/server.log`), true);
+  } finally {
+    if (s && existsSync(s.scratch)) await cli('cleanup');
+    rmSync(evidence, { recursive: true });
   }
 });
