@@ -176,5 +176,7 @@ LEDGER_SNAPSHOT_BROWSER_TEST=1 node --test .pi/skills/verify-ledger/snapshot-bro
 It owns and stops a uniquely named browser and a synthetic local HTTP fixture. Run it
 when changing capture logic, alongside the stopped-app/offline visual comparison in
 [page-snapshot.md](page-snapshot.md). Unit tests cover assembly, edited HTML, dimensions,
-overwrite refusal and unsafe arguments. Also run the four repo Checks in `AGENTS.md` before a PR. Keep the feature map in
+overwrite refusal and unsafe arguments.
+
+Also run the four repo Checks in `AGENTS.md` before a PR. Keep the feature map in
 sync as flows change; pstack's `maintain-verification-skill` is the maintenance loop.
