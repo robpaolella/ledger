@@ -123,9 +123,19 @@ Use `resize`, not `emulate`. Confirm actual viewport dimensions, wait until cont
 has loaded, and **read every image**: a blank page or wrong-size capture is not
 proof. Save snapshots, screenshots and concise observations outside git in
 `$EVIDENCE`; attach only selected synthetic evidence to the PR, never control state
-or unreviewed logs. For visible product changes also follow Maestro's `design-check`.
-This skill supplies the safe runtime; the design-state/page-snapshot workflow is
-tracked separately in #49.
+or unreviewed logs. For any visible change, follow
+[Maestro's shared design-check](/git/maestro/skills/design-check/SKILL.md).
+
+## Design sessions and state-by-state comparison
+
+- [Page snapshot](page-snapshot.md): save the selected real page/role/state as editable
+  offline HTML, with styles/fonts/images inlined and both themes at phone/desktop widths.
+- [Design states](design-states.md): reach populated, empty, form, permission, validation,
+  failure and loading states through real UI actions; map every approved design entry
+  to a build capture. Missing/unreachable cases block the shared check.
+
+These recipes supply Ledger's runtime and evidence; Maestro owns the comparison,
+independent critique and design verdict. Snapshots are design material, not behaviour proof.
 
 ## Cleanup
 
@@ -157,5 +167,14 @@ npm run build
 node --test .pi/skills/verify-ledger/*.test.mjs
 ```
 
-Also run the four repo Checks in `AGENTS.md` before a PR. Keep the feature map in
+The snapshot helper also has an opt-in real-browser fixture test (no database):
+
+```bash
+LEDGER_SNAPSHOT_BROWSER_TEST=1 node --test .pi/skills/verify-ledger/snapshot-browser.test.mjs
+```
+
+It owns and stops a uniquely named browser and a synthetic local HTTP fixture. Run it
+when changing capture logic, alongside the stopped-app/offline visual comparison in
+[page-snapshot.md](page-snapshot.md). Unit tests cover assembly, edited HTML, dimensions,
+overwrite refusal and unsafe arguments. Also run the four repo Checks in `AGENTS.md` before a PR. Keep the feature map in
 sync as flows change; pstack's `maintain-verification-skill` is the maintenance loop.
