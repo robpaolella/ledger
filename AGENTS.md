@@ -32,9 +32,11 @@ a PR, but don't add new ones either. There's also a manual Puppeteer e2e script 
 Use [.pi/skills/verify-ledger/SKILL.md](.pi/skills/verify-ledger/SKILL.md) to build and
 run Ledger on fresh throwaway sample data, check owner/admin/member access, capture
 phone and desktop evidence, and clean up. Never point verification at `data/` or a
-copied live database. The skill's feature map lists the main user flows; visible
-changes also follow Maestro's `design-check` skill. After building, run the helper's
-safety/lifecycle tests with `node --test .pi/skills/verify-ledger/*.test.mjs`.
+copied live database. The skill's feature map lists the main user flows; its page-snapshot
+recipe saves editable offline HTML in both themes, and its state recipes map approved
+designs to real app states. Visible changes also follow Maestro's shared `design-check`
+skill. After building, run the helper's safety/lifecycle tests with
+`node --test .pi/skills/verify-ledger/*.test.mjs`.
 
 ## Setup after clone
 ```
