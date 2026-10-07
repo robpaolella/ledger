@@ -1,6 +1,7 @@
 /** Shared date shifting, category lookup, and transaction/split insertion helpers. */
 import type Database from 'better-sqlite3';
 import { findOrCreateMerchant } from '../merchants.js';
+import { sampleMerchantName } from './merchants.js';
 
 export function createHelpers(db: Database.Database) {
   // ---------------------------------------------------------------------------
@@ -41,9 +42,8 @@ export function createHelpers(db: Database.Database) {
     amount: number,
     note?: string
   ): number {
-    // Demo descriptions are already clean merchant names ("Costco", "Netflix"), so
-    // link them 1:1 the way a user-entered transaction would be.
-    const merchantId = findOrCreateMerchant(description, db);
+    // Preserve the fixture description while linking to the shared sample catalog.
+    const merchantId = findOrCreateMerchant(sampleMerchantName(description), db);
     const res = db.prepare(
       'INSERT INTO transactions (account_id, date, description, category_id, merchant_id, amount, note) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(accountId, rel(date), description, categoryId, merchantId, amount, note ?? null);

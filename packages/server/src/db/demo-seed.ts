@@ -4,7 +4,8 @@
  *
  * Creates:
  *  - 2 users (John = owner, Jane = admin)
- *  - 8 accounts across both users (checking, savings, credit, investment)
+ *  - 20 accounts across 8 catalog institutions
+ *  - 35 national-brand and 150 invented merchants
  *  - ~100 transactions (Jan–Mar 2026) including splits
  *  - Monthly budgets
  *  - Balance snapshots for net worth
@@ -15,6 +16,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { createHelpers } from './demo-seed/helpers.js';
 import { seedPeopleAccounts } from './demo-seed/people-accounts.js';
+import { seedMerchants } from './demo-seed/merchants.js';
 import { createCategories } from './demo-seed/categories.js';
 import { seedTransactions } from './demo-seed/transactions.js';
 import { seedBudgets, seedRecurring } from './demo-seed/budgets-recurring.js';
@@ -61,6 +63,7 @@ db.exec(`
 
 const helpers = createHelpers(db);
 const peopleAccounts = seedPeopleAccounts(db);
+seedMerchants(db);
 const CAT = createCategories(helpers);
 seedTransactions(helpers, peopleAccounts, CAT);
 const budgetCount = seedBudgets(helpers, CAT);

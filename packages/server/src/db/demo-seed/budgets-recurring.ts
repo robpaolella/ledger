@@ -3,6 +3,7 @@ import type { Helpers } from './helpers.js';
 import type { PeopleAccounts } from './people-accounts.js';
 import type { Categories } from './categories.js';
 import { findOrCreateMerchant } from '../merchants.js';
+import { sampleMerchantName } from './merchants.js';
 
 export function seedBudgets({ db, rel }: Helpers, CAT: Categories) {
   // ---------------------------------------------------------------------------
@@ -83,7 +84,7 @@ export function seedRecurring(
     db.prepare(
       `INSERT INTO recurring_items (type, label, merchant_id, category_id, account_id, amount, freq_kind, day, days_json, start_date, status, user_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`
-    ).run(r.type, r.label, findOrCreateMerchant(r.merchant, db), r.category, r.account, r.amount, r.freq,
+    ).run(r.type, r.label, findOrCreateMerchant(sampleMerchantName(r.merchant), db), r.category, r.account, r.amount, r.freq,
       r.day ?? null, r.days ? JSON.stringify(r.days) : null, rel('2026-01-01'), r.user);
   }
   console.log(`  Created ${recurringDefs.length} recurring items`);
