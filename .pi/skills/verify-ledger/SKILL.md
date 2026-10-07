@@ -48,7 +48,9 @@ Production excludes `/mockup`, `/qa` and `/api/dev`; they are not verification r
 Launch reads `LEDGER_LOGODEV_TOKEN_FILE`, defaulting to
 `~/ledger-live/logodev-token/token.txt` in the launching user's home (not scratch HOME).
 The file can contain the publishable key alone or `PUBLISHABLE_KEY=pk_...`; surrounding
-whitespace is ignored. Never paste a real key into a command, evidence, or a PR.
+whitespace is ignored. Multiple non-empty lines are rejected, so another credential
+cannot accidentally be sent with the key. Never paste a real key into a command,
+evidence, or a PR.
 An explicit missing-file override disables logo downloads for offline verification.
 Missing, empty, unreadable or non-regular files leave the usual letter badges.
 

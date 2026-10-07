@@ -18,7 +18,7 @@ More → Reports. Dashboard income/expense summaries are another comparison poin
   shared accounts are not counted twice in the household total.
 - Edit one planned amount, save through the UI, reload and check persistence. Repeat
   as member: the default fixture permits budget editing. Capture empty future-month
-  and populated March states, not only the convenient one.
+  and populated launch-month states, not only the convenient one.
 - Open Reports, choose the launch year, expand categories, and compare the launch month's totals with Budget.
   At 390 wide use the monthly detail/month selector and Annual Totals views; at 1440
   inspect the annual table. Capture refund/negative-actual display if affected.
@@ -28,7 +28,7 @@ More → Reports. Dashboard income/expense summaries are another comparison poin
 
 ## Gotchas
 
-Seed dates are fixed, not today. A current-month empty state is expected. Shared
+Seed dates shift to the launch month and the preceding two months. Shared
 ownership is a junction, not a single owner field. Negative actuals are legitimate
 refunds and must remain visible. Default member budget access is allowed; change
 permissions through the owner UI on this throwaway instance to test a denied state.

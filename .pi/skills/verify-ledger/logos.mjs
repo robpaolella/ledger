@@ -16,12 +16,15 @@ export function hydrateLogos(scratch, env, {
     fd = openSync(tokenFile, constants.O_RDONLY | constants.O_NONBLOCK);
     const stat = fstatSync(fd);
     if (!stat.isFile() || stat.size > 4096) return { status: 'not configured', loaded: 0 };
-    key = readFileSync(fd, 'utf8').trim().replace(/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*/, '').trim();
+    key = readFileSync(fd, 'utf8').trim();
   } catch {
     return { status: 'not configured', loaded: 0 };
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
+  // Reject multiple values rather than accidentally sending a second credential.
+  if (!key || /[\r\n]/.test(key)) return { status: 'not configured', loaded: 0 };
+  key = key.replace(/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*/, '').trim();
   if (!key) return { status: 'not configured', loaded: 0 };
   const result = spawnSync(process.execPath, [script], {
     cwd: scratch, env: { ...env, LOGODEV_TOKEN: key }, stdio: 'ignore',

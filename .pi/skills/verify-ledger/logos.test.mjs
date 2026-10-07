@@ -14,10 +14,15 @@ function fixture(run) {
   finally { rmSync(scratch, { recursive: true }); }
 }
 
-test('missing, empty, oversized and non-regular key files skip hydration', () => fixture(({ scratch, tokenFile, script, env }) => {
+test('missing, empty, multiline, oversized and non-regular key files skip hydration', () => fixture(({ scratch, tokenFile, script, env }) => {
   const check = (file = tokenFile) => assert.deepEqual(hydrateLogos(scratch, env, { tokenFile: file, script }), { status: 'not configured', loaded: 0 });
   check();
   writeFileSync(tokenFile, ' \n'); check();
+  writeFileSync(tokenFile, 'PUBLISHABLE_KEY='); check();
+  writeFileSync(tokenFile, 'PUBLISHABLE_KEY=\nSECRET_KEY=sk_synthetic'); check();
+  for (const separator of ['\n', '\r\n', '\r']) {
+    writeFileSync(tokenFile, `PUBLISHABLE_KEY=pk_synthetic${separator}SECRET_KEY=sk_synthetic`); check();
+  }
   writeFileSync(tokenFile, 'x'.repeat(4097)); check();
   check(scratch);
   execFileSync('mkfifo', [`${scratch}/pipe`]); check(`${scratch}/pipe`);
