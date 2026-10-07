@@ -31,7 +31,7 @@ Routes are `/transactions`, `/import`, and `/` for the dashboard entry points.
 
 ## Gotchas
 
-Use All Time or a January–March 2026 date range for seed data. Select category type,
+Use All Time or the launch month and preceding two months for seed data. Select category type,
 not amount sign, to distinguish income/expense. Bank and card CSV signs differ;
 include parenthesized negatives if changing import parsing. Never upload real CSVs
 or configure SimpleFIN. Transfers and splits need their own proof when touched;

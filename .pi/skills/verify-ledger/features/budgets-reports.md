@@ -13,13 +13,13 @@ More → Reports. Dashboard income/expense summaries are another comparison poin
 
 ## Driving it with chrome-devtools-axi
 
-- Snapshot Budget; select March 2026 with the visible month/year controls. Expand
+- Snapshot Budget; select the launch month with the visible month/year controls. Expand
   a category and compare planned/actual values; switch All/owner filters and confirm
   shared accounts are not counted twice in the household total.
 - Edit one planned amount, save through the UI, reload and check persistence. Repeat
   as member: the default fixture permits budget editing. Capture empty future-month
   and populated March states, not only the convenient one.
-- Open Reports, choose 2026, expand categories, and compare March totals with Budget.
+- Open Reports, choose the launch year, expand categories, and compare the launch month's totals with Budget.
   At 390 wide use the monthly detail/month selector and Annual Totals views; at 1440
   inspect the annual table. Capture refund/negative-actual display if affected.
 - For templates/recurring/pay-cycle work, open the corresponding visible Budget

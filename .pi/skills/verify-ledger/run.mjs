@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { closeSync, cpSync, existsSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { hydrateLogos } from './logos.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
@@ -74,6 +75,7 @@ async function serve(evidence) {
     if (existsSync(serverModules)) symlinkSync(serverModules, resolve(scratch, 'packages/server/node_modules'));
     runNode(resolve(scratch, 'packages/server/dist/db/seed.js'), env, scratch, log);
     runNode(resolve(scratch, 'packages/server/dist/db/demo-seed.js'), env, scratch, log);
+    const logos = hydrateLogos(scratch, env);
     child = fork(resolve(scratch, 'packages/server/dist/index.js'), [], {
       cwd: scratch, env, execArgv: ['--import', resolve(here, 'listen.mjs')],
       stdio: ['ignore', log, log, 'ipc'],
@@ -97,7 +99,7 @@ async function serve(evidence) {
     async function doctor() {
       if (child.exitCode !== null || child.signalCode !== null) throw new Error('Owned app process exited');
       const actual = readFileSync(`/proc/${child.pid}/environ`, 'utf8').split('\0');
-      if (!actual.includes(`DATABASE_PATH=${database}`) || !actual.includes('NODE_ENV=production') || realpathSync(`/proc/${child.pid}/cwd`) !== scratch) {
+      if (actual.some((value) => value.startsWith('LOGODEV_TOKEN=')) || !actual.includes(`DATABASE_PATH=${database}`) || !actual.includes('NODE_ENV=production') || realpathSync(`/proc/${child.pid}/cwd`) !== scratch) {
         throw new Error('Owned app environment does not match the throwaway database');
       }
       if ((await request(`${url}/api/health`)).status !== 'ok') throw new Error('Health failed');
@@ -108,7 +110,7 @@ async function serve(evidence) {
       }
       const page = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (!page.ok || !(await page.text()).includes('<div id="root">')) throw new Error('Production client missing');
-      return { status: 'PASS', url, database, roles: ['owner', 'admin', 'limited member'], childPid: child.pid };
+      return { status: 'PASS', url, database, logos, roles: ['owner', 'admin', 'limited member'], childPid: child.pid };
     }
     await doctor();
     control = createServer(async (req, res) => {
@@ -149,7 +151,7 @@ export async function main(action, evidenceArg, extra = []) {
     closeSync(log);
     await new Promise((done, reject) => { child.once('spawn', done); child.once('error', reject); });
     child.unref();
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 210; i++) {
       if (existsSync(file)) return main('doctor', evidence);
       if (existsSync(resolve(evidence, 'cleaned.json'))) throw new Error('Launch failed and cleaned up; inspect launcher.log and server.log');
       if (child.exitCode !== null || child.signalCode !== null) throw new Error('Supervisor exited; inspect launcher.log and cleanup marker');
