@@ -32,6 +32,9 @@ jobs:
       - name: Old-token migration ratchet
         run: npm run lint:tokens
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build packages
         run: npm run build
 

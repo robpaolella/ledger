@@ -11,7 +11,8 @@
     "logos": "tsx src/db/hydrate-institution-logos.ts",
     "logos:prod": "node dist/db/hydrate-institution-logos.js",
     "migrate:income": "tsx src/db/migrate-income-categories.ts",
-    "migrate:income:prod": "node dist/db/migrate-income-categories.js"
+    "migrate:income:prod": "node dist/db/migrate-income-categories.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ledger/shared": "*",
@@ -40,6 +41,7 @@
     "@types/qrcode": "^1.5.6",
     "drizzle-kit": "^0.31.9",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
   }
 }

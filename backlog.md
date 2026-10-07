@@ -1,0 +1,5 @@
+- No automated test suite runs in CI (only typecheck/lint/build) — consider wiring the existing Puppeteer e2e script into CI or adding unit tests.
+- Login accessibility (observed during #49's local design-check): associate visible labels with inputs, raise placeholder contrast (measured 3.4:1), and meet the 44px phone-target rule (inputs 42px, submit 40px); these predate the verification work.
+- `scripts/deploy.sh` has unconfigured placeholder server values — either configure it for the real host or remove it if releases only happen via tagged Docker images.
+- AGENTS.md's Deploy section dropped some real operational detail that was in the old CLAUDE.md (dev DB path, db:reset/backup/restore scripts, release secrets needed, JWT_SECRET auto-generation) — fold back in if it turns out to matter in practice.
+- `npm run db:backup` copies only `ledger.db`, missing changes still in `ledger.db-wal`; switch `scripts/db-backup.sh` to SQLite's backup API (and point it at `data/` when running with live data).
