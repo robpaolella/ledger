@@ -28,6 +28,7 @@ test('selects the first eligible LAN IPv4 address', () => {
     docker0: [{ family: 'IPv4', address: '172.17.0.1', internal: false }],
     'br-123abc': [{ family: 'IPv4', address: '172.18.0.1', internal: false }],
     veth123: [{ family: 'IPv4', address: '172.19.0.2', internal: false }],
+    tailscale0: [{ family: 'IPv4', address: '100.100.100.100', internal: false }],
     eth0: [
       { family: 'IPv4', address: '169.254.1.10', internal: false },
       { family: 'IPv4', address: '192.168.50.10', internal: false },

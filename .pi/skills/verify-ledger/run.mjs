@@ -22,7 +22,7 @@ export function refuseDatabase(env = process.env, extra = []) {
 // The app is intentionally reachable on the LAN; never advertise container or virtual links.
 export function selectLanIPv4(interfaces) {
   for (const [name, addresses] of Object.entries(interfaces)) {
-    if (/^(?:docker\d*|br-|veth|cni|flannel|virbr|podman|vmnet|vboxnet)/i.test(name)) continue;
+    if (/^(?:docker\d*|br-|veth|cni|flannel|virbr|podman|vmnet|vboxnet|tailscale|wg\d*|tun\d*|tap\d*)/i.test(name)) continue;
     for (const address of addresses ?? []) {
       if ((address.family === 'IPv4' || address.family === 4) && !address.internal
         && !address.address.startsWith('169.254.')) return address.address;
