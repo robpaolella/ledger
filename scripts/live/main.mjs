@@ -27,7 +27,7 @@ function identity(pid) {
 function owned(state) {
   try {
     return Number.isInteger(state.pid) && state.pid > 1 && identity(state.pid) === state.identity
-      && fs.readFileSync(`/proc/${state.pid}/cmdline`, 'utf8') === `${process.execPath}\0${entry}\0`
+      && fs.readFileSync(`/proc/${state.pid}/cmdline`, 'utf8') === `${state.execPath}\0${entry}\0`
       && fs.readlinkSync(`/proc/${state.pid}/cwd`) === dir
       && fs.readFileSync(`/proc/${state.pid}/environ`, 'utf8').split('\0').includes(`DATABASE_PATH=${database}`);
   } catch { return false; }
@@ -141,7 +141,7 @@ async function start(state) {
   });
   fs.closeSync(log);
   await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
-  const record = { pid: child.pid, identity: identity(child.pid), port };
+  const record = { pid: child.pid, identity: identity(child.pid), execPath: process.execPath, port };
   try {
     const stateFd = fs.openSync(stateFile, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW, 0o600);
     try { fs.writeFileSync(stateFd, JSON.stringify(record)); } finally { fs.closeSync(stateFd); }
@@ -159,7 +159,12 @@ async function start(state) {
       await wait(200);
     }
     fail('Ledger did not become healthy; startup was stopped.');
-  } catch (error) { await stop(record); throw error; }
+  } catch (error) {
+    // This ChildProcess is ours even if a path/metadata check unexpectedly fails.
+    child.kill('SIGTERM');
+    await stop(record);
+    throw error;
+  }
 }
 try {
   if (!['start', 'stop', 'status'].includes(command) || extra.length || (source && command !== 'start')) fail('Usage: start [offline-source-folder] | stop | status');

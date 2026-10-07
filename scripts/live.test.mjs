@@ -91,7 +91,7 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
       const stat = fs.readFileSync(`/proc/${unrelated.pid}/stat`, 'utf8').split(') ').at(-1).split(' ');
       const identity = `${fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${stat[19]}`;
-      fs.writeFileSync(path.join(live, 'live-process.json'), JSON.stringify({ pid: unrelated.pid, identity }));
+      fs.writeFileSync(path.join(live, 'live-process.json'), JSON.stringify({ pid: unrelated.pid, identity, execPath: process.execPath }));
       assert.match(good(cli('stop')), /no process was stopped/);
       process.kill(unrelated.pid, 0);
       fs.renameSync(path.join(live, 'ledger.db'), path.join(live, 'saved.db'));
@@ -109,6 +109,21 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
         assert.equal(fs.existsSync(alternative), false);
         assert.equal(fs.readdirSync(temp).some(n => n.startsWith('failed-copy.initializing-')), false);
       } finally { fs.unlinkSync(path.join(source, 'uploads/linked.db')); }
+    });
+    await t.test('linked parent paths and a changed Node install retain process ownership', () => {
+      const alias = path.join(temp, 'alias');
+      fs.symlinkSync(temp, alias);
+      const linkedEnv = { ...env, LEDGER_LIVE_DIR: path.join(alias, 'live') };
+      good(run('bash', [script, 'start'], { env: linkedEnv }));
+      assert.match(good(cli('status')), /is running/);
+      const bin = path.join(temp, 'alternate-node');
+      fs.mkdirSync(bin);
+      fs.copyFileSync(process.execPath, path.join(bin, 'node'));
+      fs.chmodSync(path.join(bin, 'node'), 0o700);
+      linkedEnv.PATH = `${bin}:${env.PATH}`;
+      assert.match(good(run('bash', [script, 'status'], { env: linkedEnv })), /is running/);
+      assert.match(good(run('bash', [script, 'stop'], { env: linkedEnv })), /Ledger stopped/);
+      assert.match(good(cli('status')), /not running/);
     });
     await t.test('retention keeps 30 and reuses build without npm', () => {
       for (let i = 0; i < 35; i++) fs.writeFileSync(path.join(temp, 'backups', `ledger-2000-01-01T00-00-${String(i).padStart(2, '0')}.000Z-1.db`), 'old synthetic backup');
