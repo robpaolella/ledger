@@ -91,7 +91,15 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       assert.match(result.stderr, new RegExp(missing));
       unchanged();
       fs.rmdirSync(checkout);
-      good(run('git', ['worktree', 'add', '--detach', checkout, 'origin/feature/platform-retheme']));
+      const bin = path.join(temp, 'failed-build-bin');
+      fs.mkdirSync(bin);
+      fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+      result = run('bash', [script, 'start', source], { env: { ...env, PATH: `${bin}:${env.PATH}` } });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Checkout\/build failed/);
+      assert.equal(good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim(),
+        good(run('git', ['rev-parse', 'origin/feature/platform-retheme'])).trim());
+      unchanged();
       const originalHead = good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim();
       const tree = good(run('git', ['rev-parse', 'HEAD^{tree}'])).trim();
       const outside = good(run('git', ['commit-tree', tree, '-p', originalHead, '-m', 'synthetic off-branch commit'], {
@@ -103,13 +111,6 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       assert.match(result.stderr, /HEAD is not on tracked branch/);
       unchanged();
       good(run('git', ['-C', checkout, 'checkout', '--detach', originalHead]));
-      const bin = path.join(temp, 'failed-build-bin');
-      fs.mkdirSync(bin);
-      fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
-      result = run('bash', [script, 'start', source], { env: { ...env, PATH: `${bin}:${env.PATH}` } });
-      assert.equal(result.status, 1);
-      assert.match(result.stderr, /Checkout\/build failed/);
-      unchanged();
       // Run the changed launcher from the target checkout, not the worker's folder.
       fs.copyFileSync(script, path.join(checkout, 'scripts/live.sh'));
       for (const name of ['main.mjs', 'network.mjs']) fs.copyFileSync(path.join(repo, 'scripts/live', name), path.join(checkout, 'scripts/live', name));

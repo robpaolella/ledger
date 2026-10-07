@@ -89,7 +89,7 @@ function prepareBuild() {
   } catch { fail('LEDGER_LIVE_BRANCH must be a valid branch name.'); }
   const ref = `refs/remotes/origin/${branch}`;
   if (!fs.existsSync(checkout)) {
-    try { git('fetch', 'origin', `refs/heads/${branch}:${ref}`); }
+    try { git('fetch', 'origin', `+refs/heads/${branch}:${ref}`); }
     catch { fail(`Could not fetch tracked branch "${branch}" from origin; it may be missing or unreachable.`); }
   }
   try { git('rev-parse', '--verify', `${ref}^{commit}`); }
