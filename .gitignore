@@ -10,3 +10,4 @@ backups/
 .jwt-secret
 simplefin-test.json
 __pycache__/
+!packages/server/src/db/data/
