@@ -101,6 +101,24 @@ wired to any actual server without checking with Robert first.
 - No `alert()`/`confirm()` in product UI — destructive actions use `ConfirmDeleteButton`.
 - `.npmrc` sets `legacy-peer-deps=true`. Keep it when changing dependencies.
 
+## Personal live instance
+
+When Robert asks, agents may run `bash scripts/live.sh start [offline-source-folder]`,
+`stop`, or `status`. First start copies only the database/WAL/SHM, uploads and JWT
+secret from a **stopped, immutable source**; it never overwrites an existing working
+folder. Each start backs up before the app can migrate data; the newest 30 backups
+are retained. The dedicated checkout builds once; updating it is separate work.
+Defaults: `~/ledger-live/live`, sibling `backups/` and `logodev-token/token.txt`,
+`/git/ledger-worktrees/live-instance`, port 3001. Overrides: `LEDGER_LIVE_DIR`,
+`LEDGER_LIVE_CHECKOUT`, `LEDGER_LIVE_PORT` (use isolated paths for testing).
+
+Agents must never otherwise read, query, copy, export, screenshot or open in a browser
+this live instance or its folder. All verification uses synthetic verify-ledger data;
+never run the live script against real data during development. The existing `data/`
+restrictions remain unchanged. Only Robert/the conductor at his request does the
+first real start after merge. LAN access is HTTP, not internet-facing hosting.
+Run lifecycle tests explicitly with `node --test scripts/live.test.mjs`.
+
 ## Designs
 
 Approved clickable designs live in `design/<issue>-<name>/`. For their feature, they
