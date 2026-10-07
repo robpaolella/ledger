@@ -2,6 +2,7 @@
 import { fork, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { networkInterfaces } from 'node:os';
 import { closeSync, cpSync, existsSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,6 +17,18 @@ export function refuseDatabase(env = process.env, extra = []) {
   if (Object.hasOwn(env, 'DATABASE_PATH') || extra.length) {
     throw new Error('Refused: no supplied database path or extra arguments are accepted. Only a new launcher-created /tmp folder is allowed.');
   }
+}
+
+// The app is intentionally reachable on the LAN; never advertise container or virtual links.
+export function selectLanIPv4(interfaces) {
+  for (const [name, addresses] of Object.entries(interfaces)) {
+    if (/^(?:docker\d*|br-|veth|cni|flannel|virbr|podman|vmnet|vboxnet|tailscale|wg\d*|tun\d*|tap\d*)/i.test(name)) continue;
+    for (const address of addresses ?? []) {
+      if ((address.family === 'IPv4' || address.family === 4) && !address.internal
+        && !address.address.startsWith('169.254.')) return address.address;
+    }
+  }
+  return null;
 }
 const json = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2), { mode: 0o600 });
 async function request(url, options = {}) {
@@ -85,6 +98,8 @@ async function serve(evidence) {
       child.once('exit', () => { clearTimeout(timer); reject(new Error('Server exited before readiness')); });
     });
     const url = `http://127.0.0.1:${port}`;
+    const lanAddress = selectLanIPv4(networkInterfaces());
+    const lanUrl = lanAddress ? `http://${lanAddress}:${port}` : null;
     const ownerToken = await login(url, 'john', 'owner');
     const member = await request(`${url}/api/users`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerToken}` },
@@ -100,7 +115,8 @@ async function serve(evidence) {
       if (!actual.includes(`DATABASE_PATH=${database}`) || !actual.includes('NODE_ENV=production') || realpathSync(`/proc/${child.pid}/cwd`) !== scratch) {
         throw new Error('Owned app environment does not match the throwaway database');
       }
-      if ((await request(`${url}/api/health`)).status !== 'ok') throw new Error('Health failed');
+      if ((await request(`${url}/api/health`)).status !== 'ok') throw new Error('Local health failed');
+      if (lanUrl && (await request(`${lanUrl}/api/health`)).status !== 'ok') throw new Error(`LAN health failed: ${lanUrl}`);
       for (const [username, role] of [['john', 'owner'], ['jane', 'admin'], ['member', 'member']]) {
         const me = await request(`${url}/api/auth/me`, { headers: { Authorization: `Bearer ${tokens[username]}` } });
         if (me.data.role !== role) throw new Error(`Role check failed: ${role}`);
@@ -108,7 +124,10 @@ async function serve(evidence) {
       }
       const page = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (!page.ok || !(await page.text()).includes('<div id="root">')) throw new Error('Production client missing');
-      return { status: 'PASS', url, database, roles: ['owner', 'admin', 'limited member'], childPid: child.pid };
+      return {
+        status: 'PASS', url, lanUrl, database, roles: ['owner', 'admin', 'limited member'], childPid: child.pid,
+        ...(lanUrl ? {} : { note: 'No LAN IPv4 address found; the app is reachable locally only.' }),
+      };
     }
     await doctor();
     control = createServer(async (req, res) => {
@@ -122,7 +141,7 @@ async function serve(evidence) {
       } catch (error) { res.writeHead(500).end(JSON.stringify({ error: error.message })); }
     });
     await new Promise((done) => control.listen(0, '127.0.0.1', done));
-    json(resolve(evidence, 'run.json'), { url, database, scratch, childPid: child.pid, supervisorPid: process.pid, control: `http://127.0.0.1:${control.address().port}`, token });
+    json(resolve(evidence, 'run.json'), { url, lanUrl, database, scratch, childPid: child.pid, supervisorPid: process.pid, control: `http://127.0.0.1:${control.address().port}`, token });
     child.once('exit', () => { if (!stopping) void cleanup().catch((error) => { console.error(error.message); process.exitCode = 1; }); });
   } catch (error) {
     await cleanup();

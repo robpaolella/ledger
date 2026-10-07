@@ -33,8 +33,17 @@ test('two owned instances, authenticated Doctor, tamper-safe cleanup, signal cle
     const [a, b] = await Promise.all(runs.map(state));
     assert.notEqual(a.url, b.url);
     assert.notEqual(a.database, b.database);
-    assert.equal((await call(a, 'doctor')).status, 'PASS');
-    assert.equal((await call(b, 'doctor')).status, 'PASS');
+    const aDoctor = await call(a, 'doctor');
+    const bDoctor = await call(b, 'doctor');
+    assert.equal(aDoctor.status, 'PASS');
+    assert.equal(bDoctor.status, 'PASS');
+    for (const [run, doctor] of [[a, aDoctor], [b, bDoctor]]) {
+      assert.equal((await fetch(`${run.url}/api/health`)).status, 200);
+      if (doctor.lanUrl) {
+        assert.equal((await fetch(`${doctor.lanUrl}/api/health`)).status, 200);
+        assert.equal(doctor.lanUrl, run.lanUrl);
+      } else assert.match(doctor.note, /reachable locally only/);
+    }
     assert.equal((await fetch(`${a.control}/cleanup`, { method: 'POST' })).status, 403);
     // Fake deletion paths in disk state must have no authority in the supervisor.
     writeFileSync(`${runs[0].evidence}/run.json`, JSON.stringify({ ...a, scratch: sentinel, database: `${sentinel}/keep` }));
@@ -73,7 +82,10 @@ test('public launch, doctor, cleanup and repeat cleanup commands', { timeout: 18
   try {
     assert.match((await cli('launch')).stdout, /"status": "PASS"/);
     s = JSON.parse(readFileSync(`${evidence}/run.json`, 'utf8'));
-    assert.match((await cli('doctor')).stdout, /limited member/);
+    const doctor = JSON.parse((await cli('doctor')).stdout);
+    assert.equal(doctor.status, 'PASS');
+    assert.ok(Object.hasOwn(doctor, 'lanUrl'));
+    assert.match(JSON.stringify(doctor), /limited member/);
     assert.match((await cli('cleanup')).stdout, /"cleaned": true/);
     assert.match((await cli('cleanup')).stdout, /already cleaned/);
     await until(() => !existsSync(`/proc/${s.supervisorPid}`));
