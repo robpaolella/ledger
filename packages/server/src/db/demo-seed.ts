@@ -6,7 +6,7 @@
  *  - 2 users (John = owner, Jane = admin)
  *  - 20 accounts across 8 catalog institutions
  *  - 35 national-brand and 150 invented merchants
- *  - ~100 transactions (Jan–Mar 2026) including splits
+ *  - ~150 transactions/month for nine months, through today
  *  - Monthly budgets
  *  - Balance snapshots for net worth
  *  - Depreciable assets
