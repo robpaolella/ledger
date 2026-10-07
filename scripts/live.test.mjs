@@ -10,7 +10,6 @@ import Database from 'better-sqlite3';
 import { lanUrls } from './live/network.mjs';
 
 const repo = process.cwd();
-const script = path.join(repo, 'scripts/live.sh');
 const helper = path.join(repo, '.pi/skills/verify-ledger/run.mjs');
 const run = (file, args, options = {}) => spawnSync(file, args, { encoding: 'utf8', timeout: 180000, ...options });
 const good = result => { assert.equal(result.status, 0, result.stdout + result.stderr); return result.stdout; };
@@ -37,6 +36,9 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-live-test-'));
   const evidence = path.join(temp, 'evidence');
   fs.mkdirSync(evidence);
+  const remote = path.join(temp, 'remote.git');
+  const sandbox = path.join(temp, 'repo');
+  const script = path.join(sandbox, 'scripts/live.sh');
   const checkout = path.join(temp, 'checkout');
   const source = path.join(temp, 'source');
   const live = path.join(temp, 'live');
@@ -46,6 +48,12 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
   let wal;
   let unrelated;
   try {
+    // Borrow objects read-only, but keep refs, commits and worktree records private.
+    good(run('git', ['clone', '--shared', '--bare', repo, remote]));
+    good(run('git', ['-C', remote, 'update-ref', 'refs/heads/feature/platform-retheme', 'HEAD']));
+    good(run('git', ['clone', '--shared', '--branch', 'feature/platform-retheme', remote, sandbox]));
+    fs.copyFileSync(path.join(repo, 'scripts/live.sh'), script);
+    for (const name of ['main.mjs', 'network.mjs']) fs.copyFileSync(path.join(repo, 'scripts/live', name), path.join(sandbox, 'scripts/live', name));
     good(run(process.execPath, [helper, 'launch', evidence]));
     const fixture = JSON.parse(fs.readFileSync(path.join(evidence, 'run.json')));
     fs.mkdirSync(source);
@@ -98,11 +106,11 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       assert.equal(result.status, 1);
       assert.match(result.stderr, /Checkout\/build failed/);
       assert.equal(good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim(),
-        good(run('git', ['rev-parse', 'origin/feature/platform-retheme'])).trim());
+        good(run('git', ['-C', sandbox, 'rev-parse', 'origin/feature/platform-retheme'])).trim());
       unchanged();
       const originalHead = good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim();
-      const tree = good(run('git', ['rev-parse', 'HEAD^{tree}'])).trim();
-      const outside = good(run('git', ['commit-tree', tree, '-p', originalHead, '-m', 'synthetic off-branch commit'], {
+      const tree = good(run('git', ['-C', sandbox, 'rev-parse', 'HEAD^{tree}'])).trim();
+      const outside = good(run('git', ['-C', sandbox, 'commit-tree', tree, '-p', originalHead, '-m', 'synthetic off-branch commit'], {
         env: { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.invalid', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.invalid' },
       })).trim();
       good(run('git', ['-C', checkout, 'checkout', '--detach', outside]));
@@ -202,7 +210,7 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
     unrelated?.kill();
     wal?.close();
     run(process.execPath, [helper, 'cleanup', evidence]);
-    run('git', ['worktree', 'remove', '--force', checkout]);
+    run('git', ['-C', sandbox, 'worktree', 'remove', '--force', checkout]);
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
