@@ -23,7 +23,7 @@ export function seedNetWorth(
       // than making every account look like it has nine months of history.
       const startDay = index >= 14 ? 60 : index >= 8 ? 30 : 0;
       // Cards begin as liabilities; other transaction-backed accounts begin as assets.
-      // it has no transactions, so it keeps a statement credit: stored positive (asset).
+      // The card in credit has no transactions, so it keeps a statement credit, stored positive (asset).
       const openingBalance = account.name === CARD_IN_CREDIT ? 212.4
         : account.type === 'credit' ? -(900 + index * 175) : 2_400 + index * 675;
       for (const date of days.slice(startDay)) {
