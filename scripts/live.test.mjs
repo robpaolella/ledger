@@ -207,7 +207,21 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
         return next;
       };
       const backupFiles = () => fs.readdirSync(path.join(temp, 'backups')).filter(n => n.endsWith('.db'));
-      const healthy = async () => assert.equal((await fetch(`http://127.0.0.1:${env.LEDGER_LIVE_PORT}/api/health`)).status, 200);
+      const healthy = async (label = 'after update/rollback') => {
+        try {
+          // Synchronous lifecycle commands prevent pooled sockets from noticing a restart.
+          // Use a fresh connection, not retries that could hide an actual failed restart.
+          const response = await fetch(`http://127.0.0.1:${env.LEDGER_LIVE_PORT}/api/health`, {
+            headers: { Connection: 'close' }, signal: AbortSignal.timeout(2000),
+          });
+          await response.arrayBuffer();
+          assert.equal(response.status, 200);
+        } catch (error) {
+          const diagnostic = path.join(os.tmpdir(), `ledger-live-health-${process.pid}-${Date.now()}.log`);
+          fs.writeFileSync(diagnostic, `${label}\n${fs.readFileSync(path.join(live, 'server.log'), 'utf8')}`, { mode: 0o600, flag: 'wx' });
+          throw new Error(`Health probe failed ${label}; synthetic server log: ${diagnostic}`, { cause: error });
+        }
+      };
       const bin = path.join(temp, 'update-bin');
       fs.mkdirSync(bin);
       const mockEnv = { ...env, PATH: `${bin}:${env.PATH}` };
@@ -262,11 +276,13 @@ if (process.argv[2] === 'ci') {
       const next = advance();
       const record = fs.readFileSync(path.join(live, 'live-process.json'));
       fs.unlinkSync(path.join(live, 'live-process.json'));
-      try { assert.match(cli('update').stderr, /busy or unavailable/); }
-      finally { fs.writeFileSync(path.join(live, 'live-process.json'), record); }
+      try {
+        assert.match(cli('update').stderr, /busy or unavailable/);
+        process.kill(JSON.parse(record).pid, 0); // Refusal did not stop the original server.
+      } finally { fs.writeFileSync(path.join(live, 'live-process.json'), record); }
       assert.equal(head(), previous);
       assert.equal(backupFiles().length, count);
-      await healthy();
+      await healthy('after missing-record refusal');
       fs.renameSync(path.join(temp, 'backups'), path.join(temp, 'saved-backups'));
       fs.symlinkSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
       try { assert.match(cli('update').stderr, /Backup failed/); }
@@ -276,7 +292,7 @@ if (process.argv[2] === 'ci') {
       }
       assert.equal(head(), previous);
       assert.equal(backupFiles().length, count);
-      await healthy();
+      await healthy('after backup-failure restart');
       good(cli('stop'));
       fs.renameSync(path.join(live, 'ledger.db'), path.join(live, 'saved.db'));
       fs.mkdirSync(path.join(live, 'ledger.db'));
