@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
+import { ownerColor, initOwnerSlots } from '../components/badges';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -40,9 +41,6 @@ const AV_COLOR: Record<string, string> = {
 };
 const initialOf = (s: string) => (s.trim()[0] || '?').toUpperCase();
 const colorVar = (s: string) => `var(${AV_COLOR[initialOf(s)] || '--c-blue'})`;
-// Household users get a stable hue by id (not by initial — two "J"s would collide).
-const USER_COLORS = ['--c-blue', '--c-violet', '--c-teal', '--c-amber', '--c-rose', '--c-green', '--c-indigo', '--c-orange', '--c-fuchsia'];
-const userColor = (id: number) => `var(${USER_COLORS[Math.abs(id) % USER_COLORS.length]})`;
 /** Sentinel id for the "Unassigned" bucket in the Users filter. */
 const UNASSIGNED = 0;
 const tint = (v: string) => `color-mix(in srgb, ${v} 16%, transparent)`;
@@ -114,7 +112,7 @@ export default function ReviewsPage() {
   }, [addToast]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((r) => setUsers(r.data.map((u) => ({ id: u.id, displayName: u.display_name })))).catch(() => {});
+    apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((r) => { initOwnerSlots(r.data.map((u) => u.id)); setUsers(r.data.map((u) => ({ id: u.id, displayName: u.display_name }))); }).catch(() => {});
     apiFetch<{ data: Category[] }>('/categories').then((r) => setCategories(r.data)).catch(() => {});
   }, []);
 
@@ -299,7 +297,7 @@ export default function ReviewsPage() {
                       <span className="w-[19px] h-[19px] flex-none rounded-[6px] border-[1.5px] flex items-center justify-center" style={{ borderColor: on ? 'var(--primary)' : 'var(--line-strong)', background: on ? 'var(--primary)' : 'var(--surface)' }}>
                         {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
                       </span>
-                      <Avatar seed={u.displayName} color={userColor(u.id)} />
+                      <Avatar seed={u.displayName} color={ownerColor(u.id)} />
                       <span className="flex-1 text-sm font-semibold text-content">{u.displayName}</span>
                       <span className="font-mono text-[12px] text-content-3">{userCount.get(u.id) ?? 0}</span>
                     </div>
@@ -419,7 +417,7 @@ export default function ReviewsPage() {
                       {/* assignee / reassign */}
                       <div onClick={(e) => { e.stopPropagation(); if (canEdit) setEditAssign((v) => (v === t.id ? null : t.id)); setMenu(null); setEditCat(null); }}
                         className="flex-1 min-w-0 relative flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] border border-transparent hover:border-line-strong hover:bg-elevated transition-colors" style={{ cursor: canEdit ? 'pointer' : 'default' }}>
-                        {r.assignee ? <Avatar seed={r.assignee.displayName} color={userColor(r.assignee.id)} /> : <span className="w-6 h-6 flex-none rounded-full border border-dashed border-line-strong" />}
+                        {r.assignee ? <Avatar seed={r.assignee.displayName} color={ownerColor(r.assignee.id)} /> : <span className="w-6 h-6 flex-none rounded-full border border-dashed border-line-strong" />}
                         <span className="text-[13.5px] font-semibold text-content-2 truncate">{r.assignee?.displayName ?? 'Unassigned'}</span>
                         {canEdit && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="flex-none"><path d="m6 9 6 6 6-6" /></svg>}
                         {editAssign === t.id && (
@@ -429,7 +427,7 @@ export default function ReviewsPage() {
                               const cur = r.assignee?.id === u.id;
                               return (
                                 <div key={u.id} onClick={() => reassign(t.id, u.id)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-[8px] text-sm font-semibold cursor-pointer" style={{ color: cur ? 'var(--primary)' : 'var(--text)', background: cur ? 'color-mix(in srgb, var(--primary) 12%, transparent)' : 'transparent' }}>
-                                  <Avatar seed={u.displayName} color={userColor(u.id)} size={22} font={10} />{u.displayName}
+                                  <Avatar seed={u.displayName} color={ownerColor(u.id)} size={22} font={10} />{u.displayName}
                                 </div>
                               );
                             })}

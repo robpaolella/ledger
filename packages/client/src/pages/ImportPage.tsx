@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { initOwnerSlots } from '../components/badges';
 import { Stepper, vendorColor, type ImpCategory } from '../components/import/cells';
 import { SegmentedControl } from '../components/primitives';
 import { MobileBar } from '../components/PageHeader';
@@ -124,6 +125,7 @@ export default function ImportPage() {
   const [fetchedRange, setFetchedRange] = useState<{ startDate: string; endDate: string } | null>(null);
 
   useEffect(() => {
+    apiFetch<{ data: { id: number }[] }>('/users').then((r) => initOwnerSlots(r.data.map((u) => u.id))).catch(() => {});
     apiFetch<{ data: EnrichedAccount[] }>('/accounts').then((r) => setAccounts(r.data)).catch(() => {});
     apiFetch<{ data: ImpCategory[] }>('/categories').then((r) => setCategories(r.data)).catch(() => {});
     apiFetch<{ data: Merchant[] }>('/merchants').then((r) => setMerchants(r.data)).catch(() => {});

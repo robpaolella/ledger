@@ -62,24 +62,19 @@ export function NeedsReviewBadge({ onClick }: { onClick?: (e: MouseEvent) => voi
 }
 
 /* ------ OwnerBadge ------ */
-// Stable mapping: sort all known user IDs, first gets slot 1, second gets slot 2
-const ownerSlotCache = new Map<number, 1 | 2>();
-let knownIds: number[] = [];
+// Stable mapping: sort all known user IDs; the nth gets --owner-n, wrapping after six.
+const OWNER_SLOTS = 6;
+const ownerSlotCache = new Map<number, number>();
 
 export function initOwnerSlots(userIds: number[]) {
-  knownIds = [...userIds].sort((a, b) => a - b);
   ownerSlotCache.clear();
-  knownIds.forEach((id, i) => ownerSlotCache.set(id, (i % 2 === 0 ? 1 : 2) as 1 | 2));
+  [...userIds].sort((a, b) => a - b).forEach((id, i) => ownerSlotCache.set(id, (i % OWNER_SLOTS) + 1));
 }
 
-function getOwnerSlot(userId: number): 1 | 2 {
-  if (ownerSlotCache.has(userId)) return ownerSlotCache.get(userId)!;
-  return userId % 2 === 0 ? 1 : 2; // fallback for unknown users
-}
-
-/** Household owner hue by slot (design tokens `--own-*`). */
+/** The one person colour (design tokens `--owner-1`..`--owner-6`), keyed on user id, never a name. */
 export function ownerColor(userId: number): string {
-  return getOwnerSlot(userId) === 1 ? 'var(--own-kathleen)' : 'var(--own-robert)';
+  const slot = ownerSlotCache.get(userId) ?? ((Math.abs(userId) + OWNER_SLOTS - 1) % OWNER_SLOTS) + 1; // fallback for unknown users: id 1 → owner-1, like the sorted order
+  return `var(--owner-${slot})`;
 }
 
 export function OwnerBadge({ user }: { user: { id: number; displayName: string } }) {
@@ -88,7 +83,7 @@ export function OwnerBadge({ user }: { user: { id: number; displayName: string }
 
 /* ------ SharedBadge ------ */
 export function SharedBadge() {
-  return <span className={TAG} style={tint('var(--own-shared)')}>Shared</span>;
+  return <span className={TAG} style={tint('var(--owner-shared)')}>Shared</span>;
 }
 
 /* ------ ClassificationBadge ------ */

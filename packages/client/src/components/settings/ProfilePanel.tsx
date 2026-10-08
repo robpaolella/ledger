@@ -6,7 +6,7 @@ import { useToast } from '../../context/ToastContext';
 import { SegmentedControl } from '../primitives';
 import { Card, CardHeader, Field, PanelHeader, Pill, InitialsAvatar, inputCls, btnPrimary } from './ui';
 
-const ROLE_TONE: Record<string, string> = { owner: 'var(--c-orange)', admin: 'var(--positive)', member: 'var(--own-kathleen)' };
+const ROLE_TONE: Record<string, string> = { owner: 'var(--c-orange)', admin: 'var(--positive)', member: 'var(--c-blue)' };
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
 
 const sun = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>;
