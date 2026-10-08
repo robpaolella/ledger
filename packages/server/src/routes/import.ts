@@ -1,17 +1,15 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { db, sqlite } from '../db/index.js';
-import { transactions, transactionSplits, dismissedTransfers } from '../db/schema.js';
-import { resolveMerchantId } from '../db/merchants.js';
-import { buildCategorizer, REVIEW_THRESHOLD } from '../services/categorize.js';
+import { dismissedTransfers } from '../db/schema.js';
+import { buildCategorizer } from '../services/categorize.js';
 import { llmConfig, llmCategorizeBatch, mergeLlmResult, type LlmTxnInput } from '../services/llmCategorize.js';
 import { normalizeMerchantName } from '../services/merchantNormalize.js';
-import { flagReview, defaultAssigneeForTxn } from '../services/reviews.js';
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 import { detectTransfers } from '../services/transferDetector.js';
-import { checkBudgetExceededForMonths } from '../services/budgetAlerts.js';
+import { commitImport, IMPORT_FAILED_MESSAGE, type ImportCommitInput } from '../services/importCommit.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -211,95 +209,19 @@ router.post('/categorize', requirePermission('import.csv'), async (req: Request,
   }
 });
 
-// POST /api/import/commit
+// POST /api/import/commit — validation and the all-or-nothing write live in
+// services/importCommit.ts.
 router.post('/commit', requirePermission('import.csv'), (req: Request, res: Response) => {
   try {
-    const { accountId, transactions: txns } = req.body as {
-      accountId: number;
-      transactions: {
-        date: string; description: string; note?: string;
-        categoryId?: number; amount: number;
-        // Auto-suggestion metadata (null/absent = the user picked the category
-        // manually in the wizard). Mirrors the bank-sync commit path.
-        confidence?: number | null; source?: string | null;
-        splits?: { categoryId: number; amount: number }[];
-      }[];
-    };
-
-    if (!accountId || !txns || !Array.isArray(txns) || txns.length === 0) {
-      res.status(400).json({ error: 'accountId and transactions array are required' });
+    const result = commitImport(sqlite, req.body as ImportCommitInput);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
       return;
     }
-
-    // Validate all required fields
-    for (const t of txns) {
-      if (!t.date || !t.description || t.amount == null) {
-        res.status(400).json({ error: 'Each transaction requires date, description, and amount' });
-        return;
-      }
-      if (!t.categoryId && (!t.splits || t.splits.length < 2)) {
-        res.status(400).json({ error: 'Each transaction requires categoryId or splits' });
-        return;
-      }
-      if (t.splits && t.splits.length >= 2) {
-        const splitSum = t.splits.reduce((s, r) => s + r.amount, 0);
-        if (Math.abs(splitSum - t.amount) > 0.01) {
-          res.status(400).json({ error: `Split amounts must equal transaction amount for "${t.description}"` });
-          return;
-        }
-      }
-    }
-
-    // Insert all transactions. Auto-suggested rows carry confidence/source and
-    // land in the review queue below the threshold — same contract as bank sync.
-    let count = 0;
-    for (const t of txns) {
-      const hasSplits = t.splits && t.splits.length >= 2;
-      const conf = hasSplits ? null : (t.confidence ?? null);
-      const needsReview = !hasSplits && conf != null && conf < REVIEW_THRESHOLD ? 1 : 0;
-      const result = db.insert(transactions).values({
-        account_id: accountId,
-        category_id: hasSplits ? null : t.categoryId!,
-        date: t.date,
-        description: t.description,
-        // CSV description IS the raw statement text — preserve it verbatim
-        // even if the user later renames the merchant/description.
-        bank_description: t.description,
-        note: t.note || null,
-        merchant_id: resolveMerchantId(t.description),
-        amount: t.amount,
-        categorize_confidence: conf,
-        needs_review: needsReview,
-        categorize_source: hasSplits || conf == null ? null : (t.source ?? null),
-      }).run();
-      const txnId = Number(result.lastInsertRowid);
-
-      if (hasSplits) {
-        for (const s of t.splits!) {
-          db.insert(transactionSplits).values({
-            transaction_id: txnId,
-            category_id: s.categoryId,
-            amount: s.amount,
-          }).run();
-        }
-      }
-      if (needsReview === 1) {
-        flagReview(sqlite, {
-          txnId,
-          reason: 'auto_low_confidence',
-          assigneeId: defaultAssigneeForTxn(sqlite, txnId),
-        });
-      }
-      count++;
-    }
-
-    // Imported spending may push categories over budget (internally try/catch).
-    checkBudgetExceededForMonths(sqlite, txns.map((t) => t.date.slice(0, 7)));
-
-    res.status(201).json({ data: { imported: count } });
+    res.status(201).json({ data: { imported: result.imported } });
   } catch (err) {
     console.error('POST /import/commit error:', err);
-    res.status(500).json({ error: 'Failed to import transactions' });
+    res.status(500).json({ error: IMPORT_FAILED_MESSAGE });
   }
 });
 
