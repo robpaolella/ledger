@@ -5,6 +5,7 @@ import net from 'node:net';
 import { spawn, execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { lanUrls } from './network.mjs';
 
 process.umask(0o077);
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -82,15 +83,25 @@ function initialize() {
   } finally { fs.rmSync(staging, { recursive: true, force: true }); }
 }
 function prepareBuild() {
+  const branch = process.env.LEDGER_LIVE_BRANCH ?? 'feature/platform-retheme';
+  try {
+    if (git('check-ref-format', '--branch', branch) !== branch) throw new Error();
+  } catch { fail('LEDGER_LIVE_BRANCH must be a valid branch name.'); }
+  const ref = `refs/remotes/origin/${branch}`;
   if (!fs.existsSync(checkout)) {
-    git('fetch', 'origin', 'feature/platform-retheme');
-    git('worktree', 'add', '--detach', checkout, 'origin/feature/platform-retheme');
+    try { git('fetch', 'origin', `+refs/heads/${branch}:${ref}`); }
+    catch { fail(`Could not fetch tracked branch "${branch}" from origin; it may be missing or unreachable.`); }
   }
+  try { git('rev-parse', '--verify', `${ref}^{commit}`); }
+  catch { fail(`Tracked branch "${branch}" is missing from local origin refs.`); }
+  if (!fs.existsSync(checkout)) git('worktree', 'add', '--detach', checkout, ref);
   const common = git('rev-parse', '--path-format=absolute', '--git-common-dir');
-  if (checkout === repo || git('-C', checkout, 'rev-parse', '--show-toplevel') !== checkout
-    || git('-C', checkout, 'rev-parse', '--path-format=absolute', '--git-common-dir') !== common)
-    fail('Live checkout must be a separate worktree of this repository.');
-  git('merge-base', '--is-ancestor', git('-C', checkout, 'rev-parse', 'HEAD'), 'origin/feature/platform-retheme');
+  try {
+    if (git('-C', checkout, 'rev-parse', '--show-toplevel') !== checkout
+      || git('-C', checkout, 'rev-parse', '--path-format=absolute', '--git-common-dir') !== common) throw new Error();
+  } catch { fail('Live checkout is not a worktree of this repository.'); }
+  try { git('merge-base', '--is-ancestor', git('-C', checkout, 'rev-parse', 'HEAD'), ref); }
+  catch { fail(`Live checkout HEAD is not on tracked branch "${branch}".`); }
   if (fs.existsSync(entry) && fs.existsSync(path.join(checkout, 'packages/client/dist/index.html'))
     && fs.existsSync(path.join(checkout, 'node_modules'))) return;
   for (const args of [['ci'], ['run', 'build']]) {
@@ -126,8 +137,8 @@ async function start(state) {
     probe.once('error', () => reject(new Error(`Port ${port} is busy or unavailable; Ledger was not started.`)));
     probe.listen(port, () => probe.close(resolve));
   });
-  initialize();
   prepareBuild();
+  initialize();
   await backup(); // No app process (and therefore no migration) before a successful backup.
   assertPlain(path.join(dir, '.jwt-secret'));
   assertPlain(path.join(dir, 'uploads'), true);
@@ -151,8 +162,7 @@ async function start(state) {
         const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(500) });
         if (response.ok && owned(record) && listens(record.pid)) {
           child.unref();
-          const addresses = Object.values(os.networkInterfaces()).flat().filter(a => a.family === 'IPv4' && !a.internal);
-          console.log(`Ledger started: ${addresses.map(a => `http://${a.address}:${port}`).join(' ') || `http://localhost:${port} (no LAN address found)`}`);
+          console.log(`Ledger started: ${lanUrls(os.networkInterfaces(), port)}`);
           return;
         }
       } catch { /* Wait for migrations and listening. */ }

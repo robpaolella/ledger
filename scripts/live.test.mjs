@@ -7,9 +7,9 @@ import net from 'node:net';
 import { spawnSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
+import { lanUrls } from './live/network.mjs';
 
 const repo = process.cwd();
-const script = path.join(repo, 'scripts/live.sh');
 const helper = path.join(repo, '.pi/skills/verify-ledger/run.mjs');
 const run = (file, args, options = {}) => spawnSync(file, args, { encoding: 'utf8', timeout: 180000, ...options });
 const good = result => { assert.equal(result.status, 0, result.stdout + result.stderr); return result.stdout; };
@@ -25,10 +25,20 @@ function hashes(folder) {
     .map(name => [name, createHash('sha256').update(fs.readFileSync(path.join(folder, name))).digest('hex')]);
 }
 
+test('LAN output excludes virtual interfaces and preserves fallback', () => {
+  const address = { family: 'IPv4', internal: false, address: '192.168.1.5' };
+  const virtual = Object.fromEntries(['docker0', 'br-test', 'veth1', 'virbr0', 'podman0', 'cni0', 'flannel.1', 'lxdbr0'].map(name => [name, [address]]));
+  assert.equal(lanUrls(virtual, 4321), 'http://localhost:4321 (no LAN address found)');
+  assert.equal(lanUrls({ ...virtual, eth0: [address], lo: [{ ...address, internal: true }], wlan0: undefined }, 4321), 'http://192.168.1.5:4321');
+});
+
 test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, async t => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-live-test-'));
   const evidence = path.join(temp, 'evidence');
   fs.mkdirSync(evidence);
+  const remote = path.join(temp, 'remote.git');
+  const sandbox = path.join(temp, 'repo');
+  const script = path.join(sandbox, 'scripts/live.sh');
   const checkout = path.join(temp, 'checkout');
   const source = path.join(temp, 'source');
   const live = path.join(temp, 'live');
@@ -38,6 +48,12 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
   let wal;
   let unrelated;
   try {
+    // Borrow objects read-only, but keep refs, commits and worktree records private.
+    good(run('git', ['clone', '--shared', '--bare', repo, remote]));
+    good(run('git', ['-C', remote, 'update-ref', 'refs/heads/feature/platform-retheme', 'HEAD']));
+    good(run('git', ['clone', '--shared', '--branch', 'feature/platform-retheme', remote, sandbox]));
+    fs.copyFileSync(path.join(repo, 'scripts/live.sh'), script);
+    for (const name of ['main.mjs', 'network.mjs']) fs.copyFileSync(path.join(repo, 'scripts/live', name), path.join(sandbox, 'scripts/live', name));
     good(run(process.execPath, [helper, 'launch', evidence]));
     const fixture = JSON.parse(fs.readFileSync(path.join(evidence, 'run.json')));
     fs.mkdirSync(source);
@@ -56,10 +72,61 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
     fs.mkdirSync(path.join(temp, 'logodev-token'));
     const token = 'synthetic-token-never-log-62';
     fs.writeFileSync(path.join(temp, 'logodev-token/token.txt'), token);
+    await t.test('checkout, branch and build failures precede copying; retry keeps source usable', () => {
+      const unchanged = () => {
+        assert.equal(fs.existsSync(live), false);
+        assert.equal(fs.readdirSync(temp).some(n => n.startsWith('live.initializing-')), false);
+        assert.deepEqual(hashes(source), before);
+      };
+      for (const branch of ['--force', '', 'bad..branch']) {
+        const result = run('bash', [script, 'start', source], { env: { ...env, LEDGER_LIVE_BRANCH: branch } });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /valid branch name/);
+        unchanged();
+      }
+      const missing = 'ledger-test-nonexistent-branch-64';
+      let result = run('bash', [script, 'start', source], { env: { ...env, LEDGER_LIVE_BRANCH: missing } });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, new RegExp(missing));
+      unchanged();
+      fs.mkdirSync(checkout);
+      result = cli('start', source);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /not a worktree of this repository/);
+      unchanged();
+      result = run('bash', [script, 'start', source], { env: { ...env, LEDGER_LIVE_BRANCH: missing } });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, new RegExp(missing));
+      unchanged();
+      fs.rmdirSync(checkout);
+      const bin = path.join(temp, 'failed-build-bin');
+      fs.mkdirSync(bin);
+      fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+      result = run('bash', [script, 'start', source], { env: { ...env, PATH: `${bin}:${env.PATH}` } });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Checkout\/build failed/);
+      assert.equal(good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim(),
+        good(run('git', ['-C', sandbox, 'rev-parse', 'origin/feature/platform-retheme'])).trim());
+      unchanged();
+      const originalHead = good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim();
+      const tree = good(run('git', ['-C', sandbox, 'rev-parse', 'HEAD^{tree}'])).trim();
+      const outside = good(run('git', ['-C', sandbox, 'commit-tree', tree, '-p', originalHead, '-m', 'synthetic off-branch commit'], {
+        env: { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.invalid', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.invalid' },
+      })).trim();
+      good(run('git', ['-C', checkout, 'checkout', '--detach', outside]));
+      result = cli('start', source);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /HEAD is not on tracked branch/);
+      unchanged();
+      good(run('git', ['-C', checkout, 'checkout', '--detach', originalHead]));
+      // Run the changed launcher from the target checkout, not the worker's folder.
+      fs.copyFileSync(script, path.join(checkout, 'scripts/live.sh'));
+      for (const name of ['main.mjs', 'network.mjs']) fs.copyFileSync(path.join(repo, 'scripts/live', name), path.join(checkout, 'scripts/live', name));
+    });
     await t.test('first copy, WAL-inclusive backup, health and LAN address', async () => {
-      const output = good(cli('start', source));
+      const output = good(run('bash', ['scripts/live.sh', 'start', source], { cwd: checkout, env }));
       assert.match(output, /Pre-start backup saved/);
-      const url = output.match(/http:\/\/[\d.]+:\d+/)[0];
+      const url = output.match(/http:\/\/[\w.]+:\d+/)[0];
       assert.equal((await fetch(`${url}/api/health`)).status, 200);
       assert.deepEqual(hashes(source), before);
       assert.equal(fs.existsSync(path.join(live, 'do-not-copy.txt')), false);
@@ -128,7 +195,11 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
     await t.test('retention keeps 30 and reuses build without npm', () => {
       for (let i = 0; i < 35; i++) fs.writeFileSync(path.join(temp, 'backups', `ledger-2000-01-01T00-00-${String(i).padStart(2, '0')}.000Z-1.db`), 'old synthetic backup');
       const built = fs.statSync(path.join(checkout, 'packages/server/dist/index.js')).mtimeMs;
-      good(cli('start'));
+      const bin = path.join(temp, 'offline-bin');
+      fs.mkdirSync(bin);
+      const realGit = good(run('which', ['git'])).trim();
+      fs.writeFileSync(path.join(bin, 'git'), `#!/bin/sh\nif [ "$1" = fetch ]; then exit 99; fi\nexec "${realGit}" "$@"\n`, { mode: 0o700 });
+      good(run('bash', [script, 'start'], { env: { ...env, PATH: `${bin}:${env.PATH}`, LEDGER_LIVE_BRANCH: 'feature/platform-retheme' } }));
       assert.equal(fs.statSync(path.join(checkout, 'packages/server/dist/index.js')).mtimeMs, built);
       assert.equal(fs.readdirSync(path.join(temp, 'backups')).filter(n => n.endsWith('.db')).length, 30);
       good(cli('stop'));
@@ -139,7 +210,7 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
     unrelated?.kill();
     wal?.close();
     run(process.execPath, [helper, 'cleanup', evidence]);
-    run('git', ['worktree', 'remove', '--force', checkout]);
+    run('git', ['-C', sandbox, 'worktree', 'remove', '--force', checkout]);
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });

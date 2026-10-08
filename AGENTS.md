@@ -111,6 +111,11 @@ are retained. The dedicated checkout builds once; updating it is separate work.
 Defaults: `~/ledger-live/live`, sibling `backups/` and `logodev-token/token.txt`,
 `/git/ledger-worktrees/live-instance`, port 3001. Overrides: `LEDGER_LIVE_DIR`,
 `LEDGER_LIVE_CHECKOUT`, `LEDGER_LIVE_PORT` (use isolated paths for testing).
+`LEDGER_LIVE_BRANCH` selects the tracked branch (default `feature/platform-retheme`).
+New checkouts fetch that branch; existing checkouts use its local origin ref without
+fetching. The launcher works from the live checkout itself or another worktree of
+this repository. Checkout validation and any needed build finish before first-start
+copying, so those failures can be retried with the same source folder.
 
 Agents must never otherwise read, query, copy, export, screenshot or open in a browser
 this live instance or its folder. All verification uses synthetic verify-ledger data;
