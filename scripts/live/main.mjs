@@ -21,9 +21,18 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fail = message => { throw new Error(message); };
 const cleanEnv = { PATH: process.env.PATH, HOME: dir, NODE_ENV: 'production' };
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-function identity(pid) {
+function processInfo(pid) {
   const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ').at(-1).split(' ');
-  return `${fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${stat[19]}`;
+  return { identity: `${fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${stat[19]}`,
+    // A zombie main thread can still have exiting threads holding shared sockets.
+    exited: ['Z', 'X'].includes(stat[0]) && Number(stat[17]) === 1 };
+}
+const identity = pid => processInfo(pid).identity;
+function alive(state) {
+  try {
+    const current = processInfo(state.pid);
+    return current.identity === state.identity && !current.exited;
+  } catch { return false; }
 }
 function owned(state) {
   try {
@@ -82,13 +91,13 @@ function initialize() {
     fs.renameSync(staging, dir);
   } finally { fs.rmSync(staging, { recursive: true, force: true }); }
 }
-function prepareBuild() {
+function validateCheckout(refresh = false) {
   const branch = process.env.LEDGER_LIVE_BRANCH ?? 'feature/platform-retheme';
   try {
     if (git('check-ref-format', '--branch', branch) !== branch) throw new Error();
   } catch { fail('LEDGER_LIVE_BRANCH must be a valid branch name.'); }
   const ref = `refs/remotes/origin/${branch}`;
-  if (!fs.existsSync(checkout)) {
+  if (refresh || !fs.existsSync(checkout)) {
     try { git('fetch', 'origin', `+refs/heads/${branch}:${ref}`); }
     catch { fail(`Could not fetch tracked branch "${branch}" from origin; it may be missing or unreachable.`); }
   }
@@ -102,6 +111,10 @@ function prepareBuild() {
   } catch { fail('Live checkout is not a worktree of this repository.'); }
   try { git('merge-base', '--is-ancestor', git('-C', checkout, 'rev-parse', 'HEAD'), ref); }
   catch { fail(`Live checkout HEAD is not on tracked branch "${branch}".`); }
+  return git('rev-parse', ref);
+}
+function prepareBuild() {
+  validateCheckout();
   if (fs.existsSync(entry) && fs.existsSync(path.join(checkout, 'packages/client/dist/index.html'))
     && fs.existsSync(path.join(checkout, 'node_modules'))) return;
   for (const args of [['ci'], ['run', 'build']]) {
@@ -120,26 +133,34 @@ async function backup() {
   const files = fs.readdirSync(backups).filter(name => /^ledger-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-\d+\.db$/.test(name)).sort().reverse();
   for (const name of files.slice(30)) fs.unlinkSync(path.join(backups, name));
   console.log('Pre-start backup saved (newest 30 retained).');
+  return target;
 }
 async function stop(state) {
   if (!state || !owned(state)) { console.log('Ledger is not running; no process was stopped.'); return; }
   process.kill(state.pid, 'SIGTERM');
-  for (let i = 0; i < 100 && owned(state); i++) await wait(100);
-  if (owned(state)) fail('Ledger has not stopped yet; no other process was signalled.');
+  // cwd/cmdline can disappear before Linux closes the listening socket on exit.
+  // We already verified ownership before signalling; now wait for that exact identity.
+  for (let i = 0; i < 100 && alive(state); i++) await wait(100);
+  if (alive(state)) fail('Ledger has not stopped yet; no other process was signalled.');
   fs.rmSync(stateFile, { force: true });
   console.log('Ledger stopped.');
 }
-async function start(state) {
-  if (state && owned(state)) { console.log(`Ledger is already running on port ${state.port}.`); return; }
+async function assertAvailablePort() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) fail('Choose a port between 1 and 65535 with LEDGER_LIVE_PORT.');
   await new Promise((resolve, reject) => {
     const probe = net.createServer();
-    probe.once('error', () => reject(new Error(`Port ${port} is busy or unavailable; Ledger was not started.`)));
+    probe.once('error', error => reject(new Error(`Port ${port} is busy or unavailable (${error.code}); Ledger was not started.`)));
     probe.listen(port, () => probe.close(resolve));
   });
-  prepareBuild();
-  initialize();
-  await backup(); // No app process (and therefore no migration) before a successful backup.
+}
+async function start(state, prepared = false) {
+  if (state && owned(state)) { console.log(`Ledger is already running on port ${state.port}.`); return; }
+  await assertAvailablePort();
+  if (!prepared) {
+    prepareBuild();
+    initialize();
+    await backup(); // No app process (and therefore no migration) before a successful backup.
+  }
   assertPlain(path.join(dir, '.jwt-secret'));
   assertPlain(path.join(dir, 'uploads'), true);
   const tokenPath = path.join(path.dirname(dir), 'logodev-token/token.txt');
@@ -176,11 +197,86 @@ async function start(state) {
     throw error;
   }
 }
+async function update(state) {
+  if (!fs.existsSync(dir) || !fs.existsSync(checkout)) fail('Start Ledger once before updating it.');
+  // Refuse local work before fetching, stopping or touching the database.
+  if (git('-C', checkout, 'status', '--porcelain')) fail('Live checkout has local changes; update refused.');
+  const next = validateCheckout(true);
+  const previous = git('-C', checkout, 'rev-parse', 'HEAD');
+  if (previous === next) { console.log('Ledger is already up to date; nothing changed.'); return; }
+  const wasRunning = state && owned(state);
+  if (wasRunning && state.port !== port) fail('Use the running instance port for LEDGER_LIVE_PORT before updating.');
+  // A missing/stale record must not let us update files underneath an unknown server.
+  if (!wasRunning) await assertAvailablePort();
+  await stop(state);
+  let saved;
+  try { saved = await backup(); }
+  catch {
+    if (wasRunning) {
+      try { await start(null, true); }
+      catch (error) { fail(`Backup failed and the previous instance could not restart: ${error.message} Code and data were not changed.`); }
+    }
+    fail('Backup failed; update refused, code and data were not changed.');
+  }
+  // Keep every workspace's dependencies and build output, not just the root modules.
+  const artifacts = ['node_modules', ...['shared', 'server', 'client'].flatMap(name =>
+    [`packages/${name}/node_modules`, `packages/${name}/dist`, `packages/${name}/tsconfig.tsbuildinfo`])];
+  let holding;
+  const moved = [];
+  let installed = false;
+  let starting = false;
+  let phase = 'preserving the previous build';
+  try {
+    holding = fs.mkdtempSync(path.join(path.dirname(checkout), '.ledger-update-'));
+    for (const name of artifacts) {
+      const original = path.join(checkout, name);
+      if (!fs.existsSync(original)) continue;
+      const target = path.join(holding, name);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.renameSync(original, target);
+      moved.push(name);
+    }
+    phase = 'updating the checkout';
+    git('-C', checkout, 'merge', '--ff-only', next);
+    installed = true;
+    for (const args of [['ci'], ['run', 'build']]) {
+      phase = args[0] === 'ci' ? 'installing dependencies' : 'building';
+      execFileSync('npm', args, { cwd: checkout, env: { PATH: process.env.PATH, HOME: os.homedir() }, stdio: 'inherit' });
+    }
+    phase = 'starting and checking health';
+    starting = true;
+    await start(null, true);
+    console.log(`Ledger updated: ${previous} -> ${next}.${wasRunning ? '' : ' Previously stopped instance was started.'}`);
+  } catch {
+    try {
+      const failedState = readState();
+      if (failedState && owned(failedState)) await stop(failedState);
+      git('-C', checkout, 'reset', '--hard', previous);
+      for (const name of installed ? artifacts : moved) fs.rmSync(path.join(checkout, name), { recursive: true, force: true });
+      for (const name of moved) fs.renameSync(path.join(holding, name), path.join(checkout, name));
+      if (starting) {
+        // The failed version may have migrated data. Never retain its WAL/SHM.
+        const restored = `${database}.restoring`;
+        fs.copyFileSync(saved, restored, fs.constants.COPYFILE_EXCL);
+        for (const suffix of ['-wal', '-shm']) fs.rmSync(`${database}${suffix}`, { force: true });
+        fs.renameSync(restored, database);
+      }
+      if (wasRunning || starting) await start(null, true);
+    } catch {
+      const retained = holding && moved.some(name => fs.existsSync(path.join(holding, name)));
+      fail(`ROLLBACK FAILED: Ledger needs recovery. Database backup: ${saved}.${retained ? ` Saved build/dependencies: ${holding}.` : ''}`);
+    }
+    if (holding) fs.rmSync(holding, { recursive: true, force: true });
+    fail(`Update failed during ${phase}; rolled back to ${previous}. Ledger ${wasRunning || starting ? 'is running again' : 'remains stopped'}. Database backup: ${saved}.`);
+  }
+  fs.rmSync(holding, { recursive: true, force: true });
+}
 try {
-  if (!['start', 'stop', 'status'].includes(command) || extra.length || (source && command !== 'start')) fail('Usage: start [offline-source-folder] | stop | status');
+  if (!['start', 'stop', 'status', 'update'].includes(command) || extra.length || (source && command !== 'start')) fail('Usage: start [offline-source-folder] | stop | status | update');
   const state = readState();
   if (command === 'start') await start(state);
   else if (command === 'stop') await stop(state);
+  else if (command === 'update') await update(state);
   else console.log(state && owned(state) ? `Ledger is running on port ${state.port}.` : 'Ledger is not running.');
 } catch (error) {
   // Never include subprocess output, environment values or file contents in failures.

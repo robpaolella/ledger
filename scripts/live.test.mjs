@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
+import { get } from 'node:http';
 import { spawnSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
@@ -20,6 +21,26 @@ const freePort = async () => {
   await new Promise(resolve => server.close(resolve));
   return port;
 };
+function healthStatus(url) {
+  // Wait for socket closure as well as the response: the next synchronous CLI
+  // command otherwise blocks FIN handling while trying to rebind this port.
+  return new Promise((resolve, reject) => {
+    let status;
+    let complete = false;
+    const request = get(url, { agent: false, timeout: 2000 }, response => {
+      status = response.statusCode;
+      response.resume();
+      response.once('end', () => { complete = true; });
+      response.once('error', reject);
+    });
+    request.once('socket', socket => socket.once('close', () => {
+      if (complete) resolve(status);
+      else reject(new Error('Health connection closed before its response completed'));
+    }));
+    request.once('error', reject);
+    request.once('timeout', () => request.destroy(new Error('Health probe timed out')));
+  });
+}
 function hashes(folder) {
   return fs.readdirSync(folder, { recursive: true }).sort().filter(name => fs.statSync(path.join(folder, name)).isFile())
     .map(name => [name, createHash('sha256').update(fs.readFileSync(path.join(folder, name))).digest('hex')]);
@@ -54,7 +75,12 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
     good(run('git', ['clone', '--shared', '--branch', 'feature/platform-retheme', remote, sandbox]));
     fs.copyFileSync(path.join(repo, 'scripts/live.sh'), script);
     for (const name of ['main.mjs', 'network.mjs']) fs.copyFileSync(path.join(repo, 'scripts/live', name), path.join(sandbox, 'scripts/live', name));
-    good(run(process.execPath, [helper, 'launch', evidence]));
+    const testIdentity = { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.invalid',
+      GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.invalid' };
+    good(run('git', ['-C', sandbox, 'add', 'scripts/live.sh', 'scripts/live']));
+    good(run('git', ['-C', sandbox, 'commit', '--allow-empty', '-m', 'synthetic launcher snapshot'], { env: testIdentity }));
+    good(run('git', ['-C', sandbox, 'push', 'origin', 'HEAD:feature/platform-retheme']));
+    good(run(process.execPath, [helper, 'launch', evidence], { env: { ...process.env, LEDGER_LOGODEV_TOKEN_FILE: path.join(temp, 'no-logo-token') } }));
     const fixture = JSON.parse(fs.readFileSync(path.join(evidence, 'run.json')));
     fs.mkdirSync(source);
     const seeded = new Database(fixture.database, { readonly: true });
@@ -127,7 +153,7 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       const output = good(run('bash', ['scripts/live.sh', 'start', source], { cwd: checkout, env }));
       assert.match(output, /Pre-start backup saved/);
       const url = output.match(/http:\/\/[\w.]+:\d+/)[0];
-      assert.equal((await fetch(`${url}/api/health`)).status, 200);
+      assert.equal(await healthStatus(`${url}/api/health`), 200);
       assert.deepEqual(hashes(source), before);
       assert.equal(fs.existsSync(path.join(live, 'do-not-copy.txt')), false);
       const backup = fs.readdirSync(path.join(temp, 'backups'))[0];
@@ -191,6 +217,179 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       assert.match(good(run('bash', [script, 'status'], { env: linkedEnv })), /is running/);
       assert.match(good(run('bash', [script, 'stop'], { env: linkedEnv })), /Ledger stopped/);
       assert.match(good(cli('status')), /not running/);
+    });
+    await t.test('safe updates, refusal, rollback and serialization', async () => {
+      const head = () => good(run('git', ['-C', checkout, 'rev-parse', 'HEAD'])).trim();
+      const advance = () => {
+        const parent = good(run('git', ['--git-dir', remote, 'rev-parse', 'refs/heads/feature/platform-retheme'])).trim();
+        const tree = good(run('git', ['--git-dir', remote, 'rev-parse', `${parent}^{tree}`])).trim();
+        const next = good(run('git', ['--git-dir', remote, 'commit-tree', tree, '-p', parent, '-m', 'synthetic update'], { env: testIdentity })).trim();
+        good(run('git', ['--git-dir', remote, 'update-ref', 'refs/heads/feature/platform-retheme', next]));
+        return next;
+      };
+      const backupFiles = () => fs.readdirSync(path.join(temp, 'backups')).filter(n => n.endsWith('.db'));
+      const healthy = async (label = 'after update/rollback') => {
+        try {
+          assert.equal(await healthStatus(`http://127.0.0.1:${env.LEDGER_LIVE_PORT}/api/health`), 200);
+        } catch (error) {
+          const diagnostic = path.join(os.tmpdir(), `ledger-live-health-${process.pid}-${Date.now()}.log`);
+          fs.writeFileSync(diagnostic, `${label}\n${fs.readFileSync(path.join(live, 'server.log'), 'utf8')}`, { mode: 0o600, flag: 'wx' });
+          throw new Error(`Health probe failed ${label}; synthetic server log: ${diagnostic}`, { cause: error });
+        }
+      };
+      const bin = path.join(temp, 'update-bin');
+      fs.mkdirSync(bin);
+      const mockEnv = { ...env, PATH: `${bin}:${env.PATH}` };
+      // Fault injection preserves real built outputs/dependencies in the private clone.
+      const mock = mode => fs.writeFileSync(path.join(bin, 'npm'), `#!/usr/bin/env node
+const fs = require('node:fs'); const path = require('node:path');
+const root = process.cwd(); const parent = path.dirname(root);
+const saved = path.join(parent, fs.readdirSync(parent).find(n => n.startsWith('.ledger-update-')));
+const mode = ${JSON.stringify(mode)};
+if (process.argv[2] === 'ci') {
+  fs.mkdirSync(path.join(root, 'node_modules'), {recursive:true});
+  fs.writeFileSync(path.join(root, 'node_modules/partial-install'), 'partial');
+  if (mode === 'install') process.exit(1);
+  fs.cpSync(path.join(saved, 'node_modules'), path.join(root, 'node_modules'), {recursive:true, verbatimSymlinks:true});
+  for (const name of ['shared', 'server', 'client']) {
+    const modules = path.join(saved, 'packages', name, 'node_modules');
+    if (fs.existsSync(modules)) fs.cpSync(modules, path.join(root, 'packages', name, 'node_modules'), {recursive:true, verbatimSymlinks:true});
+  }
+  if (mode === 'lock') {
+    fs.writeFileSync(${JSON.stringify(path.join(temp, 'updating'))}, 'ready');
+    while (!fs.existsSync(${JSON.stringify(path.join(temp, 'release'))})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  }
+} else {
+  for (const name of ['shared', 'server', 'client']) fs.cpSync(path.join(saved, 'packages', name, 'dist'), path.join(root, 'packages', name, 'dist'), {recursive:true});
+  if (mode === 'build') { fs.writeFileSync(path.join(root, 'packages/client/dist/index.html'), 'broken build'); process.exit(1); }
+  if (mode === 'health' || mode === 'rollback') {
+    fs.writeFileSync(path.join(root, 'packages/server/dist/index.js'), "import Database from 'better-sqlite3'; import http from 'node:http'; import fs from 'node:fs'; const db = new Database(process.env.DATABASE_PATH); db.exec(\\\"UPDATE live_backup_test SET value = 'changed by failed version'\\\"); db.close(); fs.writeFileSync(process.env.HOME + '/update-migration-ran', 'changed'); const server = http.createServer((req,res) => { res.statusCode=503; res.end(); }).listen(Number(process.env.PORT)); process.on('SIGTERM', () => server.close());");
+    if (mode === 'rollback') fs.writeFileSync(path.join(saved, 'packages/server/dist/index.js'), 'process.exit(1);');
+  }
+}
+`, { mode: 0o700 });
+      good(cli('start'));
+      let pid = JSON.parse(fs.readFileSync(path.join(live, 'live-process.json'))).pid;
+      let count = backupFiles().length;
+      assert.match(good(cli('update')), /already up to date/);
+      assert.equal(backupFiles().length, count);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(live, 'live-process.json'))).pid, pid);
+      const previous = head();
+      fs.writeFileSync(path.join(checkout, 'untracked-work.txt'), 'local work');
+      assert.match(cli('update').stderr, /local changes/);
+      fs.unlinkSync(path.join(checkout, 'untracked-work.txt'));
+      good(run('git', ['--git-dir', remote, 'update-ref', '-d', 'refs/heads/feature/platform-retheme']));
+      assert.match(cli('update').stderr, /missing or unreachable/);
+      good(run('git', ['--git-dir', remote, 'update-ref', 'refs/heads/feature/platform-retheme', previous]));
+      const parent = good(run('git', ['-C', checkout, 'rev-parse', 'HEAD^'])).trim();
+      good(run('git', ['--git-dir', remote, 'update-ref', 'refs/heads/feature/platform-retheme', parent]));
+      assert.match(cli('update').stderr, /HEAD is not on tracked branch/);
+      good(run('git', ['--git-dir', remote, 'update-ref', 'refs/heads/feature/platform-retheme', previous]));
+      assert.equal(head(), previous);
+      assert.equal(backupFiles().length, count);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(live, 'live-process.json'))).pid, pid);
+      const next = advance();
+      const record = fs.readFileSync(path.join(live, 'live-process.json'));
+      fs.unlinkSync(path.join(live, 'live-process.json'));
+      try {
+        assert.match(cli('update').stderr, /busy or unavailable/);
+        process.kill(JSON.parse(record).pid, 0); // Refusal did not stop the original server.
+      } finally { fs.writeFileSync(path.join(live, 'live-process.json'), record); }
+      assert.equal(head(), previous);
+      assert.equal(backupFiles().length, count);
+      await healthy('after missing-record refusal');
+      // Exercise immediate stop/restart repeatedly: lost /proc ownership metadata
+      // is not proof that Linux has finished releasing the old listening socket.
+      for (let attempt = 0; attempt < 50; attempt++) {
+        fs.renameSync(path.join(temp, 'backups'), path.join(temp, 'saved-backups'));
+        fs.symlinkSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
+        try {
+          const failedBackup = cli('update');
+          assert.match(failedBackup.stderr, /Backup failed; update refused/, failedBackup.stdout + failedBackup.stderr);
+        } finally {
+          fs.unlinkSync(path.join(temp, 'backups'));
+          fs.renameSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
+        }
+        assert.equal(head(), previous);
+        assert.equal(backupFiles().length, count);
+        await healthy('after backup-failure restart');
+      }
+      good(cli('stop'));
+      fs.renameSync(path.join(live, 'ledger.db'), path.join(live, 'saved.db'));
+      fs.mkdirSync(path.join(live, 'ledger.db'));
+      assert.match(cli('update').stderr, /Backup failed/);
+      assert.equal(head(), previous);
+      assert.equal(backupFiles().length, count);
+      fs.rmdirSync(path.join(live, 'ledger.db'));
+      fs.renameSync(path.join(live, 'saved.db'), path.join(live, 'ledger.db'));
+      const output = good(cli('update')); // Real npm ci/build, stopped -> started.
+      assert.match(output, /Previously stopped instance was started/);
+      assert.ok(output.includes(previous) && output.includes(next));
+      assert.match(output, /http:\/\//);
+      assert.equal(head(), next);
+      await healthy();
+      assert.equal(backupFiles().length, ++count);
+      advance();
+      const builds = ['shared', 'server', 'client'].map(n => hashes(path.join(checkout, 'packages', n, 'dist')));
+      const modules = fs.statSync(path.join(checkout, 'node_modules')).ino;
+      for (const mode of ['install', 'build', 'health']) {
+        mock(mode);
+        const result = run('bash', [script, 'update'], { env: mockEnv });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /rolled back/);
+        assert.match(result.stderr, /is running again/);
+        assert.match(result.stderr, new RegExp(mode === 'install' ? 'installing dependencies' : mode === 'build' ? 'building' : 'checking health'));
+        if (mode === 'health') assert.equal(fs.readFileSync(path.join(live, 'update-migration-ran'), 'utf8'), 'changed');
+        assert.equal(head(), next);
+        assert.equal(fs.statSync(path.join(checkout, 'node_modules')).ino, modules);
+        assert.equal(fs.existsSync(path.join(checkout, 'node_modules/partial-install')), false);
+        assert.deepEqual(['shared', 'server', 'client'].map(n => hashes(path.join(checkout, 'packages', n, 'dist'))), builds);
+        assert.equal(backupFiles().length, ++count);
+        const db = new Database(path.join(live, 'ledger.db'), { readonly: true });
+        try { assert.equal(db.prepare('SELECT value FROM live_backup_test').get().value, 'WAL-only sample'); } finally { db.close(); }
+        await healthy();
+      }
+      for (const mode of ['install', 'health']) {
+        good(cli('stop'));
+        mock(mode);
+        const result = run('bash', [script, 'update'], { env: mockEnv });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /rolled back/);
+        assert.match(result.stderr, mode === 'health' ? /is running again/ : /remains stopped/);
+        assert.equal(head(), next);
+        assert.equal(backupFiles().length, ++count);
+        if (mode === 'health') await healthy();
+        else assert.match(good(cli('status')), /not running/);
+      }
+      mock('lock');
+      const child = spawn('bash', [script, 'update'], { env: mockEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+      let childOutput = '';
+      child.stdout.on('data', data => { childOutput += data; });
+      child.stderr.on('data', data => { childOutput += data; });
+      const completed = new Promise(resolve => child.once('exit', resolve));
+      try {
+        for (let i = 0; i < 200 && !fs.existsSync(path.join(temp, 'updating')); i++) await new Promise(resolve => setTimeout(resolve, 50));
+        assert.equal(fs.existsSync(path.join(temp, 'updating')), true);
+        const locked = cli('status');
+        assert.equal(locked.status, 75);
+        assert.match(locked.stdout, /Another live-instance command/);
+      } finally { fs.writeFileSync(path.join(temp, 'release'), 'go'); }
+      assert.equal(await completed, 0, childOutput);
+      assert.match(childOutput, /Ledger updated/);
+      await healthy();
+      advance();
+      const oldEntry = fs.readFileSync(path.join(checkout, 'packages/server/dist/index.js'));
+      mock('rollback');
+      const failed = run('bash', [script, 'update'], { env: mockEnv });
+      assert.equal(failed.status, 1);
+      assert.match(failed.stderr, /ROLLBACK FAILED/);
+      assert.equal(failed.stderr.includes('Saved build/dependencies:'), false);
+      const savedBackup = failed.stderr.match(/Database backup: (.+?\.db)\./)[1];
+      assert.equal(fs.existsSync(savedBackup), true);
+      assert.match(good(cli('status')), /not running/);
+      // Repair only the deliberately damaged synthetic build, then continue legacy tests.
+      fs.writeFileSync(path.join(checkout, 'packages/server/dist/index.js'), oldEntry);
+      for (const name of fs.readdirSync(temp).filter(n => n.startsWith('.ledger-update-'))) fs.rmSync(path.join(temp, name), { recursive: true });
     });
     await t.test('retention keeps 30 and reuses build without npm', () => {
       for (let i = 0; i < 35; i++) fs.writeFileSync(path.join(temp, 'backups', `ledger-2000-01-01T00-00-${String(i).padStart(2, '0')}.000Z-1.db`), 'old synthetic backup');
