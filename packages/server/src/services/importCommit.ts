@@ -28,6 +28,9 @@ export const IMPORT_FAILED_MESSAGE = 'Import failed. Nothing was imported.';
 
 const isAmount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** Look up an id only if it is one; a malformed id (object, boolean, text) counts as missing. */
+const idExists = (lookup: Database.Statement, id: unknown) => Number.isInteger(id) && !!lookup.get(id);
+
 /**
  * Check the request before anything is written. Returns the first problem as a
  * plain message naming the row, or null when the import can go ahead.
@@ -37,7 +40,7 @@ function validate(sqlite: Database.Database, input: ImportCommitInput): string |
   if (!accountId || !txns || !Array.isArray(txns) || txns.length === 0) {
     return 'accountId and transactions array are required';
   }
-  if (!sqlite.prepare('SELECT 1 FROM accounts WHERE id = ?').get(accountId)) {
+  if (!idExists(sqlite.prepare('SELECT 1 FROM accounts WHERE id = ?'), accountId)) {
     return "The selected account doesn't exist. Nothing was imported.";
   }
 
@@ -58,7 +61,7 @@ function validate(sqlite: Database.Database, input: ImportCommitInput): string |
         if (!s || !isAmount(s.amount)) {
           return `A split amount for "${t.description}" isn't a valid number. Nothing was imported.`;
         }
-        if (!categoryExists.get(s.categoryId)) {
+        if (!idExists(categoryExists, s.categoryId)) {
           return `A split category for "${t.description}" doesn't exist. Nothing was imported.`;
         }
       }
@@ -66,7 +69,7 @@ function validate(sqlite: Database.Database, input: ImportCommitInput): string |
       if (Math.abs(splitSum - t.amount) > 0.01) {
         return `Split amounts must equal transaction amount for "${t.description}"`;
       }
-    } else if (!categoryExists.get(t.categoryId)) {
+    } else if (!idExists(categoryExists, t.categoryId)) {
       return `The category for "${t.description}" doesn't exist. Nothing was imported.`;
     }
   }

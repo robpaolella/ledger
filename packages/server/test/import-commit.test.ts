@@ -126,6 +126,10 @@ describe('commitImport', () => {
     ['an unknown account', { accountId: MISSING, transactions: rows }, /account doesn't exist/],
     ['an unknown row category', { accountId: ACCOUNT, transactions: [rows[1], { ...rows[0], categoryId: MISSING }] }, /category for "SAMPLE GROCER #12" doesn't exist/],
     ['an unknown split category', { accountId: ACCOUNT, transactions: [{ ...rows[2], splits: [{ categoryId: GROCERIES, amount: 20 }, { categoryId: MISSING, amount: 10 }] }] }, /split category for "Sample Market" doesn't exist/],
+    ['a malformed account id', { accountId: { id: ACCOUNT }, transactions: rows }, /account doesn't exist/],
+    ['a malformed row category id', { accountId: ACCOUNT, transactions: [{ ...rows[0], categoryId: true }] }, /category for "SAMPLE GROCER #12" doesn't exist/],
+    ['a malformed split category id', { accountId: ACCOUNT, transactions: [{ ...rows[2], splits: [{ categoryId: {}, amount: 20 }, { categoryId: DINING, amount: 10 }] }] }, /split category for "Sample Market" doesn't exist/],
+    ['a non-string date', { accountId: ACCOUNT, transactions: [{ ...rows[1], date: 20260303 }] }, /requires date, description, and amount/],
     ['a non-numeric row amount', { accountId: ACCOUNT, transactions: [{ ...rows[1], amount: '12.50' }] }, /amount for "Sample Diner" isn't a valid number/],
     ['a non-finite row amount', { accountId: ACCOUNT, transactions: [{ ...rows[1], amount: Infinity }] }, /amount for "Sample Diner" isn't a valid number/],
     ['a NaN row amount', { accountId: ACCOUNT, transactions: [{ ...rows[1], amount: NaN }] }, /amount for "Sample Diner" isn't a valid number/],
@@ -144,7 +148,8 @@ describe('commitImport', () => {
 
   it('gives each rejection a distinct message', () => {
     const messages = new Set(rejections.map(([, input]) => (commitImport(db, input as Parameters<typeof commitImport>[1]) as { error: string }).error));
-    // Non-numeric, infinite and NaN amounts share one message per level (row, split).
-    expect(messages.size).toBe(6);
+    // Malformed and unknown ids share a message, as do non-numeric, infinite and
+    // NaN amounts at each level (row, split).
+    expect(messages.size).toBe(7);
   });
 });
