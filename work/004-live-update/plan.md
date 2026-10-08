@@ -11,6 +11,6 @@
 - [x] Keep the 50-cycle backup-failure restart regression, per conductor; diagnostics use only synthetic logs.
 - [x] Pass five consecutive complete lifecycle runs, each retaining the 50-cycle restart stress and no health-assertion retries (final-stability-1 through 5).
 - [x] Re-run typecheck, lint, test, build; `npm run validate`; verify helper tests (23 pass, one optional browser test skipped). Re-run Checks after final base sync.
-- [ ] Get targeted independent re-review of the recovery fix; prior recheck is NOT a pass.
+- [x] Targeted independent Opus 5.5 medium recovery re-review PASS; four additional full lifecycle runs passed, including two concurrent runs. Speculative nonblocking startup-crash cleanup case recorded in backlog/PR.
 - [ ] Final base sync, in-flight file overlap check, commit, push and PR into `feature/platform-retheme`.
 - [ ] Verify PR base/risk/issue reference and resource cleanup; report link, do not merge.

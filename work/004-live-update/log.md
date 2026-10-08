@@ -29,4 +29,6 @@
 - Checks passed in order, plus `npm run validate`; 21 existing lint warnings, zero errors. Helper safety/lifecycle tests: 23 pass, one optional browser fixture skipped (`/tmp/ledger-68-final-verify-tests.log`).
 - Rebased unpublished commits onto #78 (`1297d90`) with no conflicts. Re-ran all Checks and validate successfully: `/tmp/ledger-68-synced-{typecheck,lint,test,build,validate}.log`; server tests 19 pass.
 - Full lifecycle on the synced branch also passed, including 50 restarts: `/tmp/ledger-68-synced-lifecycle.log`.
-- Remaining: targeted independent Opus review, PR, PR-record verification, owned-resource cleanup. No decisions are open.
+- Targeted independent Opus 5.5 medium review PASS, no blockers; four independently run full suites passed, including two concurrent runs. Guard reported Unchanged. Evidence: `/tmp/ledger-68-targeted-recovery-review.log`; launcher uses no saved helper session.
+- Nonblocking speculative immediate-startup-crash cleanup case and busy-port wording recorded in root backlog (conductor informed before adding that path) and PR risks.
+- Base advanced again with #79 (`89958eb`), logo-key error reporting. Final sync/rechecks pending, then PR-record verification and owned-resource cleanup. No decisions are open.
