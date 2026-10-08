@@ -5,3 +5,5 @@
 - Live launcher (#68 review): make a busy-port update refusal say the update was refused rather than “Ledger was not started”; refusal already leaves code/data unchanged.
 - AGENTS.md's Deploy section dropped some real operational detail that was in the old CLAUDE.md (dev DB path, db:reset/backup/restore scripts, release secrets needed, JWT_SECRET auto-generation) — fold back in if it turns out to matter in practice.
 - `npm run db:backup` copies only `ledger.db`, missing changes still in `ledger.db-wal`; switch `scripts/db-backup.sh` to SQLite's backup API (and point it at `data/` when running with live data).
+- First-run onboarding for brand-new installs
+- CSV files with separate debit and credit columns
