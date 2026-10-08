@@ -102,7 +102,7 @@ export function seedReviewsRules({ db, rel }: Helpers, { johnId, janeId }: Peopl
       );
     }
 
-    const open = [...venmo, ...shuffled(categorized).filter(t => !venmo.some(v => v.id === t.id)).slice(0, 45 - venmo.length)];
+    const open = [...venmo, ...shuffled(categorized).filter(t => !venmo.some(v => v.id === t.id)).slice(0, Math.max(0, 45 - venmo.length))];
     const openIds = new Set(open.map(t => t.id));
     const resolved = shuffled(categorized.filter(t => !openIds.has(t.id))).slice(0, 255);
     for (const [index, txn] of [...open, ...resolved].entries()) {
@@ -120,7 +120,7 @@ export function seedReviewsRules({ db, rel }: Helpers, { johnId, janeId }: Peopl
         txn.id, isOpen ? 'open' : 'resolved', reason, assigneeId,
         isOpen ? 'Check this transaction' : 'Reviewed sample transaction',
         reason === 'manual' ? assigneeId : null,
-        isOpen ? null : assigneeId, createdAt, isOpen ? null : `${createdAt}T12:00:00.000Z`,
+        isOpen ? null : assigneeId, createdAt, isOpen ? null : `${createdAt}T00:00:00.000Z`,
       );
       if (isOpen) db.prepare('UPDATE transactions SET needs_review = 1 WHERE id = ?').run(txn.id);
     }
