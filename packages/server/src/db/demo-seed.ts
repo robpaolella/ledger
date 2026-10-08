@@ -21,6 +21,7 @@ import { createCategories } from './demo-seed/categories.js';
 import { seedTransactions } from './demo-seed/transactions.js';
 import { seedBudgets, seedRecurring } from './demo-seed/budgets-recurring.js';
 import { seedNetWorth } from './demo-seed/net-worth.js';
+import { seedInvestments } from './demo-seed/investments.js';
 
 const dbPath = process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'ledger.db');
 const db = new Database(dbPath);
@@ -67,7 +68,8 @@ seedMerchants(db);
 const CAT = createCategories(helpers);
 seedTransactions(helpers, peopleAccounts, CAT);
 const budgetCount = seedBudgets(helpers, CAT);
-const { balances, assetDefs } = seedNetWorth(helpers, peopleAccounts);
+const investments = seedInvestments(helpers);
+const { balances, assetDefs } = seedNetWorth(helpers, investments.balances, investments.days);
 seedRecurring(helpers, peopleAccounts, CAT);
 
 // ---------------------------------------------------------------------------
