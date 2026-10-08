@@ -75,30 +75,31 @@ colors:
   dark-navInactiveText: "#94a3b8"
   dark-sidebarText: "#f1f5f9"
   dark-heroGradientFrom: "#060a13"
+  dark-heroGradientTo: "#0f172a"
 typography:
   page-title:
-    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
     fontSize: "22px"
     fontWeight: 800
     letterSpacing: "-0.025em"
   page-title-phone:
-    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
     fontSize: "17px"
     fontWeight: 800
   body:
-    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
     fontSize: "13px"
     fontWeight: 400
   list-row-title:
-    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
     fontSize: "15px"
     fontWeight: 600
   list-row-subtitle:
-    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
     fontSize: "12.5px"
     fontWeight: 400
   kpi-value:
-    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
     fontSize: "30px"
     fontWeight: 800
     letterSpacing: "-0.025em"
@@ -131,11 +132,11 @@ components:
   button-primary:
     backgroundColor: "{colors.light-primary}"
     textColor: "{colors.light-onPrimary}"
-    rounded: "{rounded.sm}"
+    rounded: "11px"
   button-primary-dark:
     backgroundColor: "{colors.dark-primary}"
     textColor: "{colors.dark-onPrimary}"
-    rounded: "{rounded.sm}"
+    rounded: "11px"
   popover:
     backgroundColor: "{colors.light-elevated}"
     rounded: "{rounded.card}"
@@ -187,7 +188,7 @@ Three `--own-*` tokens tint the account-owner tags: two personal colours and one
 
 ### Older token names
 
-Existing components still use older names (`--bg-card`, `--text-primary`, `--color-positive`, `--btn-primary-bg`, `--badge-*`, `--bg-inline-*`, `--toggle-*`, and so on). `index.css` points each one at a core token above, so they follow the theme automatically. In new work, use the core tokens. Tinted badges and inline messages are built by mixing a core token into the surface (`color-mix`), which is why they work in both themes without separate values.
+Existing components still use older names (`--bg-card`, `--text-primary`, `--color-positive`, `--btn-primary-bg`, `--badge-*`, `--bg-inline-*`, `--toggle-*`, and so on). `index.css` points almost all of them at a core token above, so they follow the theme automatically. In new work, use the core tokens. Tinted badges and inline messages are built by mixing a core token into the surface (`color-mix`), which is why they work in both themes without separate values.
 
 A few tokens keep fixed values that do not swap with the core set: `--bg-modal` (the one scrim for every modal, sheet and panel), `--bg-zebra`, and the dark navigation and hero values (`--bg-sidebar`, `--nav-*`, `--sidebar-text`, `--hero-gradient-*`). Use `var(--bg-modal)` for any scrim; do not invent another.
 
@@ -201,14 +202,14 @@ A few tokens keep fixed values that do not swap with the core set: `--bg-modal` 
 
 ## Spacing, radius and shadow
 
-- Cards use 20px horizontal and 16px vertical padding, `--radius-card` (16px), `--line` border and `--shadow-sm`.
-- Radius scale: `--radius-sm` 8px (buttons, inputs), `--radius-md` 12px, `--radius-card` 16px (cards), `--radius-lg` 20px (bottom sheets), `--radius-full` for pills. The desktop modal panel uses 18px.
+- Cards (such as the KPI card) use 20px horizontal and 16px vertical padding, `--radius-card` (16px), `--line` border and `--shadow-sm`. Settings panels use slightly rounder 18px cards.
+- Radius scale: `--radius-sm` 8px (small controls and icon buttons), `--radius-md` 12px, `--radius-card` 16px (cards), `--radius-lg` 20px (bottom sheets), `--radius-full` for pills. The desktop modal panel uses 18px.
 - Shadows: `--shadow-sm` for cards and active toggles, `--shadow-md` for popovers, menus, modals and hover lift. Light: `0 1px 2px rgba(16,24,40,.06)` and `0 10px 30px rgba(16,24,40,.09)`. Dark: `0 1px 2px rgba(0,0,0,.45)` and `0 6px 22px rgba(0,0,0,.4)`.
 - Phone pages use 16px side padding and 40px bottom padding.
 
 ## Themes
 
-Light is the default; dark applies when `<html>` has the `dark` class. The first visit follows the device (`prefers-color-scheme`). Once someone picks a theme, that choice is saved in the browser (`ledger-theme`) and wins over the device setting from then on. The toggle is in the navigation (side rail and phone drawer) and Settings; both use the same `useTheme()` state, so they cannot disagree. Build with tokens and both themes work with no extra code; only add a `dark:` rule for something a token cannot express (for example the date-picker icon).
+Dark applies when `<html>` has the `dark` class. On the first visit Ledger copies the device setting (`prefers-color-scheme`), or light if there is none. That first choice is saved in the browser (`ledger-theme`) straight away, and from then on the saved choice wins: Ledger does not keep following the device setting, so a later change to the device's light/dark mode does not change Ledger until someone uses the toggle. The toggle is in the navigation (side rail and phone drawer) and Settings; both use the same `useTheme()` state, so they cannot disagree. Build with tokens and both themes work with no extra code; only add a `dark:` rule for something a token cannot express (for example the date-picker icon).
 
 ## Layout
 
@@ -256,7 +257,7 @@ The two-step sign-in code is six single-digit boxes (44px by 52px, centred, `--s
 
 ### Inputs
 
-Inputs and selects use `--surface-2` fill, `--line` border and 8px corners. Focus shows a `--primary` border with a soft 3px ring; an invalid field (`aria-invalid` or `.error`) shows the same in `--negative`. Number spinners are hidden.
+Inputs and selects are 44px tall with `--surface-2` fill, a `--line-strong` border and 11px corners. Buttons are 42px tall with 11px corners: primary is `--primary` with `--on-primary` text, secondary is `--surface-2` with a `--line-strong` border, and the outlined destructive button uses `--negative` text. Reuse the shared recipes in `components/settings/ui.tsx` (`inputCls`, `btnPrimary`, `btnSecondary`, `btnDanger`) rather than writing new ones. Focus shows a `--primary` border with a soft 3px ring; an invalid field (`aria-invalid` or `.error`) shows the same in `--negative`. Number spinners are hidden.
 
 ### Badges, tags and progress
 
