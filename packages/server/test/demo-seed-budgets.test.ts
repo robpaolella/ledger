@@ -75,11 +75,17 @@ describe('demo budgets, recurring items, and notifications', () => {
         SELECT b.month FROM budgets b JOIN categories c ON c.id = b.category_id
         WHERE c.sub_name = 'Take Home Pay' AND b.amount != 6500
       `).all()).toEqual([]);
+      expect(db.prepare(`
+        SELECT r.label FROM recurring_items r
+        LEFT JOIN transactions t ON t.account_id = r.account_id AND t.category_id = r.category_id
+          AND ABS(t.amount) = r.amount
+        GROUP BY r.id HAVING COUNT(t.id) = 0
+      `).all()).toEqual([]);
     } finally { db.close(); }
   });
 
   it('creates exactly the split-aware over-budget alerts and per-user notifications', () => {
-    const { db, alerts } = seededBudgetFixture();
+    const { db, helpers, alerts } = seededBudgetFixture();
     try {
       const expected = db.prepare(`
         SELECT b.category_id, b.month
@@ -108,10 +114,28 @@ describe('demo budgets, recurring items, and notifications', () => {
       expect(db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE is_read = 1').get()).toMatchObject({ n: expect.any(Number) });
       expect((db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE is_read = 1').get() as { n: number }).n).toBeGreaterThan(0);
       expect((db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE is_read = 0').get() as { n: number }).n).toBeGreaterThan(0);
+      expect(db.prepare(`
+        SELECT month, COUNT(*) AS n FROM budget_alerts
+        WHERE month IN (?, ?) GROUP BY month ORDER BY month
+      `).all(helpers.rel('2026-01'), helpers.rel('2026-02'))).toEqual([
+        { month: helpers.rel('2026-01'), n: 3 },
+        { month: helpers.rel('2026-02'), n: 3 },
+      ]);
     } finally { db.close(); }
   });
 
-  it('is deterministic apart from the rolling date shift', () => {
+  it('does not change budgets, alerts, or notifications as the launch month advances', () => {
+    const first = seededBudgetFixture(new Date(2026, 9, 7));
+    const second = seededBudgetFixture(new Date(2026, 9, 28));
+    try {
+      for (const table of ['budgets', 'recurring_items', 'budget_alerts', 'notifications'] as const) {
+        expect(first.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all())
+          .toEqual(second.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+      }
+    } finally { first.db.close(); second.db.close(); }
+  });
+
+  it('changes only rolling dates when the launch month shifts', () => {
     const first = seededBudgetFixture(new Date(2026, 9, 31));
     const second = seededBudgetFixture(new Date(2027, 0, 31));
     try {

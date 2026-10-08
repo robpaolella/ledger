@@ -38,18 +38,30 @@ export function seedBudgets({ db, rel }: Helpers, CAT: Categories) {
   console.log('Creating budgets...');
   let budgetCount = 0;
   const expenses = EXPENSE_CATEGORIES(CAT);
+  const actualsByMonth = FIXTURE_MONTHS.map(fixtureMonth => expenseActuals(db, rel(fixtureMonth)));
+  // The launch month is intentionally clipped at today. Its budget must not
+  // shrink with the launch day, so use the highest completed-month actual for
+  // each category as a stable, transaction-calibrated target instead.
+  const launchMonthTargets = new Map<number, number>();
+  for (const categoryId of expenses) {
+    launchMonthTargets.set(categoryId, Math.max(...actualsByMonth.slice(0, -1)
+      .map(actuals => Math.max(0, actuals.get(categoryId) ?? 0))));
+  }
 
   for (const [monthIndex, fixtureMonth] of FIXTURE_MONTHS.entries()) {
     const month = rel(fixtureMonth);
-    const actuals = expenseActuals(db, month);
-    for (const [categoryIndex, categoryId] of expenses.entries()) {
+    const actuals = actualsByMonth[monthIndex];
+    const overBudgetIds = new Set(expenses
+      .filter(categoryId => categoryId !== CAT.rent && (actuals.get(categoryId) ?? 0) > 0)
+      .slice(0, monthIndex < 6 ? 1 : monthIndex < 8 ? 3 : 0));
+    for (const categoryId of expenses) {
       const actual = Math.max(0, actuals.get(categoryId) ?? 0);
-      // Recent fixture months deliberately show several overspends; older
-      // overspends provide read notification history. Everything else leaves room below actual spend.
-      const isOverage = (monthIndex < 6
-        ? categoryIndex % 11 === monthIndex % 11
-        : categoryIndex % 7 === monthIndex % 7) && actual > 0;
-      const amount = categoryId === CAT.rent ? 1400 : +((actual || 25) * (isOverage ? 0.8 : 1.2)).toFixed(2);
+      const target = monthIndex === FIXTURE_MONTHS.length - 1
+        ? launchMonthTargets.get(categoryId) ?? 0
+        : actual;
+      // The two completed months before the launch month deliberately show
+      // several overspends; older ones provide read notification history.
+      const amount = categoryId === CAT.rent ? 1400 : +((target || 25) * (overBudgetIds.has(categoryId) ? 0.8 : 1.2)).toFixed(2);
       db.prepare('INSERT INTO budgets (category_id, month, amount) VALUES (?, ?, ?)')
         .run(categoryId, month, amount);
       budgetCount++;
