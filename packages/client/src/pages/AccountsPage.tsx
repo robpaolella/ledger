@@ -13,6 +13,8 @@ import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineCha
 import { timeAgo, todayYmd } from '../lib/formatters';
 import PageHeader from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
+import FilterPopover from '../components/FilterPopover';
+import { EMPTY_FILTER, type FilterDraft } from '../components/filterModel';
 
 // ---- types ----
 interface Account {
@@ -85,7 +87,7 @@ export default function AccountsPage() {
   // account filter
   const [selected, setSelected] = useState<Set<number> | null>(null); // null = all
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterDraft, setFilterDraft] = useState<Set<number>>(new Set());
+  const [filterDraft, setFilterDraft] = useState<FilterDraft>(EMPTY_FILTER); // account ids as strings; empty = every account
   const [filterSearch, setFilterSearch] = useState('');
 
   // asset modal
@@ -155,10 +157,13 @@ export default function AccountsPage() {
   if (!data) return <Spinner />;
 
   // ---- filter popover handlers ----
-  const openFilter = () => { setFilterDraft(new Set(selected ?? data.accounts.map((a) => a.accountId))); setFilterSearch(''); setFilterOpen(true); };
-  const applyFilter = () => { setSelected(filterDraft.size === data.accounts.length ? null : new Set(filterDraft)); setFilterOpen(false); };
-  const clearFilter = () => { setFilterDraft(new Set(data.accounts.map((a) => a.accountId))); };
-  const toggleDraft = (id: number) => setFilterDraft((d) => { const n = new Set(d); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const openFilter = () => { setFilterDraft({ ...EMPTY_FILTER, account: selected ? [...selected].map(String) : [] }); setFilterSearch(''); setFilterOpen(true); };
+  const applyFilter = () => {
+    const ids = filterDraft.account.map(Number);
+    setSelected(ids.length === 0 || ids.length === data.accounts.length ? null : new Set(ids));
+    setFilterOpen(false);
+  };
+  const clearFilter = () => setFilterDraft(EMPTY_FILTER);
   const filterActive = selected != null; // any subset (even empty) is an active filter
   const filterCount = selected ? selected.size : 0;
 
@@ -222,7 +227,7 @@ export default function AccountsPage() {
   const headerControls = (<>
           {/* Filters */}
           <div className="relative">
-            <button onClick={openFilter}
+            <button onClick={openFilter} aria-haspopup="dialog" aria-expanded={filterOpen}
               className="relative flex items-center gap-2 h-10 px-2.5 md:px-4 rounded-[11px] bg-surface-2 border-2 text-sm font-semibold text-content"
               style={{ borderColor: filterOpen || filterActive ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
@@ -230,31 +235,13 @@ export default function AccountsPage() {
               {filterActive && <span className="md:static absolute -top-1 -right-1 min-w-4 md:min-w-5 h-4 md:h-5 px-1 inline-flex items-center justify-center rounded-full bg-primary text-on-primary text-[10px] md:text-[11px] font-bold">{filterCount}</span>}
             </button>
             {filterOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
-                <div className="absolute top-12 right-0 z-50 w-[360px] bg-elevated border border-line-strong rounded-[16px] shadow-md">
-                  <div className="p-3 border-b border-line">
-                    <input autoFocus value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Search accounts…" className="w-full h-9 px-3 rounded-lg bg-surface-2 border border-line text-content text-sm outline-none" />
-                  </div>
-                  <div className="max-h-[340px] overflow-y-auto p-1.5">
-                    <div onClick={() => setFilterDraft(filterDraft.size === data.accounts.length ? new Set() : new Set(data.accounts.map((a) => a.accountId)))} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 cursor-pointer text-sm font-semibold">
-                      {chkbox(filterDraft.size === data.accounts.length)}Select all
-                    </div>
-                    {data.accounts.filter((a) => !filterSearch || a.name.toLowerCase().includes(filterSearch.toLowerCase())).map((a) => (
-                      <div key={a.accountId} onClick={() => toggleDraft(a.accountId)} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 cursor-pointer text-sm">
-                        {chkbox(filterDraft.has(a.accountId))}<span className="flex-1 truncate">{a.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-3 border-t border-line">
-                    <button onClick={clearFilter} className="text-sm font-semibold text-primary">Clear</button>
-                    <div className="flex gap-2">
-                      <button onClick={() => setFilterOpen(false)} className="h-9 px-4 rounded-[10px] bg-surface-2 border border-line-strong text-sm font-semibold">Cancel</button>
-                      <button onClick={applyFilter} className="h-9 px-4 rounded-[10px] bg-primary text-on-primary text-sm font-bold">Apply</button>
-                    </div>
-                  </div>
-                </div>
-              </>
+              <FilterPopover
+                draft={filterDraft} setDraft={setFilterDraft} sections={['Accounts']}
+                categoryGroups={[]} merchants={[]} categories={[]}
+                accounts={data.accounts.map((a) => ({ id: a.accountId, name: a.name, lastFour: a.lastFour, classification: a.classification, avatar_url: a.logoUrl, institutionRef: { logo_url: a.logoUrl ?? null, color: a.institutionColor ?? null } }))}
+                search={filterSearch} setSearch={setFilterSearch} tab="Accounts" setTab={() => {}}
+                onClear={clearFilter} onCancel={() => setFilterOpen(false)} onApply={applyFilter}
+              />
             )}
           </div>
           {hasSimplefin && (

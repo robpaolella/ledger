@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import LedgerLogo from './LedgerLogo';
+import Popover from './Popover';
 import NotificationBell, { useUnreadNotifications } from './NotificationBell';
 import { NAV_ITEMS, icons } from '../lib/navItems';
 import { useOpenReviewCount } from '../hooks/useOpenReviewCount';
@@ -213,18 +214,19 @@ export default function Sidebar() {
           Slimmed to name header + Sign out (theme/settings live in the rail). */}
       {accountMenuOpen && (
         <div className="desktop-only">
-          <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
-          <div
+          <Popover
+            onClose={() => setAccountMenuOpen(false)}
+            label="Account"
+            role="menu"
             className="fixed z-50 bg-elevated border border-line rounded-[12px] shadow-md p-1.5"
             style={{ left: 12, bottom: 68, width: 216 }}
-            role="menu"
           >
             <div className="px-2.5 py-2 text-sm font-semibold text-content whitespace-nowrap overflow-hidden text-ellipsis">
               {user?.displayName}
             </div>
             <button
               onClick={() => { setAccountMenuOpen(false); logout(); }}
-              className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-negative hover:bg-negative/10 transition-colors"
+              className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-negative hover:bg-negative/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
               role="menuitem"
             >
               <span className="shrink-0 flex">
@@ -232,7 +234,7 @@ export default function Sidebar() {
               </span>
               Sign out
             </button>
-          </div>
+          </Popover>
         </div>
       )}
     </>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Calendar from './Calendar';
+import Popover from './Popover';
 
 export interface DatePreset {
   value: string;
@@ -68,7 +69,7 @@ export default function DateRangePopover({
 
   return (
     <div className="relative">
-      <button onClick={open ? () => setOpen(false) : openPop}
+      <button onClick={open ? () => setOpen(false) : openPop} aria-haspopup="dialog" aria-expanded={open}
         className={`flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border-2 ${open || active ? 'border-primary' : 'border-line-strong'} text-content font-semibold text-sm hover:bg-surface-2`}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
         {label}
@@ -76,9 +77,8 @@ export default function DateRangePopover({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           {/* Phones: pinned under the app bar, full width. md+: anchored to the button. */}
-          <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
+          <Popover onClose={() => setOpen(false)} label="Date range" className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
             <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-y-auto md:overflow-visible">
               <div className="md:w-[212px] shrink-0 border-b md:border-b-0 md:border-r border-line">
                 <div className="px-5 pt-[18px] pb-3 text-base font-extrabold tracking-tight border-b border-line">Date Range</div>
@@ -86,11 +86,11 @@ export default function DateRangePopover({
                   {presets.map((p) => {
                     const on = value.preset === p.value;
                     return (
-                      <div key={p.value} onClick={() => selectPreset(p.value)}
-                        className="px-5 py-2.5 text-[15px] font-medium cursor-pointer whitespace-nowrap shrink-0 md:border-l-2"
+                      <button type="button" key={p.value} onClick={() => selectPreset(p.value)} aria-pressed={on}
+                        className="px-5 py-2.5 text-left text-[15px] font-medium whitespace-nowrap shrink-0 md:border-l-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                         style={{ color: on ? 'var(--primary)' : 'var(--text)', background: on ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent', borderColor: on ? 'var(--primary)' : 'transparent' }}>
                         {p.label}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -130,7 +130,7 @@ export default function DateRangePopover({
                 <button onClick={applyDraft} disabled={invalid || incomplete} className="h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Apply</button>
               </div>
             </div>
-          </div>
+          </Popover>
         </>
       )}
     </div>
