@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { VendorAvatar } from '../primitives';
 import { todayYmd } from '../../lib/formatters';
 import { ImpCheckbox } from './cells';
-import { BUCKETS, ownerColor, type SyncAccount } from './types';
+import { BUCKETS, type SyncAccount } from './types';
+import { ownerColor } from '../badges';
 
 const RANGE_OPTIONS = [
   { value: 'last7', label: 'Last 7 days' },
@@ -188,7 +189,7 @@ export default function BankSyncSelect({
                   {g.rows.map((a) => {
                     const off = gated.has(a.id);
                     const on = isSel(a.id);
-                    const oColor = a.isShared ? 'var(--own-shared)' : ownerColor(a.owners[0]?.displayName ?? '');
+                    const oColor = a.isShared ? 'var(--owner-shared)' : ownerColor(a.owners[0]?.id ?? 0);
                     const oLabel = a.isShared ? 'Shared' : (a.owners[0]?.displayName ?? '—');
                     return (
                       <div key={a.id} onClick={() => toggleAcct(a.id)}

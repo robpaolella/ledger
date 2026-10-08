@@ -126,9 +126,13 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --c-amber:   #d97706;
 
   /* Household owner tags */
-  --own-robert:   #db2777;
-  --own-kathleen: #2563eb;
-  --own-shared:   #64748b;
+  --owner-1:      #2563eb;
+  --owner-2:      #db2777;
+  --owner-3:      #0d9488;
+  --owner-4:      #7c3aed;
+  --owner-5:      #ea580c;
+  --owner-6:      #16a34a;
+  --owner-shared: #64748b;
 
   /* Radius scale */
   --radius-sm:   8px;
@@ -207,12 +211,20 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --badge-account-text: var(--text-2);
   --badge-category-bg:   color-mix(in srgb, var(--primary) 12%, transparent);
   --badge-category-text: var(--primary);
-  --badge-owner-1-bg:   color-mix(in srgb, var(--own-kathleen) 14%, transparent);
-  --badge-owner-1-text: var(--own-kathleen);
-  --badge-owner-2-bg:   color-mix(in srgb, var(--own-robert) 14%, transparent);
-  --badge-owner-2-text: var(--own-robert);
-  --badge-shared-bg:    color-mix(in srgb, var(--own-shared) 14%, transparent);
-  --badge-shared-text:  var(--own-shared);
+  --badge-owner-1-bg:   color-mix(in srgb, var(--owner-1) 14%, transparent);
+  --badge-owner-1-text: var(--owner-1);
+  --badge-owner-2-bg:   color-mix(in srgb, var(--owner-2) 14%, transparent);
+  --badge-owner-2-text: var(--owner-2);
+  --badge-owner-3-bg:   color-mix(in srgb, var(--owner-3) 14%, transparent);
+  --badge-owner-3-text: var(--owner-3);
+  --badge-owner-4-bg:   color-mix(in srgb, var(--owner-4) 14%, transparent);
+  --badge-owner-4-text: var(--owner-4);
+  --badge-owner-5-bg:   color-mix(in srgb, var(--owner-5) 14%, transparent);
+  --badge-owner-5-text: var(--owner-5);
+  --badge-owner-6-bg:   color-mix(in srgb, var(--owner-6) 14%, transparent);
+  --badge-owner-6-text: var(--owner-6);
+  --badge-shared-bg:    color-mix(in srgb, var(--owner-shared) 14%, transparent);
+  --badge-shared-text:  var(--owner-shared);
   --badge-liquid-bg:    color-mix(in srgb, var(--positive) 14%, transparent);
   --badge-liquid-text:  var(--positive);
   --badge-investment-bg:   color-mix(in srgb, var(--c-violet) 14%, transparent);
@@ -231,8 +243,8 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --badge-connected-text: var(--positive);
   --badge-admin-bg:   color-mix(in srgb, var(--positive) 14%, transparent);
   --badge-admin-text: var(--positive);
-  --badge-member-bg:   color-mix(in srgb, var(--own-kathleen) 14%, transparent);
-  --badge-member-text: var(--own-kathleen);
+  --badge-member-bg:   color-mix(in srgb, var(--c-blue) 14%, transparent);
+  --badge-member-text: var(--c-blue);
   --badge-owner-bg:   color-mix(in srgb, var(--warning) 14%, transparent);
   --badge-owner-text: var(--warning);
 
@@ -294,9 +306,13 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --c-orange:  #fb923c;
   --c-amber:   #fbbf24;
 
-  --own-robert:   #f472b6;
-  --own-kathleen: #60a5fa;
-  --own-shared:   #94a3b8;
+  --owner-1:      #60a5fa;
+  --owner-2:      #f472b6;
+  --owner-3:      #2dd4bf;
+  --owner-4:      #a78bfa;
+  --owner-5:      #fb923c;
+  --owner-6:      #4ade80;
+  --owner-shared: #94a3b8;
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
   --shadow-md: 0 6px 22px rgba(0,0,0,.4);
@@ -345,9 +361,13 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --color-c-orange:  var(--c-orange);
   --color-c-amber:   var(--c-amber);
 
-  --color-own-robert:   var(--own-robert);
-  --color-own-kathleen: var(--own-kathleen);
-  --color-own-shared:   var(--own-shared);
+  --color-owner-1:      var(--owner-1);
+  --color-owner-2:      var(--owner-2);
+  --color-owner-3:      var(--owner-3);
+  --color-owner-4:      var(--owner-4);
+  --color-owner-5:      var(--owner-5);
+  --color-owner-6:      var(--owner-6);
+  --color-owner-shared: var(--owner-shared);
 
   /* Named text utilities (bg-* names read oddly for text) */
   --color-content:   var(--text);

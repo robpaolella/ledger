@@ -58,7 +58,7 @@ export interface ManagedUser {
   permissions: Record<string, boolean> | null;
 }
 
-const ROLE_TONE: Record<string, string> = { owner: 'var(--c-orange)', admin: 'var(--positive)', member: 'var(--own-kathleen)' };
+const ROLE_TONE: Record<string, string> = { owner: 'var(--c-orange)', admin: 'var(--positive)', member: 'var(--c-blue)' };
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
 
 // --- Add user ---

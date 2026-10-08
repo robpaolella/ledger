@@ -27,8 +27,12 @@ colors:
   light-cRose: "#e11d48"
   light-cOrange: "#ea580c"
   light-cAmber: "#d97706"
-  light-ownerPink: "#db2777"
-  light-ownerBlue: "#2563eb"
+  light-owner1: "#2563eb"
+  light-owner2: "#db2777"
+  light-owner3: "#0d9488"
+  light-owner4: "#7c3aed"
+  light-owner5: "#ea580c"
+  light-owner6: "#16a34a"
   light-ownerShared: "#64748b"
   light-bgSidebar: "#0f172a"
   light-bgZebra: "rgba(0,0,0,0.02)"
@@ -64,8 +68,12 @@ colors:
   dark-cRose: "#fb7185"
   dark-cOrange: "#fb923c"
   dark-cAmber: "#fbbf24"
-  dark-ownerPink: "#f472b6"
-  dark-ownerBlue: "#60a5fa"
+  dark-owner1: "#60a5fa"
+  dark-owner2: "#f472b6"
+  dark-owner3: "#2dd4bf"
+  dark-owner4: "#a78bfa"
+  dark-owner5: "#fb923c"
+  dark-owner6: "#4ade80"
   dark-ownerShared: "#94a3b8"
   dark-bgSidebar: "#060a13"
   dark-bgZebra: "rgba(255,255,255,0.03)"
@@ -184,7 +192,7 @@ Nine hues with shared chroma, brighter in dark mode so they stay readable: `--c-
 
 ### Owner tags
 
-Three `--own-*` tokens tint the account-owner tags: two personal colours and one for shared. Owner tags are data-driven; do not name colours after people or add new ones.
+Numbered tokens `--owner-1` to `--owner-6` tint the account-owner tags, plus `--owner-shared` for shared accounts. One helper, `ownerColor(userId)` in `badges.tsx`, gives each person the same colour everywhere: sorted user ids take owner-1, owner-2 and so on, wrapping after six. Owner tags are data-driven; never name a colour after a person, and do not add new ones.
 
 ### Older token names
 

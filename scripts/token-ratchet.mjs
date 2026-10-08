@@ -23,7 +23,7 @@ const NEW_TOKENS = new Set([
   'positive', 'negative', 'warning', 'bg-modal',
   'content', 'content-2', 'content-3',
   'c-teal', 'c-green', 'c-blue', 'c-indigo', 'c-violet', 'c-fuchsia', 'c-rose', 'c-orange', 'c-amber',
-  'own-robert', 'own-kathleen', 'own-shared',
+  'owner-1', 'owner-2', 'owner-3', 'owner-4', 'owner-5', 'owner-6', 'owner-shared',
   'radius-sm', 'radius-md', 'radius-card', 'radius-lg', 'radius-full',
   'shadow-sm', 'shadow-md', 'font-sans', 'font-mono',
 ]);

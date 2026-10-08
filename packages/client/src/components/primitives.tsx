@@ -58,8 +58,8 @@ export function AccountChip({
         <span
           className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold shrink-0"
           style={{
-            background: `color-mix(in srgb, ${owner.color ?? 'var(--own-shared)'} 16%, transparent)`,
-            color: owner.color ?? 'var(--own-shared)',
+            background: `color-mix(in srgb, ${owner.color ?? 'var(--owner-shared)'} 16%, transparent)`,
+            color: owner.color ?? 'var(--owner-shared)',
           }}
         >
           {owner.name}
