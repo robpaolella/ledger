@@ -104,7 +104,8 @@ wired to any actual server without checking with Robert first.
   negatives as `(123.45)`. Full rule in `PRODUCT.md` ("Money rules") and `LESSONS.md`.
 - Visual values (colors, spacing, component patterns) come from
   `packages/client/src/index.css` and `DESIGN.md`. Never hardcode hex colors or category
-  colors — use CSS custom properties and `getCategoryColor()`.
+  colors — use CSS custom properties and the helpers in
+  `packages/client/src/lib/categoryMeta.ts` (`getCategoryColorVar()`).
 - Permission checks: admin/owner bypass DB lookups entirely; member permissions are
   cached for 60s (`CACHE_TTL_MS` in `permissions.ts`) and must be invalidated via
   `invalidatePermissionCache(userId)` on change.
