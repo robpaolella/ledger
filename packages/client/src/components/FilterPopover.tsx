@@ -1,13 +1,13 @@
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { VendorAvatar } from './primitives';
-import { type FilterDraft, filterDraftCount } from './filterModel';
+import { type FilterDraft, filterDraftCount, FILTER_SECTIONS, type FilterSection } from './filterModel';
+import Popover from './Popover';
 
 interface AccountOpt { id: number | string; name: string; last_four?: string | null; lastFour?: string | null; avatar_url?: string | null; classification?: string | null; institutionRef?: { logo_url: string | null; color: string | null } | null }
 interface MerchantOpt { id: number; name: string; txn_count?: number; logo_url?: string | null }
 interface CategoryGroup { group: string; subs: { id: number; sub: string }[] }
 interface CategoryRow { id: number; group_name: string; sub_name: string }
 
-const NAV_ALL = ['Categories', 'Merchants', 'Accounts', 'Amount', 'Other'];
 const accountLabel = (a: AccountOpt) => { const lf = a.lastFour ?? a.last_four; return lf ? `${a.name} (${lf})` : a.name; };
 // Same order and wording as the rest of the app (see components/import/types.ts).
 const ACCOUNT_SECTIONS: { key: string; label: string }[] = [
@@ -21,8 +21,13 @@ const Chk = ({ on }: { on: boolean }) => (
     {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
   </span>
 );
+const FOCUS = 'outline-none focus-visible:ring-2 focus-visible:ring-primary';
+/** A checklist row: a real checkbox button, so Tab reaches it and Space/Enter toggles it. */
+const CheckRow = ({ on, onToggle, className, children }: { on: boolean; onToggle: () => void; className: string; children: React.ReactNode }) => (
+  <button type="button" role="checkbox" aria-checked={on} onClick={onToggle} className={`${className} w-full text-left ${FOCUS}`}>{children}</button>
+);
 const RemoveBtn = ({ onClick }: { onClick: () => void }) => (
-  <button onClick={onClick} className="text-content-3 hover:text-content shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></svg></button>
+  <button onClick={onClick} aria-label="Remove" className={`text-content-3 hover:text-content shrink-0 rounded ${FOCUS}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></svg></button>
 );
 
 /**
@@ -33,7 +38,7 @@ const RemoveBtn = ({ onClick }: { onClick: () => void }) => (
  */
 export default function FilterPopover({
   draft, setDraft, categoryGroups, accounts, merchants, categories,
-  search, setSearch, tab, setTab, onClear, onCancel, onApply, showNeedsReview = false,
+  search, setSearch, tab, setTab, onClear, onCancel, onApply, showNeedsReview = false, sections,
 }: {
   draft: FilterDraft;
   setDraft: React.Dispatch<React.SetStateAction<FilterDraft>>;
@@ -45,10 +50,11 @@ export default function FilterPopover({
   tab: string; setTab: (t: string) => void;
   onClear: () => void; onCancel: () => void; onApply: () => void;
   showNeedsReview?: boolean; // Transactions opts in to the "Needs review" dimension
+  sections?: FilterSection[]; // show only these sections (default: all); `tab` must be one of them
 }) {
   useCategoryEmojis(); // re-render when stored category emojis load/change
   // Reports has nothing under "Other" — only Transactions offers the needs-review flag.
-  const NAV = showNeedsReview ? NAV_ALL : NAV_ALL.filter((n) => n !== 'Other');
+  const NAV = FILTER_SECTIONS.filter((n) => (sections ? sections.includes(n) : n !== 'Other' || showNeedsReview));
   const toggleCategory = (token: string) => setDraft((d) => ({ ...d, category: d.category.includes(token) ? d.category.filter((v) => v !== token) : [...d.category, token] }));
   const toggleGroup = (subs: { id: number }[]) => setDraft((d) => {
     const tokens = subs.map((s) => `sub:${s.id}`);
@@ -85,15 +91,14 @@ export default function FilterPopover({
 
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onCancel} />
       {/* Phones: pinned under the app bar, full width. md+: anchored to the Filters button. */}
-      <div className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[820px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
+      <Popover onClose={onCancel} label="Filters" className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[820px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
         {/* header */}
         <div className="flex flex-col md:flex-row border-b border-line">
           <div className="md:w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-b md:border-b-0 md:border-r border-line">Filters</div>
           <div className="flex-1 flex items-center gap-2.5 px-5 border-b md:border-b-0 md:border-r border-line">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${tab.toLowerCase()}…`} className="flex-1 h-12 bg-transparent outline-none text-sm text-content" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search filters" placeholder={`Search ${tab.toLowerCase()}…`} className="no-focus-ring flex-1 h-12 bg-transparent outline-none text-sm text-content" />
           </div>
           <div className="md:w-[240px] shrink-0 px-5 py-3 md:py-0 flex items-center text-sm font-semibold text-content-2">{count} filter{count === 1 ? '' : 's'} selected</div>
         </div>
@@ -102,15 +107,15 @@ export default function FilterPopover({
           <div className="md:w-[170px] shrink-0 p-3 border-b md:border-b-0 md:border-r border-line flex flex-row md:flex-col gap-0.5 overflow-x-auto">
             {NAV.map((n) => {
               const active = tab === n;
-              return <button key={n} onClick={() => { setTab(n); setSearch(''); }} className="px-3.5 py-2.5 rounded-[9px] text-sm font-semibold text-left" style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent' }}>{n}</button>;
+              return <button key={n} onClick={() => { setTab(n); setSearch(''); }} className={`px-3.5 py-2.5 rounded-[9px] text-sm font-semibold text-left ${FOCUS}`} style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent' }}>{n}</button>;
             })}
           </div>
           <div className="flex-1 p-3 border-r border-line overflow-auto" style={{ maxHeight: 440 }}>
             {tab === 'Categories' && visibleCatTokens.length > 0 && (
-              <div onClick={toggleAllCategories} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2 cursor-pointer"><Chk on={catAllChecked} />Select all</div>
+              <CheckRow on={catAllChecked} onToggle={toggleAllCategories} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={catAllChecked} />Select all</CheckRow>
             )}
             {tab === 'Merchants' && visibleMerchantIds.length > 0 && (
-              <div onClick={toggleAllMerchants} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2 cursor-pointer"><Chk on={merAllChecked} />Select all</div>
+              <CheckRow on={merAllChecked} onToggle={toggleAllMerchants} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={merAllChecked} />Select all</CheckRow>
             )}
             {tab === 'Categories' && categoryGroups.map((g) => {
               const gChecked = g.subs.length > 0 && g.subs.every((s) => draft.category.includes(`sub:${s.id}`));
@@ -118,9 +123,9 @@ export default function FilterPopover({
               if (q && subs.length === 0 && !g.group.toLowerCase().includes(q)) return null;
               return (
                 <div key={g.group} className="mb-1">
-                  <div onClick={() => toggleGroup(g.subs)} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-sm font-semibold cursor-pointer"><Chk on={gChecked} />{g.group}</div>
+                  <CheckRow on={gChecked} onToggle={() => toggleGroup(g.subs)} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-sm font-semibold"><Chk on={gChecked} />{g.group}</CheckRow>
                   {subs.map((s) => (
-                    <div key={s.id} onClick={() => toggleCategory(`sub:${s.id}`)} className="flex items-center gap-3 pl-8 pr-1 py-2 rounded-lg hover:bg-surface-2 text-[13px] cursor-pointer"><Chk on={draft.category.includes(`sub:${s.id}`)} />{s.sub}</div>
+                    <CheckRow key={s.id} on={draft.category.includes(`sub:${s.id}`)} onToggle={() => toggleCategory(`sub:${s.id}`)} className="flex items-center gap-3 pl-8 pr-1 py-2 rounded-lg hover:bg-surface-2 text-[13px]"><Chk on={draft.category.includes(`sub:${s.id}`)} />{s.sub}</CheckRow>
                   ))}
                 </div>
               );
@@ -130,24 +135,23 @@ export default function FilterPopover({
                 <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No accounts match</div>
               ) : (
                 <>
-                  <div onClick={() => setDraft((d) => ({ ...d, account: acctAllChecked ? d.account.filter((id) => !visibleAccountIds.includes(id)) : [...new Set([...d.account, ...visibleAccountIds])] }))}
-                    className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2 cursor-pointer"><Chk on={acctAllChecked} />Select all</div>
+                  <CheckRow on={acctAllChecked} onToggle={() => setDraft((d) => ({ ...d, account: acctAllChecked ? d.account.filter((id) => !visibleAccountIds.includes(id)) : [...new Set([...d.account, ...visibleAccountIds])] }))} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={acctAllChecked} />Select all</CheckRow>
                   {accountSections.map((sec) => {
                     const ids = sec.rows.map((a) => a.id.toString());
                     const secChecked = ids.every((id) => draft.account.includes(id));
                     return (
                       <div key={sec.key} className="mb-1">
-                        <div onClick={() => toggleAccountSection(ids)} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-sm font-semibold cursor-pointer">
+                        <CheckRow on={secChecked} onToggle={() => toggleAccountSection(ids)} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-sm font-semibold">
                           <Chk on={secChecked} />
                           <span className="flex-1">{sec.label}</span>
                           <span className="text-content-3 text-[13px] tabular-nums shrink-0">{sec.rows.length}</span>
-                        </div>
+                        </CheckRow>
                         {sec.rows.map((a) => (
-                          <div key={a.id} onClick={() => toggleAccount(a.id.toString())} className="flex items-center gap-3 pl-8 pr-1 py-2 rounded-lg hover:bg-surface-2 text-[13px] cursor-pointer">
+                          <CheckRow key={a.id} on={draft.account.includes(a.id.toString())} onToggle={() => toggleAccount(a.id.toString())} className="flex items-center gap-3 pl-8 pr-1 py-2 rounded-lg hover:bg-surface-2 text-[13px]">
                             <Chk on={draft.account.includes(a.id.toString())} />
                             <VendorAvatar name={a.name} src={(a.avatar_url || a.institutionRef?.logo_url) || undefined} color={a.institutionRef?.color || 'var(--c-blue)'} size={18} />
                             <span className="flex-1 truncate">{accountLabel(a)}</span>
-                          </div>
+                          </CheckRow>
                         ))}
                       </div>
                     );
@@ -160,7 +164,7 @@ export default function FilterPopover({
                 <div className="font-mono text-[11px] uppercase tracking-wide text-content-3 mb-1.5">Amount</div>
                 {([['gt', 'Greater than…'], ['lt', 'Less than…'], ['eq', 'Equal to…'], ['bt', 'Between…']] as [string, string][]).map(([op, label]) => (
                   <div key={op}>
-                    <div onClick={() => setDraft((d) => ({ ...d, op: d.op === op ? '' : op }))} className="flex items-center gap-3 py-2 cursor-pointer text-[15px]"><Chk on={draft.op === op} />{label}</div>
+                    <CheckRow on={draft.op === op} onToggle={() => setDraft((d) => ({ ...d, op: d.op === op ? '' : op }))} className="flex items-center gap-3 py-2 text-[15px]"><Chk on={draft.op === op} />{label}</CheckRow>
                     {draft.op === op && op !== 'bt' && (
                       <div className="pl-8 pb-2"><input value={draft.val} onChange={(e) => setDraft((d) => ({ ...d, val: e.target.value.replace(/[^0-9.]/g, '') }))} inputMode="decimal" placeholder="$10" className="w-full h-[46px] px-4 rounded-[11px] bg-surface border border-line text-content text-[15px] tabular-nums outline-none" /></div>
                     )}
@@ -175,7 +179,7 @@ export default function FilterPopover({
                 ))}
                 <div className="font-mono text-[11px] uppercase tracking-wide text-content-3 mt-3.5 mb-1.5">Type</div>
                 {([['Expense', 'Debits only'], ['Income', 'Credits only']] as [string, string][]).map(([val, label]) => (
-                  <div key={val} onClick={() => setDraft((d) => ({ ...d, type: d.type === val ? 'All' : val }))} className="flex items-center gap-3 py-2 cursor-pointer text-[15px]"><Chk on={draft.type === val} />{label}</div>
+                  <CheckRow key={val} on={draft.type === val} onToggle={() => setDraft((d) => ({ ...d, type: d.type === val ? 'All' : val }))} className="flex items-center gap-3 py-2 text-[15px]"><Chk on={draft.type === val} />{label}</CheckRow>
                 ))}
               </div>
             )}
@@ -184,18 +188,18 @@ export default function FilterPopover({
                 <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No merchants yet</div>
               ) : (
                 merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => (
-                  <div key={m.id} onClick={() => toggleMerchant(m.id.toString())} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px] cursor-pointer">
+                  <CheckRow key={m.id} on={draft.merchant.includes(m.id.toString())} onToggle={() => toggleMerchant(m.id.toString())} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
                     <Chk on={draft.merchant.includes(m.id.toString())} />
                     <VendorAvatar name={m.name} src={m.logo_url || undefined} color={'var(--c-blue)'} size={18} />
                     <span className="flex-1 truncate">{m.name}</span>
                     {m.txn_count !== undefined && <span className="text-content-3 text-[13px] tabular-nums shrink-0">{m.txn_count}</span>}
-                  </div>
+                  </CheckRow>
                 ))
               )
             )}
             {tab === 'Other' && showNeedsReview && (
               <div className="py-2">
-                <button type="button" role="checkbox" aria-checked={!!draft.needsReview} onClick={() => setDraft((d) => ({ ...d, needsReview: !d.needsReview }))} className="flex items-center gap-3 w-full text-left px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
+                <button type="button" role="checkbox" aria-checked={!!draft.needsReview} onClick={() => setDraft((d) => ({ ...d, needsReview: !d.needsReview }))} className={`flex items-center gap-3 w-full text-left px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px] ${FOCUS}`}>
                   <Chk on={!!draft.needsReview} /><span className="flex-1">Needs review only</span>
                 </button>
                 <p className="px-1 pt-1 text-[13px] text-content-3 leading-snug">Transactions auto-categorized with low confidence, or left uncategorized on import.</p>
@@ -281,7 +285,7 @@ export default function FilterPopover({
             <button onClick={onApply} className="h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm">Apply</button>
           </div>
         </div>
-      </div>
+      </Popover>
     </>
   );
 }
