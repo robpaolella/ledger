@@ -21,9 +21,18 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fail = message => { throw new Error(message); };
 const cleanEnv = { PATH: process.env.PATH, HOME: dir, NODE_ENV: 'production' };
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-function identity(pid) {
+function processInfo(pid) {
   const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ').at(-1).split(' ');
-  return `${fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${stat[19]}`;
+  return { identity: `${fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${stat[19]}`,
+    // A zombie main thread can still have exiting threads holding shared sockets.
+    exited: ['Z', 'X'].includes(stat[0]) && Number(stat[17]) === 1 };
+}
+const identity = pid => processInfo(pid).identity;
+function alive(state) {
+  try {
+    const current = processInfo(state.pid);
+    return current.identity === state.identity && !current.exited;
+  } catch { return false; }
 }
 function owned(state) {
   try {
@@ -129,8 +138,10 @@ async function backup() {
 async function stop(state) {
   if (!state || !owned(state)) { console.log('Ledger is not running; no process was stopped.'); return; }
   process.kill(state.pid, 'SIGTERM');
-  for (let i = 0; i < 100 && owned(state); i++) await wait(100);
-  if (owned(state)) fail('Ledger has not stopped yet; no other process was signalled.');
+  // cwd/cmdline can disappear before Linux closes the listening socket on exit.
+  // We already verified ownership before signalling; now wait for that exact identity.
+  for (let i = 0; i < 100 && alive(state); i++) await wait(100);
+  if (alive(state)) fail('Ledger has not stopped yet; no other process was signalled.');
   fs.rmSync(stateFile, { force: true });
   console.log('Ledger stopped.');
 }
@@ -138,7 +149,7 @@ async function assertAvailablePort() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) fail('Choose a port between 1 and 65535 with LEDGER_LIVE_PORT.');
   await new Promise((resolve, reject) => {
     const probe = net.createServer();
-    probe.once('error', () => reject(new Error(`Port ${port} is busy or unavailable; Ledger was not started.`)));
+    probe.once('error', error => reject(new Error(`Port ${port} is busy or unavailable (${error.code}); Ledger was not started.`)));
     probe.listen(port, () => probe.close(resolve));
   });
 }
@@ -203,7 +214,7 @@ async function update(state) {
   catch {
     if (wasRunning) {
       try { await start(null, true); }
-      catch { fail('Backup failed and the previous instance could not restart; code and data were not changed.'); }
+      catch (error) { fail(`Backup failed and the previous instance could not restart: ${error.message} Code and data were not changed.`); }
     }
     fail('Backup failed; update refused, code and data were not changed.');
   }

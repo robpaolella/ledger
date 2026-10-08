@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
+import { get } from 'node:http';
 import { spawnSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
@@ -20,6 +21,26 @@ const freePort = async () => {
   await new Promise(resolve => server.close(resolve));
   return port;
 };
+function healthStatus(url) {
+  // Wait for socket closure as well as the response: the next synchronous CLI
+  // command otherwise blocks FIN handling while trying to rebind this port.
+  return new Promise((resolve, reject) => {
+    let status;
+    let complete = false;
+    const request = get(url, { agent: false, timeout: 2000 }, response => {
+      status = response.statusCode;
+      response.resume();
+      response.once('end', () => { complete = true; });
+      response.once('error', reject);
+    });
+    request.once('socket', socket => socket.once('close', () => {
+      if (complete) resolve(status);
+      else reject(new Error('Health connection closed before its response completed'));
+    }));
+    request.once('error', reject);
+    request.once('timeout', () => request.destroy(new Error('Health probe timed out')));
+  });
+}
 function hashes(folder) {
   return fs.readdirSync(folder, { recursive: true }).sort().filter(name => fs.statSync(path.join(folder, name)).isFile())
     .map(name => [name, createHash('sha256').update(fs.readFileSync(path.join(folder, name))).digest('hex')]);
@@ -132,7 +153,7 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       const output = good(run('bash', ['scripts/live.sh', 'start', source], { cwd: checkout, env }));
       assert.match(output, /Pre-start backup saved/);
       const url = output.match(/http:\/\/[\w.]+:\d+/)[0];
-      assert.equal((await fetch(`${url}/api/health`)).status, 200);
+      assert.equal(await healthStatus(`${url}/api/health`), 200);
       assert.deepEqual(hashes(source), before);
       assert.equal(fs.existsSync(path.join(live, 'do-not-copy.txt')), false);
       const backup = fs.readdirSync(path.join(temp, 'backups'))[0];
@@ -209,13 +230,7 @@ test('live lifecycle uses only isolated synthetic data', { timeout: 300000 }, as
       const backupFiles = () => fs.readdirSync(path.join(temp, 'backups')).filter(n => n.endsWith('.db'));
       const healthy = async (label = 'after update/rollback') => {
         try {
-          // Synchronous lifecycle commands prevent pooled sockets from noticing a restart.
-          // Use a fresh connection, not retries that could hide an actual failed restart.
-          const response = await fetch(`http://127.0.0.1:${env.LEDGER_LIVE_PORT}/api/health`, {
-            headers: { Connection: 'close' }, signal: AbortSignal.timeout(2000),
-          });
-          await response.arrayBuffer();
-          assert.equal(response.status, 200);
+          assert.equal(await healthStatus(`http://127.0.0.1:${env.LEDGER_LIVE_PORT}/api/health`), 200);
         } catch (error) {
           const diagnostic = path.join(os.tmpdir(), `ledger-live-health-${process.pid}-${Date.now()}.log`);
           fs.writeFileSync(diagnostic, `${label}\n${fs.readFileSync(path.join(live, 'server.log'), 'utf8')}`, { mode: 0o600, flag: 'wx' });
@@ -283,16 +298,22 @@ if (process.argv[2] === 'ci') {
       assert.equal(head(), previous);
       assert.equal(backupFiles().length, count);
       await healthy('after missing-record refusal');
-      fs.renameSync(path.join(temp, 'backups'), path.join(temp, 'saved-backups'));
-      fs.symlinkSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
-      try { assert.match(cli('update').stderr, /Backup failed/); }
-      finally {
-        fs.unlinkSync(path.join(temp, 'backups'));
-        fs.renameSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
+      // Exercise immediate stop/restart repeatedly: lost /proc ownership metadata
+      // is not proof that Linux has finished releasing the old listening socket.
+      for (let attempt = 0; attempt < 50; attempt++) {
+        fs.renameSync(path.join(temp, 'backups'), path.join(temp, 'saved-backups'));
+        fs.symlinkSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
+        try {
+          const failedBackup = cli('update');
+          assert.match(failedBackup.stderr, /Backup failed; update refused/, failedBackup.stdout + failedBackup.stderr);
+        } finally {
+          fs.unlinkSync(path.join(temp, 'backups'));
+          fs.renameSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
+        }
+        assert.equal(head(), previous);
+        assert.equal(backupFiles().length, count);
+        await healthy('after backup-failure restart');
       }
-      assert.equal(head(), previous);
-      assert.equal(backupFiles().length, count);
-      await healthy('after backup-failure restart');
       good(cli('stop'));
       fs.renameSync(path.join(live, 'ledger.db'), path.join(live, 'saved.db'));
       fs.mkdirSync(path.join(live, 'ledger.db'));
