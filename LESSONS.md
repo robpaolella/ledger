@@ -279,8 +279,8 @@ hint, add a bottom fade and chevron.
 **Problem:** Guessing the statement owner's name from the first row mislabelled later
 payments, for example when that row was a charge.
 **Rule going forward:** Build Venmo descriptions from the row type and money direction,
-never from a guessed account owner. Skip funding and transfer rows, and use the Note column
-as the description.
+never from a guessed account owner. Skip funding and transfer rows, and take the note text
+from the Note column.
 
 ### Every code path returns a value (2026-03-01)
 **Problem:** A loader function with no final `return` gave `undefined` on first visit and
