@@ -13,3 +13,6 @@ export const EMPTY_FILTER: FilterDraft = { account: [], type: 'All', category: [
 
 export const filterDraftCount = (d: FilterDraft) =>
   d.category.filter((c) => c.startsWith('sub:')).length + d.merchant.length + d.account.length + (d.op ? 1 : 0) + (d.type !== 'All' ? 1 : 0) + (d.needsReview ? 1 : 0);
+
+export const FILTER_SECTIONS = ['Categories', 'Merchants', 'Accounts', 'Amount', 'Other'] as const;
+export type FilterSection = (typeof FILTER_SECTIONS)[number];

@@ -132,13 +132,51 @@ Data stays untouched; these are never rebuilt.
 
 ## Money rules
 
-> **Part 2 (#114) fills in this section.** The bullets below are the earlier rules, kept unchanged until then.
+### Storage
 
-- Stored transaction amounts always mean **positive = money out; negative = money in**. Income versus expense is determined by `categories.type`, never by amount sign alone.
-- Use `packages/client/src/lib/formatters.ts` and `fmtTransaction()` for display. Normal expenses have no sign prefix; income has `+`; expense refunds and income reversals have `-`. Refunds remain expenses, not income. A minus in the entry form reverses that category's normal direction.
-- CSV signs depend on source/account type; support manual sign-convention override and normalize parentheses, currency symbols, separators, and whitespace before parsing amounts.
+- Stored transaction amounts always mean **positive = money out; negative = money in**, for every category type. Income versus expense is determined by `categories.type`, never by amount sign alone.
+- A minus in the entry form reverses that category's normal direction.
+- Display follows the Display rules below; #88 replaces `fmtTransaction()` and the local formatters with one shared money display.
 - Convert SimpleFIN transaction amounts to Ledger's convention. Never apply that conversion to balances, holding market values, or cost basis.
-- All categories use the group → sub-category hierarchy, including income. Account ownership comes from the many-to-many `account_owners` relationship, not the legacy single-owner field.
+- All categories use the group → sub-category hierarchy, including income.
+- Account ownership comes from the many-to-many `account_owners` relationship, not the legacy single-owner field.
+
+### Display
+
+- Money in shows as green **+$X**: paychecks, interest, and refunds.
+- Money out shows as plain **$X** with no minus sign, including income reversals.
+- Transfers follow the same sign rule, in grey.
+- Totals that can go either way (Net, budget remaining, changes) show a real minus when negative and are coloured good or bad.
+- Refunds still lower their category's spending; they remain expenses, not income.
+
+### Budget
+
+- Plans carry forward from month to month.
+- Editing a plan asks "This month only" or "This month and after". Past months change only when they are edited.
+- Recurring bills set the minimum for a plan.
+- "Left to budget" is coloured by state: negative is bad, otherwise good. Its banner or card tint follows the same state, not only the number.
+- Income above plan shows as good.
+- Categories that only have refunds still show on Budget.
+- Transfers stay out of budgets, reports, and spending.
+
+### Uncategorized
+
+- Transactions with no category appear in totals as an "Uncategorized" line that links to Review.
+
+### Recurring
+
+- A bill shows "Due date passed", not "Paid", until real matching exists.
+- Totals show money in and bills separately.
+
+### Net worth
+
+- Money owed lowers net worth; a credit balance raises it.
+
+### CSV import
+
+- CSV signs depend on source/account type; support a manual sign-convention override.
+- Clean amounts before parsing: parentheses for negatives, currency symbols, separators, and whitespace.
+- Flag unreadable amounts for the person importing; never import them as $0.
 
 ## Brand Commitments
 
@@ -146,4 +184,4 @@ Preserve the Ledger name and the README's self-hosted, household-finance identit
 
 ## Accessibility & Inclusion
 
-Existing project rules require visible hover/focus states, mobile touch targets at least 44px high, appropriate input keyboards, and password-manager autocomplete. Do not autofocus bottom-sheet fields and obscure the form with the phone keyboard. Preserve text labels and explicit amount signs rather than relying on color alone. These are design requirements, not a claim that the current application has passed a formal accessibility audit.
+Existing project rules require visible hover/focus states, mobile touch targets at least 44px high, appropriate input keyboards, and password-manager autocomplete. Do not autofocus bottom-sheet fields and obscure the form with the phone keyboard. Preserve text labels and the + sign on money in rather than relying on color alone. These are design requirements, not a claim that the current application has passed a formal accessibility audit.
