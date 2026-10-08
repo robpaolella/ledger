@@ -4,8 +4,26 @@ import type { PeopleAccounts } from './people-accounts.js';
 import type { Categories } from './categories.js';
 import { brandMerchants, inventedMerchants } from './merchants.js';
 
+/** Fixtures #60 uses to create Amazon orders that match seeded card charges. */
+export const SAMPLE_AMAZON_MATCH_FIXTURES = {
+  splitShipment: {
+    descriptions: ['Amazon — USB-C Hub', 'Amazon — Laptop Stand'],
+    amounts: [24.99, 38.5],
+    total: 63.49,
+  },
+  refund: { description: 'Amazon Refund — Desk Lamp', amount: -18.75 },
+} as const;
+
+const AMAZON_ITEMS = [
+  'Phone Case', 'Coffee Filters', 'LED Bulbs', 'Dog Treats', 'Notebook',
+  'Kitchen Towels', 'HDMI Cable', 'Storage Bins', 'Water Bottle', 'Shampoo',
+  'Book Light', 'Batteries', 'Laundry Hamper', 'Measuring Cups', 'Yoga Mat',
+  'Extension Cord', 'Picture Frames', 'Dish Soap', 'Packing Tape', 'Garden Gloves',
+  'Air Filter', 'Pillowcases',
+] as const;
+
 export function seedTransactions(
-  { db, insertTx, rel, today, catId }: Helpers,
+  { db, insertTx, insertSplit, rel, today, catId }: Helpers,
   { jChecking, jaChecking, jointSav, jVisa, jaAmex }: PeopleAccounts,
   CAT: Categories,
 ) {
@@ -57,7 +75,12 @@ export function seedTransactions(
       const prefix = `${fixtureMonth.getFullYear()}-${String(fixtureMonth.getMonth() + 1).padStart(2, '0')}`;
       const add = (account: number, day: number, merchant: string, category: number | null, cents: number, note?: string) => {
         const date = `${prefix}-${String(day).padStart(2, '0')}`;
-        if (rel(date) <= today) { insertTx(account, date, merchant, category, cents / 100, note); count++; }
+        if (rel(date) <= today) {
+          const id = insertTx(account, date, merchant, category, cents / 100, note);
+          count++;
+          return id;
+        }
+        return null;
       };
       // 128 expenses; 117 on cards. Generate before clipping so the RNG never
       // depends on today's date and earlier rows remain stable across launches.
@@ -66,10 +89,50 @@ export function seedTransactions(
           ? singletons[singleIndex++]
           : expenseIndex % 32 < 17 ? popular[popularIndex++ % popular.length] : regular[regularIndex++ % regular.length];
         if (i === 117) merchant = 'Rent';
-        const category = i === 117 ? CAT.rent : categoryFor(merchant);
-        const cents = category === CAT.rent ? 140000 : 450 + Math.floor(random() ** 2 * 9000);
+        let category: number | null = i === 117 ? CAT.rent : categoryFor(merchant);
+        let cents = category === CAT.rent ? 140000 : 450 + Math.floor(random() ** 2 * 9000);
         const day = category === CAT.rent ? 1 : 1 + Math.floor(random() * 28);
-        add(i < 117 ? cards[i % 3] : i === 117 ? jChecking : liquid[(month * 11 + i - 117) % liquid.length], day, merchant, category, cents);
+        // Convert fixed card expenses into Amazon charges without adding rows or
+        // changing the random draws that keep the rest of the sample stable.
+        const amazonSlot = [10, 37, 65, ...(month === 7 ? [93] : [])].indexOf(i);
+        if (month < 8 && amazonSlot !== -1) {
+          const amazonIndex = month * 3 + amazonSlot;
+          if (amazonIndex === 21) {
+            merchant = SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.descriptions[0];
+            cents = Math.round(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.amounts[0] * 100);
+          } else if (amazonIndex === 22) {
+            merchant = SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.descriptions[1];
+            cents = Math.round(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.amounts[1] * 100);
+          } else if (amazonIndex === 23) {
+            merchant = SAMPLE_AMAZON_MATCH_FIXTURES.refund.description;
+            cents = Math.round(SAMPLE_AMAZON_MATCH_FIXTURES.refund.amount * 100);
+          } else {
+            merchant = `Amazon — ${AMAZON_ITEMS[amazonIndex < 21 ? amazonIndex : amazonIndex - 3]}`;
+          }
+          category = CAT.personalSupp;
+        }
+        // Three household-shop card expenses per month become two- or three-leg
+        // splits. The parent retains the merchant and amount; legs inherit it.
+        const splitSlot = [2, 46, 90].indexOf(i);
+        const splitIndex = month * 3 + splitSlot;
+        const split = splitSlot === -1 ? null : [
+          { merchant: 'Costco', categories: [CAT.groceries, CAT.personalSupp] },
+          { merchant: 'Target', categories: [CAT.groceries, CAT.furnishings, CAT.personalSupp] },
+          { merchant: 'Walmart', categories: [CAT.groceries, CAT.furnishings] },
+        ][splitIndex % 3];
+        if (split) {
+          merchant = split.merchant;
+          category = null;
+        }
+        const id = add(i < 117 ? cards[i % 3] : i === 117 ? jChecking : liquid[(month * 11 + i - 117) % liquid.length], day, merchant, category, cents);
+        if (id != null && split) {
+          const first = Math.floor(cents * (split.categories.length === 3 ? 0.5 : 0.6));
+          const second = Math.floor(cents * (split.categories.length === 3 ? 0.3 : 0.4));
+          const splitCents = split.categories.length === 3
+            ? [first, second, cents - first - second]
+            : [first, cents - first];
+          split.categories.forEach((categoryId, index) => insertSplit(id, categoryId, splitCents[index] / 100));
+        }
       }
       for (const day of [2, 16]) {
         add(jChecking, day, 'Direct Deposit — Payroll', CAT.takeHomePay, -175000);
