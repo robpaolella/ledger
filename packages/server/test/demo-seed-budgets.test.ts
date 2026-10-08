@@ -70,9 +70,9 @@ describe('demo budgets, recurring items, and notifications', () => {
         { label: 'Paycheck — John', amount: 1750, freq_kind: 'semi_monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
         { label: 'Paycheck — Jane', amount: 1500, freq_kind: 'semi_monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
         { label: 'Rent', amount: 1400, freq_kind: 'monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
-        { label: 'Health plan premium', amount: 285, freq_kind: 'monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
-        { label: 'Monthly pledge', amount: 40, freq_kind: 'monthly', status: 'paused', start_date: helpers.rel('2025-07-01') },
-        { label: 'Estimated state tax', amount: 640, freq_kind: 'every_n_months', status: 'active', start_date: helpers.rel('2025-07-01') },
+        { label: 'Health plan premium', amount: 285, freq_kind: 'monthly', status: 'active', start_date: helpers.rel('2026-02-01') },
+        { label: 'Monthly pledge', amount: 40, freq_kind: 'monthly', status: 'paused', start_date: helpers.rel('2026-02-01') },
+        { label: 'Estimated state tax', amount: 640, freq_kind: 'every_n_months', status: 'active', start_date: helpers.rel('2026-02-01') },
       ]);
       expect(db.prepare(`
         SELECT b.month FROM budgets b JOIN categories c ON c.id = b.category_id
@@ -160,16 +160,16 @@ describe('demo budgets, recurring items, and notifications', () => {
   });
 
   it('reaches the extra verification states: due-soon, paused, yearly, uncategorized, refund-only', () => {
-    const now = new Date(2026, 9, 30); // Two days ahead crosses the month end.
+    const now = new Date(2026, 9, 30); // Two days ahead would cross the month end.
     const { db, helpers } = seededBudgetFixture(now);
     try {
       const month = helpers.today.slice(0, 7);
       const previous = helpers.rel('2026-02');
       const due = db.prepare("SELECT day FROM recurring_items WHERE status = 'active' AND freq_kind = 'monthly' AND label = 'Health plan premium'").get() as { day: number };
-      expect(due.day).toBe(1); // Nov 1 is two days after Oct 30.
+      expect(due.day).toBe(31); // Capped at the month end, so it stays in this month's list.
       expect(db.prepare("SELECT label FROM recurring_items WHERE status = 'paused'").all()).toEqual([{ label: 'Monthly pledge' }]);
       expect(db.prepare("SELECT interval, anchor_date FROM recurring_items WHERE freq_kind = 'every_n_months'").all())
-        .toEqual([{ interval: 12, anchor_date: helpers.rel('2025-09-15') }]);
+        .toEqual([{ interval: 12, anchor_date: helpers.rel('2026-02-15') }]); // Same day as its matching charge.
       const uncategorized = (m: string) => (db.prepare(`
         SELECT COUNT(*) AS n FROM transactions t
         WHERE t.category_id IS NULL AND substr(t.date, 1, 7) = ?

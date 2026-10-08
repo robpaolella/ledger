@@ -80,7 +80,7 @@ describe('nine-month synthetic transactions', () => {
       expect(db.prepare('SELECT COUNT(*) n FROM transactions GROUP BY substr(date, 1, 7)').all()).toEqual(Array(9).fill({ n: 150 }));
       expect(db.prepare('SELECT c.type, COUNT(*) n FROM transactions t LEFT JOIN categories c ON c.id = t.category_id GROUP BY c.type').all())
         .toEqual([{ type: null, n: 54 }, { type: 'expense', n: 1125 }, { type: 'income', n: 81 }, { type: 'transfer', n: 90 }]);
-      expect(scalar("SELECT COUNT(*) n FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE a.type = 'credit'")).toBe(1076); // 1080 less four card rows moved to checking for the extra states.
+      expect(scalar("SELECT COUNT(*) n FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE a.type = 'credit'")).toBe(1080);
       expect(scalar("SELECT COUNT(DISTINCT account_id) n FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE a.type = 'credit'")).toBe(3);
       expect(scalar('SELECT COUNT(DISTINCT account_id) n FROM transactions')).toBe(19); // Fourth card intentionally quiet.
       expect(scalar('SELECT COUNT(*) n FROM transactions WHERE merchant_id IS NULL')).toBe(0);

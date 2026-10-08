@@ -22,10 +22,13 @@ const AMAZON_ITEMS = [
   'Air Filter', 'Pillowcases',
 ] as const;
 
+// Swapped-in rows are checking-account expenses, so no card balance changes.
+const RECURRING_FIRST_ROW = 118;
+const REFUND_ROW = 121;
 /** Previous-month charges matching the extra Recurring items (budgets-recurring.ts). */
 const RECURRING_MATCHES: Array<{ merchant: string; category: [string, string]; cents: number; day: number }> = [
   { merchant: 'Larkspindle Insurance', category: ['Insurance', 'Health'], cents: 28500, day: 12 },
-  { merchant: 'Larkspindle Workshop', category: ['Gifts', 'Donations'], cents: 4000, day: 20 },
+  { merchant: 'Pebblewisp Cafe', category: ['Gifts', 'Donations'], cents: 4000, day: 20 },
   { merchant: 'Ferncairn Finance', category: ['Tax Not Withheld', 'State'], cents: 64000, day: 15 },
 ];
 
@@ -133,16 +136,15 @@ export function seedTransactions(
         }
         let account = i < 117 ? cards[i % 3] : i === 117 ? jChecking : liquid[(month * 11 + i - 117) % liquid.length];
         let postDay = day;
-        // Rows swapped in place (no extra draws or rows; they replace popular-merchant card
-        // charges, so one-off merchants stay one-off) so the sample's states stay stable:
+        // Rows swapped in place (no extra draws or rows) so the sample's states stay stable:
         // the previous month holds the charges the extra Recurring items match, and the
         // launch month opens with a refund in a category that has no budget.
-        const recurringMatch = month === 7 ? RECURRING_MATCHES[i - 100] : undefined;
+        const recurringMatch = month === 7 ? RECURRING_MATCHES[i - RECURRING_FIRST_ROW] : undefined;
         if (recurringMatch) {
           ({ merchant, cents, day: postDay } = recurringMatch);
           category = catId(...recurringMatch.category);
           account = jChecking;
-        } else if (month === 8 && i === 100) {
+        } else if (month === 8 && i === REFUND_ROW) {
           merchant = 'Target';
           category = catId('Gifts', 'Holidays');
           cents = -4250;

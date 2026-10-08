@@ -2,6 +2,9 @@
 import type { Helpers } from './helpers.js';
 import type { DailyBalances } from './investments.js';
 
+/** The card with no transactions that keeps a statement credit (a positive balance). */
+export const CARD_IN_CREDIT = "Jane's Visa";
+
 export function seedNetWorth(
   { db }: Helpers,
   investmentBalances: DailyBalances,
@@ -20,8 +23,8 @@ export function seedNetWorth(
       // than making every account look like it has nine months of history.
       const startDay = index >= 14 ? 60 : index >= 8 ? 30 : 0;
       // Cards begin as liabilities; other transaction-backed accounts begin as assets.
-      // Jane's Visa has no transactions, so it keeps a statement credit: stored positive (asset).
-      const openingBalance = account.name === "Jane's Visa" ? 212.4
+      // it has no transactions, so it keeps a statement credit: stored positive (asset).
+      const openingBalance = account.name === CARD_IN_CREDIT ? 212.4
         : account.type === 'credit' ? -(900 + index * 175) : 2_400 + index * 675;
       for (const date of days.slice(startDay)) {
         const balance = isInvestment
