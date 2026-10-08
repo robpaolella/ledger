@@ -9,6 +9,7 @@ import { VENDORS } from '../src/db/data/vendors.js';
 import { createHelpers } from '../src/db/demo-seed/helpers.js';
 import { createCategories } from '../src/db/demo-seed/categories.js';
 import { SAMPLE_AMAZON_MATCH_FIXTURES, seedTransactions } from '../src/db/demo-seed/transactions.js';
+import { seedAmazonOrders } from '../src/db/demo-seed/amazon-orders.js';
 import { seedReviewsRules } from '../src/db/demo-seed/reviews-rules.js';
 import { buildCategorizer } from '../src/services/categorize.js';
 
@@ -39,6 +40,10 @@ function transactionFixture(now: Date, withReviewData = false) {
     CREATE TABLE category_feedback (id INTEGER PRIMARY KEY, transaction_id REFERENCES transactions(id), description, merchant_id REFERENCES merchants(id), account_id REFERENCES accounts(id), amount, txn_date, prior_category_id REFERENCES categories(id), prior_source, prior_confidence, corrected_category_id REFERENCES categories(id), kind, user_id REFERENCES users(id), created_at);
     CREATE TABLE transaction_reviews (id INTEGER PRIMARY KEY, transaction_id UNIQUE REFERENCES transactions(id), status, reason, assignee_id REFERENCES users(id), note, flagged_by REFERENCES users(id), resolved_by REFERENCES users(id), created_at, resolved_at);
     CREATE TABLE notifications (id INTEGER PRIMARY KEY, user_id REFERENCES users(id), type, severity, title, body, action_label, action_target, dedupe_key, is_read DEFAULT 0, created_at, UNIQUE(user_id, dedupe_key));
+    CREATE TABLE amazon_orders (order_number TEXT PRIMARY KEY, order_date, total, subtotal, tax, raw_json, scraped_at);
+    CREATE TABLE amazon_order_items (id INTEGER PRIMARY KEY, order_number REFERENCES amazon_orders(order_number), title, unit_price, quantity, asin, seller);
+    CREATE TABLE amazon_charges (id INTEGER PRIMARY KEY, charge_date, amount, order_number REFERENCES amazon_orders(order_number), payment_method, is_refund DEFAULT 0);
+    CREATE TABLE amazon_matches (transaction_id INTEGER PRIMARY KEY REFERENCES transactions(id), order_number REFERENCES amazon_orders(order_number), charge_id REFERENCES amazon_charges(id), amount, matched_by, confidence, enriched_at, created_at);
   `);
   const groups: Record<string, string[]> = {
     Income: ['Take Home Pay', 'Interest Income', 'Other Income'],
@@ -61,6 +66,7 @@ function transactionFixture(now: Date, withReviewData = false) {
   const categories = createCategories(helpers);
   createCategories(helpers); // Taxonomy additions are idempotent.
   seedTransactions(helpers, people, categories);
+  seedAmazonOrders(helpers);
   if (withReviewData) seedReviewsRules(helpers, people);
   return db;
 }
@@ -141,6 +147,61 @@ describe('nine-month synthetic transactions', () => {
       expect(a.prepare(`SELECT date, ${columns} FROM transactions WHERE date <= '2026-10-07' ORDER BY id`).all())
         .toEqual(early.prepare(`SELECT date, ${columns} FROM transactions ORDER BY id`).all());
     } finally { a.close(); b.close(); early.close(); }
+  });
+});
+
+describe('synthetic Amazon orders', () => {
+  it('matches seeded card charges, including split, refund, and unmatched cases deterministically', () => {
+    const first = transactionFixture(new Date(2026, 9, 31));
+    const second = transactionFixture(new Date(2026, 9, 31));
+    const scalar = (db: Database.Database, sql: string) => (db.prepare(sql).get() as { n: number }).n;
+    try {
+      expect(scalar(first, 'SELECT COUNT(*) n FROM amazon_orders')).toBe(25);
+      expect(first.prepare('SELECT COUNT(*) n FROM amazon_order_items GROUP BY order_number HAVING COUNT(*) NOT BETWEEN 1 AND 4').all()).toEqual([]);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM amazon_matches')).toBe(25);
+      expect(first.prepare(`
+        SELECT m.transaction_id FROM amazon_matches m
+        LEFT JOIN transactions t ON t.id = m.transaction_id
+        LEFT JOIN amazon_orders o ON o.order_number = m.order_number
+        LEFT JOIN amazon_charges c ON c.id = m.charge_id
+        WHERE t.id IS NULL OR o.order_number IS NULL OR c.id IS NULL
+      `).all()).toEqual([]);
+      expect(first.prepare(`
+        SELECT o.order_number FROM amazon_orders o
+        JOIN amazon_charges c ON c.order_number = o.order_number
+        GROUP BY o.order_number, o.total
+        HAVING ROUND(o.total * 100) != SUM(ROUND(c.amount * 100))
+      `).all()).toEqual([]);
+
+      const split = first.prepare(`
+        SELECT m.order_number, SUM(m.amount) AS total, COUNT(*) AS charges
+        FROM amazon_matches m
+        JOIN transactions t ON t.id = m.transaction_id
+        WHERE t.description IN (?, ?)
+        GROUP BY m.order_number
+      `).get(...SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.descriptions) as { order_number: string; total: number; charges: number };
+      expect(split.order_number).toMatch(/^114-\d{7}-\d{7}$/);
+      expect(split.charges).toBe(2);
+      expect(Math.round(split.total * 100)).toBe(Math.round(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.total * 100));
+      expect(scalar(first, `
+        SELECT COUNT(*) n FROM amazon_charges c
+        JOIN transactions t ON t.id = (SELECT transaction_id FROM amazon_matches WHERE charge_id = c.id)
+        WHERE c.is_refund = 1 AND t.description = '${SAMPLE_AMAZON_MATCH_FIXTURES.refund.description}' AND c.amount = ${SAMPLE_AMAZON_MATCH_FIXTURES.refund.amount}
+      `)).toBe(1);
+      expect(scalar(first, `
+        SELECT COUNT(*) n FROM amazon_orders o
+        WHERE NOT EXISTS (SELECT 1 FROM amazon_matches m WHERE m.order_number = o.order_number)
+      `)).toBe(1);
+      expect(first.pragma('foreign_key_check')).toEqual([]);
+
+      for (const table of ['amazon_orders', 'amazon_order_items', 'amazon_charges', 'amazon_matches'] as const) {
+        expect(first.prepare(`SELECT * FROM ${table} ORDER BY 1`).all())
+          .toEqual(second.prepare(`SELECT * FROM ${table} ORDER BY 1`).all());
+      }
+    } finally {
+      first.close();
+      second.close();
+    }
   });
 });
 
