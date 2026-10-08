@@ -58,8 +58,9 @@ After seeding, the existing logo hydration script gets the key **only in its own
 environment**. Its output is discarded, not copied to either log. Downloads go into
 scratch uploads, and cleanup removes them. The app server never receives the key.
 Hydration has a 60-second total cap; failure or timeout does not fail launch.
-Doctor's `logos` field reports `not configured`, `complete`, `failed` or `timed out`,
-and `loaded` counts cached institution/vendor image files, not account/merchant rows.
+Doctor's `logos` field reports `not configured`, `key rejected`, `complete`, `failed`
+or `timed out`, and `loaded` counts cached institution/vendor image files, not
+account/merchant rows.
 `complete` means the script exited successfully, not that every logo was found.
 The existing downloader hides HTTP errors, so an invalid key can report `complete`
 with zero loaded; Doctor cannot distinguish HTTP 401 from other download failures.
