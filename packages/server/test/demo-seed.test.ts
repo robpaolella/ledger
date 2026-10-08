@@ -8,7 +8,7 @@ import { INSTITUTIONS } from '../src/db/data/institutions.js';
 import { VENDORS } from '../src/db/data/vendors.js';
 import { createHelpers } from '../src/db/demo-seed/helpers.js';
 import { createCategories } from '../src/db/demo-seed/categories.js';
-import { seedTransactions } from '../src/db/demo-seed/transactions.js';
+import { SAMPLE_AMAZON_MATCH_FIXTURES, seedTransactions } from '../src/db/demo-seed/transactions.js';
 
 function fixture() {
   const db = new Database(':memory:');
@@ -32,6 +32,7 @@ function transactionFixture(now: Date) {
   db.exec(`
     CREATE TABLE categories (id INTEGER PRIMARY KEY, group_name, sub_name, display_name, type, sort_order, exclude_from_budget DEFAULT 0);
     CREATE TABLE transactions (id INTEGER PRIMARY KEY, account_id REFERENCES accounts(id), date, description, category_id REFERENCES categories(id), merchant_id REFERENCES merchants(id), amount, note);
+    CREATE TABLE transaction_splits (id INTEGER PRIMARY KEY, transaction_id REFERENCES transactions(id), category_id REFERENCES categories(id), amount, merchant_id REFERENCES merchants(id), note);
   `);
   const groups: Record<string, string[]> = {
     Income: ['Take Home Pay', 'Interest Income', 'Other Income'],
@@ -65,7 +66,7 @@ describe('nine-month synthetic transactions', () => {
       expect(scalar('SELECT COUNT(*) n FROM transactions')).toBe(1350);
       expect(db.prepare('SELECT COUNT(*) n FROM transactions GROUP BY substr(date, 1, 7)').all()).toEqual(Array(9).fill({ n: 150 }));
       expect(db.prepare('SELECT c.type, COUNT(*) n FROM transactions t LEFT JOIN categories c ON c.id = t.category_id GROUP BY c.type').all())
-        .toEqual([{ type: null, n: 27 }, { type: 'expense', n: 1152 }, { type: 'income', n: 81 }, { type: 'transfer', n: 90 }]);
+        .toEqual([{ type: null, n: 54 }, { type: 'expense', n: 1125 }, { type: 'income', n: 81 }, { type: 'transfer', n: 90 }]);
       expect(scalar("SELECT COUNT(*) n FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE a.type = 'credit'")).toBe(1080);
       expect(scalar("SELECT COUNT(DISTINCT account_id) n FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE a.type = 'credit'")).toBe(3);
       expect(scalar('SELECT COUNT(DISTINCT account_id) n FROM transactions')).toBe(19); // Fourth card intentionally quiet.
@@ -76,9 +77,35 @@ describe('nine-month synthetic transactions', () => {
       expect(topTen / 1350).toBeLessThanOrEqual(0.46);
       expect(scalar('SELECT COUNT(DISTINCT group_name) n FROM categories')).toBe(16);
       expect(db.prepare('SELECT group_name FROM categories GROUP BY group_name HAVING COUNT(*) NOT BETWEEN 3 AND 6').all()).toEqual([]);
-      expect(db.prepare("SELECT t.id FROM transactions t JOIN categories c ON c.id = t.category_id WHERE (c.type = 'income' AND amount >= 0) OR (c.type = 'expense' AND amount <= 0)").all()).toEqual([]);
+      expect(db.prepare("SELECT t.id FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'income' AND amount >= 0").all()).toEqual([]);
+      expect(db.prepare("SELECT description FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'expense' AND amount <= 0").all())
+        .toEqual([{ description: SAMPLE_AMAZON_MATCH_FIXTURES.refund.description }]);
       expect(db.prepare("SELECT date FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'transfer' GROUP BY date HAVING SUM(amount) != 0 OR COUNT(*) != 2").all()).toEqual([]);
       expect(scalar("SELECT COUNT(*) n FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.sub_name = 'Take Home Pay'")).toBe(36);
+      expect(scalar('SELECT COUNT(DISTINCT transaction_id) n FROM transaction_splits')).toBe(27);
+      expect(db.prepare('SELECT transaction_id FROM transaction_splits GROUP BY transaction_id HAVING COUNT(*) NOT BETWEEN 2 AND 3').all()).toEqual([]);
+      expect(db.prepare('SELECT transaction_id FROM transaction_splits GROUP BY transaction_id HAVING COUNT(*) != COUNT(DISTINCT category_id)').all()).toEqual([]);
+      expect(db.prepare(`
+        SELECT t.id FROM transactions t JOIN transaction_splits ts ON ts.transaction_id = t.id
+        JOIN accounts a ON a.id = t.account_id
+        JOIN categories c ON c.id = ts.category_id
+        WHERE t.category_id IS NOT NULL OR a.type != 'credit' OR c.type != 'expense'
+        GROUP BY t.id
+      `).all()).toEqual([]);
+      expect(db.prepare(`
+        SELECT t.id FROM transactions t JOIN transaction_splits ts ON ts.transaction_id = t.id
+        GROUP BY t.id HAVING SUM(ROUND(ts.amount * 100)) != ROUND(t.amount * 100)
+      `).all()).toEqual([]);
+      expect(scalar('SELECT COUNT(*) n FROM transaction_splits WHERE merchant_id IS NOT NULL')).toBe(0);
+      expect(scalar(`
+        SELECT COUNT(*) n FROM transactions t JOIN merchants m ON m.id = t.merchant_id
+        JOIN accounts a ON a.id = t.account_id
+        WHERE m.name = 'Amazon' AND a.type = 'credit'
+      `)).toBe(25);
+      const amazon = (description: string) => db.prepare('SELECT amount FROM transactions WHERE description = ?').get(description) as { amount: number };
+      expect(Math.round((amazon(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.descriptions[0]).amount + amazon(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.descriptions[1]).amount) * 100))
+        .toBe(Math.round(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.total * 100));
+      expect(amazon(SAMPLE_AMAZON_MATCH_FIXTURES.refund.description).amount).toBe(SAMPLE_AMAZON_MATCH_FIXTURES.refund.amount);
       expect(db.pragma('foreign_key_check')).toEqual([]);
     } finally { db.close(); }
   });
@@ -88,6 +115,8 @@ describe('nine-month synthetic transactions', () => {
     try {
       const rows = first.prepare('SELECT * FROM transactions ORDER BY id').all() as Array<{ date: string }>;
       expect(rows).toEqual(second.prepare('SELECT * FROM transactions ORDER BY id').all());
+      expect(first.prepare('SELECT * FROM transaction_splits ORDER BY id').all())
+        .toEqual(second.prepare('SELECT * FROM transaction_splits ORDER BY id').all());
       const today = createHelpers(first, now).today;
       expect(rows.every(row => row.date <= today && !Number.isNaN(Date.parse(row.date)))).toBe(true);
       expect(new Set(rows.map(row => row.date.slice(0, 7))).size).toBe(9);
