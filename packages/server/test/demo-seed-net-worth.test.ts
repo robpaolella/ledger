@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 vi.mock('../src/db/index.js', () => ({ sqlite: undefined }));
 import { createHelpers } from '../src/db/demo-seed/helpers.js';
 import { seedInvestments } from '../src/db/demo-seed/investments.js';
-import { seedNetWorth } from '../src/db/demo-seed/net-worth.js';
+import { CARD_IN_CREDIT, seedNetWorth } from '../src/db/demo-seed/net-worth.js';
 
 type Row = Record<string, number | string>;
 
@@ -28,7 +28,7 @@ function fixture(now: Date) {
   db.prepare('INSERT INTO users (id, display_name) VALUES (1, ?), (2, ?)').run('John', 'Jane');
   const accountTypes = ['checking', 'credit', 'checking', 'savings', 'credit', 'savings', 'retirement', 'retirement', 'savings', 'checking', 'investment', 'investment', 'retirement', 'retirement', 'credit', 'credit', 'savings', 'savings', 'checking', 'checking'];
   const insertAccount = db.prepare('INSERT INTO accounts (id, name, type, owner) VALUES (?, ?, ?, ?)');
-  for (const [index, type] of accountTypes.entries()) insertAccount.run(index + 1, `Account ${index + 1}`, type, index % 2 ? 'Jane' : 'John');
+  for (const [index, type] of accountTypes.entries()) insertAccount.run(index + 1, index === 15 ? CARD_IN_CREDIT : `Account ${index + 1}`, type, index % 2 ? 'Jane' : 'John');
   const helpers = createHelpers(db, now);
   const insertTransaction = db.prepare('INSERT INTO transactions (account_id, date, amount) VALUES (?, ?, ?)');
   insertTransaction.run(1, helpers.rel('2025-07-03'), -500);
@@ -68,6 +68,19 @@ describe('demo net-worth sample', () => {
       }
       expect(db.prepare('SELECT COUNT(*) AS count FROM simplefin_holdings').get()).toEqual({ count: 60 });
       expect(db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_success'").get()).toEqual({ value: '2026-10-31' });
+    } finally { db.close(); }
+  });
+
+  it('gives one card a positive (credit) latest balance and leaves other cards owed', () => {
+    const { db } = fixture(new Date(2026, 9, 31));
+    try {
+      const latest = db.prepare(`
+        SELECT a.name, s.balance FROM accounts a JOIN balance_snapshots s ON s.account_id = a.id
+        WHERE a.type = 'credit' AND s.date = (SELECT MAX(date) FROM balance_snapshots WHERE account_id = a.id)
+        ORDER BY a.id
+      `).all() as Array<{ name: string; balance: number }>;
+      expect(latest.filter(card => card.balance > 0)).toEqual([{ name: CARD_IN_CREDIT, balance: 212.4 }]);
+      expect(latest.filter(card => card.balance < 0)).toHaveLength(3);
     } finally { db.close(); }
   });
 

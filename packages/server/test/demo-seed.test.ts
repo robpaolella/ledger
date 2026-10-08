@@ -91,8 +91,8 @@ describe('nine-month synthetic transactions', () => {
       expect(scalar('SELECT COUNT(DISTINCT group_name) n FROM categories')).toBe(16);
       expect(db.prepare('SELECT group_name FROM categories GROUP BY group_name HAVING COUNT(*) NOT BETWEEN 3 AND 6').all()).toEqual([]);
       expect(db.prepare("SELECT t.id FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'income' AND amount >= 0").all()).toEqual([]);
-      expect(db.prepare("SELECT description FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'expense' AND amount <= 0").all())
-        .toEqual([{ description: SAMPLE_AMAZON_MATCH_FIXTURES.refund.description }]);
+      expect(db.prepare("SELECT description FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'expense' AND amount <= 0 ORDER BY t.id").all())
+        .toEqual([{ description: SAMPLE_AMAZON_MATCH_FIXTURES.refund.description }, { description: 'Target' }]); // Second is the refund-only Gifts: Holidays state.
       expect(db.prepare("SELECT date FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.type = 'transfer' GROUP BY date HAVING SUM(amount) != 0 OR COUNT(*) != 2").all()).toEqual([]);
       expect(scalar("SELECT COUNT(*) n FROM transactions t JOIN categories c ON c.id = t.category_id WHERE c.sub_name = 'Take Home Pay'")).toBe(36);
       expect(scalar('SELECT COUNT(DISTINCT transaction_id) n FROM transaction_splits')).toBe(27);

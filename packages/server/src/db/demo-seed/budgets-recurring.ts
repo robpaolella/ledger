@@ -75,26 +75,40 @@ export function seedBudgets({ db, rel }: Helpers, CAT: Categories) {
   return budgetCount;
 }
 
+/** Day of the month `daysAhead` days after `today` (YYYY-MM-DD), capped at month end, so a bill can fall due soon. */
+function dayOfMonthAfter(today: string, daysAhead: number): number {
+  const [y, m, d] = today.split('-').map(Number);
+  // Stay in this month: the Recurring page shows one month at a time.
+  return Math.min(d + daysAhead, new Date(y, m, 0).getDate());
+}
+
 export function seedRecurring(
-  { db, rel }: Helpers,
+  { db, rel, today, catId }: Helpers,
   { johnId, janeId, jChecking, jaChecking }: PeopleAccounts,
   CAT: Categories,
 ) {
   console.log('Creating recurring items...');
   const recurringDefs: Array<{
     type: 'income' | 'expense'; label: string; merchant: string; category: number; account: number;
-    amount: number; freq: 'monthly' | 'semi_monthly'; day?: number; days?: number[]; user: number;
+    amount: number; freq: 'monthly' | 'semi_monthly' | 'every_n_months'; day?: number; days?: number[]; user: number;
+    interval?: number; anchor?: string; start?: string; status?: 'active' | 'paused';
   }> = [
     { type: 'income', label: 'Paycheck — John', merchant: 'Direct Deposit — Payroll', category: CAT.takeHomePay, account: jChecking, amount: 1750, freq: 'semi_monthly', days: [2, 16], user: johnId },
     { type: 'income', label: 'Paycheck — Jane', merchant: 'Direct Deposit — Payroll', category: CAT.takeHomePay, account: jaChecking, amount: 1500, freq: 'semi_monthly', days: [2, 16], user: janeId },
     { type: 'expense', label: 'Rent', merchant: 'Oakwood Apartments', category: CAT.rent, account: jChecking, amount: 1400, freq: 'monthly', day: 1, user: johnId },
+    // Extra states: due within three days, paused, and yearly (every 12 months). Each has
+    // a matching generated transaction in the previous month (see transactions.ts).
+    { type: 'expense', label: 'Health plan premium', merchant: 'Larkspindle Insurance', category: CAT.healthIns, account: jChecking, amount: 285, freq: 'monthly', day: dayOfMonthAfter(today, 2), start: rel('2026-02-01'), user: johnId },
+    { type: 'expense', label: 'Monthly pledge', merchant: 'Pebblewisp Cafe', category: catId('Gifts', 'Donations'), account: jChecking, amount: 40, freq: 'monthly', day: 20, user: johnId, status: 'paused', start: rel('2026-02-01') },
+    { type: 'expense', label: 'Estimated state tax', merchant: 'Ferncairn Finance', category: catId('Tax Not Withheld', 'State'), account: jChecking, amount: 640, freq: 'every_n_months', day: 15, interval: 12, anchor: rel('2026-02-15'), start: rel('2026-02-01'), user: johnId },
   ];
   for (const r of recurringDefs) {
     db.prepare(
-      `INSERT INTO recurring_items (type, label, merchant_id, category_id, account_id, amount, freq_kind, day, days_json, start_date, status, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`
+      `INSERT INTO recurring_items (type, label, merchant_id, category_id, account_id, amount, freq_kind, day, days_json, interval, anchor_date, start_date, status, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(r.type, r.label, findOrCreateMerchant(sampleMerchantName(r.merchant), db), r.category, r.account, r.amount, r.freq,
-      r.day ?? null, r.days ? JSON.stringify(r.days) : null, rel('2025-07-01'), r.user);
+      r.day ?? null, r.days ? JSON.stringify(r.days) : null, r.interval ?? null, r.anchor ?? null,
+      r.start ?? rel('2025-07-01'), r.status ?? 'active', r.user);
   }
   console.log(`  Created ${recurringDefs.length} recurring items`);
 }
@@ -116,8 +130,8 @@ export function seedBudgetAlerts({ db, rel }: Helpers, CAT: Categories) {
     for (const budget of budgets) {
       const category = db.prepare("SELECT display_name, type, exclude_from_budget FROM categories WHERE id = ?").get(budget.category_id) as { display_name: string; type: string; exclude_from_budget: number } | undefined;
       if (!category || category.type !== 'expense' || category.exclude_from_budget) continue;
-      // Rent's recurring floor is equal to its seeded manual amount; all other
-      // recurring categories are income, so their effective expense budget is manual.
+      // Rent's recurring floor equals its seeded manual amount; the other recurring
+      // expenses are in categories without budget rows, so only Rent needs the floor.
       const effectiveBudget = budget.category_id === CAT.rent ? Math.max(budget.amount, 1400) : budget.amount;
       const overage = (actuals.get(budget.category_id) ?? 0) - effectiveBudget;
       if (overage <= 0.005) continue;

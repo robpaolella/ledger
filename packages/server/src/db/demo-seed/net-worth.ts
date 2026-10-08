@@ -2,13 +2,16 @@
 import type { Helpers } from './helpers.js';
 import type { DailyBalances } from './investments.js';
 
+/** The card with no transactions that keeps a statement credit (a positive balance). */
+export const CARD_IN_CREDIT = "Jane's Visa";
+
 export function seedNetWorth(
   { db }: Helpers,
   investmentBalances: DailyBalances,
   days: string[],
 ) {
   console.log('Creating daily balance snapshots...');
-  const accounts = db.prepare('SELECT id, type FROM accounts ORDER BY id').all() as Array<{ id: number; type: string }>;
+  const accounts = db.prepare('SELECT id, name, type FROM accounts ORDER BY id').all() as Array<{ id: number; name: string; type: string }>;
   const transactionSum = db.prepare('SELECT COALESCE(SUM(amount), 0) AS amount FROM transactions WHERE account_id = ? AND date <= ?');
   const insertBalance = db.prepare('INSERT INTO balance_snapshots (account_id, date, balance) VALUES (?, ?, ?)');
   const balances: Array<[number, string, number]> = [];
@@ -20,7 +23,9 @@ export function seedNetWorth(
       // than making every account look like it has nine months of history.
       const startDay = index >= 14 ? 60 : index >= 8 ? 30 : 0;
       // Cards begin as liabilities; other transaction-backed accounts begin as assets.
-      const openingBalance = account.type === 'credit' ? -(900 + index * 175) : 2_400 + index * 675;
+      // The card in credit has no transactions, so it keeps a statement credit, stored positive (asset).
+      const openingBalance = account.name === CARD_IN_CREDIT ? 212.4
+        : account.type === 'credit' ? -(900 + index * 175) : 2_400 + index * 675;
       for (const date of days.slice(startDay)) {
         const balance = isInvestment
           ? investmentBalances.get(account.id)?.get(date)
