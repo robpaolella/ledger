@@ -1,4 +1,6 @@
-import { saveImageFromUrl } from './uploads.js';
+import { saveImageFromUrl, type RemoteImageResult } from './uploads.js';
+
+export type LogoFetchResult = RemoteImageResult;
 
 /** True when a logo.dev token is configured (LOGODEV_TOKEN). Without it, logo
  *  hydration is a no-op and institutions render brand-colored monograms. */
@@ -27,20 +29,20 @@ export function logoDevUrl(domain: string): string {
   return `https://img.logo.dev/${encodeURIComponent(d)}?token=${encodeURIComponent(token)}&format=webp&size=256&retina=false&fallback=404`;
 }
 
-/** Fetch + cache a logo from logo.dev under `<prefix>-<id>.<ext>`. Returns the
- *  stored `/uploads/...` URL, or null (token missing, no domain, 404, or error). */
-export async function fetchLogo(prefix: string, id: number, domain: string | null | undefined): Promise<string | null> {
+/** Fetch + cache a logo from logo.dev under `<prefix>-<id>.<ext>`. A rejected
+ *  key is distinct from a missing logo, network failure, or invalid image. */
+export async function fetchLogo(prefix: string, id: number, domain: string | null | undefined): Promise<LogoFetchResult> {
   const d = normalizeDomain(domain || '');
-  if (!logoDevConfigured() || !d) return null;
+  if (!logoDevConfigured() || !d) return { url: null, keyRejected: false };
   return saveImageFromUrl(prefix, id, logoDevUrl(d));
 }
 
 /** Institution logo → `institution-<id>.webp`. */
-export function fetchInstitutionLogo(id: number, domain: string | null | undefined): Promise<string | null> {
+export function fetchInstitutionLogo(id: number, domain: string | null | undefined): Promise<LogoFetchResult> {
   return fetchLogo('institution', id, domain);
 }
 
 /** Vendor (merchant catalog) logo → `vendor-<id>.webp`. */
-export function fetchVendorLogo(id: number, domain: string | null | undefined): Promise<string | null> {
+export function fetchVendorLogo(id: number, domain: string | null | undefined): Promise<LogoFetchResult> {
   return fetchLogo('vendor', id, domain);
 }
