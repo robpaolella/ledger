@@ -36,7 +36,7 @@ export function hydrateLogos(scratch, env, {
       .filter((entry) => entry.isFile() && /^(institution|vendor)-\d+\.(webp|png|jpg|jpeg|gif)$/.test(entry.name)).length;
   } catch { /* No downloads is a valid outcome. */ }
   return {
-    status: result.error?.code === 'ETIMEDOUT' ? 'timed out' : result.error || result.status !== 0 ? 'failed' : 'complete',
+    status: result.error?.code === 'ETIMEDOUT' ? 'timed out' : result.status === 2 ? 'key rejected' : result.error || result.status !== 0 ? 'failed' : 'complete',
     loaded,
   };
 }

@@ -7,6 +7,7 @@ import { fetchInstitutionLogo, logoDevConfigured } from '../services/institution
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const LOGO_KEY_REJECTED_MESSAGE = "The logo service isn't accepting this app's key. Check the key and try again.";
 
 interface InstitutionRow {
   id: number;
@@ -153,9 +154,10 @@ router.post('/:id/refresh-logo', requirePermission('accounts.edit'), async (req:
   if (!row) { res.status(404).json({ error: 'Institution not found' }); return; }
   if (!logoDevConfigured()) { res.status(400).json({ error: 'Logo service not configured (set LOGODEV_TOKEN)' }); return; }
   if (!row.domain) { res.status(400).json({ error: 'Institution has no domain to look up' }); return; }
-  const url = await fetchInstitutionLogo(id, row.domain);
-  if (!url) { res.status(404).json({ error: 'No logo found for that domain' }); return; }
-  sqlite.prepare('UPDATE financial_institutions SET logo_url = ? WHERE id = ?').run(url, id);
+  const result = await fetchInstitutionLogo(id, row.domain);
+  if (result.keyRejected) { res.status(502).json({ error: LOGO_KEY_REJECTED_MESSAGE }); return; }
+  if (!result.url) { res.status(404).json({ error: 'No logo found for that domain' }); return; }
+  sqlite.prepare('UPDATE financial_institutions SET logo_url = ? WHERE id = ?').run(result.url, id);
   res.json({ data: getInstitution(id) });
 });
 
@@ -168,8 +170,9 @@ router.post('/hydrate-logos', requirePermission('accounts.edit'), async (_req: R
   const setLogo = sqlite.prepare('UPDATE financial_institutions SET logo_url = ? WHERE id = ?');
   let updated = 0;
   for (const r of rows) {
-    const url = await fetchInstitutionLogo(r.id, r.domain);
-    if (url) { setLogo.run(url, r.id); updated++; }
+    const result = await fetchInstitutionLogo(r.id, r.domain);
+    if (result.keyRejected) { res.status(502).json({ error: LOGO_KEY_REJECTED_MESSAGE }); return; }
+    if (result.url) { setLogo.run(result.url, r.id); updated++; }
   }
   res.json({ data: { attempted: rows.length, updated } });
 });

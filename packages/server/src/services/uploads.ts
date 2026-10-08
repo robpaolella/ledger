@@ -49,21 +49,27 @@ export function saveImage(prefix: string, id: number | string, file: { mimetype:
   return `/uploads/${fname}`;
 }
 
-/** Fetch a remote image URL and store it via saveImage(). Returns the served
- *  URL, or null on any failure (network error, non-200, unsupported/mismatched
- *  bytes). Used to cache institution logos fetched from logo.dev. */
-export async function saveImageFromUrl(prefix: string, id: number | string, url: string): Promise<string | null> {
+export interface RemoteImageResult {
+  url: string | null;
+  keyRejected: boolean;
+}
+
+/** Fetch a remote image URL and store it via saveImage(). The caller receives a
+ *  keyRejected flag only for upstream 401/403 responses; all other failures
+ *  (including 404) remain ordinary cache misses. Used for logo.dev downloads. */
+export async function saveImageFromUrl(prefix: string, id: number | string, url: string): Promise<RemoteImageResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000); // bound a hung upstream
   try {
     const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) return null;
+    if (resp.status === 401 || resp.status === 403) return { url: null, keyRejected: true };
+    if (!resp.ok) return { url: null, keyRejected: false };
     const mimetype = (resp.headers.get('content-type') || '').split(';')[0].trim();
     const buffer = Buffer.from(await resp.arrayBuffer());
-    if (buffer.length === 0) return null;
-    return saveImage(prefix, id, { mimetype, buffer });
+    if (buffer.length === 0) return { url: null, keyRejected: false };
+    return { url: saveImage(prefix, id, { mimetype, buffer }), keyRejected: false };
   } catch {
-    return null;
+    return { url: null, keyRejected: false };
   } finally {
     clearTimeout(timer);
   }
