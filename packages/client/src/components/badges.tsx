@@ -73,7 +73,7 @@ export function initOwnerSlots(userIds: number[]) {
 
 /** The one person colour (design tokens `--owner-1`..`--owner-6`), keyed on user id, never a name. */
 export function ownerColor(userId: number): string {
-  const slot = ownerSlotCache.get(userId) ?? (Math.abs(userId) % OWNER_SLOTS) + 1; // fallback for unknown users
+  const slot = ownerSlotCache.get(userId) ?? ((Math.abs(userId) + OWNER_SLOTS - 1) % OWNER_SLOTS) + 1; // fallback for unknown users: id 1 → owner-1, like the sorted order
   return `var(--owner-${slot})`;
 }
 

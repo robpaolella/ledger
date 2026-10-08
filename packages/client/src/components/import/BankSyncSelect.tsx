@@ -189,7 +189,7 @@ export default function BankSyncSelect({
                   {g.rows.map((a) => {
                     const off = gated.has(a.id);
                     const on = isSel(a.id);
-                    const oColor = a.isShared ? 'var(--owner-shared)' : ownerColor(a.owners[0]?.id ?? 0);
+                    const oColor = a.isShared || !a.owners[0] ? 'var(--owner-shared)' : ownerColor(a.owners[0].id);
                     const oLabel = a.isShared ? 'Shared' : (a.owners[0]?.displayName ?? '—');
                     return (
                       <div key={a.id} onClick={() => toggleAcct(a.id)}

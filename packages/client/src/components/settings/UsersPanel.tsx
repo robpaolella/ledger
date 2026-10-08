@@ -7,7 +7,8 @@ import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
-import { Card, CardHeader, Caption, Field, PanelHeader, Pill, CheckBox, SelectShell, InitialsAvatar, paletteColor, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
+import { ownerColor } from '../badges';
+import { Card, CardHeader, Caption, Field, PanelHeader, Pill, CheckBox, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
 
 // --- Permission catalogue: what a member may do, grouped for the checkbox cards ---
 const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; desc: string }[] }[] = [
@@ -261,7 +262,7 @@ function DeleteUserModal({ userId, onClose, onDeleted }: { userId: number; onClo
       {loading || !preview ? <Spinner /> : step === 'preview' ? (
         <div className="flex flex-col gap-5">
           <div className="flex items-center gap-3">
-            <InitialsAvatar name={preview.user.displayName} color={paletteColor(preview.user.id)} size={40} />
+            <InitialsAvatar name={preview.user.displayName} color={ownerColor(preview.user.id)} size={40} />
             <div className="min-w-0">
               <div className="text-[15px] font-bold text-content truncate">{preview.user.displayName}</div>
               <div className="text-[13px] text-content-3">@{preview.user.username} · {ROLE_LABEL[preview.user.role] ?? preview.user.role}</div>
@@ -430,7 +431,7 @@ export default function UsersPanel() {
       <Card>
         <CardHeader title="Household members" meta={loaded ? `${managedUsers.length} ${managedUsers.length === 1 ? 'user' : 'users'}` : undefined} />
         {!loaded ? <Spinner /> : managedUsers.map((mu) => {
-          const color = paletteColor(mu.id);
+          const color = ownerColor(mu.id);
           const isOpen = expanded.has(mu.id);
           return (
             <div key={mu.id} className="border-t border-line">
