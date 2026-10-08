@@ -3,18 +3,17 @@ import type Database from 'better-sqlite3';
 import { findOrCreateMerchant } from '../merchants.js';
 import { sampleMerchantName } from './merchants.js';
 
-export function createHelpers(db: Database.Database) {
+export function createHelpers(db: Database.Database, now = new Date()) {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
-  // Relative dates: the fixtures below are written against Jan–Mar 2026. Shift
+  // Relative dates: fixtures end in March 2026. Shift
   // every date so the last fixture month (2026-03) lands on the current month,
   // which keeps "this month" views populated whenever the demo is seeded.
   // ---------------------------------------------------------------------------
   const FIXTURE_LAST = { y: 2026, m: 3 };
-  const now = new Date();
   const MONTH_SHIFT = (now.getFullYear() - FIXTURE_LAST.y) * 12 + (now.getMonth() + 1 - FIXTURE_LAST.m);
   function rel(date: string): string {
     const [y, m, d] = date.split('-').map(Number);
@@ -38,7 +37,7 @@ export function createHelpers(db: Database.Database) {
     accountId: number,
     date: string,
     description: string,
-    categoryId: number,
+    categoryId: number | null,
     amount: number,
     note?: string
   ): number {
@@ -57,7 +56,8 @@ export function createHelpers(db: Database.Database) {
   }
 
 
-  return { db: db as Database.Database, rel, catId, insertTx, insertSplit };
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return { db: db as Database.Database, rel, catId, insertTx, insertSplit, today };
 }
 
 export type Helpers = ReturnType<typeof createHelpers>;
