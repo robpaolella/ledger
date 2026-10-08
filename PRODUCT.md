@@ -136,7 +136,7 @@ Data stays untouched; these are never rebuilt.
 
 - Stored transaction amounts always mean **positive = money out; negative = money in**, for every category type. Income versus expense is determined by `categories.type`, never by amount sign alone.
 - A minus in the entry form reverses that category's normal direction.
-- Use `fmtTransaction()` in `packages/client/src/lib/formatters.ts` for display.
+- Display follows the Display rules below; #88 replaces `fmtTransaction()` and the local formatters with one shared money display.
 - Convert SimpleFIN transaction amounts to Ledger's convention. Never apply that conversion to balances, holding market values, or cost basis.
 - All categories use the group → sub-category hierarchy, including income.
 - Account ownership comes from the many-to-many `account_owners` relationship, not the legacy single-owner field.
