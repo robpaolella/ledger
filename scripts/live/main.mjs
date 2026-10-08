@@ -134,14 +134,17 @@ async function stop(state) {
   fs.rmSync(stateFile, { force: true });
   console.log('Ledger stopped.');
 }
-async function start(state, prepared = false) {
-  if (state && owned(state)) { console.log(`Ledger is already running on port ${state.port}.`); return; }
+async function assertAvailablePort() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) fail('Choose a port between 1 and 65535 with LEDGER_LIVE_PORT.');
   await new Promise((resolve, reject) => {
     const probe = net.createServer();
     probe.once('error', () => reject(new Error(`Port ${port} is busy or unavailable; Ledger was not started.`)));
     probe.listen(port, () => probe.close(resolve));
   });
+}
+async function start(state, prepared = false) {
+  if (state && owned(state)) { console.log(`Ledger is already running on port ${state.port}.`); return; }
+  await assertAvailablePort();
   if (!prepared) {
     prepareBuild();
     initialize();
@@ -192,6 +195,8 @@ async function update(state) {
   if (previous === next) { console.log('Ledger is already up to date; nothing changed.'); return; }
   const wasRunning = state && owned(state);
   if (wasRunning && state.port !== port) fail('Use the running instance port for LEDGER_LIVE_PORT before updating.');
+  // A missing/stale record must not let us update files underneath an unknown server.
+  if (!wasRunning) await assertAvailablePort();
   await stop(state);
   let saved;
   try { saved = await backup(); }
@@ -209,6 +214,7 @@ async function update(state) {
   const moved = [];
   let installed = false;
   let starting = false;
+  let phase = 'preserving the previous build';
   try {
     holding = fs.mkdtempSync(path.join(path.dirname(checkout), '.ledger-update-'));
     for (const name of artifacts) {
@@ -219,17 +225,21 @@ async function update(state) {
       fs.renameSync(original, target);
       moved.push(name);
     }
+    phase = 'updating the checkout';
     git('-C', checkout, 'merge', '--ff-only', next);
     installed = true;
     for (const args of [['ci'], ['run', 'build']]) {
+      phase = args[0] === 'ci' ? 'installing dependencies' : 'building';
       execFileSync('npm', args, { cwd: checkout, env: { PATH: process.env.PATH, HOME: os.homedir() }, stdio: 'inherit' });
     }
+    phase = 'starting and checking health';
     starting = true;
     await start(null, true);
     console.log(`Ledger updated: ${previous} -> ${next}.${wasRunning ? '' : ' Previously stopped instance was started.'}`);
   } catch {
     try {
-      await stop(readState());
+      const failedState = readState();
+      if (failedState && owned(failedState)) await stop(failedState);
       git('-C', checkout, 'reset', '--hard', previous);
       for (const name of installed ? artifacts : moved) fs.rmSync(path.join(checkout, name), { recursive: true, force: true });
       for (const name of moved) fs.renameSync(path.join(holding, name), path.join(checkout, name));
@@ -242,10 +252,11 @@ async function update(state) {
       }
       if (wasRunning || starting) await start(null, true);
     } catch {
-      fail(`ROLLBACK FAILED: Ledger needs recovery. Database backup: ${saved}. Saved build/dependencies: ${holding}.`);
+      const retained = holding && moved.some(name => fs.existsSync(path.join(holding, name)));
+      fail(`ROLLBACK FAILED: Ledger needs recovery. Database backup: ${saved}.${retained ? ` Saved build/dependencies: ${holding}.` : ''}`);
     }
     if (holding) fs.rmSync(holding, { recursive: true, force: true });
-    fail(`Update failed; rolled back to ${previous}. Database backup: ${saved}.`);
+    fail(`Update failed during ${phase}; rolled back to ${previous}. Ledger ${wasRunning || starting ? 'is running again' : 'remains stopped'}. Database backup: ${saved}.`);
   }
   fs.rmSync(holding, { recursive: true, force: true });
 }

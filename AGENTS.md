@@ -120,8 +120,11 @@ copying, so those failures can be retried with the same source folder.
 code exists it stops, backs up, fast-forwards, installs and builds, then starts and
 checks health (a stopped instance is also started). An unchanged version takes no
 backup and does not restart. Failed install/build restores the old code, dependencies
-and builds; failed startup also restores the pre-update database. A running instance
-is restarted after rollback. If rollback fails, keep the printed backup and saved
+and builds; failed startup also restores the pre-update database. A previously running
+instance is restarted after rollback. If the new version reached startup, rollback
+starts the old version even when the instance was previously stopped; an earlier
+install/build failure leaves a previously stopped instance stopped. If rollback
+fails, keep the printed backup and any saved
 artifacts for recovery; do not retry or restore real data without Robert.
 
 Agents must never otherwise read, query, copy, export, screenshot or open in a browser

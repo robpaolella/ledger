@@ -260,6 +260,13 @@ if (process.argv[2] === 'ci') {
       assert.equal(backupFiles().length, count);
       assert.equal(JSON.parse(fs.readFileSync(path.join(live, 'live-process.json'))).pid, pid);
       const next = advance();
+      const record = fs.readFileSync(path.join(live, 'live-process.json'));
+      fs.unlinkSync(path.join(live, 'live-process.json'));
+      try { assert.match(cli('update').stderr, /busy or unavailable/); }
+      finally { fs.writeFileSync(path.join(live, 'live-process.json'), record); }
+      assert.equal(head(), previous);
+      assert.equal(backupFiles().length, count);
+      await healthy();
       fs.renameSync(path.join(temp, 'backups'), path.join(temp, 'saved-backups'));
       fs.symlinkSync(path.join(temp, 'saved-backups'), path.join(temp, 'backups'));
       try { assert.match(cli('update').stderr, /Backup failed/); }
@@ -293,6 +300,8 @@ if (process.argv[2] === 'ci') {
         const result = run('bash', [script, 'update'], { env: mockEnv });
         assert.equal(result.status, 1);
         assert.match(result.stderr, /rolled back/);
+        assert.match(result.stderr, /is running again/);
+        assert.match(result.stderr, new RegExp(mode === 'install' ? 'installing dependencies' : mode === 'build' ? 'building' : 'checking health'));
         if (mode === 'health') assert.equal(fs.readFileSync(path.join(live, 'update-migration-ran'), 'utf8'), 'changed');
         assert.equal(head(), next);
         assert.equal(fs.statSync(path.join(checkout, 'node_modules')).ino, modules);
@@ -302,6 +311,18 @@ if (process.argv[2] === 'ci') {
         const db = new Database(path.join(live, 'ledger.db'), { readonly: true });
         try { assert.equal(db.prepare('SELECT value FROM live_backup_test').get().value, 'WAL-only sample'); } finally { db.close(); }
         await healthy();
+      }
+      for (const mode of ['install', 'health']) {
+        good(cli('stop'));
+        mock(mode);
+        const result = run('bash', [script, 'update'], { env: mockEnv });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /rolled back/);
+        assert.match(result.stderr, mode === 'health' ? /is running again/ : /remains stopped/);
+        assert.equal(head(), next);
+        assert.equal(backupFiles().length, ++count);
+        if (mode === 'health') await healthy();
+        else assert.match(good(cli('status')), /not running/);
       }
       mock('lock');
       const child = spawn('bash', [script, 'update'], { env: mockEnv, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -325,6 +346,7 @@ if (process.argv[2] === 'ci') {
       const failed = run('bash', [script, 'update'], { env: mockEnv });
       assert.equal(failed.status, 1);
       assert.match(failed.stderr, /ROLLBACK FAILED/);
+      assert.equal(failed.stderr.includes('Saved build/dependencies:'), false);
       const savedBackup = failed.stderr.match(/Database backup: (.+?\.db)\./)[1];
       assert.equal(fs.existsSync(savedBackup), true);
       assert.match(good(cli('status')), /not running/);
