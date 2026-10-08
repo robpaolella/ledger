@@ -22,6 +22,7 @@ import { seedTransactions } from './demo-seed/transactions.js';
 import { seedBudgets, seedRecurring } from './demo-seed/budgets-recurring.js';
 import { seedNetWorth } from './demo-seed/net-worth.js';
 import { seedInvestments } from './demo-seed/investments.js';
+import { seedReviewsRules } from './demo-seed/reviews-rules.js';
 
 const dbPath = process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'ledger.db');
 const db = new Database(dbPath);
@@ -67,6 +68,7 @@ const peopleAccounts = seedPeopleAccounts(db);
 seedMerchants(db);
 const CAT = createCategories(helpers);
 seedTransactions(helpers, peopleAccounts, CAT);
+seedReviewsRules(helpers, peopleAccounts);
 const budgetCount = seedBudgets(helpers, CAT);
 const investments = seedInvestments(helpers);
 const { balances, assetDefs } = seedNetWorth(helpers, investments.balances, investments.days);

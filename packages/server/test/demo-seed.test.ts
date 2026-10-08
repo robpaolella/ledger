@@ -9,6 +9,8 @@ import { VENDORS } from '../src/db/data/vendors.js';
 import { createHelpers } from '../src/db/demo-seed/helpers.js';
 import { createCategories } from '../src/db/demo-seed/categories.js';
 import { SAMPLE_AMAZON_MATCH_FIXTURES, seedTransactions } from '../src/db/demo-seed/transactions.js';
+import { seedReviewsRules } from '../src/db/demo-seed/reviews-rules.js';
+import { buildCategorizer } from '../src/services/categorize.js';
 
 function fixture() {
   const db = new Database(':memory:');
@@ -16,7 +18,7 @@ function fixture() {
     CREATE TABLE users (id INTEGER PRIMARY KEY, username, password_hash, display_name, role);
     CREATE TABLE app_config (key PRIMARY KEY, value);
     CREATE TABLE financial_institutions (id INTEGER PRIMARY KEY, name UNIQUE, domain);
-    CREATE TABLE accounts (id INTEGER PRIMARY KEY, name, last_four, type, classification, owner, institution_id, institution);
+    CREATE TABLE accounts (id INTEGER PRIMARY KEY, name, last_four, type, classification, owner, institution_id, institution, is_active DEFAULT 1);
     CREATE TABLE account_owners (account_id, user_id);
     CREATE TABLE merchants (id INTEGER PRIMARY KEY, name UNIQUE, logo_url);
     CREATE TABLE vendor_logos (name, logo_url);
@@ -26,13 +28,17 @@ function fixture() {
   return db;
 }
 
-function transactionFixture(now: Date) {
+function transactionFixture(now: Date, withReviewData = false) {
   const db = fixture();
   db.pragma('foreign_keys = ON');
   db.exec(`
     CREATE TABLE categories (id INTEGER PRIMARY KEY, group_name, sub_name, display_name, type, sort_order, exclude_from_budget DEFAULT 0);
-    CREATE TABLE transactions (id INTEGER PRIMARY KEY, account_id REFERENCES accounts(id), date, description, category_id REFERENCES categories(id), merchant_id REFERENCES merchants(id), amount, note);
+    CREATE TABLE transactions (id INTEGER PRIMARY KEY, account_id REFERENCES accounts(id), date, description, category_id REFERENCES categories(id), merchant_id REFERENCES merchants(id), amount, note, needs_review DEFAULT 0);
     CREATE TABLE transaction_splits (id INTEGER PRIMARY KEY, transaction_id REFERENCES transactions(id), category_id REFERENCES categories(id), amount, merchant_id REFERENCES merchants(id), note);
+    CREATE TABLE category_rules (id INTEGER PRIMARY KEY, match_type, pattern, category_id REFERENCES categories(id), priority DEFAULT 0, created_at);
+    CREATE TABLE category_feedback (id INTEGER PRIMARY KEY, transaction_id REFERENCES transactions(id), description, merchant_id REFERENCES merchants(id), account_id REFERENCES accounts(id), amount, txn_date, prior_category_id REFERENCES categories(id), prior_source, prior_confidence, corrected_category_id REFERENCES categories(id), kind, user_id REFERENCES users(id), created_at);
+    CREATE TABLE transaction_reviews (id INTEGER PRIMARY KEY, transaction_id UNIQUE REFERENCES transactions(id), status, reason, assignee_id REFERENCES users(id), note, flagged_by REFERENCES users(id), resolved_by REFERENCES users(id), created_at, resolved_at);
+    CREATE TABLE notifications (id INTEGER PRIMARY KEY, user_id REFERENCES users(id), type, severity, title, body, action_label, action_target, dedupe_key, is_read DEFAULT 0, created_at, UNIQUE(user_id, dedupe_key));
   `);
   const groups: Record<string, string[]> = {
     Income: ['Take Home Pay', 'Interest Income', 'Other Income'],
@@ -55,6 +61,7 @@ function transactionFixture(now: Date) {
   const categories = createCategories(helpers);
   createCategories(helpers); // Taxonomy additions are idempotent.
   seedTransactions(helpers, people, categories);
+  if (withReviewData) seedReviewsRules(helpers, people);
   return db;
 }
 
@@ -134,6 +141,83 @@ describe('nine-month synthetic transactions', () => {
       expect(a.prepare(`SELECT date, ${columns} FROM transactions WHERE date <= '2026-10-07' ORDER BY id`).all())
         .toEqual(early.prepare(`SELECT date, ${columns} FROM transactions ORDER BY id`).all());
     } finally { a.close(); b.close(); early.close(); }
+  });
+});
+
+describe('learned rules and review-task fixtures', () => {
+  it('seeds deterministic, internally consistent review data and rules', () => {
+    const first = transactionFixture(new Date(2026, 9, 31), true);
+    const second = transactionFixture(new Date(2026, 9, 31), true);
+    const clipped = transactionFixture(new Date(2026, 0, 1), true);
+    const scalar = (db: Database.Database, sql: string) => (db.prepare(sql).get() as { n: number }).n;
+    try {
+      expect(scalar(first, 'SELECT COUNT(*) n FROM category_rules')).toBe(25);
+      expect(first.prepare(`
+        SELECT r.id FROM category_rules r
+        LEFT JOIN merchants m ON m.id = CAST(r.pattern AS INTEGER)
+        LEFT JOIN categories c ON c.id = r.category_id
+        LEFT JOIN transactions t ON t.merchant_id = m.id AND t.category_id = r.category_id
+        WHERE r.match_type != 'merchant' OR m.id IS NULL OR c.id IS NULL OR t.id IS NULL
+      `).all()).toEqual([]);
+
+      expect(first.prepare('SELECT kind, COUNT(*) n FROM category_feedback GROUP BY kind ORDER BY kind').all())
+        .toEqual([{ kind: 'confirmation', n: 124 }, { kind: 'correction', n: 124 }, { kind: 'split_leg', n: 2 }]);
+      expect(first.prepare(`
+        SELECT f.id FROM category_feedback f
+        LEFT JOIN transaction_splits ts ON ts.transaction_id = f.transaction_id AND ts.category_id = f.corrected_category_id
+        WHERE f.kind = 'split_leg' AND ts.id IS NULL
+      `).all()).toEqual([]);
+      expect(scalar(first, `
+        SELECT COUNT(*) n FROM category_feedback f JOIN transactions t ON t.id = f.transaction_id
+        WHERE f.created_at < t.date
+      `)).toBe(0);
+
+      expect(first.prepare('SELECT status, COUNT(*) n FROM transaction_reviews GROUP BY status ORDER BY status').all())
+        .toEqual([{ status: 'open', n: 45 }, { status: 'resolved', n: 255 }]);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM transactions WHERE needs_review = 1')).toBe(45);
+      expect(first.prepare(`
+        SELECT t.id FROM transactions t LEFT JOIN transaction_reviews r ON r.transaction_id = t.id AND r.status = 'open'
+        WHERE t.needs_review != CASE WHEN r.id IS NULL THEN 0 ELSE 1 END
+      `).all()).toEqual([]);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM transaction_reviews r JOIN transactions t ON t.id = r.transaction_id WHERE r.status = \'resolved\' AND (r.resolved_by IS NULL OR r.resolved_at IS NULL OR t.needs_review != 0)')).toBe(0);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM transaction_reviews r JOIN transactions t ON t.id = r.transaction_id WHERE r.status = \'open\' AND (r.assignee_id IS NULL OR t.needs_review != 1)')).toBe(0);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM transaction_reviews r JOIN transactions t ON t.id = r.transaction_id WHERE r.created_at < t.date')).toBe(0);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM transaction_reviews WHERE status = \'open\'') / scalar(first, 'SELECT COUNT(*) n FROM transactions')).toBeCloseTo(0.033, 2);
+
+      expect(first.prepare(`
+        SELECT n.user_id FROM notifications n
+        WHERE n.dedupe_key = 'review:aggregate' AND (
+          n.type != 'needs_review' OR n.title != 'Transactions need review' OR n.is_read != 0
+          OR n.action_target != '/reviews?assignee=me'
+          OR n.body != (SELECT COUNT(*) || ' transactions assigned to you need review' FROM transaction_reviews r WHERE r.status = 'open' AND r.assignee_id = n.user_id)
+        )
+      `).all()).toEqual([]);
+      expect(scalar(first, "SELECT COUNT(*) n FROM notifications WHERE dedupe_key = 'review:aggregate'")).toBe(2);
+      expect(first.pragma('foreign_key_check')).toEqual([]);
+
+      const rule = first.prepare(`
+        SELECT m.name, r.category_id FROM category_rules r JOIN merchants m ON m.id = CAST(r.pattern AS INTEGER) ORDER BY r.id LIMIT 1
+      `).get() as { name: string; category_id: number };
+      expect(buildCategorizer(first).categorize({ description: rule.name, amount: 12.34 })).toMatchObject({
+        categoryId: rule.category_id, confidence: 1, source: 'rule',
+      });
+      for (const table of ['category_rules', 'category_feedback', 'transaction_reviews', 'notifications'] as const) {
+        expect(first.prepare(`SELECT * FROM ${table} ORDER BY id`).all())
+          .toEqual(second.prepare(`SELECT * FROM ${table} ORDER BY id`).all());
+      }
+      expect(scalar(clipped, 'SELECT COUNT(*) n FROM transaction_reviews')).toBe(300);
+      expect((clipped.prepare(`
+        SELECT created_at AS date FROM category_rules UNION ALL
+        SELECT created_at FROM category_feedback UNION ALL
+        SELECT created_at FROM transaction_reviews UNION ALL
+        SELECT resolved_at FROM transaction_reviews WHERE resolved_at IS NOT NULL UNION ALL
+        SELECT created_at FROM notifications
+      `).all() as { date: string }[]).every(row => row.date.slice(0, 10) <= '2026-01-01')).toBe(true);
+    } finally {
+      first.close();
+      second.close();
+      clipped.close();
+    }
   });
 });
 
