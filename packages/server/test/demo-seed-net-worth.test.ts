@@ -13,6 +13,7 @@ function fixture(now: Date) {
   db.pragma('foreign_keys = ON');
   db.exec(`
     CREATE TABLE users (id INTEGER PRIMARY KEY, display_name TEXT NOT NULL);
+    CREATE TABLE app_config (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT, type TEXT NOT NULL, owner TEXT NOT NULL);
     CREATE TABLE transactions (id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL REFERENCES accounts(id), date TEXT NOT NULL, amount REAL NOT NULL);
     CREATE TABLE balance_snapshots (id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL REFERENCES accounts(id), date TEXT NOT NULL, balance REAL NOT NULL, note TEXT);
@@ -48,7 +49,9 @@ describe('demo net-worth sample', () => {
       const accounts = db.prepare('SELECT id, type FROM accounts').all() as Array<{ id: number; type: string }>;
       for (const account of accounts) {
         const snapshots = db.prepare('SELECT date, balance FROM balance_snapshots WHERE account_id = ? ORDER BY date').all(account.id) as Array<{ date: string; balance: number }>;
-        expect(snapshots).toHaveLength(days.length);
+        const expectedStart = account.id >= 15 ? 60 : account.id >= 9 ? 30 : 0;
+        expect(snapshots).toHaveLength(days.length - expectedStart);
+        expect(snapshots[0].date).toBe(days[expectedStart]);
         for (let index = 1; index < snapshots.length; index++) {
           const change = Math.round((snapshots[index].balance - snapshots[index - 1].balance) * 100) / 100;
           if (['checking', 'savings', 'credit'].includes(account.type)) {
@@ -64,6 +67,7 @@ describe('demo net-worth sample', () => {
         }
       }
       expect(db.prepare('SELECT COUNT(*) AS count FROM simplefin_holdings').get()).toEqual({ count: 60 });
+      expect(db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_success'").get()).toEqual({ value: '2026-10-31' });
     } finally { db.close(); }
   });
 

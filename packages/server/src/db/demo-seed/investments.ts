@@ -57,8 +57,12 @@ export function seedInvestments({ db, rel, today }: Helpers) {
     (simplefin_link_id, symbol, date, shares, cost_basis, market_value) VALUES (?, ?, ?, ?, ?, ?)`);
   const insertPrice = db.prepare('INSERT INTO benchmark_prices (symbol, date, adj_close) VALUES (?, ?, ?)');
   const insertMeta = db.prepare('INSERT INTO symbol_meta (symbol, asset_class) VALUES (?, ?)');
+  // Demo links exist solely to power local holdings screens. Mark today's pull
+  // complete so the production scheduler never attempts their synthetic URLs.
+  const setDailySyncComplete = db.prepare("INSERT OR REPLACE INTO app_config (key, value) VALUES ('daily_sync.last_success', ?)");
 
   db.transaction(() => {
+    setDailySyncComplete.run(today);
     for (const [symbol, , assetClass] of POSITIONS) insertMeta.run(symbol, assetClass);
     for (const [symbol, base] of BENCHMARKS) {
       for (const [dayIndex, date] of days.entries()) insertPrice.run(symbol, date, price(base, dayIndex, BENCHMARKS.findIndex(([candidate]) => candidate === symbol)));
@@ -79,6 +83,6 @@ export function seedInvestments({ db, rel, today }: Helpers) {
       }
     }
   })();
-  console.log(`  Created ${accounts.length * POSITIONS.length} positions, ${days.length} days of history, and ${BENCHMARKS.length} price series`);
+  console.log(`  Created ${accounts.length * POSITIONS.length} positions, ${days.length} days of history, and ${BENCHMARKS.length} price series (offline)`);
   return { balances, days, positionCount: accounts.length * POSITIONS.length };
 }

@@ -16,9 +16,12 @@ export function seedNetWorth(
   db.transaction(() => {
     for (const [index, account] of accounts.entries()) {
       const isInvestment = ['investment', 'retirement'].includes(account.type);
+      // Later-added sample accounts appear during the fixture window, rather
+      // than making every account look like it has nine months of history.
+      const startDay = index >= 14 ? 60 : index >= 8 ? 30 : 0;
       // Cards begin as liabilities; other transaction-backed accounts begin as assets.
       const openingBalance = account.type === 'credit' ? -(900 + index * 175) : 2_400 + index * 675;
-      for (const date of days) {
+      for (const date of days.slice(startDay)) {
         const balance = isInvestment
           ? investmentBalances.get(account.id)?.get(date)
           : Math.round((openingBalance - (transactionSum.get(account.id, date) as { amount: number }).amount) * 100) / 100;
