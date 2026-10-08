@@ -7,3 +7,6 @@
 - `npm run db:backup` copies only `ledger.db`, missing changes still in `ledger.db-wal`; switch `scripts/db-backup.sh` to SQLite's backup API (and point it at `data/` when running with live data).
 - First-run onboarding for brand-new installs
 - CSV files with separate debit and credit columns
+- Refuse CSV imports into inactive accounts (is_active = 0).
+- verify-ledger feature map: phone directions still say "Budget tab" and "More →"; phones now use the app bar and nav drawer (`budgets-reports.md`, `transactions-import.md`, `settings-permissions.md`, `design-states.md`).
+- README Configuration table omits settings it relies on: `TIINGO_TOKEN`, `DAILY_SYNC_HOUR`/`DAILY_SYNC_MINUTE`, `DISABLE_DAILY_SYNC`, `AMAZON_DATA_DIR`, `LOGODEV_TOKEN`.
