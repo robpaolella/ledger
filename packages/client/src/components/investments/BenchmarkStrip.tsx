@@ -58,7 +58,7 @@ export default function BenchmarkStrip({ rangeLabel, portfolio, benchmarks, sele
               </span>
               <span className="text-[16px] font-bold">{c.name}</span>
             </div>
-            <div className="flex gap-[34px]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:gap-[34px]">
               <Stat label={rangeLabel} value={c.rangePct} />
               <Stat label="Today" value={c.todayPct} />
             </div>
