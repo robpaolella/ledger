@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 # Serialize all lifecycle commands, including first-run initialization.
-case "${1:-}" in start|stop|status) ;; *) echo 'Usage: bash scripts/live.sh start [offline-source-folder] | stop | status'; exit 1;; esac
+case "${1:-}" in start|stop|status|update) ;; *) echo 'Usage: bash scripts/live.sh start [offline-source-folder] | stop | status | update'; exit 1;; esac
 live_dir="$(realpath -m "${LEDGER_LIVE_DIR:-$HOME/ledger-live/live}")"
 export LEDGER_LIVE_DIR="$live_dir"
 mkdir -p "$(dirname "$live_dir")"

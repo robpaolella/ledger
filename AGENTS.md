@@ -104,7 +104,7 @@ wired to any actual server without checking with Robert first.
 ## Personal live instance
 
 When Robert asks, agents may run `bash scripts/live.sh start [offline-source-folder]`,
-`stop`, or `status`. First start copies only the database/WAL/SHM, uploads and JWT
+`stop`, `status`, or `update`. First start copies only the database/WAL/SHM, uploads and JWT
 secret from a **stopped, immutable source**; it never overwrites an existing working
 folder. Each start backs up before the app can migrate data; the newest 30 backups
 are retained. The dedicated checkout builds once; updating it is separate work.
@@ -116,6 +116,13 @@ New checkouts fetch that branch; existing checkouts use its local origin ref wit
 fetching. The launcher works from the live checkout itself or another worktree of
 this repository. Checkout validation and any needed build finish before first-start
 copying, so those failures can be retried with the same source folder.
+`update` fetches the tracked branch and refuses dirty or divergent checkouts. If newer
+code exists it stops, backs up, fast-forwards, installs and builds, then starts and
+checks health (a stopped instance is also started). An unchanged version takes no
+backup and does not restart. Failed install/build restores the old code, dependencies
+and builds; failed startup also restores the pre-update database. A running instance
+is restarted after rollback. If rollback fails, keep the printed backup and saved
+artifacts for recovery; do not retry or restore real data without Robert.
 
 Agents must never otherwise read, query, copy, export, screenshot or open in a browser
 this live instance or its folder. All verification uses synthetic verify-ledger data;
