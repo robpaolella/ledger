@@ -28,7 +28,15 @@ The newcomer is someone Robert invites into his instance, where the data already
 
 ### Finished retheme
 
-The retheme is finished when every screen follows the same look and patterns, everyday tasks work well on a phone, the rules in this file hold everywhere, and nothing the household had in v1.0.2 is lost. `feature/platform-retheme` is the single integration branch until v2.0.0; work branches from it and merges into it.
+The retheme is finished when all of these are true, in this order:
+
+1. Every task on the retheme list is merged, apart from ones marked "after the retheme".
+2. A final full audit finds no high or medium problems on sample data, covering every page, on phone and desktop, in light and dark, as owner, admin and member.
+3. A sample v1.0.2 database upgrades cleanly with nothing lost.
+4. Robert uses his live instance on the finished branch for about a week with no problems.
+5. Then the branch merges to main, v2.0.0 is published with plain-English release notes, and the live instance switches to following main.
+
+`feature/platform-retheme` is the single integration branch until v2.0.0; work branches from it and merges into it. Main is frozen until release. All Ledger work, bug fixes included, goes to the retheme branch. Anything that must land on main is merged into the retheme branch the same day.
 
 ## Product Purpose
 
