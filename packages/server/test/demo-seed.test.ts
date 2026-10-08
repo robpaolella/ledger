@@ -159,6 +159,7 @@ describe('synthetic Amazon orders', () => {
       expect(scalar(first, 'SELECT COUNT(*) n FROM amazon_orders')).toBe(25);
       expect(first.prepare('SELECT COUNT(*) n FROM amazon_order_items GROUP BY order_number HAVING COUNT(*) NOT BETWEEN 1 AND 4').all()).toEqual([]);
       expect(scalar(first, 'SELECT COUNT(*) n FROM amazon_matches')).toBe(25);
+      expect(scalar(first, 'SELECT COUNT(*) n FROM amazon_matches WHERE enriched_at IS NOT NULL')).toBe(0);
       expect(first.prepare(`
         SELECT m.transaction_id FROM amazon_matches m
         LEFT JOIN transactions t ON t.id = m.transaction_id

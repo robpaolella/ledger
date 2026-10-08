@@ -89,7 +89,7 @@ export function seedAmazonOrders({ db, rel, today }: Helpers): number {
   db.transaction(() => {
     orders.forEach((fixture, index) => {
       const number = orderNumber(index + 1);
-      const total = fixture.transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+      const total = Math.round(fixture.transactions.reduce((sum, transaction) => sum + transaction.amount, 0) * 100) / 100;
       const orderDate = fixture.transactions.map(transaction => transaction.date).sort()[0];
       const items = itemsForOrder(fixture, total);
       const isRefund = fixture.transactions.some(transaction => transaction.amount < 0);
