@@ -58,8 +58,9 @@ After seeding, the existing logo hydration script gets the key **only in its own
 environment**. Its output is discarded, not copied to either log. Downloads go into
 scratch uploads, and cleanup removes them. The app server never receives the key.
 Hydration has a 60-second total cap; failure or timeout does not fail launch.
-Doctor's `logos` field reports `not configured`, `complete`, `failed` or `timed out`,
-and `loaded` counts cached institution/vendor image files, not account/merchant rows.
+Doctor's `logos` field reports `not configured`, `key rejected`, `complete`, `failed`
+or `timed out`, and `loaded` counts cached institution/vendor image files, not
+account/merchant rows.
 `complete` means the script exited successfully, not that every logo was found.
 The existing downloader hides HTTP errors, so an invalid key can report `complete`
 with zero loaded; Doctor cannot distinguish HTTP 401 from other download failures.
@@ -115,10 +116,10 @@ re-snapshot; restart only your named browser session if it remains stuck.
 Use **Settings → Sign Out** on phone to switch roles, or the sidebar sign-out icon
 on desktop; alternatively stop this browser session and use a fresh named session
 for the next role. Do not inject tokens into local storage. Avoid rapid repeated
-logins; after HTTP 429 wait one minute. Fixtures are written against January–March
-2026 but **shift to the launch month and its preceding two months**. Transactions
-can use All Time; Budget/Reports should use the launch month/year. Record the launch
-date when comparing counts and balances.
+logins; after HTTP 429 wait one minute. Fixtures cover nine source months but **shift so the launch month is current, with
+its preceding eight months also populated**. The launch month stops at today; use
+Transactions → All Time to read its current count. Budget/Reports should use the
+launch month and its year. Record the launch date when comparing counts and balances.
 
 Main routes: `/accounts`, `/transactions`, `/import`, `/budget`, `/reports`,
 `/reviews`, `/investments`, `/settings`. `/net-worth` redirects to Accounts.

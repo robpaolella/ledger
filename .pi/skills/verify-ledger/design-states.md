@@ -20,7 +20,7 @@ In the shared design-check's evidence manifest, map **every** approved entry to:
 | Theme | light / dark, using the actual theme control below |
 | Viewport | 390×844 / 1440×900, plus any extra approved widths |
 | Expected result | 0 transactions and “No transactions found for this period” |
-| Proof / reset | screenshot + accessibility snapshot; clear search to recover 91 seeded transactions |
+| Proof / reset | screenshot + accessibility snapshot; clear search, choose All Time, and record the displayed seeded total |
 
 Also record main/build SHAs and dirty diff, recipe steps, fixture dates, current date,
 browser timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`), image dimensions,
@@ -65,13 +65,14 @@ JS
 
 ## Reproducible Transactions states (same page, either theme, either width)
 
-The fresh seed has **91 transactions**, dated January–March 2026. Reapply each state
-at the other width: React sometimes selects different DOM for phone and desktop.
+The fresh seed has about **150 transactions per month across nine months**, with the
+launch month through today. Use All Time to read its exact displayed total. Reapply each
+state at the other width: React sometimes selects different DOM for phone and desktop.
 
 | State | Real steps and expected result | Reset |
 | --- | --- | --- |
-| Populated | Open Transactions. Clear search/filters, select All Time. Expect 91 transactions, BlueCross BlueShield / $210.00 first, table on desktop and cards on phone. | Clear filters/search again; fresh launch if a previous test changed data. |
-| Empty results | Type `zz-no-sample-match-49` into Search transactions. Wait for 0 transactions and “No transactions found for this period”. This is a **filtered-empty** state, not a household with no data. | Clear the search; wait for 91 transactions. |
+| Populated | Open Transactions. Clear search/filters, select All Time. Record the displayed total and inspect the newest launch-month rows; expect a table on desktop and cards on phone. | Clear filters/search again; fresh launch if a previous test changed data. |
+| Empty results | Type `zz-no-sample-match-49` into Search transactions. Wait for 0 transactions and “No transactions found for this period”. This is a **filtered-empty** state, not a household with no data. | Clear the search and restore the recorded All Time total. |
 | Add form / incomplete input | From populated, desktop **Add Transaction** or phone **+ Transaction**. Expect Add Transaction modal/bottom sheet with date/account, blank Description/Amount and Select category. Opening this form does not prove validation; test a submit separately when the issue requires it. The default date is today; record it for comparisons. | Cancel; no transaction was created. Close, change theme, reopen rather than clicking behind the modal. |
 | Detail / edit | Click a seeded ordinary transaction (not a split) and inspect its values. A split needs the separate feature-map recipe. | Cancel; do not save unless testing persistence. |
 | Restricted member | Log in as member, open Transactions. Add/edit remain available; bulk editing and deletion are absent. Inspect a row's detail as well as the page. | New browser/sign out; restore any grants through owner UI if changed. |
@@ -91,9 +92,10 @@ JS
 Use the [feature map](features/README.md) for detailed entry points and persistence
 proof. These are state recipes, not permission to change app code during verification.
 
-- **Monthly data:** Budget → March 2026 and Reports → 2026 match the seed. An empty
-  month outside January–March is different from an unconfigured household. Select
-  dates explicitly; record them so main and build don't compare different months.
+- **Monthly data:** Budget → the launch month and a past month, and Reports → the launch
+  month's year, match the seed. A month outside the rolling nine-month window is different
+  from an unconfigured household. Select dates explicitly; record them so main and build
+  don't compare different months.
 - **No connections:** Settings → Bank Sync has no seeded SimpleFIN connections.
   Capture that real empty state; never connect an outside account to populate it.
 - **Validation error:** Settings → Preferences → Change Password; enter a synthetic

@@ -15,7 +15,8 @@ Routes are `/transactions`, `/import`, and `/` for the dashboard entry points.
 ## Driving it with chrome-devtools-axi
 
 - As John, snapshot Transactions. Fill **Search transactions...** with `Costco`;
-  expect matching rows/cards; clear it and expect 91 seeded transactions again.
+  expect matching rows/cards; clear it, select All Time, and record the displayed total.
+  It is about 150 rows per month across nine months, with the launch month through today.
 - Choose **Add Transaction** (phone: **+ Transaction**), fill the visible account,
   date, description, category and amount controls. Use a unique synthetic description.
   Save, search for it, reload, and reopen it: all entered values must persist.
@@ -31,7 +32,7 @@ Routes are `/transactions`, `/import`, and `/` for the dashboard entry points.
 
 ## Gotchas
 
-Use All Time or the launch month and preceding two months for seed data. Select category type,
+Use All Time or a month in the nine-month window ending at the launch month for seed data. Select category type,
 not amount sign, to distinguish income/expense. Bank and card CSV signs differ;
 include parenthesized negatives if changing import parsing. Never upload real CSVs
 or configure SimpleFIN. Transfers and splits need their own proof when touched;
