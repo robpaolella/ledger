@@ -22,7 +22,10 @@ Launch builds all workspaces, creates a private `/tmp/ledger-verify-*` directory
 copies the production server/client builds there, runs the compiled base seed and
 then the demo seed, starts production, and creates a limited member through the
 real users API. It prints Doctor `PASS`, the URL and the throwaway database path.
-The supervisor keeps running in the background. Record `$EVIDENCE` for cleanup.
+The supervisor keeps running in the background. Record `$EVIDENCE` for cleanup. The result includes
+`url` for local checks and `lanUrl` for another device on the local network; give Robert the
+`lanUrl` to open. If no suitable LAN IPv4 address exists, `lanUrl` is `null` and the result
+says the app is reachable locally only.
 
 The only supported database is the new file created by this run. **Any inherited
 `DATABASE_PATH` (even empty), or extra argument, is refused before filesystem access.**
@@ -34,9 +37,12 @@ The server's working directory and HOME are the private scratch folder, so it do
 not load a checkout's environment file. `.jwt-secret`, SQLite WAL/SHM files, and
 build copies all stay inside that folder. Dependencies are read from this checkout.
 `listen.mjs` is a verification-only preload: it binds the unchanged production
-server to `127.0.0.1` on an OS-assigned port, reports the real port through IPC, and
-exits if its supervisor disconnects. The app's own startup line says port 0;
-**use Doctor's URL**, not that log line.
+server to `0.0.0.0` on an OS-assigned port, reports the real port through IPC, and
+exits if its supervisor disconnects. The launcher keeps its own health checks and
+control endpoint on `127.0.0.1`; only the synthetic app is exposed on the LAN. Anyone
+on that LAN can reach a running verification instance. This is acceptable because it
+contains only synthetic data and published sample passwords. The app's own startup line
+says port 0; **use Doctor's URL**, not that log line.
 
 Each launch has separate data, build snapshots, ports, control token and logs.
 Use separate worktrees for workers building concurrently, and a fresh evidence
@@ -79,7 +85,8 @@ node .pi/skills/verify-ledger/run.mjs doctor "$EVIDENCE"
 
 Run this before driving and whenever anything looks off. It asks the authenticated
 local supervisor to check its owned child, its actual process database environment
-and working directory, API health, production HTML, and all three role sessions.
+and working directory, API health (on `url` and `lanUrl` when available), production
+HTML, and all three role sessions.
 Launch proves password login for each role; Doctor reuses those tokens against
 `/api/auth/me` instead of exhausting the five-logins-per-minute rate limit.
 The limited member must have transaction creation but not deletion permission.

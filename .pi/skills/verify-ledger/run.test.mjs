@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { refuseDatabase } from './run.mjs';
+import { refuseDatabase, selectLanIPv4 } from './run.mjs';
 import { hydrateLogos } from './logos.mjs';
 
 const helper = fileURLToPath(new URL('./run.mjs', import.meta.url));
@@ -23,6 +23,28 @@ for (const database of [
     assert.doesNotMatch(result.stderr, /ENOENT/);
   });
 }
+test('selects the first eligible LAN IPv4 address', () => {
+  const address = selectLanIPv4({
+    lo: [{ family: 'IPv4', address: '127.0.0.1', internal: true }],
+    docker0: [{ family: 'IPv4', address: '172.17.0.1', internal: false }],
+    'br-123abc': [{ family: 'IPv4', address: '172.18.0.1', internal: false }],
+    veth123: [{ family: 'IPv4', address: '172.19.0.2', internal: false }],
+    tailscale0: [{ family: 'IPv4', address: '100.100.100.100', internal: false }],
+    eth0: [
+      { family: 'IPv4', address: '169.254.1.10', internal: false },
+      { family: 'IPv4', address: '192.168.50.10', internal: false },
+    ],
+    eth1: [{ family: 4, address: '10.0.0.5', internal: false }],
+  });
+  assert.equal(address, '192.168.50.10');
+});
+test('returns null when no eligible LAN IPv4 address exists', () => {
+  assert.equal(selectLanIPv4({
+    lo: [{ family: 'IPv4', address: '127.0.0.1', internal: true }],
+    docker0: [{ family: 'IPv4', address: '172.17.0.1', internal: false }],
+    eth0: [{ family: 'IPv4', address: '169.254.1.10', internal: false }],
+  }), null);
+});
 test('no database override is accepted via extra arguments', () => {
   assert.doesNotThrow(() => refuseDatabase({}));
   assert.throws(() => refuseDatabase({}, ['--database', '/tmp/foo']), /Refused/);
