@@ -135,6 +135,7 @@ Data stays untouched; these are never rebuilt.
 ### Storage
 
 - Stored transaction amounts always mean **positive = money out; negative = money in**, for every category type. Income versus expense is determined by `categories.type`, never by amount sign alone.
+- A minus in the entry form reverses that category's normal direction.
 - Use `fmtTransaction()` in `packages/client/src/lib/formatters.ts` for display.
 - Convert SimpleFIN transaction amounts to Ledger's convention. Never apply that conversion to balances, holding market values, or cost basis.
 - All categories use the group → sub-category hierarchy, including income.
@@ -147,7 +148,6 @@ Data stays untouched; these are never rebuilt.
 - Transfers follow the same sign rule, in grey.
 - Totals that can go either way (Net, budget remaining, changes) show a real minus when negative and are coloured good or bad.
 - Refunds still lower their category's spending; they remain expenses, not income.
-- A minus in the entry form reverses that category's normal direction.
 
 ### Budget
 
@@ -184,4 +184,4 @@ Preserve the Ledger name and the README's self-hosted, household-finance identit
 
 ## Accessibility & Inclusion
 
-Existing project rules require visible hover/focus states, mobile touch targets at least 44px high, appropriate input keyboards, and password-manager autocomplete. Do not autofocus bottom-sheet fields and obscure the form with the phone keyboard. Preserve text labels and explicit amount signs rather than relying on color alone. These are design requirements, not a claim that the current application has passed a formal accessibility audit.
+Existing project rules require visible hover/focus states, mobile touch targets at least 44px high, appropriate input keyboards, and password-manager autocomplete. Do not autofocus bottom-sheet fields and obscure the form with the phone keyboard. Preserve text labels and the + sign on money in rather than relying on color alone. These are design requirements, not a claim that the current application has passed a formal accessibility audit.
