@@ -37,7 +37,8 @@ export default function Popover({
   useEffect(() => {
     const panel = panelRef.current!;
     const active = document.activeElement as HTMLElement | null;
-    const trigger = active && active !== document.body ? active : lastPressed;
+    // (Strict mode re-runs this with focus already inside the panel; that is not the trigger.)
+    const trigger = active && active !== document.body && !panel.contains(active) ? active : lastPressed;
     const close = () => closeRef.current();
     openClosers.forEach((c) => c());
     openClosers.add(close);

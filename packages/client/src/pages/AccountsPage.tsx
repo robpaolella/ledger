@@ -160,11 +160,11 @@ export default function AccountsPage() {
   const openFilter = () => { setFilterDraft({ ...EMPTY_FILTER, account: selected ? [...selected].map(String) : [] }); setFilterSearch(''); setFilterOpen(true); };
   const applyFilter = () => {
     const ids = filterDraft.account.map(Number);
-    setSelected(ids.length === 0 || ids.length === data.accounts.length ? null : new Set(ids));
+    setSelected(ids.length === 0 || ids.length === data.accounts.length ? null : new Set(ids)); // nothing ticked = every account
     setFilterOpen(false);
   };
   const clearFilter = () => setFilterDraft(EMPTY_FILTER);
-  const filterActive = selected != null; // any subset (even empty) is an active filter
+  const filterActive = selected != null; // any chosen subset is an active filter
   const filterCount = selected ? selected.size : 0;
 
   // ---- asset modal ----

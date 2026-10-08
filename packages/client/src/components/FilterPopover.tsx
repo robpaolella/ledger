@@ -98,7 +98,7 @@ export default function FilterPopover({
           <div className="md:w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-b md:border-b-0 md:border-r border-line">Filters</div>
           <div className="flex-1 flex items-center gap-2.5 px-5 border-b md:border-b-0 md:border-r border-line">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search filters" placeholder={`Search ${tab.toLowerCase()}…`} className="flex-1 h-12 bg-transparent outline-none text-sm text-content" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search filters" placeholder={`Search ${tab.toLowerCase()}…`} className="no-focus-ring flex-1 h-12 bg-transparent outline-none text-sm text-content" />
           </div>
           <div className="md:w-[240px] shrink-0 px-5 py-3 md:py-0 flex items-center text-sm font-semibold text-content-2">{count} filter{count === 1 ? '' : 's'} selected</div>
         </div>

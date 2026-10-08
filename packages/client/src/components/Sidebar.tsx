@@ -221,7 +221,7 @@ export default function Sidebar() {
             className="fixed z-50 bg-elevated border border-line rounded-[12px] shadow-md p-1.5"
             style={{ left: 12, bottom: 68, width: 216 }}
           >
-            <div className="px-2.5 py-2 text-sm font-semibold text-content whitespace-nowrap overflow-hidden text-ellipsis">
+            <div role="none" className="px-2.5 py-2 text-sm font-semibold text-content whitespace-nowrap overflow-hidden text-ellipsis">
               {user?.displayName}
             </div>
             <button
