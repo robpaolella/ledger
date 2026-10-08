@@ -53,12 +53,13 @@ Checked against: `packages/server/src/middleware/permissions.ts`,
 | Missing required field | | yes |
 | Can't delete (has dependencies) | | yes |
 | Contextual info (filter, limit) | | yes |
-| Duplicate detected on manual entry | yes, with an action | |
+| Possible duplicate on manual entry | | yes ("save again to confirm") |
 
 Toasts report outcomes; inline text reports input problems. **Never both for one action.**
 
-Checked against: `packages/client/src/App.tsx` (error toasts) and the toast context in
-`packages/client/src/context/`.
+Checked against: `packages/client/src/App.tsx` (error toasts), `packages/client/src/context/ToastContext.tsx`
+(a toast carries a message and a type only), and the duplicate warning in
+`packages/client/src/pages/TransactionsPage.tsx`.
 
 ## No browser dialogs
 
@@ -165,11 +166,12 @@ cost basis pass through as SimpleFIN reports them (positive = asset, negative = 
 **Problem:** Tooltips positioned inside flex or table parents got clipped or misplaced.
 **Rule going forward:** See "Tooltips" above.
 
-### Category colours are dynamic (2026-02-22)
+### Category colours come from one place (2026-02-22)
 **Problem:** Colours hardcoded per category name in several files drifted apart and broke
 when categories were added or renamed.
-**Rule going forward:** Never map a category name to a colour by hand. Use
-`getCategoryColor()` from `packages/client/src/lib/categoryColors.ts`.
+**Rule going forward:** Category colours come only from `packages/client/src/lib/categoryMeta.ts`
+(one shared map, with a fallback colour for unknown names). Never add another per-file
+colour map or hardcode a category's colour in a component.
 
 ### Constrained scroll containers (2026-02-22)
 **Problem:** A scrollable list inside a fixed-height card overflowed the card: percentage
@@ -195,7 +197,7 @@ members.
 **Problem:** Fresh installs need an owner account before anyone can sign in, with no seed
 users.
 **Rule going forward:** The `setup_complete` flag in `app_config` gates a one-time,
-unauthenticated create-owner endpoint (it works once only). The setup-status check runs
+unauthenticated `POST /api/setup/create-admin` endpoint, which creates the owner (it works once only). The setup-status check runs
 before any auth check at app start. Existing installs are migrated automatically.
 
 ### Owner > admin > member hierarchy (2026-02-22)
@@ -272,6 +274,13 @@ with the declarations in the right order, like `.app-shell-height` in `index.css
 **Rule going forward:** Never show a visible scrollbar for vertical modal or list
 scrolling. Put `hide-scrollbar` on the scroll container, and when the area needs a scroll
 hint, add a bottom fade and chevron.
+
+### Venmo descriptions come from row type and direction (2026-05-05)
+**Problem:** Guessing the statement owner's name from the first row mislabelled later
+payments, for example when that row was a charge.
+**Rule going forward:** Build Venmo descriptions from the row type and money direction,
+never from a guessed account owner. Skip funding and transfer rows, and use the Note column
+as the description.
 
 ### Every code path returns a value (2026-03-01)
 **Problem:** A loader function with no final `return` gave `undefined` on first visit and
