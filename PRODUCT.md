@@ -58,7 +58,7 @@ Do not mistake an owner filter for a privacy boundary. Shared account transactio
 
 Member permissions come in three presets, with individual switches under "Customize":
 
-- **View only:** see everything the member is allowed to see; change nothing.
+- **View only:** can view the household finance screens but change nothing.
 - **Everyday:** today's member defaults: add and edit transactions, CSV and bank-sync imports, edit budgets, and update balances.
 - **Everything except managing people:** every grantable permission. Managing users stays with the owner and admins.
 
@@ -66,7 +66,7 @@ Member permissions come in three presets, with individual switches under "Custom
 
 - Runs on the household's own server as a single Docker image, with SQLite persistence. Browser access requires sign-in after first-run owner creation; there are no default user credentials.
 - Supports username/password sign-in and optional authenticator-based two-factor authentication with recovery codes. Preserve account recovery and security states when designing these flows.
-- Desktop supports dense review and editing; phone layouts provide bottom navigation, card lists, and bottom-sheet forms rather than squeezing desktop tables into a narrow viewport.
+- Desktop supports dense review and editing; phone layouts provide a header with a slide-out menu, card lists, and bottom-sheet forms rather than squeezing desktop tables into a narrow viewport.
 - Transactions can be entered manually or reviewed and imported from CSV and SimpleFIN Bridge.
 - SimpleFIN is an external service. Shared and personal connections can coexist; credentials and personal connection details must not leak between users. Do not describe self-hosting as proof that no external services are involved.
 - Current currency formatters display dollar amounts with US number formatting. This is observed implementation, not a claim of multi-currency support.
@@ -75,7 +75,7 @@ Member permissions come in three presets, with individual switches under "Custom
 
 - **Dashboard:** financial summaries, spending breakdown, and recent transactions.
 - **Transactions:** search, filters, pagination, create/edit/delete, bulk changes, splits and reimbursements. Preserve the distinction between the bank transaction and its allocations; changes must keep totals consistent.
-- **Review queue:** transactions that need a category or a second look, before they count as settled.
+- **Review queue:** transactions that need a category or a second look.
 - **Import (CSV and bank sync):** review categorization, duplicates, and likely transfers before importing. Both paths need these checks. SimpleFIN transaction IDs provide exact re-import protection in addition to cross-source duplicate detection.
 - **Budget:** monthly category budget versus actual, including shared accounts. Negative actuals such as refunds remain visible. Over-budget emphasis belongs on actual spending and progress indicators, not the planned budget amount.
 - **Recurring:** bills and income that repeat, and whether each has come due.
@@ -89,10 +89,9 @@ Member permissions come in three presets, with individual switches under "Custom
 
 ### Daily bank sync
 
-- Bank sync runs automatically every day at 05:30 server time by default. If it fails it retries with growing delays (15 minutes, 1 hour, 3 hours, 6 hours) and notifies the household when it gives up. A sign-in problem with the bank connection notifies immediately.
+- Bank sync runs automatically every day at 05:30 server time by default. If it fails it retries with growing delays (15 minutes, 1 hour, 3 hours, 6 hours) and notifies the people who use that connection after repeated failures. A sign-in problem with the bank connection notifies immediately.
 - Anyone with the bank-sync permission can also sync manually at any time.
 - SimpleFIN requests are limited to 60-day ranges; split longer ranges and explain rate-limit failures.
-- The schedule and the latest sync result are visible in Settings, and the owner can switch automatic sync off.
 
 ### Optional extras
 
@@ -100,7 +99,7 @@ Owner and admin only. Each shows one plain "Not set up yet" line when unconfigur
 
 - **AI categorizing:** uses a local Ollama server.
 - **Amazon order matching:** matches Amazon orders to transactions.
-- **Investment benchmarks:** needs the `TIINGO_TOKEN` setting.
+- **Investment benchmarks:** needs the `TIINGO_TOKEN` server setting.
 
 ### Retired for good
 
@@ -116,6 +115,13 @@ Data stays untouched; these are never rebuilt.
 - A toggle that folds Recurring into Budget
 - Colours named after people
 
+## Safety and access
+
+- Enforce permissions on the server as well as in the UI. Hide unavailable destructive actions; disable unavailable add/edit actions; explain denied full-page features. A hidden button alone is not authorization.
+- Prefer deactivation when user removal is ambiguous. Permanent user deletion requires dependency preview, reassignment of sole-owned accounts, and typed username confirmation, preserving financial records.
+- Use the existing in-app confirmation pattern for ordinary destructive actions; never browser `alert()` or `confirm()`. Report action outcomes once, and keep validation/constraint messages by the relevant input or action.
+- This repository is public. Designs, documentation, screenshots, and tests must use synthetic sample data only. Never open, copy into a design, or publish Robert's live financial database, account details, credentials, or recovery codes.
+
 ## Money rules
 
 > **Part 2 (#114) fills in this section.** The bullets below are the earlier rules, kept unchanged until then.
@@ -125,13 +131,6 @@ Data stays untouched; these are never rebuilt.
 - CSV signs depend on source/account type; support manual sign-convention override and normalize parentheses, currency symbols, separators, and whitespace before parsing amounts.
 - Convert SimpleFIN transaction amounts to Ledger's convention. Never apply that conversion to balances, holding market values, or cost basis.
 - All categories use the group → sub-category hierarchy, including income. Account ownership comes from the many-to-many `account_owners` relationship, not the legacy single-owner field.
-
-### Safety and access
-
-- Enforce permissions on the server as well as in the UI. Hide unavailable destructive actions; disable unavailable add/edit actions; explain denied full-page features. A hidden button alone is not authorization.
-- Prefer deactivation when user removal is ambiguous. Permanent user deletion requires dependency preview, reassignment of sole-owned accounts, and typed username confirmation, preserving financial records.
-- Use the existing in-app confirmation pattern for ordinary destructive actions; never browser `alert()` or `confirm()`. Report action outcomes once, and keep validation/constraint messages by the relevant input or action.
-- This repository is public. Designs, documentation, screenshots, and tests must use synthetic sample data only. Never open, copy into a design, or publish Robert's live financial database, account details, credentials, or recovery codes.
 
 ## Brand Commitments
 
