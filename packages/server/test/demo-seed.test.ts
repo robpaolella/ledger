@@ -172,6 +172,15 @@ describe('synthetic Amazon orders', () => {
         GROUP BY o.order_number, o.total
         HAVING ROUND(o.total * 100) != SUM(ROUND(c.amount * 100))
       `).all()).toEqual([]);
+      expect(first.prepare(`
+        SELECT o.order_number FROM amazon_orders o
+        JOIN amazon_order_items i ON i.order_number = o.order_number
+        GROUP BY o.order_number, o.total
+        HAVING ROUND(o.total * 100) != SUM(ROUND(i.unit_price * i.quantity * 100))
+      `).all()).toEqual([]);
+      const today = createHelpers(first, new Date(2026, 9, 31)).today;
+      expect(first.prepare('SELECT order_number FROM amazon_orders WHERE order_date > ?').all(today)).toEqual([]);
+      expect(first.prepare("SELECT order_number FROM amazon_orders WHERE order_number NOT GLOB '[0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9][0-9]'").all()).toEqual([]);
 
       const split = first.prepare(`
         SELECT m.order_number, SUM(m.amount) AS total, COUNT(*) AS charges
@@ -183,11 +192,24 @@ describe('synthetic Amazon orders', () => {
       expect(split.order_number).toMatch(/^114-\d{7}-\d{7}$/);
       expect(split.charges).toBe(2);
       expect(Math.round(split.total * 100)).toBe(Math.round(SAMPLE_AMAZON_MATCH_FIXTURES.splitShipment.total * 100));
+      expect(first.prepare(`
+        SELECT i.title, i.unit_price FROM amazon_order_items i
+        WHERE i.order_number = ? ORDER BY i.id
+      `).all(split.order_number)).toEqual([
+        { title: 'USB-C Hub', unit_price: 24.99 },
+        { title: 'Laptop Stand', unit_price: 38.5 },
+      ]);
       expect(scalar(first, `
         SELECT COUNT(*) n FROM amazon_charges c
         JOIN transactions t ON t.id = (SELECT transaction_id FROM amazon_matches WHERE charge_id = c.id)
         WHERE c.is_refund = 1 AND t.description = '${SAMPLE_AMAZON_MATCH_FIXTURES.refund.description}' AND c.amount = ${SAMPLE_AMAZON_MATCH_FIXTURES.refund.amount}
       `)).toBe(1);
+      expect(first.prepare(`
+        SELECT i.title, i.unit_price FROM amazon_order_items i
+        JOIN amazon_matches m ON m.order_number = i.order_number
+        JOIN transactions t ON t.id = m.transaction_id
+        WHERE t.description = ?
+      `).all(SAMPLE_AMAZON_MATCH_FIXTURES.refund.description)).toEqual([{ title: 'Desk Lamp', unit_price: -18.75 }]);
       expect(scalar(first, `
         SELECT COUNT(*) n FROM amazon_orders o
         WHERE NOT EXISTS (SELECT 1 FROM amazon_matches m WHERE m.order_number = o.order_number)
