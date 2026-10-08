@@ -31,14 +31,15 @@ export default function Popover({
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null | undefined>(undefined);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
 
   useEffect(() => {
     const panel = panelRef.current!;
     const active = document.activeElement as HTMLElement | null;
-    // (Strict mode re-runs this with focus already inside the panel; that is not the trigger.)
-    const trigger = active && active !== document.body && !panel.contains(active) ? active : lastPressed;
+    // Recorded once: Strict mode re-runs this effect with focus already inside the panel.
+    if (triggerRef.current === undefined) triggerRef.current = active && active !== document.body ? active : lastPressed;
     const close = () => closeRef.current();
     openClosers.forEach((c) => c());
     openClosers.add(close);
@@ -56,7 +57,7 @@ export default function Popover({
       openClosers.delete(close);
       // Return focus unless something else (e.g. another popover) already took it.
       const now = document.activeElement;
-      if ((!now || now === document.body) && trigger?.isConnected) trigger.focus();
+      if ((!now || now === document.body) && triggerRef.current?.isConnected) triggerRef.current.focus();
     };
   }, []);
 
