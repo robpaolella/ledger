@@ -19,7 +19,7 @@ import { seedPeopleAccounts } from './demo-seed/people-accounts.js';
 import { seedMerchants } from './demo-seed/merchants.js';
 import { createCategories } from './demo-seed/categories.js';
 import { seedTransactions } from './demo-seed/transactions.js';
-import { seedBudgets, seedRecurring } from './demo-seed/budgets-recurring.js';
+import { seedBudgetAlerts, seedBudgets, seedRecurring } from './demo-seed/budgets-recurring.js';
 import { seedNetWorth } from './demo-seed/net-worth.js';
 import { seedInvestments } from './demo-seed/investments.js';
 import { seedReviewsRules } from './demo-seed/reviews-rules.js';
@@ -73,6 +73,9 @@ const budgetCount = seedBudgets(helpers, CAT);
 const investments = seedInvestments(helpers);
 const { balances, assetDefs } = seedNetWorth(helpers, investments.balances, investments.days);
 seedRecurring(helpers, peopleAccounts, CAT);
+// Alerts depend on transactions, budgets, recurring floors, and all other
+// notification fixtures, so this intentionally remains the final seed step.
+const alertCount = seedBudgetAlerts(helpers, CAT);
 
 // ---------------------------------------------------------------------------
 // 9. Jane's member permissions (she's admin so these are mainly for display)
@@ -92,6 +95,7 @@ console.log(`   Users:        ${finalUserCount}`);
 console.log(`   Accounts:     ${finalAcctCount}`);
 console.log(`   Transactions: ${finalTxCount}`);
 console.log(`   Budgets:      ${budgetCount}`);
+console.log(`   Alerts:       ${alertCount}`);
 console.log(`   Balances:     ${balances.length}`);
 console.log(`   Assets:       ${assetDefs.length}`);
 console.log('\n   Login as john/password1 (owner) or jane/password1 (admin)');

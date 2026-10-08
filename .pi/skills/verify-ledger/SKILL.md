@@ -115,10 +115,10 @@ re-snapshot; restart only your named browser session if it remains stuck.
 Use **Settings → Sign Out** on phone to switch roles, or the sidebar sign-out icon
 on desktop; alternatively stop this browser session and use a fresh named session
 for the next role. Do not inject tokens into local storage. Avoid rapid repeated
-logins; after HTTP 429 wait one minute. Fixtures are written against January–March
-2026 but **shift to the launch month and its preceding two months**. Transactions
-can use All Time; Budget/Reports should use the launch month/year. Record the launch
-date when comparing counts and balances.
+logins; after HTTP 429 wait one minute. Fixtures cover nine source months but **shift so the launch month is current, with
+its preceding eight months also populated**. The launch month stops at today; use
+Transactions → All Time to read its current count. Budget/Reports should use the
+launch month and its year. Record the launch date when comparing counts and balances.
 
 Main routes: `/accounts`, `/transactions`, `/import`, `/budget`, `/reports`,
 `/reviews`, `/investments`, `/settings`. `/net-worth` redirects to Accounts.

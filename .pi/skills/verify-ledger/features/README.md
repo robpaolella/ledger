@@ -14,5 +14,5 @@ the corresponding pages, API routes, and the demo seed; it is not an exhaustive 
 
 Use each listed entry point relevant to the change, including phone navigation.
 Record empty, populated, validation-error and permission-denied states where applicable.
-Fixture transaction/budget/balance dates shift to the launch month and the preceding
-two months. Use that month/year, not the literal January–March 2026 source dates.
+Fixture transaction, budget, and balance dates span the launch month (through today)
+and its preceding eight months. Use the launch month/year rather than source fixture dates.
