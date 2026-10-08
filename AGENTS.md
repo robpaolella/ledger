@@ -13,12 +13,27 @@ image.
 - Package manager: npm workspaces (`packages/shared`, `packages/server`, `packages/client`)
 - Node 20+, npm 9+
 
+## Precedence
+When sources disagree, the higher one wins:
+1. Robert's decisions as written in the rulebook: `PRODUCT.md`, `DESIGN.md`, `AGENTS.md`.
+2. An approved `design/<issue>-<name>/` folder, for its own feature only.
+3. The app as it is today.
+4. Archived private design notes, only to fill gaps, and never copied into the repo.
+5. Version-1 material (old mockups, the old design system, older docs) carries no weight.
+
+## Branches
+`feature/platform-retheme` is the single integration branch until v2.0.0. Work branches
+from it and merges into it, never into `main`. Anything that must land on `main` is
+merged into it the same day, so the two don't drift (see "Finished retheme" in
+`PRODUCT.md`).
+
 ## Checks
-Run in this order before any PR (same as CI and the `.githooks/pre-push` hook, which runs
-`npm run validate`):
+`npm run validate` is the one command CI and the `.githooks/pre-push` hook run. Run it
+before any PR. It runs these in order (typecheck, lint, lint:tokens, test, build):
 ```
 npm run typecheck
 npm run lint
+npm run lint:tokens
 npm run test
 npm run build
 ```
@@ -63,8 +78,6 @@ packages/server/src/
                        except migrate-income-categories.ts — run by hand via `npm run migrate:income`)
 packages/server/test/  Vitest tests
 packages/shared/src/   types.ts — shared TypeScript types
-.github/mockups/, .github/*.jsx   design mockups, served at /mockup in dev (import.meta.env.DEV only)
-.github/qa/, QAPage                manual QA checklist, served at /qa in dev
 scripts/                db-backup, db-restore, db-reset, deploy, docker-*, build
 e2e/                    manual Puppeteer e2e script (not wired into CI)
 ```
@@ -88,11 +101,10 @@ wired to any actual server without checking with Robert first.
   every category type. Never infer income/expense from the amount sign — check
   `categories.type` instead, and use `fmtTransaction()` (`packages/client/src/lib/formatters.ts`)
   for display. Card CSVs and bank CSVs use opposite signs, and some institutions write
-  negatives as `(123.45)`. Full rule in `.github/copilot-instructions.md` under "Project Learnings".
-- All visual/styling values (colors, spacing, component patterns) are defined in
-  `.github/design-system.jsx`, the single source of truth (`.github/mobile-prototype.jsx` for
-  mobile layouts). Never hardcode hex colors or category colors — use CSS custom properties
-  and `getCategoryColor()`.
+  negatives as `(123.45)`. Full rule in `PRODUCT.md` ("Money rules") and `LESSONS.md`.
+- Visual values (colors, spacing, component patterns) come from
+  `packages/client/src/index.css` and `DESIGN.md`. Never hardcode hex colors or category
+  colors — use CSS custom properties and `getCategoryColor()`.
 - Permission checks: admin/owner bypass DB lookups entirely; member permissions are
   cached for 60s (`CACHE_TTL_MS` in `permissions.ts`) and must be invalidated via
   `invalidatePermissionCache(userId)` on change.
@@ -136,25 +148,17 @@ Run lifecycle tests explicitly with `node --test scripts/live.test.mjs`.
 
 ## Designs
 
-Approved clickable designs live in `design/<issue>-<name>/`. For their feature, they
-win on layout, content, wording, states, and behaviour. `DESIGN.md` summarizes the
-site-wide look; `.github/design-system.jsx` remains its authoritative source, with
-`.github/mobile-prototype.jsx` supplying mobile layout guidance. A feature design
-does not silently change that visual system.
+New designs go in `design/<issue>-<name>/`, using synthetic sample data only: this
+repository is public and Ledger holds Robert's real finances. Never use the live database
+as design data, in designs or screenshots.
 
-Use synthetic sample data only in designs and screenshots: this repository is public
-and Ledger holds Robert's real finances. Never use the live database as design data.
-This workflow supersedes the older new-mockup location instructions in the Copilot
-doc; existing `.github/mockups/` files remain reference material.
+An approved design wins on layout, content, wording, states, and behaviour for its
+feature. The site-wide look still comes from `DESIGN.md` and
+`packages/client/src/index.css`; a feature design does not silently change it.
 
 ## Reference material
 
 - `PRODUCT.md`: users, roles, household workflows, and financial/product constraints.
-- `DESIGN.md`: the existing light/dark tokens and component/mobile patterns, summarized
-  from the authoritative design system rather than replacing it.
-
-`.github/copilot-instructions.md` is a long-lived, actively maintained doc (written for
-Copilot, but the content applies here too) covering the full design system, mobile
-responsive rules, permission system, and a dated "Project Learnings" log of real bugs and
-decisions. Read it before design or permissions work, and add to the Learnings Log when
-you hit a similarly hard-won lesson.
+- `DESIGN.md`: the light/dark tokens and component/mobile patterns.
+- `LESSONS.md`: rules learned from past bugs. Read it before permissions or design work,
+  and add hard-won lessons to its log.
