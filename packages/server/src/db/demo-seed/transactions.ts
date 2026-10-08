@@ -22,6 +22,13 @@ const AMAZON_ITEMS = [
   'Air Filter', 'Pillowcases',
 ] as const;
 
+/** Previous-month charges matching the extra Recurring items (budgets-recurring.ts). */
+const RECURRING_MATCHES: Array<{ merchant: string; category: [string, string]; cents: number; day: number }> = [
+  { merchant: 'Larkspindle Insurance', category: ['Insurance', 'Health'], cents: 28500, day: 12 },
+  { merchant: 'Larkspindle Workshop', category: ['Gifts', 'Donations'], cents: 4000, day: 20 },
+  { merchant: 'Ferncairn Finance', category: ['Tax Not Withheld', 'State'], cents: 64000, day: 15 },
+];
+
 export function seedTransactions(
   { db, insertTx, insertSplit, rel, today, catId }: Helpers,
   { jChecking, jaChecking, jointSav, jVisa, jaAmex }: PeopleAccounts,
@@ -124,7 +131,25 @@ export function seedTransactions(
           merchant = split.merchant;
           category = null;
         }
-        const id = add(i < 117 ? cards[i % 3] : i === 117 ? jChecking : liquid[(month * 11 + i - 117) % liquid.length], day, merchant, category, cents);
+        let account = i < 117 ? cards[i % 3] : i === 117 ? jChecking : liquid[(month * 11 + i - 117) % liquid.length];
+        let postDay = day;
+        // Rows swapped in place (no extra draws or rows; they replace popular-merchant card
+        // charges, so one-off merchants stay one-off) so the sample's states stay stable:
+        // the previous month holds the charges the extra Recurring items match, and the
+        // launch month opens with a refund in a category that has no budget.
+        const recurringMatch = month === 7 ? RECURRING_MATCHES[i - 100] : undefined;
+        if (recurringMatch) {
+          ({ merchant, cents, day: postDay } = recurringMatch);
+          category = catId(...recurringMatch.category);
+          account = jChecking;
+        } else if (month === 8 && i === 100) {
+          merchant = 'Target';
+          category = catId('Gifts', 'Holidays');
+          cents = -4250;
+          postDay = 1;
+          account = jChecking;
+        }
+        const id = add(account, postDay, merchant, category, cents);
         if (id != null && split) {
           const first = Math.floor(cents * (split.categories.length === 3 ? 0.5 : 0.6));
           const second = Math.floor(cents * (split.categories.length === 3 ? 0.3 : 0.4));
@@ -154,7 +179,8 @@ export function seedTransactions(
         add(card ? cards[i] : i === 3 ? jointSav : savings[month % savings.length],
           5 + i * 4, merchant, category, -cents);
       }
-      for (let i = 0; i < 3; i++) add(liquid[(month + i) % liquid.length], 3 + i * 10, 'Venmo', null, 1500 + i * 725);
+      // Two land on the 1st so the launch month always has uncategorized rows.
+      for (let i = 0; i < 3; i++) add(liquid[(month + i) % liquid.length], [1, 1, 16][i], 'Venmo', null, 1500 + i * 725);
     }
   })();
   console.log(`  Created ${count} synthetic transactions (nine months, through ${today})`);

@@ -25,7 +25,7 @@ function seededBudgetFixture(now = new Date(2026, 9, 31)) {
     CREATE TABLE transactions (id INTEGER PRIMARY KEY, account_id REFERENCES accounts(id), date, description, category_id REFERENCES categories(id), merchant_id REFERENCES merchants(id), amount, note);
     CREATE TABLE transaction_splits (id INTEGER PRIMARY KEY, transaction_id REFERENCES transactions(id), category_id REFERENCES categories(id), amount, merchant_id REFERENCES merchants(id), note);
     CREATE TABLE budgets (id INTEGER PRIMARY KEY, category_id REFERENCES categories(id), month, amount, override DEFAULT 0);
-    CREATE TABLE recurring_items (id INTEGER PRIMARY KEY, type, label, merchant_id REFERENCES merchants(id), category_id REFERENCES categories(id), account_id REFERENCES accounts(id), amount, freq_kind, day, days_json, start_date, status, user_id REFERENCES users(id));
+    CREATE TABLE recurring_items (id INTEGER PRIMARY KEY, type, label, merchant_id REFERENCES merchants(id), category_id REFERENCES categories(id), account_id REFERENCES accounts(id), amount, freq_kind, day, days_json, interval, anchor_date, start_date, status, user_id REFERENCES users(id));
     CREATE TABLE budget_alerts (category_id REFERENCES categories(id), month, first_exceeded_at);
     CREATE TABLE notifications (id INTEGER PRIMARY KEY, user_id REFERENCES users(id), type, severity, title, body, action_label, action_target, dedupe_key, is_read DEFAULT 0, UNIQUE(user_id, dedupe_key));
   `);
@@ -66,10 +66,13 @@ describe('demo budgets, recurring items, and notifications', () => {
       expect(db.prepare('SELECT month FROM budgets GROUP BY month ORDER BY month').all()).toEqual(
         ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03'].map(helpers.rel).map(month => ({ month })),
       );
-      expect(db.prepare('SELECT label, amount, freq_kind, start_date FROM recurring_items ORDER BY id').all()).toEqual([
-        { label: 'Paycheck — John', amount: 1750, freq_kind: 'semi_monthly', start_date: helpers.rel('2025-07-01') },
-        { label: 'Paycheck — Jane', amount: 1500, freq_kind: 'semi_monthly', start_date: helpers.rel('2025-07-01') },
-        { label: 'Rent', amount: 1400, freq_kind: 'monthly', start_date: helpers.rel('2025-07-01') },
+      expect(db.prepare('SELECT label, amount, freq_kind, status, start_date FROM recurring_items ORDER BY id').all()).toEqual([
+        { label: 'Paycheck — John', amount: 1750, freq_kind: 'semi_monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
+        { label: 'Paycheck — Jane', amount: 1500, freq_kind: 'semi_monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
+        { label: 'Rent', amount: 1400, freq_kind: 'monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
+        { label: 'Health plan premium', amount: 285, freq_kind: 'monthly', status: 'active', start_date: helpers.rel('2025-07-01') },
+        { label: 'Monthly pledge', amount: 40, freq_kind: 'monthly', status: 'paused', start_date: helpers.rel('2025-07-01') },
+        { label: 'Estimated state tax', amount: 640, freq_kind: 'every_n_months', status: 'active', start_date: helpers.rel('2025-07-01') },
       ]);
       expect(db.prepare(`
         SELECT b.month FROM budgets b JOIN categories c ON c.id = b.category_id
@@ -128,6 +131,10 @@ describe('demo budgets, recurring items, and notifications', () => {
     const first = seededBudgetFixture(new Date(2026, 9, 7));
     const second = seededBudgetFixture(new Date(2026, 9, 28));
     try {
+      // The due-soon bill's day follows today by design; everything else must not move.
+      expect(first.db.prepare("SELECT day FROM recurring_items WHERE label = 'Health plan premium'").get()).toEqual({ day: 9 });
+      expect(second.db.prepare("SELECT day FROM recurring_items WHERE label = 'Health plan premium'").get()).toEqual({ day: 30 });
+      for (const db of [first.db, second.db]) db.prepare("UPDATE recurring_items SET day = 0 WHERE label = 'Health plan premium'").run();
       for (const table of ['budgets', 'recurring_items', 'budget_alerts', 'notifications'] as const) {
         expect(first.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all())
           .toEqual(second.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
@@ -141,14 +148,54 @@ describe('demo budgets, recurring items, and notifications', () => {
     try {
       expect(first.db.prepare('SELECT category_id, amount FROM budgets ORDER BY id').all())
         .toEqual(second.db.prepare('SELECT category_id, amount FROM budgets ORDER BY id').all());
-      expect(first.db.prepare('SELECT label, amount, freq_kind, day, days_json FROM recurring_items ORDER BY id').all())
-        .toEqual(second.db.prepare('SELECT label, amount, freq_kind, day, days_json FROM recurring_items ORDER BY id').all());
+      const recurring = 'SELECT label, amount, freq_kind, day, days_json, interval, status FROM recurring_items WHERE label != \'Health plan premium\' ORDER BY id';
+      expect(first.db.prepare(recurring).all()).toEqual(second.db.prepare(recurring).all());
       expect(first.db.prepare('SELECT category_id FROM budget_alerts ORDER BY rowid').all())
         .toEqual(second.db.prepare('SELECT category_id FROM budget_alerts ORDER BY rowid').all());
       expect(first.db.prepare('SELECT user_id, type, severity, title, body, action_label, action_target, is_read FROM notifications ORDER BY id').all())
         .toEqual(second.db.prepare('SELECT user_id, type, severity, title, body, action_label, action_target, is_read FROM notifications ORDER BY id').all());
       expect(first.db.prepare('SELECT month FROM budget_alerts ORDER BY rowid').all())
         .not.toEqual(second.db.prepare('SELECT month FROM budget_alerts ORDER BY rowid').all());
+    } finally { first.db.close(); second.db.close(); }
+  });
+
+  it('reaches the extra verification states: due-soon, paused, yearly, uncategorized, refund-only', () => {
+    const now = new Date(2026, 9, 30); // Two days ahead crosses the month end.
+    const { db, helpers } = seededBudgetFixture(now);
+    try {
+      const month = helpers.today.slice(0, 7);
+      const previous = helpers.rel('2026-02');
+      const due = db.prepare("SELECT day FROM recurring_items WHERE status = 'active' AND freq_kind = 'monthly' AND label = 'Health plan premium'").get() as { day: number };
+      expect(due.day).toBe(1); // Nov 1 is two days after Oct 30.
+      expect(db.prepare("SELECT label FROM recurring_items WHERE status = 'paused'").all()).toEqual([{ label: 'Monthly pledge' }]);
+      expect(db.prepare("SELECT interval, anchor_date FROM recurring_items WHERE freq_kind = 'every_n_months'").all())
+        .toEqual([{ interval: 12, anchor_date: helpers.rel('2025-09-15') }]);
+      const uncategorized = (m: string) => (db.prepare(`
+        SELECT COUNT(*) AS n FROM transactions t
+        WHERE t.category_id IS NULL AND substr(t.date, 1, 7) = ?
+          AND NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transaction_id = t.id)
+      `).get(m) as { n: number }).n;
+      expect(uncategorized(month)).toBeGreaterThanOrEqual(2);
+      expect(uncategorized(previous)).toBeGreaterThanOrEqual(2);
+      // Refund-only: a negative expense row, no positive spending, and no budget this month.
+      const refundOnly = db.prepare(`
+        SELECT c.id FROM categories c JOIN transactions t ON t.category_id = c.id
+        WHERE c.type = 'expense' AND substr(t.date, 1, 7) = ?
+        GROUP BY c.id HAVING MAX(t.amount) < 0
+      `).all(month) as Array<{ id: number }>;
+      expect(refundOnly).toHaveLength(1);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM budgets WHERE category_id = ? AND month = ?').get(refundOnly[0].id, month)).toEqual({ n: 0 });
+    } finally { db.close(); }
+  });
+
+  it('seeds identical data on repeated runs', () => {
+    const first = seededBudgetFixture(new Date(2026, 9, 15));
+    const second = seededBudgetFixture(new Date(2026, 9, 15));
+    try {
+      for (const table of ['transactions', 'transaction_splits', 'budgets', 'recurring_items', 'budget_alerts', 'notifications'] as const) {
+        expect(first.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all())
+          .toEqual(second.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+      }
     } finally { first.db.close(); second.db.close(); }
   });
 });

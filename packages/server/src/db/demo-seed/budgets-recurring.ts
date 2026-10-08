@@ -75,26 +75,39 @@ export function seedBudgets({ db, rel }: Helpers, CAT: Categories) {
   return budgetCount;
 }
 
+/** Day of the month `daysAhead` days after `today` (YYYY-MM-DD), so a bill can fall due soon. */
+function dayOfMonthAfter(today: string, daysAhead: number): number {
+  const [y, m, d] = today.split('-').map(Number);
+  return new Date(y, m - 1, d + daysAhead).getDate();
+}
+
 export function seedRecurring(
-  { db, rel }: Helpers,
+  { db, rel, today, catId }: Helpers,
   { johnId, janeId, jChecking, jaChecking }: PeopleAccounts,
   CAT: Categories,
 ) {
   console.log('Creating recurring items...');
   const recurringDefs: Array<{
     type: 'income' | 'expense'; label: string; merchant: string; category: number; account: number;
-    amount: number; freq: 'monthly' | 'semi_monthly'; day?: number; days?: number[]; user: number;
+    amount: number; freq: 'monthly' | 'semi_monthly' | 'every_n_months'; day?: number; days?: number[]; user: number;
+    interval?: number; anchor?: string; status?: 'active' | 'paused';
   }> = [
     { type: 'income', label: 'Paycheck — John', merchant: 'Direct Deposit — Payroll', category: CAT.takeHomePay, account: jChecking, amount: 1750, freq: 'semi_monthly', days: [2, 16], user: johnId },
     { type: 'income', label: 'Paycheck — Jane', merchant: 'Direct Deposit — Payroll', category: CAT.takeHomePay, account: jaChecking, amount: 1500, freq: 'semi_monthly', days: [2, 16], user: janeId },
     { type: 'expense', label: 'Rent', merchant: 'Oakwood Apartments', category: CAT.rent, account: jChecking, amount: 1400, freq: 'monthly', day: 1, user: johnId },
+    // Extra states: due within three days, paused, and yearly (every 12 months). Each has
+    // a matching generated transaction in the previous month (see transactions.ts).
+    { type: 'expense', label: 'Health plan premium', merchant: 'Larkspindle Insurance', category: CAT.healthIns, account: jChecking, amount: 285, freq: 'monthly', day: dayOfMonthAfter(today, 2), user: johnId },
+    { type: 'expense', label: 'Monthly pledge', merchant: 'Larkspindle Workshop', category: catId('Gifts', 'Donations'), account: jChecking, amount: 40, freq: 'monthly', day: 20, user: johnId, status: 'paused' },
+    { type: 'expense', label: 'Estimated state tax', merchant: 'Ferncairn Finance', category: catId('Tax Not Withheld', 'State'), account: jChecking, amount: 640, freq: 'every_n_months', day: 15, interval: 12, anchor: rel('2025-09-15'), user: johnId },
   ];
   for (const r of recurringDefs) {
     db.prepare(
-      `INSERT INTO recurring_items (type, label, merchant_id, category_id, account_id, amount, freq_kind, day, days_json, start_date, status, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`
+      `INSERT INTO recurring_items (type, label, merchant_id, category_id, account_id, amount, freq_kind, day, days_json, interval, anchor_date, start_date, status, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(r.type, r.label, findOrCreateMerchant(sampleMerchantName(r.merchant), db), r.category, r.account, r.amount, r.freq,
-      r.day ?? null, r.days ? JSON.stringify(r.days) : null, rel('2025-07-01'), r.user);
+      r.day ?? null, r.days ? JSON.stringify(r.days) : null, r.interval ?? null, r.anchor ?? null,
+      rel('2025-07-01'), r.status ?? 'active', r.user);
   }
   console.log(`  Created ${recurringDefs.length} recurring items`);
 }
