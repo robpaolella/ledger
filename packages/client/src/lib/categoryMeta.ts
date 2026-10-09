@@ -87,9 +87,39 @@ function fallbackToken(name: string): CategoryToken {
   return ALL_TOKENS[h % ALL_TOKENS.length];
 }
 
-export function getCategoryMeta(name: string | null | undefined): CategoryMeta {
+// ── Group lookup ────────────────────────────────────────────────────────────
+// A category (leaf) inherits its group's colour, and its group's emoji when it
+// has none of its own. Filled from the category + group lists (see
+// setCategoryGroups); a leaf name that exists under two groups maps to null and
+// needs the optional `group` argument to resolve.
+const leafToGroup = new Map<string, string | null>();
+const groupColors = new Map<string, CategoryToken>();
+const groupNames = new Set<string>();
+
+function resolveGroup(name: string, group?: string | null): string | null {
+  if (group) return group;
+  const key = norm(name);
+  const leaf = leafToGroup.get(key);
+  if (leaf !== undefined) return leaf; // a leaf wins over a group of the same name
+  return groupNames.has(key) ? name : null;
+}
+
+/**
+ * Resolve emoji + hue. Emoji: the category's built-in entry, else its group's,
+ * else 🏷️. Hue: always the group's (stored colour, built-in, then hash of the
+ * group name). A name with no known group keeps the old name-only behaviour.
+ */
+export function getCategoryMeta(name: string | null | undefined, group?: string | null): CategoryMeta {
   if (!name) return { emoji: '🏷️', token: 'c-blue' };
-  return MAP.get(norm(name)) ?? { emoji: '🏷️', token: fallbackToken(name) };
+  const own = MAP.get(norm(name));
+  const groupName = resolveGroup(name, group);
+  if (!groupName) return own ?? { emoji: '🏷️', token: fallbackToken(name) };
+  const gKey = norm(groupName);
+  const groupBuiltin = MAP.get(gKey);
+  return {
+    emoji: own?.emoji ?? groupBuiltin?.emoji ?? '🏷️',
+    token: groupColors.get(gKey) ?? groupBuiltin?.token ?? fallbackToken(groupName),
+  };
 }
 
 // ── Stored per-category emoji overrides ─────────────────────────────────────
@@ -102,12 +132,27 @@ const emojiOverrides = new Map<string, string>();
 let overridesVersion = 0;
 const overrideListeners = new Set<() => void>();
 
-export function setCategoryEmojiOverrides(
-  cats: Array<{ sub_name?: string | null; display_name?: string | null; emoji?: string | null }>,
-): void {
+type CategoryRow = { sub_name?: string | null; display_name?: string | null; group_name?: string | null; emoji?: string | null };
+type GroupRow = { name: string; color: string | null };
+
+export function setCategoryEmojiOverrides(cats: CategoryRow[], groups: GroupRow[] = []): void {
   emojiOverrides.clear();
+  leafToGroup.clear();
+  groupColors.clear();
+  groupNames.clear();
+  for (const g of groups) {
+    const key = norm(g.name);
+    groupNames.add(key);
+    if (g.color && (ALL_TOKENS as string[]).includes(g.color)) groupColors.set(key, g.color as CategoryToken);
+  }
   for (const c of cats) {
-    if (!c.emoji) continue;
+    if (c.sub_name && c.group_name) {
+      const key = norm(c.sub_name);
+      const seen = leafToGroup.get(key);
+      leafToGroup.set(key, seen === undefined || seen === c.group_name ? c.group_name : null);
+    }
+    // The New category form saves its 🏷️ placeholder as a real value; treat it as unset.
+    if (!c.emoji || c.emoji === '🏷️') continue;
     if (c.sub_name) emojiOverrides.set(norm(c.sub_name), c.emoji);
     if (c.display_name) emojiOverrides.set(norm(c.display_name), c.emoji);
   }
@@ -118,8 +163,11 @@ export function setCategoryEmojiOverrides(
 /** Fetch the category list and register stored emoji overrides. Safe to re-call. */
 export async function loadCategoryEmojis(): Promise<void> {
   try {
-    const r = await apiFetch<{ data: Array<{ sub_name: string; display_name: string; emoji: string | null }> }>('/categories');
-    setCategoryEmojiOverrides(r.data);
+    const [cats, groups] = await Promise.all([
+      apiFetch<{ data: CategoryRow[] }>('/categories'),
+      apiFetch<{ data: GroupRow[] }>('/categories/groups'),
+    ]);
+    setCategoryEmojiOverrides(cats.data, groups.data);
   } catch { /* keep RAW fallbacks in place */ }
 }
 
@@ -132,21 +180,21 @@ export function useCategoryEmojis(): number {
   );
 }
 
-export function getCategoryEmoji(name: string | null | undefined): string {
+export function getCategoryEmoji(name: string | null | undefined, group?: string | null): string {
   if (name) {
     const stored = emojiOverrides.get(norm(name));
     if (stored) return stored;
   }
-  return getCategoryMeta(name).emoji;
+  return getCategoryMeta(name, group).emoji;
 }
 
-export function getCategoryToken(name: string | null | undefined): CategoryToken {
-  return getCategoryMeta(name).token;
+export function getCategoryToken(name: string | null | undefined, group?: string | null): CategoryToken {
+  return getCategoryMeta(name, group).token;
 }
 
 /** CSS value reference, e.g. 'var(--c-blue)' — for style props and color-mix. */
-export function getCategoryColorVar(name: string | null | undefined): string {
-  return `var(--${getCategoryMeta(name).token})`;
+export function getCategoryColorVar(name: string | null | undefined, group?: string | null): string {
+  return `var(--${getCategoryMeta(name, group).token})`;
 }
 
 /**
@@ -173,6 +221,6 @@ export function resolveTokenColor(token: CategoryToken | string): string {
 }
 
 /** Concrete hex for a category (mode-aware) — for charts and hex-only consumers. */
-export function getCategoryColorHex(name: string | null | undefined): string {
-  return resolveTokenColor(getCategoryMeta(name).token);
+export function getCategoryColorHex(name: string | null | undefined, group?: string | null): string {
+  return resolveTokenColor(getCategoryMeta(name, group).token);
 }
