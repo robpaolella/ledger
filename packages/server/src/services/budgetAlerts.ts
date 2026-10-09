@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { getRecurringFloors, effectiveBudgetedAmount } from './recurringBudget.js';
 import { upsertNotification, activeUserIds } from './notifications.js';
+import { getStoredPlans } from './budgetPlan.js';
 
 /**
  * Budget-exceeded notifications with crossing-state semantics: the FIRST time
@@ -35,10 +36,7 @@ export function checkBudgetExceeded(
   `).all(...(categoryIds ?? [])) as { id: number; display_name: string }[];
   if (candidates.length === 0) return;
 
-  const budgetRows = sqlite.prepare(
-    'SELECT category_id, amount, COALESCE(override, 0) AS override FROM budgets WHERE month = ?',
-  ).all(month) as { category_id: number; amount: number; override: number }[];
-  const budgetMap = new Map(budgetRows.map((b) => [b.category_id, b]));
+  const budgetMap = getStoredPlans(sqlite, month);
   const floors = getRecurringFloors(month);
 
   // Split-aware actuals — the same UNION shape as /budgets/summary (no owner filter).
