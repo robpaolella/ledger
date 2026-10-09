@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import Database from 'better-sqlite3';
 // The production merchant helper imports the default database unless this is mocked.
 vi.mock('../src/db/index.js', () => ({ sqlite: undefined }));
@@ -42,63 +42,65 @@ function fixture(now: Date) {
 }
 
 describe('demo net-worth sample', () => {
-  it('derives liquid and card snapshots from transactions and investment snapshots from holdings', () => {
-    const { db, days } = fixture(new Date(2026, 9, 31));
-    try {
-      expect(days.length).toBeGreaterThan(240);
-      const accounts = db.prepare('SELECT id, type FROM accounts').all() as Array<{ id: number; type: string }>;
-      for (const account of accounts) {
-        const snapshots = db.prepare('SELECT date, balance FROM balance_snapshots WHERE account_id = ? ORDER BY date').all(account.id) as Array<{ date: string; balance: number }>;
-        const expectedStart = account.id >= 15 ? 60 : account.id >= 9 ? 30 : 0;
-        expect(snapshots).toHaveLength(days.length - expectedStart);
-        expect(snapshots[0].date).toBe(days[expectedStart]);
-        for (let index = 1; index < snapshots.length; index++) {
-          const change = Math.round((snapshots[index].balance - snapshots[index - 1].balance) * 100) / 100;
-          if (['checking', 'savings', 'credit'].includes(account.type)) {
-            const amount = db.prepare('SELECT COALESCE(SUM(amount), 0) AS amount FROM transactions WHERE account_id = ? AND date > ? AND date <= ?')
-              .get(account.id, snapshots[index - 1].date, snapshots[index].date) as { amount: number };
-            expect(change + amount.amount).toBeCloseTo(0, 2);
-          } else {
-            const value = db.prepare(`SELECT COALESCE(SUM(h.market_value), 0) AS value FROM holdings_history h
-              JOIN simplefin_links l ON l.id = h.simplefin_link_id WHERE l.account_id = ? AND h.date = ?`)
-              .get(account.id, snapshots[index].date) as { value: number };
-            expect(snapshots[index].balance).toBe(Math.round(value.value * 100) / 100);
-          }
-        }
-      }
-      expect(db.prepare('SELECT COUNT(*) AS count FROM simplefin_holdings').get()).toEqual({ count: 60 });
-      expect(db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_success'").get()).toEqual({ value: '2026-10-31' });
-    } finally { db.close(); }
+  // Seeding is the slow part, so seed once per date; the tests only read the results.
+  let first: ReturnType<typeof fixture>;
+  let second: ReturnType<typeof fixture>;
+  beforeAll(() => {
+    first = fixture(new Date(2026, 9, 31));
+    second = fixture(new Date(2027, 9, 31));
+  });
+  afterAll(() => {
+    first?.db.close();
+    second?.db.close();
   });
 
+  it('derives liquid and card snapshots from transactions and investment snapshots from holdings', () => {
+    const { db, days } = first;
+    expect(days.length).toBeGreaterThan(240);
+    const accounts = db.prepare('SELECT id, type FROM accounts').all() as Array<{ id: number; type: string }>;
+    for (const account of accounts) {
+      const snapshots = db.prepare('SELECT date, balance FROM balance_snapshots WHERE account_id = ? ORDER BY date').all(account.id) as Array<{ date: string; balance: number }>;
+      const expectedStart = account.id >= 15 ? 60 : account.id >= 9 ? 30 : 0;
+      expect(snapshots).toHaveLength(days.length - expectedStart);
+      expect(snapshots[0].date).toBe(days[expectedStart]);
+      for (let index = 1; index < snapshots.length; index++) {
+        const change = Math.round((snapshots[index].balance - snapshots[index - 1].balance) * 100) / 100;
+        if (['checking', 'savings', 'credit'].includes(account.type)) {
+          const amount = db.prepare('SELECT COALESCE(SUM(amount), 0) AS amount FROM transactions WHERE account_id = ? AND date > ? AND date <= ?')
+            .get(account.id, snapshots[index - 1].date, snapshots[index].date) as { amount: number };
+          expect(change + amount.amount).toBeCloseTo(0, 2);
+        } else {
+          const value = db.prepare(`SELECT COALESCE(SUM(h.market_value), 0) AS value FROM holdings_history h
+            JOIN simplefin_links l ON l.id = h.simplefin_link_id WHERE l.account_id = ? AND h.date = ?`)
+            .get(account.id, snapshots[index].date) as { value: number };
+          expect(snapshots[index].balance).toBe(Math.round(value.value * 100) / 100);
+        }
+      }
+    }
+    expect(db.prepare('SELECT COUNT(*) AS count FROM simplefin_holdings').get()).toEqual({ count: 60 });
+    expect(db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_success'").get()).toEqual({ value: '2026-10-31' });
+    // Thousands of queries (about 1.5s alone): the default 5s limit is too tight on a busy machine.
+  }, 30_000);
+
   it('gives one card a positive (credit) latest balance and leaves other cards owed', () => {
-    const { db } = fixture(new Date(2026, 9, 31));
-    try {
-      const latest = db.prepare(`
-        SELECT a.name, s.balance FROM accounts a JOIN balance_snapshots s ON s.account_id = a.id
-        WHERE a.type = 'credit' AND s.date = (SELECT MAX(date) FROM balance_snapshots WHERE account_id = a.id)
-        ORDER BY a.id
-      `).all() as Array<{ name: string; balance: number }>;
-      expect(latest.filter(card => card.balance > 0)).toEqual([{ name: CARD_IN_CREDIT, balance: 212.4 }]);
-      expect(latest.filter(card => card.balance < 0)).toHaveLength(3);
-    } finally { db.close(); }
+    const { db } = first;
+    const latest = db.prepare(`
+      SELECT a.name, s.balance FROM accounts a JOIN balance_snapshots s ON s.account_id = a.id
+      WHERE a.type = 'credit' AND s.date = (SELECT MAX(date) FROM balance_snapshots WHERE account_id = a.id)
+      ORDER BY a.id
+    `).all() as Array<{ name: string; balance: number }>;
+    expect(latest.filter(card => card.balance > 0)).toEqual([{ name: CARD_IN_CREDIT, balance: 212.4 }]);
+    expect(latest.filter(card => card.balance < 0)).toHaveLength(3);
   });
 
   it('covers every held symbol and core benchmark every day, with values repeatable apart from the date shift', () => {
-    const first = fixture(new Date(2026, 9, 31));
-    const second = fixture(new Date(2027, 9, 31));
-    try {
-      const symbols = first.db.prepare(`SELECT symbol FROM simplefin_holdings GROUP BY symbol
-        UNION SELECT 'SPY' UNION SELECT 'VTI' UNION SELECT 'BND' ORDER BY symbol`).all() as Array<{ symbol: string }>;
-      for (const { symbol } of symbols) {
-        expect(first.db.prepare('SELECT COUNT(*) AS count FROM benchmark_prices WHERE symbol = ?').get(symbol)).toEqual({ count: first.days.length });
-      }
-      const prices = (db: Database.Database) => db.prepare('SELECT symbol, adj_close FROM benchmark_prices ORDER BY symbol, date').all() as Row[];
-      expect(prices(second.db)).toEqual(prices(first.db));
-      expect(first.db.prepare('SELECT COUNT(*) AS count FROM assets').get()).toEqual({ count: 5 });
-    } finally {
-      first.db.close();
-      second.db.close();
+    const symbols = first.db.prepare(`SELECT symbol FROM simplefin_holdings GROUP BY symbol
+      UNION SELECT 'SPY' UNION SELECT 'VTI' UNION SELECT 'BND' ORDER BY symbol`).all() as Array<{ symbol: string }>;
+    for (const { symbol } of symbols) {
+      expect(first.db.prepare('SELECT COUNT(*) AS count FROM benchmark_prices WHERE symbol = ?').get(symbol)).toEqual({ count: first.days.length });
     }
+    const prices = (db: Database.Database) => db.prepare('SELECT symbol, adj_close FROM benchmark_prices ORDER BY symbol, date').all() as Row[];
+    expect(prices(second.db)).toEqual(prices(first.db));
+    expect(first.db.prepare('SELECT COUNT(*) AS count FROM assets').get()).toEqual({ count: 5 });
   });
 });
