@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHistory, monthBefore } from '../../client/src/components/budget/historyModel';
+import { buildHistory, monthBefore } from '@ledger/shared';
 
 const series = (...v: number[]) => v.map((actual, i) => ({ month: `2026-0${i + 1}`, actual }));
 
