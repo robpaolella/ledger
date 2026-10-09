@@ -1,7 +1,7 @@
 import { useCachedApi } from '../useCachedApi';
 import DashboardCard, { CardSection, CardSkeleton, CardError, CardHeaderControl } from '../DashboardCard';
 import SpendingTrendChart from '../SpendingTrendChart';
-import { Money } from '../../Money';
+import { formatMoney } from '@ledger/shared';
 import type { DashboardCardProps } from '../cardRegistry';
 
 interface SeriesDay { day: number; date: string; cumulative: number }
@@ -15,12 +15,14 @@ export default function SpendingCard({ dragHandleProps }: DashboardCardProps) {
 
   // Headline = the series' final cumulative point (matches the chart endpoint).
   const total = series && series.days.length > 0 ? series.days[series.days.length - 1].cumulative : 0;
+  // A sum of transactions (money rule), but neutral keeps the subtitle's grey.
+  const spent = formatMoney(total, { showZero: true });
 
   return (
     <DashboardCard
       title="Spending"
       subtitle={<>
-        {series && <span className="text-[20px] font-semibold text-content-2 tabular-nums"><Money amount={total} showZero /> this month</span>}
+        {series && <span className="text-[20px] font-semibold text-content-2 tabular-nums"><span className={spent.tone === 'positive' ? 'text-positive' : ''}>{spent.text}</span> this month</span>}
         <span className="md:hidden text-[13px] font-medium text-content-3">This month vs. last month</span>
       </>}
       headerRight={<CardHeaderControl>This month vs. last month</CardHeaderControl>}
