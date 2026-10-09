@@ -136,6 +136,7 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   /* Radius scale */
   --radius-sm:   8px;
+  --radius-control: 11px;   /* buttons and inputs */
   --radius-md:   12px;
   --radius-card: 16px;
   --radius-lg:   20px;
@@ -373,6 +374,8 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --color-content:   var(--text);
   --color-content-2: var(--text-2);
   --color-content-3: var(--text-3);
+  --color-btn-ghost: var(--btn-ghost-text);
+  --color-ring:      var(--ring);
 
   /* Retained legacy utilities still used by components */
   --color-card:    var(--surface);
@@ -380,6 +383,7 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   /* Radius → rounded-* */
   --radius-sm:   var(--radius-sm);
+  --radius-control: var(--radius-control);
   --radius-md:   var(--radius-md);
   --radius-card: var(--radius-card);
   --radius-lg:   var(--radius-lg);
@@ -391,6 +395,19 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   /* Type families → font-sans / font-mono */
   --font-sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Type scale → text-* font-size utilities. Names avoid the colour aliases
+   (--text-body, --text-primary, --text-secondary, --text-muted, --text-2, --text-3). */
+@theme static {
+  --text-caption: 11px;
+  --text-small:   12px;
+  --text-label:   13px;
+  --text-copy:    14px;
+  --text-large:   15px;
+  --text-heading: 17px;
+  --text-title:   22px;
+  --text-display: 30px;
 }
 
 @layer base {

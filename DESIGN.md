@@ -117,6 +117,7 @@ typography:
     fontWeight: 500
 rounded:
   sm: "8px"
+  control: "11px"
   md: "12px"
   card: "16px"
   lg: "20px"
@@ -140,11 +141,11 @@ components:
   button-primary:
     backgroundColor: "{colors.light-primary}"
     textColor: "{colors.light-onPrimary}"
-    rounded: "11px"
+    rounded: "{rounded.control}"
   button-primary-dark:
     backgroundColor: "{colors.dark-primary}"
     textColor: "{colors.dark-onPrimary}"
-    rounded: "11px"
+    rounded: "{rounded.control}"
   popover:
     backgroundColor: "{colors.light-elevated}"
     rounded: "{rounded.card}"
@@ -206,12 +207,13 @@ A few tokens keep fixed values that do not swap with the core set: `--bg-modal` 
 - **JetBrains Mono** is for small technical labels such as KPI captions and account labels.
 - **Figures use tabular numerals** (the `tabular` class or `tabular-nums`) so columns of money line up. Right-align money in columns.
 - Page titles are 22px / weight 800 on desktop and 17px on phones. Body copy is about 13px on desktop; phone lists use 15px titles with 12.5px subtitles. KPI values are 30px / 800 with a small uppercase mono caption above.
+- **Type scale.** Use these named sizes (Tailwind `text-*` utilities and `--text-*` variables from `index.css`); no new literal sizes. 11px `caption`, 12px `small`, 13px `label`, 14px `copy`, 15px `large`, 17px `heading`, 22px `title` (page titles, big numbers), 30px `display` (KPI values). The in-between 12.5px and 13.5px sizes round to 13 and 14 as pages adopt the scale; the 12.5px `list-row-subtitle` in the token list at the top is one of them. The names avoid the colour aliases (`--text-body`, `--text-muted`, and so on).
 - Do not shrink form text or touch targets just because a table is compact.
 
 ## Spacing, radius and shadow
 
 - Cards (such as the KPI card) use 20px horizontal and 16px vertical padding, `--radius-card` (16px), `--line` border and `--shadow-sm`. Settings panels use slightly rounder 18px cards.
-- Radius scale: `--radius-sm` 8px (small controls and icon buttons), `--radius-md` 12px, `--radius-card` 16px (cards), `--radius-lg` 20px (bottom sheets), `--radius-full` for pills. The desktop modal panel uses 18px.
+- Radius scale: `--radius-sm` 8px (small controls and icon buttons), `--radius-control` 11px (buttons and inputs), `--radius-md` 12px, `--radius-card` 16px (cards), `--radius-lg` 20px (bottom sheets), `--radius-full` for pills. The desktop modal panel uses 18px.
 - Shadows: `--shadow-sm` for cards and active toggles, `--shadow-md` for popovers, menus, modals and hover lift. Light: `0 1px 2px rgba(16,24,40,.06)` and `0 10px 30px rgba(16,24,40,.09)`. Dark: `0 1px 2px rgba(0,0,0,.45)` and `0 6px 22px rgba(0,0,0,.4)`.
 - Phone pages use 16px side padding and 40px bottom padding.
 
@@ -266,7 +268,7 @@ The two-step sign-in code is six single-digit boxes (44px by 52px, centred, `--s
 
 ### Inputs
 
-Inputs and selects are 44px tall with `--surface-2` fill, a `--line-strong` border and 11px corners. Buttons are 42px tall with 11px corners: primary is `--primary` with `--on-primary` text, secondary is `--surface-2` with a `--line-strong` border, and the outlined destructive button uses `--negative` text. Reuse the shared recipes in `components/settings/ui.tsx` (`inputCls`, `btnPrimary`, `btnSecondary`, `btnDanger`) rather than writing new ones. Focus shows a `--primary` border with a soft 3px ring; an invalid field (`aria-invalid` or `.error`) shows the same in `--negative`. Number spinners are hidden.
+Inputs and selects are 44px tall with `--surface-2` fill, a `--line-strong` border and 11px corners. Buttons use the shared `Button` component (`components/Button.tsx`) with `--radius-control` (11px) corners: primary is `--primary` with `--on-primary` text, secondary is `--surface-2` with a `--line-strong` border, outline is `--surface` with a `--line-strong` border (toolbar triggers; `active` turns the border `--primary` while open or applied), ghost has no fill or border and `--btn-ghost-text` (hover `--surface-2`), and danger is outlined with `--negative` text. Sizes: `md` 42px (forms and footers), `sm` 40px (toolbars and panel headers), `row` 34px with 9px corners (row actions). `iconOnly` makes the button square and requires an `aria-label`. `loading` disables the button, sets `aria-busy` and ignores clicks; keep the "Saving…" wording as the label (no spinner). Keyboard focus shows a 2px `--ring` outline. Use `Button` for new buttons; pages not yet moved still use the class recipes in `components/settings/ui.tsx`: `inputCls` for fields, and `btnPrimary`, `btnSecondary`, `btnDanger` for buttons, which are built from the same source as `Button` (`buttonClasses.ts`). Input focus shows a `--primary` border with a soft 3px ring; an invalid field (`aria-invalid` or `.error`) shows the same in `--negative`. Number spinners are hidden.
 
 ### Badges, tags and progress
 
