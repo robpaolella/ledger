@@ -96,7 +96,9 @@ owned local server fails. The CSP allows only inline script (`default-src 'none'
 ## Pre-PR review (2026-10-08)
 General PR review per the ship/review skills: Claude Sonnet 5.5, high thinking, same-company under
 Robert's approval (`read-only-run.ts . review /git/maestro/skills/review/reviewer-prompt.md …`).
-Verdict: not ready, 2 blocking, 5 worth fixing, 3 nits. After approval, Robert agreed the changes
+Verdict: not ready, 2 blocking, 5 worth fixing, 3 nits. Decisions asked in herdr after approval: 17 "OK to drop A and B?" ("Sure."); 18 "Approve C?" ("Yes.");
+19 gave-up wording; 20 add captures of all 12 switches (no design change); 21 PRODUCT.md line; 22 loading/error
+shown once. After approval, Robert agreed the changes
 (2026-10-08, herdr: "19. Agreed. 20. Yes. 21. Agreed. 22. Agreed."):
 
 1. Blocking: no "gave up for the day" status → decision 19 wording; new states `daily-gave-up`, `daily-off-failing`.
@@ -110,7 +112,10 @@ Verdict: not ready, 2 blocking, 5 worth fixing, 3 nits. After approval, Robert a
 
 Approved evidence was re-captured: 116 images (29 states × 2 themes × 2 widths), all inspected via
 contact sheets; existing states differ from the first capture only where the fixes apply and in the
-prototype bar's state selector width. `screenshots/all/` is unchanged: it is the pre-pruning record
+prototype bar's state selector width.
+
+Re-check of only those items (same model, 2026-10-08): **Ready for PR**; all items resolved. One
+worth-fixing note (decision 20 not written out) is addressed by the line above. `screenshots/all/` is unchanged: it is the pre-pruning record
 of A, B and C and predates the four new states.
 
 ## Experiment
