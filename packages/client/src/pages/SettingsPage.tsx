@@ -74,7 +74,7 @@ export default function SettingsPage() {
       setGroups(groupRes.data);
       // Publish stored emoji to the app-wide override map so every other page
       // (Transactions, Reports, Recurring, …) reflects edits immediately.
-      setCategoryEmojiOverrides(catRes.data);
+      setCategoryEmojiOverrides(catRes.data, groupRes.data);
       setUserList(userRes.data.map((u) => ({ id: u.id, displayName: u.display_name })));
       initOwnerSlots(userRes.data.map((u) => u.id));
     } catch {
