@@ -85,10 +85,9 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
       for the tinted badge / inline-notification groups). This reskins the whole
       app with light/dark parity and zero component edits. Migrate components off
       the old names per-area in later waves, then retire each alias.
-   3. Tokens deliberately kept LITERAL (not aliased): --bg-sidebar, --nav-*,
-      --sidebar-text, --hero-gradient-* — the sidebar stays dark until the Wave 2
-      shell redesign moves it to the white/surface spec (and reworks the 4 auth
-      pages + net-worth hero).
+   3. Tokens deliberately kept LITERAL (not aliased): --nav-*, --hero-gradient-*
+      — the sidebar stays dark until the Wave 2 shell redesign moves it to the
+      white/surface spec (and reworks the net-worth hero).
    4. Raw hex lives ONLY in these :root / .dark blocks. Never hard-code a color
       elsewhere — always use a token.
    ===================================================================== */
@@ -263,14 +262,12 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   /* Progress bar */
   --progress-track: var(--surface-2);
 
-  /* ---- Kept LITERAL until Wave 2 shell/auth redesign ---- */
-  --bg-sidebar: #0f172a;
+  /* ---- Kept LITERAL until Wave 2 shell redesign ---- */
   --bg-zebra:   rgba(0,0,0,0.02);
   --bg-modal:   rgba(6,8,12,0.55);   /* the ONE modal / sheet / panel scrim */
   --nav-active-bg:    rgba(59,130,246,0.15);
   --nav-active-text:  #93c5fd;
   --nav-inactive-text:#94a3b8;
-  --sidebar-text:     #f1f5f9;
   --hero-gradient-from: #0f172a;
   --hero-gradient-to:   #1e293b;
 }
@@ -320,21 +317,19 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   /* ---- Literal-valued old tokens (dark overrides only; var() aliases above
           inherit and resolve against the dark tokens automatically) ---- */
-  --bg-sidebar: #060a13;
   --bg-zebra:   rgba(255,255,255,0.03);
   --bg-modal:   rgba(0,0,0,0.7);
   --nav-active-bg:    rgba(59,130,246,0.25);
   --nav-active-text:  #93c5fd;
   --nav-inactive-text:#94a3b8;
-  --sidebar-text:     #f1f5f9;
   --hero-gradient-from: #060a13;
   --hero-gradient-to:   #0f172a;
 }
 
 /* ---------------------------------------------------------------------
    Map tokens into Tailwind's utility space (@theme inline reads the vars).
-   Retains --color-card (bg-card ×319) and --color-sidebar (bg-sidebar ×7),
-   the only bare @theme utilities still consumed by existing components.
+   Retains --color-card (bg-card ×319), the only bare @theme utility still
+   consumed by existing components.
    ------------------------------------------------------------------- */
 @theme inline {
   --color-bg:            var(--bg);
@@ -379,7 +374,6 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   /* Retained legacy utilities still used by components */
   --color-card:    var(--surface);
-  --color-sidebar: var(--bg-sidebar);
 
   /* Radius → rounded-* */
   --radius-sm:   var(--radius-sm);
@@ -431,6 +425,11 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
     cursor: pointer;
   }
 }
+
+/* Signed-out pages: 16px field text so iPhones don't zoom on focus. Scoped here
+   because inputCls is shared with Settings. The six-box code input (inputmode
+   numeric, 20px) is left alone. Unlayered, so it beats the text-sm utility. */
+.auth-shell input:not([inputmode]) { font-size: 16px; }
 
 /* ── Responsive Utilities ── */
 @media (max-width: 767px) {
