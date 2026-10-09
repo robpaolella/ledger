@@ -55,7 +55,7 @@ export default function SettingsPage() {
   const legacyTab = searchParams.get('tab');
   const setPanel = (p: PanelId) => setSearchParams({ panel: p });
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<boolean> => {
     try {
       const [acctRes, catRes, groupRes, userRes] = await Promise.all([
         apiFetch<{ data: Account[] }>('/accounts'),
@@ -72,8 +72,10 @@ export default function SettingsPage() {
       setUserList(userRes.data.map((u) => ({ id: u.id, displayName: u.display_name })));
       initOwnerSlots(userRes.data.map((u) => u.id));
       setLoadFailed(false);
+      return true;
     } catch {
       setLoadFailed(true);
+      return false;
     } finally {
       setLoaded(true);
     }
@@ -123,7 +125,7 @@ export default function SettingsPage() {
     }
   };
 
-  const refreshAll = async () => { await Promise.all([loadData(), sf.reload()]); addToast('Refreshed'); };
+  const refreshAll = async () => { const [ok] = await Promise.all([loadData(), sf.reload()]); if (ok) addToast('Refreshed'); };
 
   // Show only what the person can use. Accounts also stays for bank-sync users
   // while the Bank sync card lives inside it (until it gets its own panel).
@@ -213,7 +215,7 @@ export default function SettingsPage() {
               <PanelHeader title="Categories" description="Groups and categories are shared by the whole household. Changes apply everywhere in Ledger — tailor the structure to fit how you budget." />
               <LoadError onRetry={retryLoad} />
             </div>
-          ) : loaded ? <CategoriesPanel categories={categories} groups={groups} onChanged={loadData} /> : <Spinner />)}
+          ) : loaded ? <CategoriesPanel categories={categories} groups={groups} onChanged={() => { loadData(); }} /> : <Spinner />)}
 
           {panel === 'accounts' && (
             <div className="flex flex-col gap-[22px]">
@@ -241,7 +243,7 @@ export default function SettingsPage() {
                 loading={sf.loading}
                 accountsLoading={sf.accountsLoading}
                 onReload={sf.reload}
-                onAccountCreated={loadData}
+                onAccountCreated={() => { loadData(); }}
                 onOpenAccount={(a) => { if (hasPermission('accounts.edit')) setEditingAccount(a); }}
                 onSyncNow={() => setSyncOpen(true)}
               />

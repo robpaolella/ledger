@@ -350,7 +350,6 @@ export default function UsersPanel() {
     finally { setLoaded(true); }
   }, [canManage]);
 
-  const retryLoad = () => { setLoaded(false); setLoadFailed(false); loadUsers(); };
 
   const load2FA = useCallback(async () => {
     try {
@@ -360,6 +359,8 @@ export default function UsersPanel() {
   }, []);
 
   useEffect(() => { loadUsers(); load2FA(); }, [loadUsers, load2FA]);
+
+  const retryLoad = () => { setLoaded(false); setLoadFailed(false); loadUsers(); load2FA(); };
 
   const canTouch = (mu: ManagedUser) => mu.role !== 'owner' && (callerRole === 'owner' || (callerRole === 'admin' && mu.role === 'member'));
 

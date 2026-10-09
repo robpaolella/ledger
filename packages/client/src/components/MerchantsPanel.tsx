@@ -51,8 +51,8 @@ export default function MerchantsPanel() {
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try { setMerchants((await apiFetch<{ data: Merchant[] }>('/merchants')).data); setLoadFailed(false); }
+    setLoading(true); setLoadFailed(false);
+    try { setMerchants((await apiFetch<{ data: Merchant[] }>('/merchants')).data); }
     catch { setLoadFailed(true); }
     finally { setLoading(false); }
   }, []);
