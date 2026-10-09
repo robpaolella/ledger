@@ -3,6 +3,7 @@ import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
+import { ACCESS_LABEL, accessLevelOf } from '@ledger/shared';
 import { SegmentedControl } from '../primitives';
 import { Card, CardHeader, Field, PanelHeader, Pill, InitialsAvatar, inputCls, btnPrimary } from './ui';
 
@@ -41,13 +42,14 @@ export default function ProfilePanel() {
   };
 
   const role = user?.role ?? 'member';
+  const roleLabel = role === 'member' ? `Member · ${ACCESS_LABEL[accessLevelOf(user?.permissions)]}` : ROLE_LABEL[role];
 
   return (
     <div className="flex flex-col gap-[22px]">
       <PanelHeader title="Profile" description="Your name as it appears across Ledger, and how the app looks on this device." />
 
       <Card>
-        <CardHeader title="Your details" divider actions={<Pill color={ROLE_TONE[role]}>{ROLE_LABEL[role]}</Pill>} />
+        <CardHeader title="Your details" divider actions={<Pill color={ROLE_TONE[role]} className="max-md:max-w-[190px] max-md:h-auto max-md:py-1 max-md:whitespace-normal max-md:leading-snug">{roleLabel}</Pill>} />
         <div className="px-6 py-5 flex flex-col gap-5">
           <div className="flex items-center gap-4">
             <InitialsAvatar name={displayName || user?.displayName || '?'} color="var(--primary)" size={56} />
