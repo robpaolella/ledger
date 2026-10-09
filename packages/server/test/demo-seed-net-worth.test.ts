@@ -42,7 +42,7 @@ function fixture(now: Date) {
 }
 
 describe('demo net-worth sample', () => {
-  // Seeding is the slow part, so seed once per date; the tests only read the results.
+  // Seed once per date and share the read-only results across the tests.
   let first: ReturnType<typeof fixture>;
   let second: ReturnType<typeof fixture>;
   beforeAll(() => {
