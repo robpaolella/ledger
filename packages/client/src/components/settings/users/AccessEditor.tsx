@@ -82,7 +82,7 @@ export default function AccessEditor({ name, permissions, canEdit, onApplyPreset
 
       <div>
         <button type="button" onClick={() => setCustomizing((v) => !v)} aria-expanded={customizing}
-          className={`inline-flex items-center gap-1.5 min-h-[32px] ${phoneTap} text-[13px] font-semibold text-content-2 hover:text-content`}>
+          className={`inline-flex items-center gap-1.5 min-h-[32px] ${phoneTap} ${focusRing} text-[13px] font-semibold text-content-2 hover:text-content`}>
           <span className={`flex transition-transform ${customizing ? 'rotate-180' : ''}`}>{ICON.chevron}</span>
           {customizing ? 'Hide switches' : 'Customize'}
         </button>

@@ -3,7 +3,10 @@
 ## Sub-features
 
 - Preferences: appearance, display name, password and two-factor authentication.
-- Users & Permissions: owner/admin/member hierarchy, granular grants and activation.
+- Users & Permissions: owner/admin/member hierarchy, granular grants and activation. Each
+  person is one row; clicking it opens their view (pop-up window on desktop, bottom sheet
+  on phones) with Role, Access (presets and Customize), Sign-in (can sign in, Reset
+  two-step), and Edit name or password / Delete user, which open on top of it.
 - Bank Sync empty/configuration-denied states (no real external connection).
 
 ## How to get to it (user POV)

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import BottomSheet from './BottomSheet';
+import { useDialogLayer } from '../hooks/useDialogLayer';
 
 interface ResponsiveModalProps {
   /** Rendered as the modal header (desktop + bottom sheet). Omit to render only children. */
@@ -31,6 +32,8 @@ const closeIcon = (
 export default function ResponsiveModal({ title, description, icon, isOpen, onClose, children, footer, maxWidth, padded = true }: ResponsiveModalProps) {
   const isMobile = useIsMobile();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const descriptionId = useId();
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
 
   const checkOverflow = useCallback(() => {
@@ -55,13 +58,8 @@ export default function ResponsiveModal({ title, description, icon, isOpen, onCl
     };
   }, [checkOverflow, children, isMobile, isOpen]);
 
-  // ESC closes (desktop; the bottom sheet handles its own)
-  useEffect(() => {
-    if (!isOpen || isMobile) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, isMobile, onClose]);
+  // Escape, focus and layering (desktop; the bottom sheet handles its own)
+  useDialogLayer(dialogRef, isOpen && !isMobile, onClose);
 
   const scrollDown = () => scrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' });
 
@@ -82,9 +80,11 @@ export default function ResponsiveModal({ title, description, icon, isOpen, onCl
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-describedby={title && description ? descriptionId : undefined}
         className="relative flex flex-col w-full bg-elevated border border-line-strong rounded-[18px] shadow-md overflow-hidden"
         style={{ maxWidth: maxWidth || '30rem', maxHeight: 'calc(100dvh - 48px)' }}
         onClick={(e) => e.stopPropagation()}
@@ -94,15 +94,15 @@ export default function ResponsiveModal({ title, description, icon, isOpen, onCl
             <div className="min-w-0 flex items-center gap-3">
               {icon && <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{icon}</span>}
               <div className="min-w-0">
-                <h2 className="text-[18px] font-extrabold tracking-tight text-content m-0 leading-tight">{title}</h2>
-                {description && <p className="text-[13px] text-content-3 mt-1 m-0 leading-snug">{description}</p>}
+                <h2 className="text-[18px] font-extrabold tracking-tight text-content m-0 leading-tight break-words">{title}</h2>
+                {description && <p id={descriptionId} className="text-[13px] text-content-3 mt-1 m-0 leading-snug">{description}</p>}
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="shrink-0 w-8 h-8 -mr-2 -mt-1 flex items-center justify-center rounded-[8px] text-content-2 hover:bg-surface-2 hover:text-content transition-colors"
+              className="shrink-0 w-8 h-8 -mr-2 -mt-1 flex items-center justify-center rounded-[8px] text-content-2 hover:bg-surface-2 hover:text-content transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               {closeIcon}
             </button>
