@@ -1,5 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import PageHeader from '../components/PageHeader';
+import Button from '../components/Button';
 import { createPortal } from 'react-dom';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, closestCorners,
@@ -36,13 +37,26 @@ function DroppableColumn({ column, children }: { column: Column; children: React
 export default function DashboardPage() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const { layout, setLayout } = useDashboardLayout();
+  const { layout, setLayout, resetLayout } = useDashboardLayout();
+  const [customizing, setCustomizing] = useState(false);
   const [activeId, setActiveId] = useState<DashboardCardId | null>(null);
   const dragSnapshot = useRef<DashboardLayout | null>(null);
 
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } });
   const sensors = useSensors(pointerSensor, touchSensor);
+
+  // Escape leaves customize mode, keeping the layout. Mid-drag, dnd-kit's own Escape
+  // handler also cancels the drag (restoring the snapshot), so one press does both.
+  useEffect(() => {
+    if (!customizing) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCustomizing(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [customizing]);
+
+  // Customize is desktop-only; leaving for a phone-width viewport ends the mode.
+  useEffect(() => { if (isMobile) setCustomizing(false); }, [isMobile]);
 
   const onDragStart = (e: DragStartEvent) => {
     dragSnapshot.current = layout;
@@ -92,7 +106,18 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-16">
-      <PageHeader title={greeting} mobileTitle="Dashboard" />
+      <PageHeader
+        title={greeting}
+        mobileTitle="Dashboard"
+        right={!isMobile && (customizing ? (
+          <>
+            <Button variant="outline" size="sm" onClick={resetLayout}>Reset layout</Button>
+            <Button size="sm" onClick={() => setCustomizing(false)}>Done</Button>
+          </>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setCustomizing(true)}>Customize</Button>
+        ))}
+      />
 
       {isMobile ? (
         // Static single column on mobile — no drag-and-drop.
@@ -115,7 +140,7 @@ export default function DashboardPage() {
             {(['left', 'right'] as const).map((col) => (
               <SortableContext key={col} items={layout[col]} strategy={verticalListSortingStrategy}>
                 <DroppableColumn column={col}>
-                  {layout[col].map((id) => <SortableDashboardCard key={id} id={id} />)}
+                  {layout[col].map((id) => <SortableDashboardCard key={id} id={id} customizing={customizing} />)}
                 </DroppableColumn>
               </SortableContext>
             ))}

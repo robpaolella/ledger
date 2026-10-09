@@ -7,6 +7,8 @@ interface ResponsiveModalProps {
   title?: string;
   /** Optional one-line description under the title. */
   description?: string;
+  /** Optional emoji or glyph, shown in a tile to the left of the title. */
+  icon?: ReactNode;
   isOpen: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -26,7 +28,7 @@ const closeIcon = (
  * elevated panel, 18px radius, header · body · footer). On phones it becomes a
  * bottom sheet with the same anatomy.
  */
-export default function ResponsiveModal({ title, description, isOpen, onClose, children, footer, maxWidth, padded = true }: ResponsiveModalProps) {
+export default function ResponsiveModal({ title, description, icon, isOpen, onClose, children, footer, maxWidth, padded = true }: ResponsiveModalProps) {
   const isMobile = useIsMobile();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
@@ -67,7 +69,7 @@ export default function ResponsiveModal({ title, description, isOpen, onClose, c
 
   if (isMobile) {
     return (
-      <BottomSheet isOpen={isOpen} onClose={onClose} title={title} description={description} footer={footer}>
+      <BottomSheet isOpen={isOpen} onClose={onClose} title={title} description={description} icon={icon} footer={footer}>
         {padded ? <div className="py-1">{children}</div> : children}
       </BottomSheet>
     );
@@ -89,9 +91,12 @@ export default function ResponsiveModal({ title, description, isOpen, onClose, c
       >
         {title && (
           <div className="shrink-0 flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-line">
-            <div className="min-w-0">
-              <h2 className="text-[18px] font-extrabold tracking-tight text-content m-0 leading-tight">{title}</h2>
-              {description && <p className="text-[13px] text-content-3 mt-1 m-0 leading-snug">{description}</p>}
+            <div className="min-w-0 flex items-center gap-3">
+              {icon && <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{icon}</span>}
+              <div className="min-w-0">
+                <h2 className="text-[18px] font-extrabold tracking-tight text-content m-0 leading-tight">{title}</h2>
+                {description && <p className="text-[13px] text-content-3 mt-1 m-0 leading-snug">{description}</p>}
+              </div>
             </div>
             <button
               type="button"
