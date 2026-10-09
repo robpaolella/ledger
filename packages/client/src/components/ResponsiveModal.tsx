@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import BottomSheet from './BottomSheet';
+import { useDialogLayer } from '../hooks/useDialogLayer';
 
 interface ResponsiveModalProps {
   /** Rendered as the modal header (desktop + bottom sheet). Omit to render only children. */
@@ -31,6 +32,7 @@ const closeIcon = (
 export default function ResponsiveModal({ title, description, icon, isOpen, onClose, children, footer, maxWidth, padded = true }: ResponsiveModalProps) {
   const isMobile = useIsMobile();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
 
   const checkOverflow = useCallback(() => {
@@ -55,13 +57,8 @@ export default function ResponsiveModal({ title, description, icon, isOpen, onCl
     };
   }, [checkOverflow, children, isMobile, isOpen]);
 
-  // ESC closes (desktop; the bottom sheet handles its own)
-  useEffect(() => {
-    if (!isOpen || isMobile) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, isMobile, onClose]);
+  // Escape, focus and layering (desktop; the bottom sheet handles its own)
+  useDialogLayer(dialogRef, isOpen && !isMobile, onClose);
 
   const scrollDown = () => scrollRef.current?.scrollBy({ top: 200, behavior: 'smooth' });
 
@@ -82,6 +79,7 @@ export default function ResponsiveModal({ title, description, icon, isOpen, onCl
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

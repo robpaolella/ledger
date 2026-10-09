@@ -9,6 +9,8 @@ interface ConfirmDeleteButtonProps {
   /** 'pill' = compact footer button (default). 'block' = full-width, for panels. */
   variant?: 'pill' | 'block';
   disabled?: boolean;
+  /** Extra classes for the pill's buttons (for example a taller phone tap target). */
+  className?: string;
 }
 
 /** Two-click destructive action: outlined `--negative` at rest, solid while
@@ -21,6 +23,7 @@ export default function ConfirmDeleteButton({
   timeout = 3000,
   variant = 'pill',
   disabled = false,
+  className = '',
 }: ConfirmDeleteButtonProps) {
   const [confirming, setConfirming] = useState(false);
 
@@ -60,12 +63,12 @@ export default function ConfirmDeleteButton({
   return (
     <div className="flex items-center gap-1.5">
       <button type="button" onClick={handleClick} disabled={disabled}
-        className="h-10 px-4 rounded-[11px] font-bold text-sm cursor-pointer transition-colors whitespace-nowrap disabled:opacity-50" style={style}>
+        className={`h-10 px-4 rounded-[11px] font-bold text-sm cursor-pointer transition-colors whitespace-nowrap disabled:opacity-50 ${className}`} style={style}>
         {confirming ? confirmLabel : label}
       </button>
       {confirming && (
         <button type="button" onClick={() => setConfirming(false)}
-          className="h-10 px-3 rounded-[10px] bg-transparent border-none cursor-pointer text-sm font-semibold text-content-2 hover:bg-surface-2">
+          className={`h-10 px-3 rounded-[10px] bg-transparent border-none cursor-pointer text-sm font-semibold text-content-2 hover:bg-surface-2 ${className}`}>
           Cancel
         </button>
       )}
