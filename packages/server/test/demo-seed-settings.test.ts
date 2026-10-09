@@ -96,6 +96,22 @@ describe('Settings sample data', () => {
       `).all()).toEqual([{ label: 'Sample new feed' }]);
       expect(scalar(db, 'SELECT COUNT(*) n FROM simplefin_connections WHERE sync_attempt_at IS NULL')).toBe(0);
       expect(scalar(db, 'SELECT COUNT(DISTINCT COALESCE(user_id, 0)) n FROM simplefin_connections')).toBe(3); // shared + both people
+      // Personal connections only show to their owner, so John (the owner) must still see every status.
+      expect(db.prepare(`
+        SELECT DISTINCT COALESCE(sync_error_kind, sync_status) state FROM simplefin_connections
+        WHERE user_id IS NULL OR user_id = 1 ORDER BY state
+      `).all()).toEqual([{ state: 'auth' }, { state: 'other' }, { state: 'rate_limit' }, { state: 'working' }]);
+      expect(db.prepare("SELECT 1 FROM simplefin_connections WHERE (user_id IS NULL OR user_id = 1) AND sync_message IS NULL AND id NOT IN (SELECT simplefin_connection_id FROM simplefin_links)").all()).toHaveLength(1);
+      // Each failing connection links to a fitting sample account.
+      expect(db.prepare(`
+        SELECT c.label, a.name, a.type FROM simplefin_connections c
+        JOIN simplefin_links l ON l.simplefin_connection_id = c.id JOIN accounts a ON a.id = l.account_id
+        WHERE c.sync_status != 'working' ORDER BY c.id
+      `).all()).toEqual([
+        { label: 'Sample checking feed', name: 'Joint Checking', type: 'checking' },
+        { label: 'Sample card feed', name: "John's Mastercard", type: 'credit' },
+        { label: 'Sample savings feed', name: 'Joint Savings', type: 'savings' },
+      ]);
       expect(db.pragma('foreign_key_check')).toEqual([]);
     } finally {
       db.close();
@@ -149,15 +165,37 @@ describe('Settings sample data', () => {
           AND EXISTS (SELECT 1 FROM category_rules r WHERE r.match_type = 'merchant' AND r.pattern = CAST(m.id AS TEXT))
       `).all()).toEqual([]);
       expect(scalar(db, 'SELECT COUNT(*) n FROM merchants WHERE suppress_rule_suggest = 1')).toBe(3);
-      // Each contains rule matches a real merchant name.
+      // Each contains/pattern rule picks out exactly one sample merchant, so it never overrides another merchant's rule.
       const categorizer = buildCategorizer(db);
-      for (const rule of db.prepare("SELECT pattern FROM category_rules WHERE match_type = 'contains'").all() as { pattern: string }[]) {
-        const merchant = db.prepare('SELECT name FROM merchants WHERE lower(name) LIKE ? ORDER BY id').get(`%${rule.pattern}%`) as { name: string };
-        expect(merchant).toBeDefined();
-        expect(categorizer.categorize({ description: merchant.name, amount: 10 }).source).toBe('rule');
+      const targeted = db.prepare("SELECT match_type, pattern, category_id FROM category_rules WHERE match_type != 'merchant'").all() as
+        { match_type: string; pattern: string; category_id: number }[];
+      expect(targeted).toHaveLength(6);
+      const merchants = db.prepare(`
+        SELECT DISTINCT m.id, m.name, t.description FROM merchants m JOIN transactions t ON t.merchant_id = m.id
+      `).all() as { id: number; name: string; description: string }[];
+      for (const rule of targeted) {
+        const test = rule.match_type === 'contains'
+          ? (text: string) => text.toLowerCase().includes(rule.pattern)
+          : (text: string) => new RegExp(rule.pattern, 'i').test(text);
+        const hit = new Set(merchants.filter(m => test(m.name) || test(m.description)).map(m => m.id));
+        expect(hit.size).toBe(1);
+        const merchant = merchants.find(m => hit.has(m.id))!;
+        expect(categorizer.categorize({ description: merchant.name, amount: 10 })).toMatchObject({ source: 'rule', categoryId: rule.category_id });
       }
     } finally {
       db.close();
+    }
+  });
+
+  it('never dates a rule after the seeding day', () => {
+    for (const now of [NOON, new Date(2026, 0, 1, 12, 0), new Date(2026, 9, 9, 12, 0)]) {
+      const db = fixture(now);
+      try {
+        const today = now.toLocaleDateString('en-CA');
+        expect(db.prepare('SELECT id FROM category_rules WHERE created_at > ?').all(today)).toEqual([]);
+      } finally {
+        db.close();
+      }
     }
   });
 

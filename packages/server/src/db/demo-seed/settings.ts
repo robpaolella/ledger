@@ -22,7 +22,7 @@ const localDay = (d: Date) => d.toLocaleDateString('en-CA');
  * Runs after the reviews/rules and investments data exist. Every access URL is
  * `demo://`, which cannot make a network request, and the seed stores no token.
  */
-export function seedSettings({ db, rel, now }: Helpers, { johnId, janeId }: PeopleAccounts) {
+export function seedSettings({ db, rel, today, now }: Helpers, { johnId }: PeopleAccounts) {
   const run = lastDailyRun(now);
   const at = run.toISOString();
 
@@ -36,18 +36,16 @@ export function seedSettings({ db, rel, now }: Helpers, { johnId, janeId }: Peop
     const insertLink = db.prepare(`INSERT INTO simplefin_links
       (simplefin_connection_id, simplefin_account_id, account_id, simplefin_account_name, simplefin_org_name,
        last_synced_at, last_sync_status, last_sync_error, last_sync_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const spendingAccounts = db.prepare(
-      "SELECT id, name FROM accounts WHERE type IN ('checking', 'savings', 'credit') ORDER BY id",
-    ).all() as Array<{ id: number; name: string }>;
+    const accountByName = db.prepare('SELECT id, name FROM accounts WHERE name = ?');
     const previousDay = localDay(new Date(run.getTime() - 86_400_000));
 
     const connections = [
-      { label: 'Sample checking feed', userId: null, status: 'failed', kind: 'other' },
-      { label: 'Sample card feed', userId: johnId, status: 'failed', kind: 'rate_limit' },
-      { label: 'Sample savings feed', userId: janeId, status: 'reconnect_needed', kind: 'auth' },
+      { label: 'Sample checking feed', userId: null, account: 'Joint Checking', status: 'failed', kind: 'other' },
+      { label: 'Sample card feed', userId: johnId, account: "John's Mastercard", status: 'failed', kind: 'rate_limit' },
+      { label: 'Sample savings feed', userId: null, account: 'Joint Savings', status: 'reconnect_needed', kind: 'auth' },
     ] as const;
     for (const [index, connection] of connections.entries()) {
-      const account = spendingAccounts[index * 3];
+      const account = accountByName.get(connection.account) as { id: number; name: string } | undefined;
       if (!account) throw new Error('Synthetic accounts are incomplete for bank connection fixtures');
       const message = FAILURE_SENTENCES[connection.kind];
       const id = Number(insertConnection.run(connection.userId, `demo://settings-${index + 1}`, connection.label, connection.status, connection.kind, message, at).lastInsertRowid);
@@ -76,20 +74,40 @@ export function seedSettings({ db, rel, now }: Helpers, { johnId, janeId }: Peop
     `).all() as Array<{ merchant_id: number; name: string; category_id: number }>;
     const picked = candidates.filter((row, index, rows) =>
       rows.findIndex(candidate => candidate.merchant_id === row.merchant_id) === index);
-    if (picked.length < EXTRA_RULES + MUTED_MERCHANTS) throw new Error('Synthetic transactions have too few categorized merchants for extra rules');
+    if (picked.length < EXTRA_RULES + MUTED_MERCHANTS + 6) throw new Error('Synthetic transactions have too few categorized merchants for extra rules');
 
-    const firstWord = (name: string) => name.match(/[A-Za-z0-9]{4,}/)?.[0] ?? name;
+    // A contains/pattern rule is only believable if it picks out one merchant, so
+    // it uses a merchant's leading word and only where no other merchant or
+    // description in the sample also matches it.
+    const names = db.prepare(`
+      SELECT m.id, lower(m.name) AS name, lower(t.description) AS description
+      FROM merchants m LEFT JOIN transactions t ON t.merchant_id = m.id
+      GROUP BY m.id, t.description
+    `).all() as Array<{ id: number; name: string; description: string | null }>;
+    const leadingWord = (name: string) => name.match(/^[A-Za-z0-9]{4,}(?![A-Za-z0-9])/)?.[0];
+    const matchesOnly = (word: string, id: number) => names.every(row =>
+      row.id === id || !(row.name.includes(word) || row.description?.includes(word)));
+    const targeted = picked.filter(row => {
+      const word = leadingWord(row.name)?.toLowerCase();
+      return word !== undefined && matchesOnly(word, row.merchant_id);
+    }).slice(0, 6);
+    const plain = picked.filter(row => !targeted.includes(row));
+    // Interleave so the checking order reads like rules added over time.
+    const sequence = ['merchant', 'contains', 'merchant', 'regex', 'merchant', 'contains', 'merchant', 'merchant', 'regex', 'merchant', 'contains', 'merchant', 'merchant', 'regex', 'merchant'] as const;
+    const queues = { merchant: plain, contains: targeted.slice(0, 3), regex: targeted.slice(3, 6) };
+    if (queues.contains.length + queues.regex.length < 6) throw new Error('Synthetic merchants are too ambiguous for contains and pattern rules');
     const insertRule = db.prepare('INSERT INTO category_rules (match_type, pattern, category_id, priority, created_at) VALUES (?, ?, ?, ?, ?)');
-    const types = ['merchant', 'contains', 'merchant', 'regex', 'merchant', 'contains', 'merchant', 'merchant', 'regex', 'merchant', 'contains', 'merchant', 'merchant', 'regex', 'merchant'] as const;
-    for (const [index, row] of picked.slice(0, EXTRA_RULES).entries()) {
-      const type = types[index];
-      const pattern = type === 'merchant' ? String(row.merchant_id)
-        : type === 'contains' ? firstWord(row.name).toLowerCase()
-        : `^${firstWord(row.name)}\\b`;
-      insertRule.run(type, pattern, row.category_id, type === 'regex' ? 20 : type === 'contains' ? 10 : 0, rel(`2026-0${1 + index % 3}-${String(10 + index).padStart(2, '0')}`));
+    for (const [index, type] of sequence.entries()) {
+      const row = queues[type].shift()!;
+      const word = leadingWord(row.name) ?? '';
+      const pattern = type === 'merchant' ? String(row.merchant_id) : type === 'contains' ? word.toLowerCase() : `^${word}\\b`;
+      const created = rel(`2026-0${1 + index % 3}-${String(10 + index).padStart(2, '0')}`);
+      insertRule.run(type, pattern, row.category_id, type === 'regex' ? 20 : type === 'contains' ? 10 : 0, created > today ? today : created);
     }
+    // What is left of `plain` after the merchant rules are the muted merchants.
+    const remaining = queues.merchant;
     const mute = db.prepare('UPDATE merchants SET suppress_rule_suggest = 1 WHERE id = ?');
-    for (const row of picked.slice(EXTRA_RULES, EXTRA_RULES + MUTED_MERCHANTS)) mute.run(row.merchant_id);
+    for (const row of remaining.slice(0, MUTED_MERCHANTS)) mute.run(row.merchant_id);
   })();
 
   console.log(`  Created 4 sample bank connections, a daily-sync last run, ${EXTRA_RULES} more rules, and ${MUTED_MERCHANTS} muted merchants`);

@@ -97,8 +97,8 @@ proof. These are state recipes, not permission to change app code during verific
   from an unconfigured household. Select dates explicitly; record them so main and build
   don't compare different months.
 - **No connections (`bank-empty`):** the standard launch now has ten synthetic SimpleFIN
-  connections. For the empty state, Disconnect every one through the real UI
-  (Settings → Bank Sync) and capture that; never connect an outside account.
+  connections. For the empty state, Disconnect every connection you can see through the real UI
+  (Settings → Bank Sync; as owner, John's and Jane's personal ones need each person) and capture that; never connect an outside account.
 - **Validation error:** Settings → Preferences → Change Password; enter a synthetic
   new password of at least eight characters (e.g. `sample-new-49`) and a different
   confirmation (e.g. `sample-other-49`). Submit and capture “Passwords do not match”. Do not enter the correct current password or publish password values.
