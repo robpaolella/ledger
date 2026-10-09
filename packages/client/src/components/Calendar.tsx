@@ -37,12 +37,12 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
   const lastYear = Math.max(today.getFullYear() + 3, vy);
   for (let y = firstYear; y <= lastYear; y++) years.push(y);
 
-  const navBtn = 'w-8 h-10 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 shrink-0';
-  const selectCls = 'h-10 pl-3 pr-7 rounded-[10px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';
+  const navBtn = 'w-10 h-10 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 shrink-0';
+  const selectCls = 'h-10 px-3 pr-8 rounded-[10px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-3">
+      <div className="flex items-center gap-2 mb-3">
         <button type="button" onClick={prev} className={navBtn}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
         <div className="relative flex-1">
           <select value={vm} onChange={(e) => setVm(Number(e.target.value))} className={`w-full ${selectCls}`}>
@@ -50,7 +50,7 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
           </select>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-2.5 top-2.5 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
         </div>
-        <div className="relative w-[84px]">
+        <div className="relative w-[92px]">
           <select value={vy} onChange={(e) => setVy(Number(e.target.value))} className={`w-full ${selectCls}`}>
             {years.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>

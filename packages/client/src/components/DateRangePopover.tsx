@@ -87,11 +87,8 @@ export default function DateRangePopover({
   const typeDate = (f: 'start' | 'end', raw: string) => {
     setText((t) => ({ ...t, [f]: raw }));
     const trimmed = raw.trim();
-    if (trimmed === '') setDraft((d) => ({ ...d, preset: 'custom', [f]: '' }));
-    else {
-      const iso = parseText(trimmed);
-      if (iso) setDraft((d) => ({ ...d, preset: 'custom', [f]: iso }));
-    }
+    // Text that isn't a real date clears the stored date, so a stale one can't trip the range check.
+    setDraft((d) => ({ ...d, preset: 'custom', [f]: parseText(trimmed) ?? '' }));
   };
   const clear = () => { setDraft(clearValue); setText({ start: toText(clearValue.start), end: toText(clearValue.end) }); onApply(clearValue); };
 
@@ -106,8 +103,8 @@ export default function DateRangePopover({
       {open && (
         <>
           {/* Phones: pinned under the app bar, full width. md+: anchored to the button. */}
-          <Popover onClose={() => setOpen(false)} label="Date range" className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
-            <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-y-auto md:overflow-visible">
+          <Popover onClose={() => setOpen(false)} label="Date range" className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[660px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-[calc(100dvh-8rem)] bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">
+            <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-y-auto">
               <div className="md:w-[212px] shrink-0 border-b md:border-b-0 md:border-r border-line">
                 <div className="px-5 pt-[18px] pb-3 text-base font-extrabold tracking-tight border-b border-line">Date Range</div>
                 <div className="py-2 flex flex-row md:flex-col overflow-x-auto md:overflow-visible">
@@ -123,7 +120,7 @@ export default function DateRangePopover({
                   })}
                 </div>
               </div>
-              <div className="flex-1 p-6">
+              <div className="flex-1 p-4 md:p-6">
                 {(['start', 'end'] as const).map((f) => {
                   const val = f === 'start' ? draft.start : draft.end;
                   const fieldError = textBad(f);
