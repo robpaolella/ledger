@@ -375,6 +375,7 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --color-content-2: var(--text-2);
   --color-content-3: var(--text-3);
   --color-btn-ghost: var(--btn-ghost-text);
+  --color-ring:      var(--ring);
 
   /* Retained legacy utilities still used by components */
   --color-card:    var(--surface);
