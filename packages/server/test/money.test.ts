@@ -118,3 +118,49 @@ describe('formatMoney: balances', () => {
     expect(formatMoney(0, { kind: 'balance' })).toEqual({ text: '—', tone: 'neutral' });
   });
 });
+
+describe('formatMoney: showZero', () => {
+  it('shows zero as $0 instead of a dash when asked', () => {
+    expect(formatMoney(0, { kind: 'balance', precision: 'whole', showZero: true })).toEqual({ text: '$0', tone: 'neutral' });
+    expect(formatMoney(0.4, { kind: 'balance', precision: 'whole', showZero: true })).toEqual({ text: '$0', tone: 'neutral' });
+    expect(formatMoney(-0.4, { kind: 'total', precision: 'whole', showZero: true })).toEqual({ text: '$0', tone: 'neutral' });
+    expect(formatMoney(0, { kind: 'balance', showZero: true })).toEqual({ text: '$0.00', tone: 'neutral' });
+  });
+
+  it('leaves non-zero amounts unchanged', () => {
+    expect(formatMoney(-1234.5, { kind: 'balance', precision: 'whole', showZero: true })).toEqual({ text: '-$1,235', tone: 'neutral' });
+    expect(formatMoney(-12, { kind: 'total', precision: 'whole', showZero: true })).toEqual({ text: '-$12', tone: 'negative' });
+  });
+});
+
+describe('formatMoney: chart axis labels', () => {
+  const axis = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' });
+
+  it('shows whole dollars below $1,000 and $0 at zero', () => {
+    expect(axis(0)).toEqual({ text: '$0', tone: 'neutral' });
+    expect(axis(0.4).text).toBe('$0');
+    expect(axis(250).text).toBe('$250');
+    expect(axis(249.6).text).toBe('$250');
+  });
+
+  it('uses a lowercase k with no trailing .0', () => {
+    expect(axis(1000).text).toBe('$1k');
+    expect(axis(999.6).text).toBe('$1k');
+    expect(axis(1200).text).toBe('$1.2k');
+    expect(axis(12_000).text).toBe('$12k');
+    expect(axis(12_500).text).toBe('$13k');
+    expect(axis(250_000).text).toBe('$250k');
+  });
+
+  it('steps up to M and B without showing 1000 of a smaller unit', () => {
+    expect(axis(999_600).text).toBe('$1M');
+    expect(axis(1_500_000).text).toBe('$1.5M');
+    expect(axis(2_000_000_000).text).toBe('$2B');
+  });
+
+  it('shows negatives with a real minus and no colour', () => {
+    expect(axis(-250)).toEqual({ text: '-$250', tone: 'neutral' });
+    expect(axis(-1200)).toEqual({ text: '-$1.2k', tone: 'neutral' });
+    expect(axis(-12_000)).toEqual({ text: '-$12k', tone: 'neutral' });
+  });
+});

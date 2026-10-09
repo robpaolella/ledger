@@ -9,7 +9,9 @@ import CurrencyInput from '../components/CurrencyInput';
 import Dropdown from '../components/Dropdown';
 import { VendorAvatar } from '../components/primitives';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
-import { timeAgo, fmtTransaction, todayYmd } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { timeAgo, todayYmd } from '../lib/formatters';
+import { Money } from '../components/Money';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ListRow } from '../components/ListRow';
 import PageHeader from '../components/PageHeader';
@@ -31,8 +33,6 @@ interface Txn {
 }
 
 // ---- helpers ----
-const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
 const SUBTYPE: Record<string, string> = {
   checking: 'Checking', savings: 'Savings', credit: 'Credit Card', investment: 'Brokerage',
   retirement: 'Retirement', venmo: 'Venmo', cash: 'Cash',
@@ -150,6 +150,9 @@ export default function AccountDetailPage() {
   const delta = points.length >= 2 ? points[points.length - 1].value - points[0].value : null;
   // No percentage when the range-start balance is 0 — dividing by it yields a bogus +0.0%.
   const deltaPct = delta != null && points[0].value !== 0 ? (delta / Math.abs(points[0].value)) * 100 : null;
+  // Oriented so up is good (liabilities are plotted negative); zero keeps today's "+$0.00" in green.
+  const change = delta != null ? formatMoney(delta, { kind: 'total', showZero: true, zeroTone: 'positive' }) : null;
+  const up = change?.tone !== 'negative';
   const rangeLabel = RANGES.find((r) => r.key === range)?.label ?? range;
 
   // Axis date format tracks the plotted span: ≤3m "Jun 12", ≤1y "Mar", all "Mar '24".
@@ -235,14 +238,14 @@ export default function AccountDetailPage() {
           <div className="min-w-0">
             <div className="font-mono text-[11px] uppercase tracking-[.1em] text-content-3 mb-2 md:mb-2.5">Current balance</div>
             <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{money(displayBalance)}</span>
-              {delta != null && (
+              <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{formatMoney(displayBalance, { kind: 'balance', showZero: true }).text}</span>
+              {change != null && (
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold tabular-nums"
-                  style={{ color: delta >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                  style={{ color: up ? 'var(--positive)' : 'var(--negative)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={delta >= 0 ? 'M7 17 17 7M9 7h8v8' : 'M7 7l10 10M17 9v8H9'} />
+                    <path d={up ? 'M7 17 17 7M9 7h8v8' : 'M7 7l10 10M17 9v8H9'} />
                   </svg>
-                  {`${delta >= 0 ? '+' : '-'}${money(Math.abs(delta))}${deltaPct != null ? ` (${delta >= 0 ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
+                  {`${up ? '+' : ''}${change.text}${deltaPct != null ? ` (${up ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
                 </span>
               )}
               <span className="text-[15px] font-medium text-content-3">{rangeLabel} change</span>
@@ -276,14 +279,14 @@ export default function AccountDetailPage() {
               const cat = categoryOf(t);
               const color = getCategoryColorHex(cat.groupName);
               const vendor = t.merchant?.name ?? t.description;
-              const amt = fmtTransaction(t.amount, cat.type);
+              const amt = <Money amount={t.amount} transfer={cat.type === 'transfer'} />;
               if (isMobile) {
                 return (
                   <ListRow key={t.id}
                     avatar={{ name: vendor, src: t.merchant?.logoUrl, color }}
                     title={vendor}
                     subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(cat.subName)}</span><span className="truncate">{cat.label}</span></>}
-                    amount={amt.text} amountClass={amt.className}
+                    amount={amt}
                     meta={<span className="font-mono">{new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                     className="border-t" />
                 );
@@ -299,7 +302,7 @@ export default function AccountDetailPage() {
                     <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(cat.subName)}</span>
                     <span className="truncate">{cat.label}</span>
                   </span>
-                  <span className={`w-32 shrink-0 text-right font-bold text-[15px] tabular-nums ${amt.className}`}>{amt.text}</span>
+                  <span className="min-w-32 shrink-0 text-right font-bold text-[15px]">{amt}</span>
                 </div>
               );
             })
