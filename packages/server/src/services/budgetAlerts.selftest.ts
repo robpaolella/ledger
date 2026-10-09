@@ -49,6 +49,7 @@ const { migrateSettingsColumns } = await import('../db/migrate-settings-columns.
 const { migrateNotifications } = await import('../db/migrate-notifications.js');
 const { migrateTransactionReviews } = await import('../db/migrate-transaction-reviews.js');
 const { migrateNotificationCenter } = await import('../db/migrate-notification-center.js');
+const { migrateNotificationPrefs } = await import('../db/migrate-notification-prefs.js');
 const { migrateRecurringItems } = await import('../db/migrate-recurring-items.js');
 
 let failures = 0;
@@ -61,6 +62,7 @@ migrateSettingsColumns(sqlite);   // categories.exclude_from_budget
 migrateNotifications(sqlite);     // notifications table
 migrateTransactionReviews(sqlite);
 migrateNotificationCenter(sqlite); // budget_alerts ledger
+migrateNotificationPrefs(sqlite);  // users.over_budget_alerts
 migrateRecurringItems(sqlite);    // recurring_items (floor source)
 
 // Two active users + one inactive (must never be notified).
