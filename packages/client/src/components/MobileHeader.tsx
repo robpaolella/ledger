@@ -19,7 +19,7 @@ export default function MobileHeader() {
   const closeNav = useCallback(() => setNavOpen(false), []);
   return (
     <>
-      <div className="mobile-only sticky top-0 z-40 flex items-center gap-1 bg-surface border-b border-line px-2 h-14">
+      <div className="mobile-only sticky top-0 z-40 shrink-0 flex items-center gap-1 bg-surface border-b border-line px-2 h-14">
         {/* back slot (filled by detail pages) — hides the menu/bell cluster when present */}
         <div id={MOBILE_BAR_SLOTS.back} className="peer/back flex items-center shrink-0 empty:hidden" />
         <div className="flex items-center shrink-0 peer-[:not(:empty)]/back:hidden">
