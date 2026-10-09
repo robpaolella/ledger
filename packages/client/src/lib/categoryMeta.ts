@@ -90,7 +90,7 @@ function fallbackToken(name: string): CategoryToken {
 // ── Group lookup ────────────────────────────────────────────────────────────
 // A category (leaf) inherits its group's colour, and its group's emoji when it
 // has none of its own. Filled from the category + group lists (see
-// setCategoryGroups); a leaf name that exists under two groups maps to null and
+// setCategoryEmojiOverrides); a leaf name that exists under two groups maps to null and
 // needs the optional `group` argument to resolve.
 const leafToGroup = new Map<string, string | null>();
 const groupColors = new Map<string, CategoryToken>();
@@ -99,9 +99,10 @@ const groupNames = new Set<string>();
 function resolveGroup(name: string, group?: string | null): string | null {
   if (group) return group;
   const key = norm(name);
-  const leaf = leafToGroup.get(key);
-  if (leaf !== undefined) return leaf; // a leaf wins over a group of the same name
-  return groupNames.has(key) ? name : null;
+  // Most callers pass a group name, so a name that is a group resolves to that
+  // group; a leaf that shares a group's name needs the `group` argument.
+  if (groupNames.has(key)) return name;
+  return leafToGroup.get(key) ?? null;
 }
 
 /**
