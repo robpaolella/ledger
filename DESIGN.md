@@ -199,7 +199,7 @@ Numbered tokens `--owner-1` to `--owner-6` tint the account-owner tags, plus `--
 
 Existing components still use older names (`--bg-card`, `--text-primary`, `--color-positive`, `--btn-primary-bg`, `--badge-*`, `--bg-inline-*`, `--toggle-*`, and so on). `index.css` points almost all of them at a core token above, so they follow the theme automatically. In new work, use the core tokens. Tinted badges and inline messages are built by mixing a core token into the surface (`color-mix`), which is why they work in both themes without separate values.
 
-A few tokens keep fixed values that do not swap with the core set: `--bg-modal` (the one scrim for every modal, sheet and panel), `--bg-zebra`, and the dark navigation and hero values (`--bg-sidebar`, `--nav-*`, `--sidebar-text`, `--hero-gradient-*`). Use `var(--bg-modal)` for any scrim; do not invent another.
+A few tokens keep fixed values that do not swap with the core set: `--bg-modal` (the one scrim for every modal, sheet and panel), `--bg-zebra`, and the dark navigation and hero values (`--nav-*`, `--hero-gradient-*`). Use `var(--bg-modal)` for any scrim; do not invent another.
 
 ## Typography
 
