@@ -3,6 +3,8 @@ interface InlineNotificationProps {
   message: string;
   dismissible?: boolean;
   onDismiss?: () => void;
+  /** Buttons shown inside the notice, after the message. */
+  actions?: React.ReactNode;
   className?: string;
 }
 
@@ -21,12 +23,12 @@ const ICON: Record<InlineNotificationProps['type'], React.ReactNode> = {
 };
 
 /** Tinted callout (design system: color-mix 12% fill, 35% border, solid text). */
-export default function InlineNotification({ type, message, dismissible, onDismiss, className = '' }: InlineNotificationProps) {
+export default function InlineNotification({ type, message, dismissible, onDismiss, actions, className = '' }: InlineNotificationProps) {
   const tone = TONE[type];
   return (
     <div
       role={type === 'error' ? 'alert' : 'status'}
-      className={`flex items-start gap-2.5 rounded-[12px] border px-4 py-3 text-[13px] font-medium leading-snug ${className}`}
+      className={`flex items-start gap-2.5 ${actions ? 'flex-wrap' : ''} rounded-[12px] border px-4 py-3 text-[13px] font-medium leading-snug ${className}`}
       style={{
         background: `color-mix(in srgb, ${tone} 12%, var(--surface))`,
         borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
@@ -34,7 +36,8 @@ export default function InlineNotification({ type, message, dismissible, onDismi
       }}
     >
       <svg className="shrink-0 mt-[1px]" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{ICON[type]}</svg>
-      <span className="flex-1 min-w-0">{message}</span>
+      <span className={`flex-1 ${actions ? 'min-w-[160px]' : 'min-w-0'}`}>{message}</span>
+      {actions && <span className="ml-auto">{actions}</span>}
       {dismissible && onDismiss && (
         <button
           type="button"
