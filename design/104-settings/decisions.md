@@ -45,9 +45,9 @@ All-version captures (300 images: 3 versions × 25 states × 2 themes × 2 width
 every pixel width equals its viewport) were taken and inspected before `versions/` was removed.
 Approved evidence: [manifest](screenshots/approved/manifest.json), 100 images (25 states × 2 themes
 × 2 widths); 99 are byte-identical to the inspected C captures, and the remaining one
-(`approved-loading-light-390.png`) differs only in the spinner's position and was opened.
+(`approved-loading-light-390.png`) differs only in the spinner's position and was opened. (Superseded by the 116-image re-capture after the pre-PR review; see below.)
 
-Final offline proof of `index.html` (2026-10-08): fresh browser with network offline; all 50
+Final offline proof of `index.html` (2026-10-08): fresh browser with network offline; all 50 (now 58)
 state × theme URLs report matching `data-state`/`data-theme`; network log shows only `file:` and
 `data:`; no console errors. The host snapshot (`host.html`) was removed after this proof; its
 capture and offline check are recorded in `brief.md`.
@@ -93,6 +93,26 @@ owned local server fails. The CSP allows only inline script (`default-src 'none'
 | herdr, decision 14 follow-up | rate-limit line | "How does that limit get decided? Simple FIN will notify Ledger?" | Answered: SimpleFIN refuses requests past ~24/day per connection (HTTP 429); Ledger already classifies that as a rate-limit failure. Build note: the shown retry time must be the real next retry from the backoff schedule | 2026-10-08 |
 | herdr, "What should I check on C?" | C | Robert reviewed C | "Looks good." then "Yes." to approval | 2026-10-08 |
 
+## Pre-PR review (2026-10-08)
+General PR review per the ship/review skills: Claude Sonnet 5.5, high thinking, same-company under
+Robert's approval (`read-only-run.ts . review /git/maestro/skills/review/reviewer-prompt.md …`).
+Verdict: not ready, 2 blocking, 5 worth fixing, 3 nits. After approval, Robert agreed the changes
+(2026-10-08, herdr: "19. Agreed. 20. Yes. 21. Agreed. 22. Agreed."):
+
+1. Blocking: no "gave up for the day" status → decision 19 wording; new states `daily-gave-up`, `daily-off-failing`.
+2. Blocking: not all 12 switches pictured → new states `user-switches-more` (Finance group) and `user-everyday-switches` (ticked switches).
+3. Pending preset not visible → the picked preset is outlined with "Picked. Confirm below to apply."
+4. Sample count mismatch → the "Accounts from SimpleFIN" count is now derived from the connections shown.
+5. Benchmarks stored data → added to the build notes.
+6. PRODUCT.md vs decision 1 → one line added to PRODUCT.md "Settings rules" (decision 21).
+7. Loading/error only on Users → accepted (decision 22).
+8. Nits: brief numbering fixed; the gap under Customize was an empty element, removed (the rest is the 44px phone tap height); "Couldn't load your settings" kept.
+
+Approved evidence was re-captured: 116 images (29 states × 2 themes × 2 widths), all inspected via
+contact sheets; existing states differ from the first capture only where the fixes apply and in the
+prototype bar's state selector width. `screenshots/all/` is unchanged: it is the pre-pruning record
+of A, B and C and predates the four new states.
+
 ## Experiment
 None.
 
@@ -105,6 +125,9 @@ None affecting the approved scope. Build notes for #105 (from decisions 15 and 1
   each person's over-budget alert choice, the last sync's time and new-transaction count,
   per-connection next retry time, and Amazon's last match. Migrations must work on existing
   databases.
+- Investment benchmarks: a stored on/off and the last price update time (today only `TIINGO_TOKEN`
+  controls it). Amazon's on/off already exists (`amazon.enabled`).
+- Daily sync shows when today's retries have run out; per-connection "gave up" needs storing too.
 - Member permissions on the server are unchanged; only names and grouping change.
 - The sample times, counts and names are illustrative; the build shows real values.
 

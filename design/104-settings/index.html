@@ -171,6 +171,8 @@ html.proto-locked #root { height: calc(100dvh - var(--proto-bar)); overflow: hid
 .modal-wrap .side-scrim { position: absolute; inset: 0; z-index: 0; }
 .modal-box { position: relative; z-index: 1; display: flex; flex-direction: column; width: 100%; max-width: 560px; max-height: calc(100dvh - var(--proto-bar) - 48px); background: var(--elevated); border: 1px solid var(--line-strong); border-radius: 18px; box-shadow: var(--shadow-md); overflow: hidden; }
 .modal-box .body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.preset[data-pending="true"] { border: 1.5px dashed var(--primary); }
+.preset[data-pending="true"] .dot { border-color: var(--primary); }
 </style>
 </head>
 <body>
@@ -322,6 +324,10 @@ const CONNS = {
     { id: 4, label: 'Kids’ savings', shared: true, linked: 2, status: 'failed', retry: '9:30 am', line: 'SimpleFIN’s daily request limit was reached. Trying again at 9:30 am' },
   ],
 };
+CONNS.gaveup = [
+  { id: 1, label: 'Household banks', shared: true, linked: 6, status: 'working', line: 'Last synced today 5:31 am' },
+  { id: 2, label: 'John’s brokerage', shared: false, owner: 1, linked: 3, status: 'failed', gaveUp: true, line: 'Couldn’t reach SimpleFIN after 5 tries today. Next try tomorrow at 5:30 am.' },
+];
 const STATUS = {
   working: ['var(--positive)', 'Working'],
   failed: ['var(--warning)', 'Sync failed'],
@@ -354,6 +360,8 @@ const STATES = {
   'users-admin': { viewer: 2, panel: 'users', expand: 3 },
   'user-detail': { viewer: 1, panel: 'users', open: 4, pending: 'everyday' },
   'user-switches': { viewer: 1, panel: 'users', open: 5, customize: true, sheetScroll: 'switches' },
+  'user-switches-more': { viewer: 1, panel: 'users', open: 5, customize: true, sheetScroll: 'finance' },
+  'user-everyday-switches': { viewer: 1, panel: 'users', open: 3, customize: true, sheetScroll: 'switches' },
   'user-actions': { viewer: 1, panel: 'users', open: 5, sheetScroll: 'bottom' },
   'accounts': { viewer: 1, panel: 'accounts' },
   'bank-working': { viewer: 1, panel: 'bank', bank: 'working' },
@@ -363,6 +371,8 @@ const STATES = {
   'daily-problems': { viewer: 1, panel: B ? 'auto' : 'bank', bank: 'problems' },
   'daily-member': { viewer: 3, panel: B ? 'auto' : 'bank', bank: 'problems' },
   'daily-paused': { viewer: 1, panel: B ? 'auto' : 'bank', bank: 'working', paused: true },
+  'daily-gave-up': { viewer: 1, panel: B ? 'auto' : 'bank', bank: 'gaveup' },
+  'daily-off-failing': { viewer: 1, panel: B ? 'auto' : 'bank', bank: 'problems', paused: true },
   'bank-empty': { viewer: 1, panel: 'bank', bank: 'empty' },
   'rules': { viewer: 1, panel: B ? 'auto' : 'rules', confirming: 'rule2' },
   'rules-search': { viewer: 1, panel: B ? 'auto' : 'rules', search: 'zz-no-match' },
@@ -475,7 +485,7 @@ function dailySyncCard() {
   const rows = [
     ['Runs', 'Every day at 5:30 am, server time'],
     ['Last sync', ui.daily ? (problems ? `Today 5:31 am · ${conns.filter((c) => c.status !== 'working').length} of ${conns.length} connections had problems` : 'Today 5:31 am · 23 new transactions') : 'Yesterday 5:30 am · 18 new transactions'],
-    ['Next sync', ui.daily ? (nextRetry(conns) ? `Trying again at ${nextRetry(conns)}, then tomorrow 5:30 am` : 'Tomorrow 5:30 am') : 'Off. Switch daily sync on to sync each morning.'],
+    ['Next sync', ui.daily ? (nextRetry(conns) ? `Trying again at ${nextRetry(conns)}, then tomorrow 5:30 am` : conns.some((c) => c.gaveUp) ? 'Tomorrow 5:30 am (today’s retries ran out)' : 'Tomorrow 5:30 am') : 'Off. Switch daily sync on to sync each morning.'],
   ];
   return card(`<div class="flex items-start justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px] border-b border-line"><div class="min-w-0"><div class="flex items-center gap-2.5 flex-wrap"><span class="text-[17px] font-extrabold tracking-tight text-content">Daily sync</span>${ui.daily ? '' : statusPill('paused')}</div><div class="text-[13px] text-content-3 mt-1 leading-snug max-w-[620px]">Each morning Ledger pulls new transactions and balances from every connection. ${ui.daily ? '' : 'Daily sync is off. Sync now still works.'}</div></div>${manage ? sw(ui.daily, 'Daily sync', 'daily') : ''}</div>
     <dl class="m-0 px-4 md:px-6 py-2">${rows.map(([k, v]) => `<div class="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-4 py-2"><dt class="font-mono text-[11px] tracking-[0.1em] uppercase text-content-3 sm:w-[110px] shrink-0">${k}</dt><dd class="m-0 text-sm text-content tabular">${v}</dd></div>`).join('')}</dl>
@@ -497,10 +507,10 @@ function connectionsCard() {
     <div class="border-t border-line px-4 md:px-6 py-3.5">${caption('Connections', 'mb-1')}${conns.map((c) => `
       <div class="py-3 ${c === conns[0] ? '' : 'border-t border-line'}"><div class="flex items-center gap-2.5 flex-wrap"><span class="text-sm font-semibold text-content">${esc(c.label)}</span><span class="h-[22px] px-2 rounded-md text-[11px] font-semibold inline-flex items-center bg-surface-2 text-content-2">${c.shared ? 'Shared' : 'Personal'}</span>${statusPill(ui.daily || c.status !== 'working' ? c.status : 'paused')}
         ${manage && !isPhone() ? `<span class="ml-auto flex items-center gap-1.5">${c.status === 'reconnect' ? `<button type="button" class="${btnRow}" style="color:var(--primary)">Reconnect</button>` : ''}<button type="button" title="Edit connection" aria-label="Edit ${esc(c.label)}" class="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-3 hover:text-content hover:bg-surface-2">${I.pencil}</button>${confirmDelete('conn' + c.id, 'Disconnect', 'Confirm disconnect?')}</span>` : ''}</div>
-        <div class="text-[13px] mt-1 leading-snug" style="color:${c.status === 'working' ? 'var(--text-3)' : STATUS[c.status][0]}">${c.status === 'reconnect' && !manage ? 'SimpleFIN didn’t accept the sign-in. Ask an admin to reconnect.' : !ui.daily && c.status === 'working' ? 'Daily sync is off. Sync now still works.' : c.line}</div>
+        <div class="text-[13px] mt-1 leading-snug" style="color:${c.status === 'working' ? 'var(--text-3)' : STATUS[c.status][0]}">${c.status === 'reconnect' && !manage ? 'SimpleFIN didn’t accept the sign-in. Ask an admin to reconnect.' : !ui.daily && c.status === 'working' ? 'Daily sync is off. Sync now still works.' : !ui.daily && c.status === 'failed' ? 'Sync failed. Daily sync is off, so Ledger won’t retry on its own. Use Sync now.' : c.line}</div>
         <div class="font-mono text-[12px] text-content-3 mt-1">${c.linked} accounts linked</div>
         ${manage && isPhone() ? `<div class="flex items-center gap-1.5 mt-2.5">${c.status === 'reconnect' ? `<button type="button" class="${btnRow}" style="color:var(--primary)">Reconnect</button>` : ''}<button type="button" class="${btnRow}">${I.pencil}Edit</button>${confirmDelete('conn' + c.id, 'Disconnect', 'Confirm disconnect?')}</div>` : ''}</div>`).join('')}</div>
-    ${manage ? `<div class="border-t border-line"><button type="button" data-act="sfopen" aria-expanded="${ui.sfOpen}" class="w-full flex items-center gap-2 px-4 md:px-6 py-3.5 text-left"><span class="text-content-3" style="transform:rotate(${ui.sfOpen ? 90 : 0}deg);display:flex">${I.chevR}</span>${caption('Accounts from SimpleFIN')}<span class="font-mono text-[12px] text-content-3">· 11 accounts</span></button>
+    ${manage ? `<div class="border-t border-line"><button type="button" data-act="sfopen" aria-expanded="${ui.sfOpen}" class="w-full flex items-center gap-2 px-4 md:px-6 py-3.5 text-left"><span class="text-content-3" style="transform:rotate(${ui.sfOpen ? 90 : 0}deg);display:flex">${I.chevR}</span>${caption('Accounts from SimpleFIN')}<span class="font-mono text-[12px] text-content-3">· ${conns.reduce((n, c) => n + c.linked, 0) + 2} accounts</span></button>
       ${ui.sfOpen ? `<div class="px-4 md:px-6 pb-5 flex flex-col gap-2.5">${[['Harbor National Bank', 4, 4], ['Credit union', 2, 2], ['Summit Investments', 3, 3], ['Lakeside Card Services', 2, 0]].map(([org, n, l]) => `<div class="rounded-[11px] bg-surface-2 flex items-center gap-3 px-3.5 py-[11px]">${avatar(org, 'var(--c-teal)', 28)}<span class="text-sm font-bold text-content flex-1 min-w-0 truncate">${org}</span><span class="font-mono text-[12px] text-content-3">${n} · ${l} linked</span></div>`).join('')}</div>` : ''}</div>` : ''}`);
 }
 
@@ -599,10 +609,10 @@ function accessEditor(u) {
   const custOpen = ui.customize.has(u.id);
   return `<div class="flex flex-col gap-3">
     <div role="radiogroup" aria-label="Access for ${esc(u.name)}" class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">${opts.map((o) => `
-      <button type="button" role="radio" aria-checked="${cur === o.k}" ${touch && o.k !== 'custom' ? `data-act="preset:${u.id}:${o.k}"` : 'aria-disabled="true"'} class="preset"><span class="dot"></span><span class="min-w-0"><span class="block text-[13.5px] font-semibold text-content">${o.label}</span><span class="block text-[12px] text-content-3 leading-snug">${o.desc}</span></span></button>`).join('')}</div>
+      <button type="button" role="radio" aria-checked="${cur === o.k}" ${pend === o.k ? 'data-pending="true"' : ''} ${touch && o.k !== 'custom' ? `data-act="preset:${u.id}:${o.k}"` : 'aria-disabled="true"'} class="preset"><span class="dot"></span><span class="min-w-0"><span class="block text-[13.5px] font-semibold text-content">${o.label}</span><span class="block text-[12px] text-content-3 leading-snug">${pend === o.k ? '<span class="font-semibold text-primary">Picked. Confirm below to apply.</span>' : o.desc}</span></span></button>`).join('')}</div>
     ${pend ? notice('warning', `This replaces ${esc(u.name.split(' ')[0])}’s custom switches with ${PRESETS[pend].label}.`, `<span class="flex gap-2 shrink-0"><button type="button" data-act="cancelpreset" class="${btnRow}">Cancel</button><button type="button" data-act="applypreset" class="${btnRow}" style="background:var(--primary);color:var(--on-primary);border-color:var(--primary)">Confirm</button></span>`) : ''}
     <div><button type="button" data-act="customize:${u.id}" aria-expanded="${custOpen}" class="tap inline-flex items-center gap-1.5 text-[13px] font-semibold text-content-2 hover:text-content min-h-[32px]"><span style="display:flex;transform:rotate(${custOpen ? 180 : 0}deg)">${I.chevD}</span>${custOpen ? 'Hide switches' : 'Customize'}</button></div>
-    ${custOpen ? `<div class="flex flex-col gap-4" data-anchor="switches">${PERMS.map((g) => `<div>${caption(g.g, 'mb-2')}<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${g.items.map(([k, label, desc]) => { const on = u.perms.has(k); return `<button type="button" role="checkbox" aria-checked="${on}" ${touch ? `data-act="perm:${u.id}:${k}"` : 'aria-disabled="true"'} class="flex items-start gap-3 px-3.5 py-[11px] rounded-[11px] border border-line bg-surface-2 text-left hover:border-line-strong transition-colors">${checkBox(on)}<span class="min-w-0"><span class="block text-[13.5px] font-semibold text-content">${label}</span><span class="block text-[12px] text-content-3 leading-snug">${desc}</span></span></button>`; }).join('')}</div></div>`).join('')}</div>` : ''}</div>`;
+    ${custOpen ? `<div class="flex flex-col gap-4" data-anchor="switches">${PERMS.map((g) => `<div data-anchor="g-${g.g}">${caption(g.g, 'mb-2')}<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${g.items.map(([k, label, desc]) => { const on = u.perms.has(k); return `<button type="button" role="checkbox" aria-checked="${on}" ${touch ? `data-act="perm:${u.id}:${k}"` : 'aria-disabled="true"'} class="flex items-start gap-3 px-3.5 py-[11px] rounded-[11px] border border-line bg-surface-2 text-left hover:border-line-strong transition-colors">${checkBox(on)}<span class="min-w-0"><span class="block text-[13.5px] font-semibold text-content">${label}</span><span class="block text-[12px] text-content-3 leading-snug">${desc}</span></span></button>`; }).join('')}</div></div>`).join('')}</div>` : ''}</div>`;
 }
 
 const roleNote = (u) => u.role === 'owner' ? 'App owner. Cannot be restricted or removed.' : u.role === 'admin' ? (viewer().role === 'owner' ? 'Admins can use everything and manage members.' : 'Admins can use everything and manage members. Only the owner can change admins.') : '';
@@ -614,7 +624,7 @@ function personDetail(u) {
   return `<div class="flex flex-col gap-5">
     <div class="flex items-center gap-3">${avatar(u.name, u.color, 44)}<div class="min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-[16px] font-bold text-content">${esc(u.name)}</span>${badges(u)}</div><div class="text-[13px] text-content-3 font-mono truncate">@${esc(u.username)}</div></div></div>
     <div class="flex items-center justify-between gap-3"><div>${caption('Role')}${roleNote(u) ? `<div class="text-[12.5px] text-content-3 mt-1 leading-snug">${roleNote(u)}</div>` : ''}</div>${roleControl(u)}</div>
-    ${u.role === 'member' ? `<div>${caption('Access', 'mb-2')}${accessEditor(u)}</div>` : ''}<span data-anchor="actions"></span>
+    ${u.role === 'member' ? `<div>${caption('Access', 'mb-2')}${accessEditor(u)}</div>` : ''}
     ${touch ? `<div class="flex flex-col gap-2.5 pt-1 border-t border-line" style="padding-top:16px">${caption('Sign-in')}
       <div class="flex items-center justify-between gap-3"><span class="text-[13px] text-content-2">${u.active ? 'Can sign in.' : 'Sign-in is blocked until re-activated.'}</span>${sw(u.active, 'Active', 'active:' + u.id)}</div>
       ${u.twofa ? `<div class="flex items-center justify-between gap-3"><span class="text-[13px] text-content-2">Two-step sign-in is on.</span>${confirmDelete('2fa' + u.id, 'Reset two-step', 'Confirm reset?')}</div>` : ''}
@@ -666,6 +676,7 @@ function renderOverlay() {
   // State captures that show the lower part of the sheet/panel keep that scroll across re-renders.
   const body = el.querySelector('.body');
   if (body && ui.sheetScroll === 'bottom') body.scrollTop = body.scrollHeight;
+  if (body && ui.sheetScroll === 'finance') { const a = body.querySelector('[data-anchor="g-Finance"]'); if (a) body.scrollTop = a.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 12; }
   if (body && ui.sheetScroll === 'switches') { const a = body.querySelector('[data-anchor="switches"]'); if (a) body.scrollTop = a.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 12; }
 }
 

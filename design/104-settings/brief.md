@@ -79,7 +79,7 @@ the truth in plain English; every automatic behaviour has a place to see it and 
 10. **Menu.** You: Profile, Security, Notifications (everyone). Household: Accounts, Bank sync,
     Categories, Merchants, Rules (only what each can use). Admin: Users & permissions, Optional
     extras (owner/admin). Phones keep the tap-into menu list.
-11. **Optional extras** (renamed from AI): AI categorizing, Amazon order matching, Investment
+- **Optional extras** (renamed from AI): AI categorizing, Amazon order matching, Investment
     benchmarks; each shows one plain "Not set up yet" line when unconfigured; setup steps stay in
     the project docs. Owner and admin only.
 
@@ -98,6 +98,8 @@ admin, Sam Rivera and Alex Chen members).
 | `users-admin` | Admin | Owner and other admin read-only; members manageable | No 2FA requirements card |
 | `user-detail` | Owner, member opened (phone sheet / desktop per version) | Custom member | "This replaces…" confirm shown |
 | `user-switches` | Owner, long-named View-only member opened, Customize open | All 12 honest switch names | Sheet/panel scrolled to the switches |
+| `user-switches-more` | Same member, scrolled to the Finance switches | The last 5 switches incl. "Edit budgets and recurring bills", "Update balances (including fetching from the bank)", "Run bank sync" | — |
+| `user-everyday-switches` | Owner, Everyday member opened, Customize open | Ticked switches | — |
 | `user-actions` | Same member, scrolled to the end | Sign-in, edit, delete | Can sign in switch, Edit name or password, Delete user |
 | `bank-working` | Owner, 2 connections working, daily sync on | 9 linked accounts | Sync now, daily switch, add connection |
 | `bank-problems` | Owner, one Sync failed + one Reconnect needed | Summary shows worst | Reconnect action |
@@ -106,6 +108,8 @@ admin, Sam Rivera and Alex Chen members).
 | `daily-problems` | Owner, the daily sync card with failures (A: Bank sync; B: Automatic) | Retry times | Switch |
 | `daily-member` | Everyday member, the daily sync card (no switch) | | "An admin manages connections and daily sync." |
 | `daily-paused` | Owner, the daily sync card switched off | | Switch back on |
+| `daily-gave-up` | Owner, a connection failed all of today's retries | "Couldn't reach SimpleFIN after 5 tries today. Next try tomorrow at 5:30 am."; Next sync "Tomorrow 5:30 am (today's retries ran out)" | — |
+| `daily-off-failing` | Owner, daily sync off while connections fail | "Sync failed. Daily sync is off, so Ledger won't retry on its own. Use Sync now." | Sync now |
 | `bank-empty` | Owner, no connection | | Connect SimpleFIN |
 | `rules` | Owner | 40 rules (merchant, "contains" and pattern rules) in checking order; first 25 then "Show all 40 rules" (B shows 5 on its Automatic page); 3 muted merchants | One Delete already in its "Confirm delete?" step, Undo |
 | `rules-search` | Owner, search with no match | | "No rules match …" |
@@ -114,8 +118,8 @@ admin, Sam Rivera and Alex Chen members).
 | `extras` | Owner | AI set up and on; Amazon not set up; benchmarks not set up | Test connection, switches |
 | `extras-on` | Owner | AI switched off with a failed connection test; Amazon and benchmarks set up, each with its own switch | Switches |
 | `accounts` | Owner on Accounts | 9 accounts, linked and not linked; bank connection card moved to Bank sync | Add account, Edit, Institutions |
-| `loading` | Any panel loading | Skeleton/spinner as today | — |
-| `error` | Panel failed to load | "Couldn't load your settings. Check your connection and try again." | Try again |
+| `loading` | A panel loading (Users shown; every panel uses the same pattern, accepted by Robert, decision 22) | Skeleton/spinner as today | — |
+| `error` | A panel failed to load (Users shown; same pattern everywhere) | "Couldn't load your settings. Check your connection and try again." | Try again |
 
 Not applicable: first-run/no-household (the owner already exists before Settings is reachable);
 locked/2FA lockout (sign-in, not Settings). Keyboard: every control reachable by Tab with a
@@ -152,7 +156,16 @@ for them too; their Household menu is Bank sync, Merchants and Rules. The planne
 15. Sync-failure alerts go only to people who can see Bank sync; others don't see that line.
 16. #105 includes the stored data needed for honest status (see decisions.md, Open items).
 
-With 12, the desktop side panel is no longer a proposed new element.
+19. When daily sync gives up for the day: the connection says "Couldn't reach SimpleFIN after 5 tries
+    today. Next try tomorrow at 5:30 am."; Next sync reads "Tomorrow 5:30 am (today's retries ran
+    out)"; with daily sync off and a connection failing: "Sync failed. Daily sync is off, so Ledger
+    won't retry on its own. Use Sync now."
+21. PRODUCT.md's Settings rules now say controls a person can't use are hidden in Settings and
+    disabled elsewhere, so the rulebook and decision 1 agree.
+22. Loading and error are shown once (Users); every panel uses the same pattern.
+
+With 12, the desktop side panel is no longer a proposed new element. A preset picked while a member
+is Custom is outlined with "Picked. Confirm below to apply." until confirmed.
 
 ## Open decisions
 None.

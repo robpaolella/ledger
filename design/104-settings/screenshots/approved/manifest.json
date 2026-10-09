@@ -281,6 +281,86 @@
       "pixelHeight": 900
     },
     {
+      "image": "approved-user-switches-more-light-390.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-switches-more-light-1440.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-switches-more-dark-390.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-switches-more-dark-1440.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-everyday-switches-light-390.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-everyday-switches-light-1440.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-everyday-switches-dark-390.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-everyday-switches-dark-1440.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
       "image": "approved-user-actions-light-390.png",
       "version": "approved",
       "state": "user-actions",
@@ -679,6 +759,86 @@
       "height": 900,
       "pixelWidth": 1440,
       "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-gave-up-light-390.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1148
+    },
+    {
+      "image": "approved-daily-gave-up-light-1440.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-gave-up-dark-390.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1148
+    },
+    {
+      "image": "approved-daily-gave-up-dark-1440.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-off-failing-light-390.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1500
+    },
+    {
+      "image": "approved-daily-off-failing-light-1440.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1111
+    },
+    {
+      "image": "approved-daily-off-failing-dark-390.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1500
+    },
+    {
+      "image": "approved-daily-off-failing-dark-1440.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1111
     },
     {
       "image": "approved-rules-light-390.png",
