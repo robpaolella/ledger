@@ -289,7 +289,8 @@ export default function ReportsPage() {
   // so shares never pass 100%.
   const savedAmt = Math.round(k.net) > 0 ? k.net : 0;
   const flowDenom = focusObj ? focusObj.group.total : savedAmt > 0 ? k.income : k.expenses;
-  const showFlow = flowDenom > 0;
+  // No expenses means nothing to break down, even if everything was saved.
+  const showFlow = flowDenom > 0 && (!!focusObj || k.expenses > 0);
   if (showFlow) {
     if (focusObj) {
       focusObj.group.subs.forEach((s, i) => flowSegs.push({ name: s.subName, color: subColor(i), emoji: getCategoryEmoji(s.subName), amount: s.total, pct: s.total / flowDenom, drill: null }));
