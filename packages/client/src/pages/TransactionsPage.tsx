@@ -11,6 +11,7 @@ import Button from '../components/Button';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
 import Calendar from '../components/Calendar';
+import Popover from '../components/Popover';
 import PermissionGate from '../components/PermissionGate';
 import { NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
@@ -116,6 +117,27 @@ interface Merchant {
   logo_url?: string | null;
   suppress_rule_suggest?: number;
   txn_count?: number;
+}
+
+/** "1 transaction" / "2 transactions". */
+function txnCount(n: number): string {
+  return `${n.toLocaleString()} ${n === 1 ? 'transaction' : 'transactions'}`;
+}
+
+const PANEL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Puts focus back in the list: the row with this id, else (when a row was the
+ * opener but is gone, e.g. deleted) the first row, else the page heading.
+ */
+function focusList(rowId: string | null) {
+  const row = rowId !== null
+    ? (document.querySelector<HTMLElement>(`[data-row-id="${rowId}"]`) ?? document.querySelector<HTMLElement>('[data-row-id]'))
+    : null;
+  const target = row ?? document.querySelector<HTMLElement>('h1.page-title') ?? document.getElementById('mobile-bar-title');
+  if (!target) return;
+  if (!row) target.tabIndex = -1;
+  target.focus();
 }
 
 /** Display label for a transaction's vendor: merchant name, or raw statement as fallback. */
@@ -231,7 +253,8 @@ function TransactionForm({
   const [splitNotification, setSplitNotification] = useState<string | null>(null);
 
   // Refs for focusing first invalid field
-  const dateRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLButtonElement>(null);
+  const [dateOpen, setDateOpen] = useState(false);
   const accountRef = useRef<HTMLSelectElement>(null);
   const descRef = useRef<HTMLInputElement>(null);
   const categoryRef = useRef<HTMLSelectElement>(null);
@@ -414,8 +437,18 @@ function TransactionForm({
       <div className="flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Date" required error={errDate}>
-            <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className={`${inputCls(!!errDate)} font-mono`} />
+            <div className="relative">
+              <button ref={dateRef} type="button" onClick={() => setDateOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={dateOpen}
+                className={`${inputCls(!!errDate)} font-mono flex items-center justify-between text-left cursor-pointer`}>
+                <span className={date ? 'text-content' : 'text-content-3'}>{date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Choose date…'}</span>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+              </button>
+              {dateOpen && (
+                <Popover onClose={() => setDateOpen(false)} label="Choose date" className="absolute top-12 left-0 z-50 w-[320px] max-w-[calc(100vw-48px)] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                  <Calendar value={date} onChange={(d) => { setDate(d); setDateOpen(false); }} />
+                </Popover>
+              )}
+            </div>
           </Field>
           <Field label="Account" required error={errAccount}>
             <div className="relative">
@@ -658,6 +691,11 @@ export default function TransactionsPage() {
   // Mirror of detailSplitId that's always current, so an in-flight refreshDetail
   // re-seeds the leg that's open NOW (not the one open when the PATCH fired).
   const detailSplitIdRef = useRef<number | null>(null);
+  // Detail panel as a dialog: the panel node, the list row that opened it (so focus
+  // can return there), and a flag to refocus the list once a deleted row has gone.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnRowId = useRef<string | null>(null);
+  const listFocusPending = useRef(false);
   // True while the split-child note field has focus, so a concurrent PATCH's
   // refresh doesn't clobber an in-progress edit.
   const splitFieldFocused = useRef<'note' | null>(null);
@@ -1030,6 +1068,8 @@ export default function TransactionsPage() {
     } catch { /* leave panel as-is */ }
   };
   const openDetail = (t: Transaction, split?: TransactionSplit) => {
+    if (detail) panelRef.current?.focus(); // switching to a split leg: the clicked button is about to unmount
+    else returnRowId.current = document.activeElement?.closest('[data-row-id]')?.getAttribute('data-row-id') ?? null;
     setDetailSplitId(split?.id ?? null);
     detailSplitIdRef.current = split?.id ?? null;
     setAmountEditing(false);
@@ -1070,6 +1110,7 @@ export default function TransactionsPage() {
       await apiFetch(`/transactions/${id}/transfer-link`, { method: 'DELETE' });
       addToast('Transfer unlinked — the two transactions are separate again', 'success');
       if (detail?.id === id) await refreshDetail(id);
+      panelRef.current?.focus(); // the Unlink button is gone; keep focus inside the panel
       loadTransactions();
     } catch { addToast('Failed to unlink transfer', 'error'); }
   };
@@ -1086,6 +1127,7 @@ export default function TransactionsPage() {
       await apiFetch(`/transactions/${detail.id}`, { method: 'DELETE' });
       closeDetail();
       addToast('Transaction deleted');
+      listFocusPending.current = true;
       await loadTransactions();
     } catch { addToast('Failed to delete transaction', 'error'); }
   };
@@ -1182,15 +1224,47 @@ export default function TransactionsPage() {
     return () => io.disconnect();
   }, [transactions.length, total]);
 
+  // Detail panel as a dialog: focus moves in on open and back to the opener on close.
+  const panelOpen = detail !== null;
   useEffect(() => {
+    if (!panelOpen) return;
+    panelRef.current?.focus();
+    return () => focusList(returnRowId.current);
+  }, [panelOpen]);
+
+  // A deleted row's focus target is gone once the reload lands; park focus on the list.
+  useEffect(() => {
+    if (!listFocusPending.current) return;
+    listFocusPending.current = false;
+    focusList('');
+  }, [transactions]);
+
+  useEffect(() => {
+    // Modals stacked above the panel own the keyboard while they are open.
+    const aboveModal = splitOpen || bulkEditOpen || editing !== null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (editCell) { setEditCell(null); setCellSearch(''); }
-      else if (bulkMode) { setBulkMode(false); setSelectedIds(new Set()); }
+      if (e.key === 'Escape') {
+        if (editCell) { setEditCell(null); setCellSearch(''); }
+        else if (panelOpen) { if (!aboveModal) closeDetail(); }
+        else if (bulkMode) { setBulkMode(false); setSelectedIds(new Set()); }
+        return;
+      }
+      // Keep Tab / Shift+Tab inside the open panel.
+      if (e.key !== 'Tab' || !panelOpen || aboveModal) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const items = [...panel.querySelectorAll<HTMLElement>(PANEL_FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+      if (items.length === 0) { e.preventDefault(); panel.focus(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!panel.contains(active) || active === panel) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+      else if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [editCell, bulkMode]);
+  }, [editCell, bulkMode, panelOpen, splitOpen, bulkEditOpen, editing]);
 
   const handleSave = async (data: Record<string, unknown>) => {
     try {
@@ -1287,7 +1361,7 @@ export default function TransactionsPage() {
     if (Object.keys(updates).length === 0) return;
     try {
       await apiFetch('/transactions/bulk-update', { method: 'POST', body: JSON.stringify({ ids, updates }) });
-      addToast(`Updated ${ids.length} transactions`);
+      addToast(`Updated ${txnCount(ids.length)}`);
       setBulkMerchant(''); setBulkCategoryId(''); setBulkDate(''); setBulkCalOpen(false);
       setBulkEditOpen(false);
       if (updates.merchant) loadMerchants(); // a new merchant may have been created
@@ -1304,7 +1378,7 @@ export default function TransactionsPage() {
     try {
       await apiFetch('/transactions/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
       setBulkConfirmDelete(false);
-      addToast(`Deleted ${ids.length} transactions`);
+      addToast(`Deleted ${txnCount(ids.length)}`);
       setSelectedIds(new Set()); setBulkMode(false); setBulkEditOpen(false);
       loadTransactions();
     } catch (_err) {
@@ -1420,6 +1494,18 @@ export default function TransactionsPage() {
     </svg>
   );
 
+  // A row opens the panel (or toggles its checkbox in multi-edit mode) on click, or on
+  // Enter / Space when the row itself has focus; keys pressed inside a cell's own
+  // controls (search box, badge button) are left alone.
+  const activateRow = (e: { shiftKey: boolean }, t: Transaction, split?: TransactionSplit) => {
+    if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t, split);
+  };
+  const onRowKeyDown = (e: React.KeyboardEvent, t: Transaction, split?: TransactionSplit) => {
+    if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault(); // Space must not scroll the page
+    activateRow(e, t, split);
+  };
+
   const renderRow = (t: Transaction, split?: TransactionSplit) => {
     const checked = selectedIds.has(t.id);
     // Split sub-row: parent merchant + this split's own category + amount + marker.
@@ -1428,8 +1514,9 @@ export default function TransactionsPage() {
       const sinitial = (splitVendorLabel(t, split)?.trim()?.[0] ?? '?').toUpperCase();
       return (
         <div key={`${t.id}-split-${split.id}`}
-          onClick={(e) => { if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t, split); }}
-          className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 ${bulkMode ? 'select-none' : ''}`}
+          data-row-id={`${t.id}-split-${split.id}`} role="button" tabIndex={0}
+          onClick={(e) => activateRow(e, t, split)} onKeyDown={(e) => onRowKeyDown(e, t, split)}
+          className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${bulkMode ? 'select-none' : ''}`}
           style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined, boxShadow: 'inset 3px 0 0 color-mix(in srgb, var(--primary) 30%, transparent)' }}>
           {bulkMode && (
             <span className="w-5 h-5 shrink-0 rounded-[6px] flex items-center justify-center border-[1.5px]" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
@@ -1464,8 +1551,9 @@ export default function TransactionsPage() {
     const catMatches = categories.filter((c) => `${c.sub_name} ${c.group_name}`.toLowerCase().includes(cellSearch.toLowerCase())).slice(0, 60);
     return (
       <div key={t.id}
-        onClick={(e) => { if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t); }}
-        className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 ${bulkMode ? 'select-none' : ''}`}
+        data-row-id={String(t.id)} role="button" tabIndex={0}
+        onClick={(e) => activateRow(e, t)} onKeyDown={(e) => onRowKeyDown(e, t)}
+        className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${bulkMode ? 'select-none' : ''}`}
         style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined }}>
         {bulkMode && (
           <span className="w-5 h-5 shrink-0 rounded-[6px] flex items-center justify-center border-[1.5px]" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
@@ -1728,7 +1816,7 @@ export default function TransactionsPage() {
           </div>
         )}
         mobileActions={<>{importEl}{addEl}</>}
-        right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{sortEl}{importEl}{addEl}</>} />
+        right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{importEl}{addEl}</>} />
 
       {isMobile ? (
         /* Phones: the same day groups as the desktop list, on two-line rows */
@@ -1743,6 +1831,7 @@ export default function TransactionsPage() {
                 const catGroup = split ? split.groupName : t.category?.groupName;
                 return (
                   <ListRow key={split ? `${t.id}-split-${split.id}` : t.id}
+                    rowId={split ? `${t.id}-split-${split.id}` : String(t.id)}
                     onClick={hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
                     avatar={{ name: label, src: t.merchant?.logoUrl, color: catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)' }}
                     title={label}
@@ -1774,7 +1863,7 @@ export default function TransactionsPage() {
         >
         {!bulkMode ? (
           <div className="flex items-center justify-between gap-4 px-6 py-4">
-            <span className="text-[15px] font-bold tabular-nums">{total.toLocaleString()} transactions</span>
+            <span className="text-[15px] font-bold tabular-nums">{txnCount(total)}</span>
             <div className="flex items-center gap-2.5">
               <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
                 <button onClick={() => setBulkMode(true)} className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line text-content font-semibold text-sm hover:bg-surface">
@@ -1782,6 +1871,7 @@ export default function TransactionsPage() {
                   Edit multiple
                 </button>
               </PermissionGate>
+              {sortEl}
             </div>
           </div>
         ) : (
@@ -1846,7 +1936,7 @@ export default function TransactionsPage() {
               <button onClick={() => setBulkEditOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
-              <p className="text-[13px] text-content-3 -mt-2">Set any of the fields below. Changes apply to all {selectedIds.size} selected transactions.</p>
+              <p className="text-[13px] text-content-3 -mt-2">Set any of the fields below. Changes apply to {selectedIds.size === 1 ? 'the selected transaction' : `all ${selectedIds.size} selected transactions`}.</p>
               {/* Merchant */}
               <div>
                 <div className="text-[13px] font-semibold text-content-2 mb-2">Merchant</div>
@@ -1894,16 +1984,32 @@ export default function TransactionsPage() {
       {detail && (
         <>
           <div onClick={closeDetail} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
-          <div className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col">
-            <div className="flex items-center justify-between gap-1.5 px-5 py-3 border-b border-line">
-              <span className="text-[15px] font-extrabold tracking-tight">Transaction</span>
-              <button onClick={closeDetail} className="w-9 h-9 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-            </div>
+          <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="txn-panel-title" tabIndex={-1}
+            className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col outline-none">
+            {(() => {
+              // Header: who was paid, with "Category · Account" beneath. A split leg shows
+              // its own merchant and category; a split parent reads "Split".
+              const leg = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
+              const name = leg ? splitVendorLabel(detail, leg) : vendorLabel(detail);
+              const logo = leg ? (leg.merchant ?? detail.merchant)?.logoUrl : detail.merchant?.logoUrl;
+              const group = leg ? leg.groupName : detail.category?.groupName;
+              const category = leg ? leg.subName : (detail.splits && detail.splits.length > 0 ? 'Split' : (detail.category?.subName ?? 'Uncategorized'));
+              return (
+                <div className="flex items-center gap-3 pl-5 pr-3 py-3 border-b border-line">
+                  <span aria-hidden="true" className="shrink-0 flex">
+                    <VendorAvatar name={name} src={logo || undefined} color={group ? getCategoryColorHex(group) : undefined} size={40} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <h2 id="txn-panel-title" className="m-0 text-[16px] font-extrabold tracking-tight leading-tight truncate">{name}</h2>
+                    <div className="text-[13px] text-content-3 truncate mt-0.5">{category} · {accountLabel(detail.account)}</div>
+                  </div>
+                  <button onClick={closeDetail} aria-label="Close" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                </div>
+              );
+            })()}
             <div className="flex-1 overflow-y-auto px-6 py-6">
               {(() => {
                 const isTransfer = (detail.category?.type ?? detail.splits?.[0]?.type) === 'transfer';
-                const color = getCategoryColorHex(detail.category?.groupName);
-                const initial = (vendorLabel(detail)?.trim()?.[0] ?? '?').toUpperCase();
                 const isSplit = !!(detail.splits && detail.splits.length > 0);
                 const fieldCls = 'w-full h-12 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none';
                 const labelCls = 'text-[13px] font-semibold text-content-2 mb-2';
@@ -1930,9 +2036,6 @@ export default function TransactionsPage() {
                 // ===== Split-CHILD view: one leg opened as its own transaction =====
                 const activeSplit = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
                 if (activeSplit) {
-                  const scolor = getCategoryColorHex(activeSplit.groupName);
-                  const sLabel = splitVendorLabel(detail, activeSplit);
-                  const sInitial = (sLabel?.trim()?.[0] ?? '?').toUpperCase();
                   const childDir: 'income' | 'expense' = activeSplit.type === 'income' ? 'income' : 'expense';
                   // Same-direction categories only (+ always keep the current one), so a
                   // PATCH can't leave the leg's sign contradicting its category.
@@ -1946,15 +2049,8 @@ export default function TransactionsPage() {
                   return (
                     <>
                       <div className="flex items-start justify-between gap-4 mb-6">
-                        {(activeSplit.merchant ?? detail.merchant)?.logoUrl
-                          ? <img src={((activeSplit.merchant ?? detail.merchant)?.logoUrl) as string} alt="" className="shrink-0 rounded-full object-cover" style={{ width: 52, height: 52 }} />
-                          : <span className="shrink-0 rounded-full flex items-center justify-center font-bold text-xl" style={{ width: 52, height: 52, background: `color-mix(in srgb, ${scolor} 16%, transparent)`, color: scolor }}>{sInitial}</span>}
-                        <div className="min-w-0 text-right">
+                        <div className="min-w-0">
                           <Money amount={activeSplit.amount} transfer={activeSplit.type === 'transfer'} className="block text-[28px] font-extrabold tracking-tight leading-none" />
-                          <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[12px] text-content-3">
-                            <VendorAvatar name={detail.account.name} src={detail.account.logoUrl || undefined} color={detail.account.color || 'var(--c-blue)'} size={16} />
-                            <span className="truncate">{accountLabel(detail.account)}</span>
-                          </div>
                         </div>
                       </div>
 
@@ -2010,15 +2106,13 @@ export default function TransactionsPage() {
                 return (
                   <>
                     <div className="flex items-start justify-between gap-4 mb-6">
-                      {detail.merchant?.logoUrl
-                        ? <img src={detail.merchant.logoUrl} alt="" className="shrink-0 rounded-full object-cover" style={{ width: 52, height: 52 }} />
-                        : <span className="shrink-0 rounded-full flex items-center justify-center font-bold text-xl" style={{ width: 52, height: 52, background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}>{initial}</span>}
-                      <div className="min-w-0 text-right">
+                      <div className="min-w-0">
                         {!isSplit && canEdit && amountEditing ? (
                           <CurrencyInput allowNegative autoFocus value={detailAmount} onChange={setDetailAmount} onBlur={commitAmount}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') e.currentTarget.blur();
-                              else if (e.key === 'Escape') { amountCancelled.current = true; e.currentTarget.blur(); }
+                              // The input unmounts on blur, so hand focus to the panel rather than lose it.
+                              if (e.key === 'Enter') { e.currentTarget.blur(); panelRef.current?.focus(); }
+                              else if (e.key === 'Escape') { e.stopPropagation(); amountCancelled.current = true; e.currentTarget.blur(); panelRef.current?.focus(); }
                             }}
                             className="w-44 h-11 px-3 rounded-[11px] bg-surface-2 border border-primary text-content text-[22px] font-extrabold tabular-nums text-right outline-none" />
                         ) : (
@@ -2029,10 +2123,6 @@ export default function TransactionsPage() {
                             <Money amount={detail.amount} transfer={isTransfer} />
                           </div>
                         )}
-                        <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[12px] text-content-3">
-                          <VendorAvatar name={detail.account.name} src={detail.account.logoUrl || undefined} color={detail.account.color || 'var(--c-blue)'} size={16} />
-                          <span className="truncate">{accountLabel(detail.account)}</span>
-                        </div>
                       </div>
                     </div>
 
@@ -2101,12 +2191,9 @@ export default function TransactionsPage() {
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
                       </button>
                       {detailCalOpen && (
-                        <>
-                          <div className="fixed inset-0 z-[74]" onClick={() => setDetailCalOpen(false)} />
-                          <div className="absolute top-[52px] left-0 z-[75] w-[320px] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
-                            <Calendar value={detail.date} onChange={(d) => { updateTxnField(detail, { date: d }); setDetailCalOpen(false); }} />
-                          </div>
-                        </>
+                        <Popover onClose={() => setDetailCalOpen(false)} label="Choose date" className="absolute top-[52px] left-0 z-[75] w-[320px] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                          <Calendar value={detail.date} onChange={(d) => { updateTxnField(detail, { date: d }); setDetailCalOpen(false); }} />
+                        </Popover>
                       )}
                     </div>
 
@@ -2315,7 +2402,7 @@ export default function TransactionsPage() {
       {/* Infinite scroll: sentinel loads the next batch as it nears the viewport */}
       <div ref={loadMoreRef} />
       <div className={`mt-3 mb-16 text-center font-mono text-[12px] text-content-3`}>
-        {total > 0 ? (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : `All ${total} transactions`) : 'No transactions'}
+        {total > 0 ? (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : `All ${txnCount(total)}`) : 'No transactions'}
       </div>
 
       {/* Modal */}
