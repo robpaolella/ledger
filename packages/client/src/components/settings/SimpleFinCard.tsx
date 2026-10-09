@@ -273,9 +273,9 @@ export default function SimpleFinCard({
   if (connections.length === 0) {
     return (
       <>
-        <div className="rounded-[18px] border border-dashed border-line-strong bg-surface px-[26px] py-6 flex items-center gap-5 flex-wrap">
+        <div className="rounded-[18px] border border-dashed border-line-strong bg-surface px-5 md:px-[26px] py-6 flex items-center gap-5 flex-wrap">
           <span className="flex-none w-[46px] h-[46px] rounded-[12px] bg-surface-2 text-content-3 flex items-center justify-center">{ICON.wifi}</span>
-          <div className="flex-1 min-w-[240px]">
+          <div className="flex-1 min-w-[220px]">
             <div className="text-[17px] font-extrabold tracking-tight text-content">Connect your SimpleFIN account</div>
             <div className="text-[13.5px] text-content-3 mt-1 leading-snug max-w-[560px]">
               Set up your bank connections on SimpleFIN, then paste your setup token here. SimpleFIN will populate the accounts you can link to. Plans start at $1.50/month.
@@ -353,7 +353,7 @@ export default function SimpleFinCard({
           <button type="button" onClick={() => setListOpen((v) => !v)} className="flex items-center gap-2 text-left" aria-expanded={listOpen}>
             <span className={`text-content-3 transition-transform ${listOpen ? 'rotate-90' : ''}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg></span>
             <Caption className="tracking-[0.08em]">Accounts from SimpleFIN</Caption>
-            <span className="font-mono text-[12px] text-content-3">· {sfAccounts.length} {sfAccounts.length === 1 ? 'account' : 'accounts'}</span>
+            <span className="font-mono text-[12px] text-content-3">· {accountsLoading ? 'loading…' : `${sfAccounts.length} ${sfAccounts.length === 1 ? 'account' : 'accounts'}`}</span>
           </button>
           {listOpen && (
             <div className="ml-auto flex items-center gap-3">

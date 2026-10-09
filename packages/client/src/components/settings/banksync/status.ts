@@ -1,5 +1,5 @@
 import type { DailySyncInfo } from '@ledger/shared';
-import { plainWhen } from '../extras/when';
+import { clockTime, plainWhen } from '../extras/when';
 import type { Connection } from '../simplefin';
 
 export type ConnStatus = 'working' | 'failed' | 'reconnect' | 'paused';
@@ -20,12 +20,6 @@ export const SUMMARY: Record<ConnStatus, string> = {
   failed: 'A connection couldn’t sync this morning.',
   reconnect: 'A connection needs to be reconnected.',
 };
-
-/** "5:31 am" from a stored ISO time. */
-export function clock(iso: string): string {
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?([AP])M/, (_, p) => ` ${p.toLowerCase()}m`);
-}
 
 /** "5:30 am" from the server's HH:MM run time. */
 export function runClock(hhmm: string): string {
@@ -48,6 +42,13 @@ export function worstStatus(conns: Connection[], off: boolean): ConnStatus {
   return conns.reduce<ConnStatus>((w, c) => (RANK[statusOf(c, off)] > RANK[w] ? statusOf(c, off) : w), off ? 'paused' : 'working');
 }
 
+/** "at 6:45 am", or "tomorrow at 5:30 am" when the next try is the next day's run. */
+function retryWhen(iso: string): string {
+  const at = new Date(iso);
+  const sameDay = at.toDateString() === new Date().toDateString();
+  return `${sameDay || at < new Date() ? '' : 'tomorrow '}at ${clockTime(iso)}`;
+}
+
 /** The one plain line under a connection's name. Times and counts come from the server's sync state. */
 export function statusLine(c: Connection, off: boolean, canManage: boolean, daily: DailySyncInfo | null): string {
   const st = c.syncState;
@@ -61,7 +62,7 @@ export function statusLine(c: Connection, off: boolean, canManage: boolean, dail
       return `Couldn’t reach SimpleFIN after ${st.triesToday} ${st.triesToday === 1 ? 'try' : 'tries'} today. Next try ${next}.`;
     }
     const what = st.kind === 'rate_limit' ? 'SimpleFIN’s daily request limit was reached.' : 'Couldn’t reach SimpleFIN.';
-    return st.nextRetryAt ? `${what} Trying again at ${clock(st.nextRetryAt)}` : what;
+    return st.nextRetryAt ? `${what} Trying again ${retryWhen(st.nextRetryAt)}` : what;
   }
   const when = c.lastSyncedAt ? plainWhen(c.lastSyncedAt) : '';
   return when ? `Last synced ${when}` : 'Not synced yet';
