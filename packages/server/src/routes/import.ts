@@ -44,7 +44,7 @@ function findHeaderRow(parsedLines: string[][]): number {
 }
 
 // headerRowIndex counts non-blank records, so the browser's readCsv slice agrees with it.
-function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number; unclosedQuoteLine: number | null } {
+export function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number; unclosedQuoteLine: number | null } {
   const { records, unclosedQuoteLine } = readCsv(text);
   if (records.length === 0) return { headers: [], rows: [], headerRowIndex: 0, unclosedQuoteLine };
 
@@ -90,7 +90,7 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
     }
 
     if (headers.length === 0) {
-      res.status(400).json({ error: 'Could not parse CSV headers' });
+      res.status(400).json({ error: "We couldn't find any rows in this file. Check that it's a CSV export and try again." });
       return;
     }
 

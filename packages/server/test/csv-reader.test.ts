@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readCsv } from '@ledger/shared';
+
+// The route module opens the database on import; these tests never touch it.
+vi.mock('../src/db/index.js', () => ({ db: {}, sqlite: {} }));
+
+import { parseCSV } from '../src/routes/import.js';
 
 const rows = (text: string) => {
   const result = readCsv(text);
@@ -69,5 +74,26 @@ describe('readCsv', () => {
   it('returns no records for an empty file', () => {
     expect(readCsv('')).toEqual({ records: [], unclosedQuoteLine: null });
     expect(readCsv('\n\r\n  \n')).toEqual({ records: [], unclosedQuoteLine: null });
+  });
+});
+
+describe('parseCSV (POST /import/parse)', () => {
+  it('counts headerRowIndex over non-blank records, so the browser slice gives the same rows', () => {
+    const text = '\nExported 10/2026\n,,\n\nDate,Description,Amount\n10/01/2026,"Sample Shop\nRefund",-4.00\n\n10/02/2026,Sample Cafe,6.50\n';
+    const { headers, rows, headerRowIndex, unclosedQuoteLine } = parseCSV(text);
+    expect(unclosedQuoteLine).toBeNull();
+    expect(headerRowIndex).toBe(1);
+    expect(headers).toEqual(['Date', 'Description', 'Amount']);
+    expect(rows).toEqual([['10/01/2026', 'Sample Shop\nRefund', '-4.00'], ['10/02/2026', 'Sample Cafe', '6.50']]);
+    // ImportPage re-reads the file and slices from the server's index.
+    expect(readCsv(text).records.slice(headerRowIndex + 1)).toEqual(rows);
+  });
+
+  it('passes an unclosed quote through for the route to reject', () => {
+    expect(parseCSV('Date,Amount\n"10/01/2026,1.00\n').unclosedQuoteLine).toBe(2);
+  });
+
+  it('returns no headers for an empty file', () => {
+    expect(parseCSV('').headers).toEqual([]);
   });
 });
