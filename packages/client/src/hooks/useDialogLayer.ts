@@ -26,12 +26,14 @@ export function useDialogLayer(ref: RefObject<HTMLElement | null>, active: boole
       if (layers[layers.length - 1] !== id) return;
       if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); return; }
       if (e.key !== 'Tab' || !el) return;
+      // A popover the dialog opened elsewhere on the page (an emoji picker) keeps its own Tab order.
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && !el.contains(focused)) return;
       const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.tabIndex >= 0 && n.offsetParent !== null);
       if (items.length === 0) { e.preventDefault(); return; }
       const first = items[0], last = items[items.length - 1];
-      const inside = el.contains(document.activeElement);
-      if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+      if (e.shiftKey && (focused === document.body || focused === first)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (focused === document.body || focused === last)) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', handler);
     return () => {
