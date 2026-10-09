@@ -4,28 +4,13 @@
  */
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { VendorAvatar } from '../primitives';
+import { Money } from '../Money';
 import { getCategoryEmoji, useCategoryEmojis } from '../../lib/categoryMeta';
 
-/** Absolute-value currency string (never collapses 0 to an em-dash). */
-export function money(n: number): string {
-  return `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-/** Sign glyph + direction for a ledger amount (money-out positive). 0 → no sign. */
-export function amountParts(n: number): { sign: string; moneyIn: boolean } {
-  if (n < 0) return { sign: '+', moneyIn: true };
-  if (n > 0) return { sign: '−', moneyIn: false };
-  return { sign: '', moneyIn: false };
-}
-
-// ── Amount — money-in (stored negative) shows green "+"; money-out shows "−". ──
+// ── Amount — the shared money rule: money in (stored negative) is green "+$X",
+// money out is plain "$X". Zero reads "$0.00", as it always has here. ──
 export function AmountText({ amount }: { amount: number }) {
-  const { sign, moneyIn } = amountParts(amount);
-  return (
-    <span className="w-[110px] flex-none text-right font-mono font-bold text-sm tabular-nums" style={{ color: moneyIn ? 'var(--positive)' : 'var(--text)' }}>
-      {sign}{money(amount)}
-    </span>
-  );
+  return <Money amount={amount} showZero className="min-w-[110px] flex-none text-right font-mono font-bold text-sm" />;
 }
 
 // ── Unreadable amount — shown in place of the amount; the row is never imported. ──

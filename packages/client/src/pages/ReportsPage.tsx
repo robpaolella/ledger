@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
-import { fmtTransaction } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { Money } from '../components/Money';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
@@ -38,8 +39,11 @@ const MFULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', '
 const SUBPAL = ['--c-violet', '--c-blue', '--c-teal', '--c-orange', '--c-green', '--c-fuchsia', '--c-amber', '--c-rose', '--c-indigo'];
 const subColor = (i: number) => `var(${SUBPAL[i % SUBPAL.length]})`;
 
-const money0 = (v: number) => { const r = Math.round(v); return `${r < 0 ? '-' : ''}$${Math.abs(r).toLocaleString('en-US')}`; };
-const fmtK = (v: number) => { const a = Math.abs(v), sign = v < 0 ? '-' : ''; return a >= 1000 ? `${sign}$${(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k` : `${sign}$${Math.round(a)}`; };
+// Plain figures (KPIs, per-month and per-group amounts): whole dollars, "$0" at zero.
+const dollars = (v: number) => formatMoney(v, { kind: 'balance', precision: 'whole', showZero: true }).text;
+// Net figures: a real minus when negative, coloured good or bad; zero stays "$0", good.
+const netFigure = (v: number) => formatMoney(v, { kind: 'total', precision: 'whole', showZero: true, zeroTone: 'positive' });
+const axis = (v: number) => formatMoney(v, { kind: 'balance', precision: 'axis' }).text;
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const usDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
@@ -267,10 +271,10 @@ export default function ReportsPage() {
   const k = report.kpis;
   const months = Math.max(1, report.range.months);
   const kpis = [
-    { label: 'Income', value: money0(k.income), sub: `${k.incomeSourceCount} income source${k.incomeSourceCount === 1 ? '' : 's'}`, color: 'text-content', subColor: 'text-content-3' },
-    { label: 'Expenses', value: money0(k.expenses), sub: `${money0(k.expenses / months)} avg / mo`, color: 'text-content', subColor: 'text-content-3' },
-    { label: 'Net', value: money0(k.net), sub: k.net >= 0 ? '▲ money kept' : '▼ over income', color: k.net >= 0 ? 'text-positive' : 'text-negative', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
-    { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${money0(k.net / months)} avg / mo`, color: 'text-content', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
+    { label: 'Income', value: dollars(k.income), sub: `${k.incomeSourceCount} income source${k.incomeSourceCount === 1 ? '' : 's'}`, color: 'text-content', subColor: 'text-content-3' },
+    { label: 'Expenses', value: dollars(k.expenses), sub: `${dollars(k.expenses / months)} avg / mo`, color: 'text-content', subColor: 'text-content-3' },
+    { label: 'Net', value: netFigure(k.net).text, sub: k.net >= 0 ? '▲ money kept' : '▼ over income', color: netFigure(k.net).tone === 'negative' ? 'text-negative' : 'text-positive', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
+    { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${netFigure(k.net / months).text} avg / mo`, color: 'text-content', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
   ];
 
   // ── FLOW BAR (where the money that went out went: top expense groups + Other) ──
@@ -290,7 +294,7 @@ export default function ReportsPage() {
       if (otherAmt > 0) flowSegs.push({ name: 'Other', color: 'var(--text-3)', emoji: '📦', amount: otherAmt, pct: otherAmt / flowDenom, drill: null });
     }
   }
-  const flowDenomLabel = focusObj ? focusObj.group.groupName : `Spent ${money0(k.expenses)}`;
+  const flowDenomLabel = focusObj ? focusObj.group.groupName : `Spent ${dollars(k.expenses)}`;
   // Lay the bar out in whole DEVICE pixels so the gap AND every segment edge land
   // on the device grid — then all gaps render at an identical device-pixel width
   // at any DPR (fractional CSS px otherwise anti-aliases gaps to 2 vs 3 px).
@@ -332,7 +336,7 @@ export default function ReportsPage() {
   const yOf = (v: number) => PY1 - (v / vmax) * PH;
   const ptsOf = (vals: number[]) => vals.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
   const emph = hoverLine || isolate;
-  const chartTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => { const v = vmax * f; const y = yOf(v); return { label: fmtK(v), y: y.toFixed(1), topPct: `${(y / 380 * 100).toFixed(2)}%` }; });
+  const chartTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => { const v = vmax * f; const y = yOf(v); return { label: axis(v), y: y.toFixed(1), topPct: `${(y / 380 * 100).toFixed(2)}%` }; });
   const hovering = hoverIdx != null && hoverIdx >= 0 && hoverIdx < nB;
   const hoverX = hovering ? xOf(hoverIdx!).toFixed(1) : '0';
 
@@ -349,7 +353,7 @@ export default function ReportsPage() {
     const active = isTot ? !isolate : isolate === key;
     const accent = isTot ? 'var(--text-3)' : color;
     const muted = !!emph && emph !== key;
-    return { key, name, color, total: money0(total), active, muted,
+    return { key, name, color, total: dollars(total), active, muted,
       bg: active ? `color-mix(in srgb, ${accent} 22%, var(--surface-2))` : 'var(--surface-2)',
       border: (active || emph === key) ? accent : 'var(--line)',
       weight: (emph === key || active) ? 700 : 600 };
@@ -424,8 +428,8 @@ export default function ReportsPage() {
       let rows = byDay.get(key)!;
       if (rowSort) rows = rows.slice().sort(rowSort);
       const [yy, mm, dd] = key.split('-').map(Number);
-      const net = rows.reduce((s, t) => s + t.amount, 0);
-      return { key, label: `${MFULL[mm - 1]} ${dd}, ${yy}`, total: fmtTransaction(net, type), rows };
+      const total = rows.reduce((s, t) => s + t.amount, 0);
+      return { key, label: `${MFULL[mm - 1]} ${dd}, ${yy}`, total, transfer: type === 'transfer', rows };
     });
   })();
 
@@ -555,7 +559,7 @@ export default function ReportsPage() {
                   {flowHover === i && (
                     <div className="absolute whitespace-nowrap bg-elevated border border-line-strong rounded-[10px] shadow-md" style={{ bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%) scaleY(0.781)', transformOrigin: 'bottom center', pointerEvents: 'none', padding: '8px 11px', zIndex: 10 }}>
                       <div className="flex items-center gap-2 text-[13px] font-bold mb-0.5">{focusObj ? <span className="text-sm leading-none">{s.emoji}</span> : <span className="shrink-0 w-3 h-3 rounded-[3px]" style={{ background: s.color }} />}{s.name}</div>
-                      <div className="text-[13px] text-content-2 tabular-nums">{money0(s.amount)} · {(s.pct * 100).toFixed(1)}%</div>
+                      <div className="text-[13px] text-content-2 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</div>
                     </div>
                   )}
                 </div>
@@ -568,7 +572,7 @@ export default function ReportsPage() {
                     ? <span className="text-sm leading-none">{s.emoji}</span>
                     : <span className="shrink-0 w-3 h-3 rounded-[3px]" style={{ background: s.color }} />}
                   <span className="font-semibold">{s.name}</span>
-                  <span className="text-content-3 tabular-nums">{money0(s.amount)} · {(s.pct * 100).toFixed(1)}%</span>
+                  <span className="text-content-3 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</span>
                 </div>
               ))}
             </div>
@@ -609,7 +613,7 @@ export default function ReportsPage() {
                     <div key={i} className="flex items-center gap-2.5 py-0.5 text-[13px]">
                       <span className="w-2.5 h-2.5 shrink-0 rounded-[2px]" style={{ background: r.color }} />
                       <span className="flex-1 text-content-2 truncate" style={{ fontWeight: r.weight }}>{r.name}</span>
-                      <span className="font-bold tabular-nums">{money0(r.value)}</span>
+                      <span className="font-bold tabular-nums">{dollars(r.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -657,7 +661,7 @@ export default function ReportsPage() {
                 <div onClick={sec.toggle} className="flex items-center gap-2.5 bg-surface-2 border-b border-line cursor-pointer" style={{ padding: '12px 26px' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sec.collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
                   <span className="flex-1 text-xs font-bold uppercase text-content-2" style={{ letterSpacing: '.05em' }}>{sec.label}</span>
-                  <span className="text-[15px] font-extrabold tabular-nums">{money0(sec.total)}</span>
+                  <span className="text-[15px] font-extrabold tabular-nums">{dollars(sec.total)}</span>
                 </div>
                 {!sec.collapsed && sec.rows.map((r) => {
                   const canExpand = r.subs.length > 0;
@@ -676,7 +680,7 @@ export default function ReportsPage() {
                       <span className="w-[172px] shrink-0 font-semibold text-[15px] truncate">{r.name}</span>
                       <div className="flex-1 h-2 rounded-full bg-surface-2 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(r.pct * 100).toFixed(1)}%`, background: r.color }} /></div>
                       <span className="w-14 shrink-0 text-right text-[13px] text-content-3 tabular-nums">{(r.pct * 100).toFixed(0)}%</span>
-                      <span className="w-24 shrink-0 text-right font-bold text-[15px] tabular-nums">{money0(r.amount)}</span>
+                      <span className="w-24 shrink-0 text-right font-bold text-[15px] tabular-nums">{dollars(r.amount)}</span>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={r.drill ? 'var(--text-3)' : 'transparent'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
                     </div>
                     {open && r.subs.map((sub) => (
@@ -685,7 +689,7 @@ export default function ReportsPage() {
                         <span className="w-[150px] shrink-0 text-sm text-content-2 truncate">{sub.name}</span>
                         <div className="flex-1 h-1.5 rounded-full bg-surface overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(sub.pct * 100).toFixed(1)}%`, background: sub.color }} /></div>
                         <span className="w-14 shrink-0 text-right text-[13px] text-content-3 tabular-nums">{(sub.pct * 100).toFixed(0)}%</span>
-                        <span className="w-24 shrink-0 text-right font-semibold text-sm tabular-nums">{money0(sub.amount)}</span>
+                        <span className="w-24 shrink-0 text-right font-semibold text-sm tabular-nums">{dollars(sub.amount)}</span>
                         <span className="shrink-0 w-4" />
                       </div>
                     ))}
@@ -710,8 +714,8 @@ export default function ReportsPage() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sec.collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
                       <span className="text-xs font-bold uppercase text-content-2" style={{ letterSpacing: '.05em' }}>{sec.label}</span>
                     </span>
-                    {sec.subtotals.map((t, i) => <span key={i} className="text-right text-[13px] font-bold text-content-2 tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin }}>{money0(t)}</span>)}
-                    <span className="w-[104px] shrink-0 text-right text-[13px] font-extrabold tabular-nums">{money0(sec.total)}</span>
+                    {sec.subtotals.map((t, i) => <span key={i} className="text-right text-[13px] font-bold text-content-2 tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin }}>{dollars(t)}</span>)}
+                    <span className="w-[104px] shrink-0 text-right text-[13px] font-extrabold tabular-nums">{dollars(sec.total)}</span>
                   </div>
                   {!sec.collapsed && sec.rows.map((r) => {
                     const canExpand = r.subs.length > 0;
@@ -730,8 +734,8 @@ export default function ReportsPage() {
                             : <span className="shrink-0 w-3.5 h-3.5 rounded-[4px]" style={{ background: r.color }} />}
                           <span className="font-semibold text-sm truncate">{r.name}</span>
                         </span>
-                        {r.cells.map((v, i) => <span key={i} className="text-right text-sm tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === r.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === r.peak && v > 0) ? 700 : 500 }}>{money0(v)}</span>)}
-                        <span className="w-[104px] shrink-0 text-right font-bold text-sm tabular-nums">{money0(r.total)}</span>
+                        {r.cells.map((v, i) => <span key={i} className="text-right text-sm tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === r.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === r.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
+                        <span className="w-[104px] shrink-0 text-right font-bold text-sm tabular-nums">{dollars(r.total)}</span>
                       </div>
                       {open && r.subs.map((sub) => (
                         <div key={sub.key} className="flex items-center border-b border-line bg-surface-2/40" style={{ padding: '10px 26px' }}>
@@ -739,8 +743,8 @@ export default function ReportsPage() {
                             <span className="shrink-0 text-sm leading-none">{sub.emoji}</span>
                             <span className="text-sm text-content-2 truncate">{sub.name}</span>
                           </span>
-                          {sub.cells.map((v, i) => <span key={i} className="text-right text-[13px] tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === sub.peak && v > 0) ? 'var(--text)' : 'var(--text-3)', fontWeight: (v === sub.peak && v > 0) ? 700 : 500 }}>{money0(v)}</span>)}
-                          <span className="w-[104px] shrink-0 text-right font-semibold text-[13px] tabular-nums">{money0(sub.total)}</span>
+                          {sub.cells.map((v, i) => <span key={i} className="text-right text-[13px] tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === sub.peak && v > 0) ? 'var(--text)' : 'var(--text-3)', fontWeight: (v === sub.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
+                          <span className="w-[104px] shrink-0 text-right font-semibold text-[13px] tabular-nums">{dollars(sub.total)}</span>
                         </div>
                       ))}
                     </div>
@@ -791,19 +795,19 @@ export default function ReportsPage() {
             <div key={g.key}>
               <div className="flex items-center justify-between bg-surface-2 border-b border-line" style={{ padding: '9px 26px' }}>
                 <span className="text-[13px] font-semibold text-content-2">{g.label}</span>
-                <span className={`font-mono text-[12px] tabular-nums ${g.total.className}`}>{g.total.text}</span>
+                <Money amount={g.total} transfer={g.transfer} className="font-mono text-[12px]" />
               </div>
               {g.rows.map((t) => {
                 const vendor = t.merchant?.name || t.description || '—';
                 const hue = subColor((vendor.charCodeAt(0) || 0));
-                const amt = fmtTransaction(t.amount, t.category?.type ?? 'expense');
+                const amt = <Money amount={t.amount} transfer={t.category?.type === 'transfer'} />;
                 if (isMobile) {
                   return (
                     <ListRow key={t.id} className="border-t-0 border-b"
                       avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
                       title={vendor}
                       subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
-                      amount={amt.text} amountClass={amt.className}
+                      amount={amt}
                       meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined} />
                   );
                 }
@@ -819,7 +823,7 @@ export default function ReportsPage() {
                       {t.account && <VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={16} />}
                       <span className="truncate">{t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : '—'}</span>
                     </div>
-                    <div className={`w-[118px] shrink-0 text-right font-bold text-[15px] tabular-nums ${amt.className}`}>{amt.text}</div>
+                    <div className="min-w-[118px] shrink-0 text-right font-bold text-[15px]">{amt}</div>
                   </div>
                 );
               })}
@@ -835,7 +839,7 @@ export default function ReportsPage() {
           <span className="text-[13px] text-content-3 font-semibold">{focusObj.section.label}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
           <span className="text-sm font-extrabold truncate">{focusObj.group.groupName}</span>
-          <span className="text-[13px] text-content-2 tabular-nums">{money0(focusObj.group.total)} · {focusObj.section.total > 0 ? Math.round(focusObj.group.total / focusObj.section.total * 100) : 0}% of {focusObj.section.label.toLowerCase()}</span>
+          <span className="text-[13px] text-content-2 tabular-nums">{dollars(focusObj.group.total)} · {focusObj.section.total > 0 ? Math.round(focusObj.group.total / focusObj.section.total * 100) : 0}% of {focusObj.section.label.toLowerCase()}</span>
           <button onClick={clearFocus} title="Clear drill-down" className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full" style={{ border: '1px solid var(--negative)', color: 'var(--negative)', background: 'color-mix(in srgb, var(--negative) 12%, transparent)' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>

@@ -62,37 +62,3 @@ export function timeAgo(iso: string | null): string {
   return `${d}d ago`;
 }
 
-/**
- * Display logic for transaction amounts considering both sign and category type.
- * Transfers between the user's own accounts are neutral — the pair nets to zero,
- * so only the magnitude is shown.
- *
- * 1. Positive + expense (regular outflow): neutral, no prefix → "$50.00"
- * 2. Negative + income (regular income): green, "+" prefix → "+$3,618.21"
- * 3. Negative + expense (refund/credit): green, "-" prefix → "-$50.00"
- * 4. Positive + income (income reversal): red, "-" prefix → "-$500.00"
- */
-export function fmtTransaction(amount: number, categoryType: string): { text: string; className: string } {
-  const abs = Math.abs(amount);
-  const formatted = fmt(abs);
-  const isOutflow = categoryType === 'expense';
-
-  if (categoryType === 'transfer') {
-    // Transfers are neutral (both legs net to zero) — show the magnitude, no color.
-    return { text: formatted, className: 'text-content-2' };
-  }
-  if (amount >= 0 && isOutflow) {
-    // Case 1: regular expense — neutral, no prefix
-    return { text: formatted, className: 'text-content' };
-  }
-  if (amount < 0 && categoryType === 'income') {
-    // Case 2: regular income — green, "+"
-    return { text: `+${formatted}`, className: 'text-positive' };
-  }
-  if (amount < 0 && isOutflow) {
-    // Case 3: refund/credit against an expense — green, "-"
-    return { text: `-${formatted}`, className: 'text-positive' };
-  }
-  // Case 4: positive + income (income reversal) — red, "-"
-  return { text: `-${formatted}`, className: 'text-negative' };
-}
