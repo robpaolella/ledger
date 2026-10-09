@@ -112,7 +112,7 @@ export function notifyAmazonFailure(sqlite: Database.Database, kind: keyof typeo
       title: kind === 'auth' ? 'Amazon session expired' : kind === 'stale' ? 'Amazon scrape is stale' : 'Amazon scrape failing',
       body: message,
       actionLabel: 'Open Settings',
-      actionTarget: '/settings?panel=ai',
+      actionTarget: '/settings?panel=extras',
       dedupeKey: AMAZON_KEYS[kind],
     });
   }
