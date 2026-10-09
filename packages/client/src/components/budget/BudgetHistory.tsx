@@ -29,7 +29,7 @@ export default function BudgetHistory({ categoryId, targetMonth, income }: { cat
     <div className="mt-5">
       <div className="text-[12px] font-bold uppercase tracking-[0.05em] text-content-3 mb-[9px]">History</div>
       {series === null ? (
-        <div className="h-[170px] flex items-center justify-center"><Spinner inline /></div>
+        <div className="h-[222px] flex items-center justify-center"><Spinner inline /></div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3">
@@ -44,7 +44,9 @@ export default function BudgetHistory({ categoryId, targetMonth, income }: { cat
             <div className="flex items-end gap-2.5 h-24">
               {(h.months.length ? h.months : Array.from({ length: 6 }, () => null)).map((m, i) => (
                 <div key={m?.month ?? i} className="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-2" title={m ? `${m.label}: ${whole(m.value)}` : undefined}>
-                  <div className="w-full max-w-[26px] rounded-t-[5px]" style={{ height: `${(m?.height ?? 0) * 100}%`, minHeight: m && m.height > 0 ? 3 : 0, background: 'var(--primary)' }} />
+                  <div className="flex-1 w-full min-h-0 flex items-end justify-center">
+                    <div className="w-full max-w-[26px] rounded-t-[5px]" style={{ height: `${(m?.height ?? 0) * 100}%`, minHeight: m && m.height > 0 ? 3 : 0, background: 'var(--primary)' }} />
+                  </div>
                   <span className="font-mono text-[10px] text-content-3">{m?.label}</span>
                 </div>
               ))}
