@@ -89,6 +89,26 @@ function classifyFailure(message: string): ConnectionFailure['kind'] {
   return 'other';
 }
 
+/**
+ * What Ledger stores and shows for a failure. Never the raw error: it can echo
+ * the access URL, which carries the connection's credentials.
+ */
+export const FAILURE_SENTENCES: Record<ConnectionFailure['kind'], string> = {
+  auth: 'SimpleFIN no longer accepts this connection. Reconnect it to resume syncing.',
+  rate_limit: "SimpleFIN's daily request limit was reached.",
+  other: "SimpleFIN didn't return this connection's data.",
+};
+
+/** The raw error for the server log, with the access URL and its credentials removed. */
+function redactAccessUrl(text: string, accessUrl: string): string {
+  const secrets = [accessUrl];
+  try {
+    const u = new URL(accessUrl);
+    secrets.push(u.username, u.password, decodeURIComponent(u.password));
+  } catch { /* not a URL: the whole string is the only secret */ }
+  return secrets.filter((s) => s.length >= 4).reduce((t, s) => t.split(s).join('[redacted]'), text);
+}
+
 /* ------ Fetch-phase mutex (FIFO promise chain) ------ */
 // better-sqlite3 writes already serialize; this guards the async FETCH phase so
 // the scheduler and a manual sync don't burn the SimpleFIN request budget
@@ -181,6 +201,10 @@ export async function runSyncPipeline(opts: {
     UPDATE simplefin_links SET last_sync_status = ?, last_sync_error = ?, last_sync_attempt_at = ?
     WHERE simplefin_connection_id = ?
   `);
+  const markConnection = sqlite.prepare(`
+    UPDATE simplefin_connections SET sync_status = ?, sync_error_kind = ?, sync_message = ?, sync_attempt_at = ?
+    WHERE id = ?
+  `);
 
   for (const conn of connections) {
     const attemptAt = new Date().toISOString();
@@ -188,13 +212,17 @@ export async function runSyncPipeline(opts: {
     try {
       response = await fetchAccounts(conn.access_url, startTs, endTs);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Failed to fetch from connection ${conn.id}:`, message);
+      const raw = err instanceof Error ? err.message : String(err);
+      const kind = classifyFailure(raw);
+      const message = FAILURE_SENTENCES[kind];
+      console.error(`Failed to fetch from connection ${conn.id}:`, redactAccessUrl(raw, conn.access_url));
       markStatus.run('error', message, attemptAt, conn.id);
-      result.failures.push({ connectionId: conn.id, label: conn.label, message, kind: classifyFailure(message) });
+      markConnection.run(kind === 'auth' ? 'reconnect_needed' : 'failed', kind, message, attemptAt, conn.id);
+      result.failures.push({ connectionId: conn.id, label: conn.label, message, kind });
       continue;
     }
     markStatus.run('ok', null, attemptAt, conn.id);
+    markConnection.run('working', null, null, attemptAt, conn.id);
     clearSyncFailureNotification(sqlite, conn.id);
     result.succeededConnectionIds.push(conn.id);
 

@@ -42,6 +42,7 @@ import { migrateNotificationCenter } from './migrate-notification-center.js';
 import { migrateAutoImport } from './migrate-auto-import.js';
 import { migrateCategoryFeedback } from './migrate-category-feedback.js';
 import { migrateAmazon } from './migrate-amazon.js';
+import { migrateDailySync } from './migrate-daily-sync.js';
 
 export function runMigrations(sqlite: Database.Database): void {
   migrateAccountOwners(sqlite);
@@ -78,6 +79,7 @@ export function runMigrations(sqlite: Database.Database): void {
   migrateMerchantAliases(sqlite);       // merchant_aliases — merges keep routing future imports
   migrateMerchantRulePrefs(sqlite);     // merchants.suppress_rule_suggest ("never ask again")
   migrateTransferLinks(sqlite);         // transfer_links — the two legs of one money movement
+  migrateDailySync(sqlite);             // simplefin_connections.sync_* (per-connection sync state)
 
   // Backfill/refresh transfer links on boot: cheap (bucketed by amount) and
   // self-healing, so history and anything imported outside a sync gets paired too.
