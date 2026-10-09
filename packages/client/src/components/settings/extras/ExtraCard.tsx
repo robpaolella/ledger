@@ -6,7 +6,7 @@ interface Props {
   title: string;
   description: string;
   /** Right-hand control for set-up cards; omit for "Not set up yet". */
-  switchProps?: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean };
+  switchProps?: { checked: boolean; onChange: (next: boolean) => void };
   /** Shown instead of the body when the extra isn't set up on this server. */
   notSetUp?: boolean;
   children?: ReactNode;

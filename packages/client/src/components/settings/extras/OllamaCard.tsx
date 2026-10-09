@@ -5,7 +5,7 @@ import { Field, inputCls, btnPrimary, btnSecondary } from '../ui';
 import ExtraCard from './ExtraCard';
 
 export interface LlmConfig { enabled: boolean; baseUrl: string; model: string }
-interface LlmStatus { reachable: boolean; modelAvailable: boolean; latencyMs?: number; error?: string }
+interface LlmStatus { reachable: boolean; modelAvailable: boolean; latencyMs?: number; saveError?: string }
 
 const save = (body: object) => apiFetch('/llm/config', { method: 'PUT', body: JSON.stringify(body) });
 
@@ -44,8 +44,8 @@ export default function OllamaCard({ config }: { config: LlmConfig }) {
     try {
       await save({ baseUrl, model });
       setStatus((await apiFetch<{ data: LlmStatus }>('/llm/status')).data);
-    } catch {
-      setStatus({ reachable: false, modelAvailable: false });
+    } catch (err) {
+      setStatus({ reachable: false, modelAvailable: false, saveError: err instanceof Error ? err.message : undefined });
     } finally { setTesting(false); }
   };
 
@@ -53,7 +53,7 @@ export default function OllamaCard({ config }: { config: LlmConfig }) {
   const result = !status ? null
     : ok ? `Connected · ${status.latencyMs} ms`
     : status.reachable ? `Connected, but the Ollama server doesn’t have “${model}”.`
-    : 'Couldn’t reach the Ollama server at that address.';
+    : status.saveError ?? 'Couldn’t reach the Ollama server at that address.';
 
   return (
     <ExtraCard
