@@ -7,7 +7,7 @@ import { ownerColor, initOwnerSlots } from '../components/badges';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { fmtTransaction } from '../lib/formatters';
+import { Money } from '../components/Money';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -44,7 +44,6 @@ const colorVar = (s: string) => `var(${AV_COLOR[initialOf(s)] || '--c-blue'})`;
 /** Sentinel id for the "Unassigned" bucket in the Users filter. */
 const UNASSIGNED = 0;
 const tint = (v: string) => `color-mix(in srgb, ${v} 16%, transparent)`;
-const money = (v: number) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const parseDate = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
 const friendlyDate = (ymd: string) => parseDate(ymd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -137,7 +136,7 @@ export default function ReviewsPage() {
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
   const anyFilter = dateFilter !== 'all' || selUsers.size > 0 || q !== '';
-  const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
+  const shownTotal = shown.reduce((s, r) => s + r.transaction.amount, 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
   const groups = useMemo(() => {
@@ -338,7 +337,7 @@ export default function ReviewsPage() {
               {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Reset filters</span>}
               {refreshing && <span className="text-[12px] text-content-3 animate-pulse">Refreshing…</span>}
             </div>
-            <span className="font-mono text-[13px] text-content-2 tabular-nums">{money(shownTotal)} pending</span>
+            <span className="font-mono text-[13px] text-content-2 tabular-nums"><Money amount={shownTotal} showZero /> pending</span>
           </div>
 
           {initialLoading ? (
@@ -364,7 +363,7 @@ export default function ReviewsPage() {
                   const mLabel = t.merchant?.name || t.description;
                   const reasonText = REASON_LABEL[r.reason] || 'Flagged for review';
                   const noteText = r.note?.trim() || '';
-                  const amt = fmtTransaction(t.amount, t.category?.type ?? 'expense');
+                  const amt = <Money amount={t.amount} transfer={t.category?.type === 'transfer'} />;
                   if (isMobile) {
                     // Phones: two-line row; category/assignee edits happen in the detail panel.
                     return (
@@ -376,7 +375,7 @@ export default function ReviewsPage() {
                           <span className="font-semibold truncate" style={{ color: 'var(--warning)' }}>{reasonText}</span>
                           {noteText && <span className="truncate">· {noteText}</span>}
                         </>}
-                        amount={amt.text} amountClass={amt.className}
+                        amount={amt}
                         meta={r.assignee?.displayName ?? 'Unassigned'} />
                     );
                   }
@@ -435,7 +434,7 @@ export default function ReviewsPage() {
                           </div>
                         )}
                       </div>
-                      <div className={`w-[112px] flex-none text-right font-bold text-[15px] tabular-nums ${amt.className}`}>{amt.text}</div>
+                      <div className="min-w-[112px] flex-none text-right font-bold text-[15px]">{amt}</div>
                       {canEdit && (
                         <div onClick={(e) => { e.stopPropagation(); resolve([t.id]); }} className="w-9 h-9 flex-none flex items-center justify-center rounded-[10px] cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity" title="Mark reviewed"
                           style={{ background: 'color-mix(in srgb, var(--positive) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--positive) 40%, transparent)', color: 'var(--positive)' }}>
@@ -476,7 +475,6 @@ export default function ReviewsPage() {
             {(() => {
               const d = detail;
               const loaded = d.account !== undefined;
-              const amt = loaded ? fmtTransaction(d.amount, d.category?.type ?? 'expense') : null;
               const label = d.merchant?.name || d.description || '';
               const fieldCls = 'w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer disabled:cursor-default';
               const chevron = <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>;
@@ -502,7 +500,7 @@ export default function ReviewsPage() {
 
                   {!loaded ? <Spinner size={24} className="py-10" /> : (
                     <>
-                      <div className={`text-right font-extrabold text-[22px] tabular-nums mb-5 ${amt!.className}`}>{amt!.text}</div>
+                      <Money amount={d.amount} transfer={d.category?.type === 'transfer'} className="block text-right font-extrabold text-[22px] mb-5" />
 
                       {d.review?.status === 'resolved' && (
                         <div className="mb-4 text-[13px] font-semibold px-3 py-2 rounded-[10px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }}>Reviewed</div>

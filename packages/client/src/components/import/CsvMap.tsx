@@ -1,5 +1,6 @@
 /** CSV Import · Step 2 — Map Columns (docs/Import Flow §CSV IMPORT step 2). */
-import { money, amountParts, UnreadableAmount } from './cells';
+import { UnreadableAmount } from './cells';
+import { Money } from '../Money';
 
 export interface CsvPreviewRow {
   date: string;
@@ -99,7 +100,6 @@ export default function CsvMap({
             <span className="w-[70px] flex-none">Owner</span>
           </div>
           {preview.map((p, i) => {
-            const { sign, moneyIn } = amountParts(p.amount ?? 0);
             return (
               <div key={i} className="flex items-center gap-3.5 px-4 py-3 border-b border-line text-[12.5px] last:border-b-0">
                 <span className="w-[88px] flex-none font-mono text-content-3">{p.date}</span>
@@ -109,7 +109,7 @@ export default function CsvMap({
                 <span className="flex-1 min-w-0 font-mono text-[11px] text-content-3 truncate">{p.stmt}</span>
                 {p.amount == null
                   ? <UnreadableAmount className="w-[100px]" />
-                  : <span className="w-[100px] flex-none text-right font-mono font-semibold" style={{ color: moneyIn ? 'var(--positive)' : 'var(--text)' }}>{sign}{money(p.amount)}</span>}
+                  : <Money amount={p.amount} showZero className="min-w-[100px] flex-none text-right font-mono font-semibold" />}
                 <span className="w-[70px] flex-none text-content-3 truncate">{p.owner}</span>
               </div>
             );
