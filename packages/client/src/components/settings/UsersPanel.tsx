@@ -342,35 +342,29 @@ export default function UsersPanel() {
     }
   };
 
-  const togglePermission = async (userId: number, permKey: string, current: boolean) => {
-    const keys = COMPOUND_PERMISSIONS[permKey] || [permKey];
-    const next = !current;
-    setManagedUsers((prev) => prev.map((u) => {
-      if (u.id !== userId || !u.permissions) return u;
-      const perms = { ...u.permissions };
-      for (const k of keys) perms[k] = next;
-      return { ...u, permissions: perms };
-    }));
+  // Saves permission changes optimistically; a failed save puts back the values from before.
+  const savePermissions = async (userId: number, changes: Record<string, boolean>, before: Record<string, boolean>, success?: string) => {
+    const patch = (values: Record<string, boolean>) => setManagedUsers((prev) => prev.map((u) => (
+      u.id === userId && u.permissions ? { ...u, permissions: { ...u.permissions, ...values } } : u)));
+    patch(changes);
     try {
-      const permissions: Record<string, boolean> = {};
-      for (const k of keys) permissions[k] = next;
-      await apiFetch(`/users/${userId}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions }) });
+      await apiFetch(`/users/${userId}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions: changes }) });
+      if (success) addToast(success);
     } catch {
-      addToast('Failed to update permission', 'error');
-      loadUsers();
+      patch(before);
+      addToast('Failed to update access', 'error');
     }
   };
 
-  const applyPreset = async (mu: ManagedUser, preset: AccessPreset) => {
-    const permissions = presetPermissions(preset);
-    setManagedUsers((prev) => prev.map((u) => (u.id === mu.id ? { ...u, permissions } : u)));
-    try {
-      await apiFetch(`/users/${mu.id}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions }) });
-      addToast(`${mu.displayName.trim().split(/\s+/)[0]} now has ${ACCESS_PRESETS[preset].label}`);
-    } catch {
-      addToast('Failed to update access', 'error');
-      loadUsers();
-    }
+  const togglePermission = (userId: number, permKey: string, current: boolean) => {
+    const keys = COMPOUND_PERMISSIONS[permKey] || [permKey];
+    savePermissions(userId, Object.fromEntries(keys.map((k) => [k, !current])), Object.fromEntries(keys.map((k) => [k, current])));
+  };
+
+  const applyPreset = (mu: ManagedUser, preset: AccessPreset) => {
+    const changes = presetPermissions(preset);
+    const before = Object.fromEntries(Object.keys(changes).map((k) => [k, mu.permissions?.[k] ?? false]));
+    savePermissions(mu.id, changes, before, `${mu.displayName.trim().split(/\s+/)[0]} now has ${ACCESS_PRESETS[preset].label}`);
   };
 
   const setRequirement = async (which: 'admin' | 'member', next: boolean) => {
@@ -403,9 +397,9 @@ export default function UsersPanel() {
           const isOpen = expanded.has(mu.id);
           return (
             <div key={mu.id} className="border-t border-line">
-              <div className="flex items-center gap-4 px-6 py-[18px]">
+              <div className="flex flex-wrap md:flex-nowrap items-center gap-x-4 gap-y-3 px-6 py-[18px]">
                 <InitialsAvatar name={mu.displayName} color={color} size={40} />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[160px]">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[15px] font-bold text-content truncate">{mu.displayName}</span>
                     {mu.id === user?.id && <span className="text-[12px] text-content-3">(you)</span>}
@@ -415,7 +409,7 @@ export default function UsersPanel() {
                   <div className="text-[12.5px] text-content-3 truncate">{ROLE_LABEL[mu.role]}{mu.role === 'member' && ` · ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}</div>
                 </div>
                 <span className="hidden md:block font-mono text-[12.5px] text-content-3 truncate max-w-[160px]">@{mu.username}</span>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 max-md:ml-14">
                   {mu.role === 'owner' ? (
                     <Pill color="var(--c-orange)" className="h-[26px] rounded-[7px]">Owner</Pill>
                   ) : callerRole === 'owner' ? (
@@ -460,7 +454,7 @@ export default function UsersPanel() {
                   {mu.role === 'owner' ? 'App owner. Cannot be restricted or removed.' : `Admins can use everything and manage members.${callerRole !== 'owner' ? ' Only the owner can change admins.' : ''}`}
                 </div>
               ) : mu.permissions && (
-                <div className="pb-4" style={{ paddingLeft: 80, paddingRight: 24 }}>
+                <div className="pb-4 pl-6 pr-6 md:pl-20">
                   <button type="button" onClick={() => toggleExpanded(mu.id)} aria-expanded={isOpen} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-content-2 hover:text-content">
                     <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>{ICON.chevron}</span>
                     {isOpen ? 'Hide access' : `Access: ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}

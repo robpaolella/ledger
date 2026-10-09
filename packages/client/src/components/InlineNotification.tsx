@@ -28,7 +28,7 @@ export default function InlineNotification({ type, message, dismissible, onDismi
   return (
     <div
       role={type === 'error' ? 'alert' : 'status'}
-      className={`flex items-start gap-2.5 rounded-[12px] border px-4 py-3 text-[13px] font-medium leading-snug ${className}`}
+      className={`flex items-start gap-2.5 ${actions ? 'flex-wrap' : ''} rounded-[12px] border px-4 py-3 text-[13px] font-medium leading-snug ${className}`}
       style={{
         background: `color-mix(in srgb, ${tone} 12%, var(--surface))`,
         borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
@@ -36,8 +36,8 @@ export default function InlineNotification({ type, message, dismissible, onDismi
       }}
     >
       <svg className="shrink-0 mt-[1px]" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{ICON[type]}</svg>
-      <span className="flex-1 min-w-0">{message}</span>
-      {actions}
+      <span className={`flex-1 ${actions ? 'min-w-[160px]' : 'min-w-0'}`}>{message}</span>
+      {actions && <span className="ml-auto">{actions}</span>}
       {dismissible && onDismiss && (
         <button
           type="button"
