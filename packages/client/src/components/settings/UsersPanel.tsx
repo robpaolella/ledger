@@ -516,14 +516,14 @@ export default function UsersPanel() {
             </div>
           );
         })}
-        <button type="button" onClick={() => setShowAdd(true)}
+        {loaded && <button type="button" onClick={() => setShowAdd(true)}
           className="w-full flex items-center justify-center gap-2 px-6 py-4 border-t border-line bg-surface-2 text-content-2 text-sm font-bold hover:text-content hover:bg-elevated transition-colors">
           {ICON.plus}Add user
-        </button>
+        </button>}
       </Card>
       )}
 
-      {!loadFailed && callerRole === 'owner' && (
+      {loaded && !loadFailed && callerRole === 'owner' && (
         <Card>
           <div className="px-6 py-3.5 border-b border-line"><Caption>Two-factor authentication requirements</Caption></div>
           <div className="flex items-center justify-between gap-4 px-6 py-4">
