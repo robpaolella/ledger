@@ -40,7 +40,7 @@ export default function BudgetHistory({ categoryId, targetMonth, income }: { cat
               </div>
             ))}
           </div>
-          <div className="relative mt-3 flex items-end gap-2 h-[84px]">
+          <div className="relative mt-3 flex items-end gap-2 h-[72px]">
             {(h.months.length ? h.months : Array.from({ length: 6 }, () => null)).map((m, i) => (
               <div key={m?.month ?? i} className="flex-1 min-w-0 h-full flex flex-col justify-end items-stretch gap-1.5" title={m ? `${m.label}: ${whole(m.value)}` : undefined}>
                 <div className="flex-1 flex items-end border-b border-line">
