@@ -397,7 +397,7 @@ export default function UsersPanel() {
 
       {loadFailed ? <LoadError onRetry={retryLoad} /> : (
       <Card>
-        <CardHeader title="Household members" meta={loaded ? `${managedUsers.length} ${managedUsers.length === 1 ? 'user' : 'users'}` : undefined} />
+        <CardHeader title="Household members" meta={loaded ? `${managedUsers.length} ${managedUsers.length === 1 ? 'person' : 'people'}` : undefined} />
         {!loaded ? <Spinner /> : managedUsers.map((mu) => (
           <button key={mu.id} type="button" onClick={() => setOpenId(mu.id)} aria-haspopup="dialog"
             className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 min-h-[64px] py-2.5 border-t border-line text-left hover:bg-surface-2 transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
