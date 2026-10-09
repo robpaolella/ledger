@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { getCategoryEmoji, useCategoryEmojis } from '../../lib/categoryMeta';
@@ -29,6 +29,8 @@ export default function RulesPanel() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
+  // Rows with a request in flight, so a second tap can't send the same request twice.
+  const pending = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     setLoading(true); setLoadFailed(false);
@@ -56,23 +58,29 @@ export default function RulesPanel() {
   const visible = short ? matches.slice(0, SHOWN_FIRST) : matches;
 
   const deleteRule = async (id: number) => {
+    const key = `rule${id}`;
+    if (pending.current.has(key)) return;
+    pending.current.add(key);
     try {
       await apiFetch(`/category-rules/${id}`, { method: 'DELETE' });
       setRules((prev) => prev.filter((r) => r.id !== id));
       addToast('Rule removed');
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Couldn’t remove the rule', 'error');
-    }
+    } finally { pending.current.delete(key); }
   };
 
   const undoMute = async (m: Merchant) => {
+    const key = `merchant${m.id}`;
+    if (pending.current.has(key)) return;
+    pending.current.add(key);
     try {
       await apiFetch(`/merchants/${m.id}`, { method: 'PATCH', body: JSON.stringify({ suppressRuleSuggest: false }) });
       setMerchants((prev) => prev.map((x) => (x.id === m.id ? { ...x, suppress_rule_suggest: 0 } : x)));
       addToast(`Ledger will suggest rules for ${m.name} again`);
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Couldn’t undo', 'error');
-    }
+    } finally { pending.current.delete(key); }
   };
 
   const header = (
@@ -109,12 +117,12 @@ export default function RulesPanel() {
                   ? <VendorAvatar name={r.merchantName ?? '?'} src={logoById.get(r.pattern) || undefined} color="var(--c-indigo)" size={34} />
                   : <span aria-hidden="true" className="w-[34px] h-[34px] rounded-full bg-surface-2 text-content-3 flex items-center justify-center shrink-0">{ICON.search}</span>}
                 <div className="flex-1 min-w-0">
-                  <div className="text-[15px] font-bold text-content break-words">
+                  <div className="text-[15px] font-bold text-content max-md:line-clamp-2 max-md:[overflow-wrap:anywhere] md:truncate">
                     {r.matchType === 'merchant' ? r.merchantName
                       : r.matchType === 'contains' ? <>Description contains “<span className="font-mono text-[13.5px]">{r.pattern}</span>”</>
                       : <>Description matches the pattern <span className="font-mono text-[13.5px]">{r.pattern}</span></>}
                   </div>
-                  <div className="text-[12.5px] text-content-3">
+                  <div className="text-[12.5px] text-content-3 max-md:line-clamp-2 max-md:[overflow-wrap:anywhere] md:truncate">
                     <span className="text-content-2 font-semibold">{getCategoryEmoji(r.subName, r.groupName)} {r.subName}</span> · {r.groupName}
                   </div>
                 </div>
