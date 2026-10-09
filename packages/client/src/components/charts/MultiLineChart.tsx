@@ -1,4 +1,5 @@
 import { useLayoutEffect, useEffect, useRef, useState, useMemo } from 'react';
+import { formatMoney } from '@ledger/shared';
 
 export interface Series {
   label: string;
@@ -16,11 +17,7 @@ interface Props {
   yTicks?: number;
 }
 
-const defaultValue = (n: number) => {
-  const a = Math.abs(n);
-  if (a >= 1000) return `$${(n / 1000).toFixed(0)}k`;
-  return `$${Math.round(n)}`;
-};
+const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' }).text;
 
 /**
  * Reusable multi-line time-series chart (inline SVG): gridlines, axis labels,

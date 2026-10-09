@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
+import { formatMoney } from '@ledger/shared';
 import { useCachedApi } from '../useCachedApi';
 import { VendorAvatar } from '../../primitives';
+import { Money } from '../../Money';
 import DashboardCard, { CardSkeleton, CardError, CardHeaderControl } from '../DashboardCard';
 import type { DashboardCardProps } from '../cardRegistry';
 
@@ -24,13 +26,6 @@ interface MonthView {
 const FREQ: Record<string, string> = {
   weekly: 'Every week', biweekly: 'Every 2 weeks', semi_monthly: 'Twice a month',
   monthly: 'Every month', every_n_months: 'Every few months', custom_months: 'Custom months',
-};
-
-const usd = (n: number) => {
-  const rounded = Math.round(n * 100) / 100;
-  return Number.isInteger(rounded)
-    ? `$${Math.abs(rounded).toLocaleString('en-US')}`
-    : `$${Math.abs(rounded).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -66,7 +61,7 @@ export default function RecurringCard({ dragHandleProps }: DashboardCardProps) {
   return (
     <DashboardCard
       title="Recurring"
-      subtitle={remaining != null ? <span className="text-[15px] font-semibold text-content-3 tabular-nums">{usd(remaining)} remaining due</span> : undefined}
+      subtitle={remaining != null ? <span className="text-[15px] font-semibold text-content-3 tabular-nums">{formatMoney(remaining, { kind: 'balance', showZero: true }).text} remaining due</span> : undefined}
       headerRight={<CardHeaderControl small>This month</CardHeaderControl>}
       hideRightOnPhone
       dragHandleProps={dragHandleProps}
@@ -95,9 +90,8 @@ export default function RecurringCard({ dragHandleProps }: DashboardCardProps) {
             <div className="text-sm text-content-3 mt-0.5">{next.merchantName ?? 'Merchant'} · {FREQ[next.frequency] ?? next.frequency}</div>
           </div>
           <div className="flex-none text-right">
-            <div className={`font-bold text-[16px] tabular-nums ${next.type === 'income' ? 'text-positive' : ''}`}>
-              {next.type === 'income' ? '+' : ''}${Math.abs(next.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
+            {/* Recurring amounts are magnitudes plus a type: income is money in. */}
+            <Money amount={next.type === 'income' ? -Math.abs(next.amount) : Math.abs(next.amount)} className="block font-bold text-[16px]" />
             <div className="text-[13px] text-content-3 mt-0.5">{dueLabel(next.date)}</div>
           </div>
         </div>

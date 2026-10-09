@@ -92,8 +92,6 @@ function categoryOf(t: Txn): { label: string; subName: string | undefined; group
   return { label: 'Uncategorized', subName: undefined, groupName: undefined, type: 'expense' };
 }
 
-const fmtY = (n: number) => { const a = Math.abs(n); return a >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${Math.round(n)}`; };
-
 export default function AccountDetailPage() {
   const { id: idParam } = useParams();
   const id = parseInt(idParam ?? '', 10);
@@ -150,7 +148,7 @@ export default function AccountDetailPage() {
   const delta = points.length >= 2 ? points[points.length - 1].value - points[0].value : null;
   // No percentage when the range-start balance is 0 — dividing by it yields a bogus +0.0%.
   const deltaPct = delta != null && points[0].value !== 0 ? (delta / Math.abs(points[0].value)) * 100 : null;
-  // Oriented so up is good (liabilities are plotted negative); zero keeps today's "+$0.00" in green.
+  // Oriented so up is good (liabilities are plotted negative); zero shows "$0.00" in green.
   const change = delta != null ? formatMoney(delta, { kind: 'total', showZero: true, zeroTone: 'positive' }) : null;
   const up = change?.tone !== 'negative';
   const rangeLabel = RANGES.find((r) => r.key === range)?.label ?? range;
@@ -245,7 +243,7 @@ export default function AccountDetailPage() {
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d={up ? 'M7 17 17 7M9 7h8v8' : 'M7 7l10 10M17 9v8H9'} />
                   </svg>
-                  {`${up ? '+' : ''}${change.text}${deltaPct != null ? ` (${up ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
+                  {`${change.text}${deltaPct != null ? ` (${up ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
                 </span>
               )}
               <span className="text-[15px] font-medium text-content-3">{rangeLabel} change</span>
@@ -259,7 +257,7 @@ export default function AccountDetailPage() {
           {points.length === 0 ? (
             <div className="h-[260px] flex items-center justify-center text-sm text-content-3">No balance history yet.</div>
           ) : (
-            <AreaLineChart points={points} height={260} formatValue={fmtY} formatDate={fmtAxisDate} highlightLast xTicks={6} />
+            <AreaLineChart points={points} height={260} formatDate={fmtAxisDate} highlightLast xTicks={6} />
           )}
         </div>
       </div>
