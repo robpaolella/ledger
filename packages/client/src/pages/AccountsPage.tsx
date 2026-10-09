@@ -14,6 +14,8 @@ import { timeAgo, todayYmd } from '../lib/formatters';
 import PageHeader from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
 import FilterPopover from '../components/FilterPopover';
+import AddAccountModal from '../components/accounts/AddAccountModal';
+import Button from '../components/Button';
 import { EMPTY_FILTER, type FilterDraft } from '../components/filterModel';
 
 // ---- types ----
@@ -95,6 +97,7 @@ export default function AccountsPage() {
   const [af, setAf] = useState({ name: '', purchaseDate: '', cost: '', salvageValue: '', method: 'declining_balance' as 'straight_line' | 'declining_balance', rate: '20', life: '5' });
 
   // refresh (bank sync) + add-account modals
+  const [addingAccount, setAddingAccount] = useState(false);
   const [showRefresh, setShowRefresh] = useState(false);
   const [hasSimplefin, setHasSimplefin] = useState(false);
   type SyncBal = { accountId: number; accountName: string; simplefinBalance: number; balanceDate: string; holdings?: unknown[] };
@@ -249,6 +252,12 @@ export default function AccountsPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
               <span className="hidden md:inline">Refresh all</span>
             </button>
+          )}
+          {hasPermission('accounts.create') && (
+            <Button size="sm" onClick={() => setAddingAccount(true)} aria-label="Add account">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              <span className="hidden md:inline">Add account</span>
+            </Button>
           )}
   </>);
 
@@ -468,6 +477,18 @@ export default function AccountsPage() {
           </ResponsiveModal>
         );
       })()}
+
+      {addingAccount && (
+        <AddAccountModal
+          onClose={() => setAddingAccount(false)}
+          onCreated={(id) => {
+            // a filtered view would otherwise hide the account just created
+            const next = selected ? new Set(selected).add(id) : selected;
+            if (next !== selected) setSelected(next);
+            loadData(); loadHistory(range, next);
+          }}
+        />
+      )}
 
       {/* refresh (bank balances) modal */}
       {showRefresh && (
