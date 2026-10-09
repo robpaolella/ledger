@@ -17,7 +17,7 @@ The newcomer is someone Robert invites into his instance, where the data already
 ### Settings rules
 
 - Every setting has one obvious home.
-- People only see settings they can use.
+- People only see settings they can use. In Settings, controls a person can't use are hidden rather than disabled; elsewhere, unavailable add/edit actions stay disabled.
 - Status messages tell the truth in plain English.
 - Every automatic behaviour you can't see has a place to see it and switch it off.
 
