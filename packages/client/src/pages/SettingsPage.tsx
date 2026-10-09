@@ -19,12 +19,13 @@ import { useSaveAccount } from '../components/accounts/useSaveAccount';
 import CategoriesPanel, { type Category, type Group } from '../components/settings/CategoriesPanel';
 import ProfilePanel from '../components/settings/ProfilePanel';
 import SecurityPanel from '../components/settings/SecurityPanel';
+import RulesPanel from '../components/settings/RulesPanel';
 import UsersPanel from '../components/settings/UsersPanel';
 import AiPanel from '../components/settings/AiPanel';
 import { Card, CardHeader, LoadError, PanelHeader, btnPrimarySm, btnSecondarySm, btnRow, ICON } from '../components/settings/ui';
 import { TYPE_LABEL, sfLabel } from '../components/settings/simplefin';
 
-type PanelId = 'profile' | 'security' | 'accounts' | 'categories' | 'merchants' | 'users' | 'extras';
+type PanelId = 'profile' | 'security' | 'accounts' | 'categories' | 'merchants' | 'rules' | 'users' | 'extras';
 
 const NAV_ICON: Record<PanelId, ReactNode> = {
   profile: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>,
@@ -32,6 +33,7 @@ const NAV_ICON: Record<PanelId, ReactNode> = {
   accounts: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4Z" /></svg>,
   categories: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>,
   merchants: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6" /></svg>,
+  rules: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></svg>,
   users: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>,
   extras: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /><circle cx="12" cy="12" r="4" /></svg>,
 };
@@ -137,6 +139,7 @@ export default function SettingsPage() {
       { id: 'accounts', label: 'Accounts', show: canAny('accounts') || hasPermission('simplefin.manage') || hasPermission('import.bank_sync') },
       { id: 'categories', label: 'Categories', show: canAny('categories') },
       { id: 'merchants', label: 'Merchants', show: hasPermission('transactions.edit') },
+      { id: 'rules', label: 'Rules', show: hasPermission('transactions.edit') },
     ] },
     { title: 'Admin', items: [
       { id: 'users', label: 'Users & permissions', show: admin },
@@ -208,6 +211,7 @@ export default function SettingsPage() {
           {panel === 'profile' && <ProfilePanel />}
           {panel === 'security' && <SecurityPanel />}
           {panel === 'merchants' && <MerchantsPanel />}
+          {panel === 'rules' && <RulesPanel />}
           {panel === 'users' && <UsersPanel />}
           {panel === 'extras' && <AiPanel />}
           {panel === 'categories' && (loadFailed ? (
