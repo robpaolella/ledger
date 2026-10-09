@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
+import { readCsv } from '@ledger/shared';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { initOwnerSlots } from '../components/badges';
@@ -48,19 +49,6 @@ interface ParseResult {
 }
 
 // ── CSV helpers (ported from the previous ImportPage) ────────────────────────
-function parseLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
-    else if (ch === ',' && !inQ) { out.push(cur.trim()); cur = ''; }
-    else cur += ch;
-  }
-  out.push(cur.trim());
-  return out;
-}
 function normalizeAmount(raw: string): number {
   let s = (raw ?? '').trim().replace(/"/g, '');
   const paren = /^\(.*\)$/.test(s);
@@ -225,9 +213,8 @@ export default function ImportPage() {
       }
       // Re-parse locally to hold all rows.
       const text = await f.text();
-      const lines = text.split(/\r?\n/).filter((l) => l.trim());
       const hri = res.data.headerRowIndex ?? 0;
-      let rows = lines.slice(hri + 1).map(parseLine).filter((r) => r.some((c) => c.trim()));
+      let rows = readCsv(text).records.slice(hri + 1);
       if (res.data.detectedFormat === 'venmo') {
         const hLower = res.data.headers.map((x) => x.toLowerCase());
         const typeIdx = hLower.findIndex((x) => /^type$/i.test(x));
@@ -249,7 +236,7 @@ export default function ImportPage() {
       setCsvStep(2);
     } catch (err) {
       console.error('CSV parse failed', err);
-      addToast('Failed to parse CSV file.', 'error');
+      addToast(err instanceof ApiError && err.status === 400 ? err.message : 'Failed to parse CSV file.', 'error');
       setFile(null);
     }
   };
