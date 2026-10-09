@@ -1,11 +1,13 @@
 import type Database from 'better-sqlite3';
+import { getConfig, setConfig } from './appConfig.js';
 
 /**
  * Tiingo end-of-day price sync. Tracks the core benchmarks (S&P 500 / total US
  * stock market / US bonds via ETF proxies) plus every symbol currently held,
  * storing split+dividend-ADJUSTED closes in benchmark_prices. Runs from the
  * daily scheduler; without TIINGO_TOKEN it skips cleanly and the read
- * endpoints degrade to null change fields.
+ * endpoints degrade to null change fields. An admin can switch the daily fetch
+ * off (app_config benchmarks.enabled, on when unset); stored prices stay.
  *
  * Budget: free tier = 1,000 req/day, 500 unique symbols/month. One request
  * per symbol per day (first run backfills ~2 years in the same single call).
@@ -17,7 +19,7 @@ export const CORE_BENCHMARKS = ['SPY', 'VTI', 'BND'] as const;
 const SYMBOL_RE = /^[A-Z][A-Z0-9.-]{0,9}$/;
 
 export interface BenchmarkSyncResult {
-  skipped?: 'no_token';
+  skipped?: 'no_token' | 'disabled';
   updatedSymbols: string[];
   errors: string[];
 }
@@ -39,6 +41,14 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 let warnedNoToken = false;
 
+export const BENCHMARKS_ENABLED_KEY = 'benchmarks.enabled';
+export const BENCHMARKS_LAST_UPDATED_KEY = 'benchmarks.last_updated_at';
+
+/** On unless switched off, so installs that ran benchmarks before the switch keep running them. */
+export function benchmarksEnabled(sqlite: Database.Database): boolean {
+  return getConfig(sqlite, BENCHMARKS_ENABLED_KEY) !== '0';
+}
+
 export async function syncBenchmarkPrices(
   sqlite: Database.Database,
   fetchImpl: typeof fetch = fetch,
@@ -57,6 +67,7 @@ export async function syncBenchmarkPrices(
     }
     return { skipped: 'no_token', updatedSymbols: [], errors: [] };
   }
+  if (!benchmarksEnabled(sqlite)) return { skipped: 'disabled', updatedSymbols: [], errors: [] };
 
   const today = new Date().toISOString().slice(0, 10);
   const symbols = trackedSymbols(sqlite);
@@ -111,5 +122,7 @@ export async function syncBenchmarkPrices(
     await sleep(paceMs);
   }
 
+  // Already-current symbols count too: the prices are up to date.
+  if (errors.length === 0) setConfig(sqlite, BENCHMARKS_LAST_UPDATED_KEY, new Date().toISOString());
   return { updatedSymbols, errors };
 }

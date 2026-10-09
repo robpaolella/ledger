@@ -32,6 +32,7 @@ const db = new Database(':memory:');
 // seeds holdings_history from simplefin_holdings (whose FK needs simplefin_links;
 // better-sqlite3 enforces foreign keys by default) and creates benchmark_prices.
 db.exec(`
+  CREATE TABLE app_config (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL UNIQUE, value TEXT NOT NULL);
   CREATE TABLE simplefin_links (id INTEGER PRIMARY KEY AUTOINCREMENT);
   CREATE TABLE simplefin_holdings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
