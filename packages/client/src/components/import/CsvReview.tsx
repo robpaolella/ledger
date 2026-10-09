@@ -68,7 +68,7 @@ export default function CsvReview({
           const on = selected.has(i);
           return (
             <div key={i} className="flex items-center gap-4 px-5 py-3.5 border-b border-line" style={{ background: on ? 'transparent' : 'color-mix(in srgb, var(--bg) 40%, transparent)' }}>
-              <ImpCheckbox checked={on} disabled={r.amount == null} onClick={() => toggle(i)} />
+              <ImpCheckbox checked={on} disabled={r.amount == null} title={r.amount == null ? 'Amount unreadable. Fix it in the file and import again.' : undefined} onClick={() => toggle(i)} />
               <span className="w-[74px] flex-none font-mono text-xs text-content-3">{r.date}</span>
               <VendorCell
                 value={r.description}
