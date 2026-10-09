@@ -27,6 +27,8 @@ const defaultDate = (d: string) => {
   return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' }).text;
+/** One decimal ($24.5k), for when axis labels collide and for the default hover value. */
+const compact = (n: number) => formatMoney(n, { kind: 'balance', precision: 'compact', showZero: true }).text;
 
 /**
  * Reusable inline-SVG area+line chart with gridlines, axis labels, and a hover
@@ -84,6 +86,12 @@ export default function AreaLineChart({
     : '';
 
   const ticks = Array.from({ length: yTicks }, (_, i) => min + (i / (yTicks - 1)) * (max - min));
+  // A narrow range (a balance moving $24.2k to $24.9k) can round two gridlines to the
+  // same axis label; then show one decimal so each line stays distinct.
+  const axisLabels = ticks.map(formatValue);
+  const tickLabels = formatValue === defaultValue && new Set(axisLabels).size < axisLabels.length
+    ? ticks.map(compact)
+    : axisLabels;
   const gid = 'nw-area-grad';
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -115,7 +123,7 @@ export default function AreaLineChart({
               <g key={i}>
                 <line x1={pad.left} y1={y} x2={pad.left + plotW} y2={y} stroke="var(--line)" strokeWidth="1" />
                 <text x={pad.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="var(--text-3)" className="tabular-nums">
-                  {formatValue(t)}
+                  {tickLabels[i]}
                 </text>
               </g>
             );
@@ -175,7 +183,7 @@ export default function AreaLineChart({
             top: Math.max(yFor(hp.value) - 52, 0),
           }}
         >
-          <div className="font-bold tabular-nums text-content">{formatValue(hp.value)}</div>
+          <div className="font-bold tabular-nums text-content">{(formatValue === defaultValue ? compact : formatValue)(hp.value)}</div>
           <div className="text-content-3">{formatDate(hp.date)}</div>
         </div>
       )}
