@@ -10,6 +10,7 @@ import Dropdown from '../components/Dropdown';
 import { OwnerBadge, SharedBadge, initOwnerSlots } from '../components/badges';
 import { VendorAvatar, SegmentedControl } from '../components/primitives';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
+import { formatMoney } from '@ledger/shared';
 import { timeAgo, todayYmd } from '../lib/formatters';
 import PageHeader from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -39,8 +40,7 @@ interface HistoryPoint {
 }
 
 // ---- helpers ----
-const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const balance = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
 
 const SUBTYPE: Record<string, string> = {
   checking: 'Checking', savings: 'Savings', credit: 'Credit Card', investment: 'Brokerage',
@@ -219,13 +219,17 @@ export default function AccountsPage() {
   const canEdit = hasPermission('accounts.edit');
   const acctColor = (cls: string) => cls === 'liability' ? 'var(--negative)' : cls === 'investment' ? 'var(--c-teal)' : 'var(--c-blue)';
 
-  const ChangeText = ({ v }: { v: number }) => (
-    <span className="text-[13px] tabular-nums" style={{ color: v > 0 ? 'var(--positive)' : v < 0 ? 'var(--negative)' : 'var(--text-3)' }}>
-      {signed(v)} <span className="text-content-3">{rangeLabel} change</span>
-    </span>
-  );
+  const ChangeText = ({ v }: { v: number }) => {
+    // A change: real minus when negative, coloured good/bad; zero stays grey.
+    const c = formatMoney(v, { kind: 'total', showZero: true });
+    return (
+      <span className="text-[13px] tabular-nums" style={{ color: c.tone === 'positive' ? 'var(--positive)' : c.tone === 'negative' ? 'var(--negative)' : 'var(--text-3)' }}>
+        {c.text} <span className="text-content-3">{rangeLabel} change</span>
+      </span>
+    );
+  };
 
-  const seg = (label: number, total: number) => summaryMode === 'percent' ? `${total ? Math.round((label / total) * 100) : 0}%` : money(label);
+  const seg = (label: number, total: number) => summaryMode === 'percent' ? `${total ? Math.round((label / total) * 100) : 0}%` : balance(label);
 
   const headerControls = (<>
           {/* Filters */}
@@ -271,7 +275,7 @@ export default function AccountsPage() {
         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
           <div>
             <div className="font-mono text-[11px] uppercase tracking-wide text-content-3 mb-1">Net worth</div>
-            <div className="text-[30px] font-extrabold tracking-tight tabular-nums leading-none">{money(netWorth)}</div>
+            <div className="text-[30px] font-extrabold tracking-tight tabular-nums leading-none">{balance(netWorth)}</div>
             <div className="mt-1.5"><ChangeText v={change.netWorth} /></div>
           </div>
           <div className="flex items-center gap-2.5">
@@ -279,7 +283,7 @@ export default function AccountsPage() {
             {!isMobile && <Dropdown value={range} options={RANGES.map((r) => ({ key: r.key, label: r.label }))} onChange={setRange} minWidth={120} />}
           </div>
         </div>
-        <AreaLineChart points={chartPoints} height={isMobile ? 200 : 240} formatValue={(n) => { const a = Math.abs(n); return a >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${Math.round(n)}`; }} />
+        <AreaLineChart points={chartPoints} height={isMobile ? 200 : 240} />
         {isMobile && (
           <div className="flex items-center justify-between mt-3 -mx-1">
             {RANGES.map((r) => (
@@ -314,7 +318,7 @@ export default function AccountsPage() {
                     <span className="text-[12.5px] md:text-sm truncate"><ChangeText v={chg} /></span>
                   </span>
                   <span className="ml-auto text-right shrink-0 flex flex-col">
-                    <span className="text-[17px] font-extrabold tabular-nums">{money(total)}</span>
+                    <span className="text-[17px] font-extrabold tabular-nums">{balance(total)}</span>
                     {g.key !== 'liability' && assetsTotal > 0 && <span className="md:hidden text-[12.5px] text-content-3 tabular-nums">{Math.round((total / assetsTotal) * 100)}% of assets</span>}
                   </span>
                 </button>
@@ -334,7 +338,7 @@ export default function AccountsPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-bold text-[15px] tabular-nums">{money(a.classification === 'liability' ? -Math.abs(a.balance) : a.balance)}</div>
+                      <div className="font-bold text-[15px] tabular-nums">{balance(a.classification === 'liability' ? -Math.abs(a.balance) : a.balance)}</div>
                       {a.lastUpdated && <div className="text-[12px] text-content-3">{timeAgo(a.lastUpdated)}</div>}
                     </div>
                   </div>
@@ -354,7 +358,7 @@ export default function AccountsPage() {
 
             <div className="flex items-baseline justify-between mb-2.5">
               <span className="font-bold">Assets</span>
-              <span className="font-extrabold tabular-nums">{money(assetsTotal)}</span>
+              <span className="font-extrabold tabular-nums">{balance(assetsTotal)}</span>
             </div>
             <div className="flex h-2.5 rounded-full overflow-hidden bg-surface-2 mb-3">
               <div style={{ width: `${assetsTotal ? (groupTotals.investment / assetsTotal) * 100 : 0}%`, background: 'var(--c-teal)' }} />
@@ -377,7 +381,7 @@ export default function AccountsPage() {
 
             <div className="flex items-baseline justify-between mb-2.5">
               <span className="font-bold">Liabilities</span>
-              <span className="font-extrabold tabular-nums">{money(liabilitiesTotal)}</span>
+              <span className="font-extrabold tabular-nums">{balance(liabilitiesTotal)}</span>
             </div>
             <div className="h-2.5 rounded-full overflow-hidden bg-surface-2 mb-3">
               <div className="h-full" style={{ width: liabilitiesTotal ? '100%' : '0%', background: 'var(--negative)' }} />
@@ -395,7 +399,7 @@ export default function AccountsPage() {
       <div className="mt-5 bg-surface border border-line rounded-card shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-4 md:px-5 py-4">
           <span className="text-[17px] font-extrabold">Physical Assets</span>
-          <span className="ml-auto text-[17px] font-extrabold tabular-nums">{money(physicalTotal)}</span>
+          <span className="ml-auto text-[17px] font-extrabold tabular-nums">{balance(physicalTotal)}</span>
           {canEdit && <button onClick={() => openAsset('new')} className="h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-sm font-semibold">Add</button>}
         </div>
         {data.assets.length === 0 ? (
@@ -404,13 +408,13 @@ export default function AccountsPage() {
           <div key={a.id} className="flex items-center gap-3 px-4 md:px-5 min-h-[62px] py-2.5 border-t border-line">
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-[15px] truncate">{a.name}</div>
-              <div className="font-mono text-[12px] text-content-3 truncate">Acquired {a.purchaseDate} · cost {money(a.cost)}</div>
+              <div className="font-mono text-[12px] text-content-3 truncate">Acquired {a.purchaseDate} · cost {balance(a.cost)}</div>
             </div>
             <span className="hidden md:inline-flex text-[12px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'color-mix(in srgb, var(--c-amber) 16%, transparent)', color: 'var(--c-amber)' }}>
               {a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}
             </span>
             <div className="md:w-28 text-right shrink-0">
-              <div className="font-bold text-[15px] tabular-nums">{money(a.currentValue)}</div>
+              <div className="font-bold text-[15px] tabular-nums">{balance(a.currentValue)}</div>
               <div className="md:hidden text-[11px] font-semibold" style={{ color: 'var(--c-amber)' }}>{a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}</div>
             </div>
             {canEdit && (
@@ -465,7 +469,7 @@ export default function AccountsPage() {
               )}
               <div className="rounded-[12px] bg-surface-2 border border-line px-4 py-3">
                 <div className="text-[11px] font-mono uppercase tracking-wide text-content-3 mb-1">Current value</div>
-                <div className="text-[26px] font-extrabold tabular-nums leading-none">{money(prev.value)}</div>
+                <div className="text-[26px] font-extrabold tabular-nums leading-none">{balance(prev.value)}</div>
                 <div className="text-[12px] text-content-3 mt-1">after {prev.years.toFixed(1)} yrs</div>
               </div>
               <div className="flex items-center gap-2.5 pt-1">
@@ -502,9 +506,9 @@ export default function AccountsPage() {
                   className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-2 cursor-pointer">
                   {chkbox(syncSel.has(b.accountId))}
                   <span className="flex-1 truncate text-sm font-medium">{b.accountName}</span>
-                  <span className="text-sm text-content-3 tabular-nums">{money(currentBalanceOf(b.accountId))}</span>
+                  <span className="text-sm text-content-3 tabular-nums">{balance(currentBalanceOf(b.accountId))}</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-                  <span className="text-sm font-semibold tabular-nums">{money(b.simplefinBalance)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{balance(b.simplefinBalance)}</span>
                 </div>
               ))}
               <div className="flex justify-end gap-2 pt-3">

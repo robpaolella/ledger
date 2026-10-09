@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, useMemo } from 'react';
+import { formatMoney } from '@ledger/shared';
 
 export interface ChartPoint {
   date: string;   // 'YYYY-MM-DD' (or any label)
@@ -25,12 +26,7 @@ const defaultDate = (d: string) => {
   const dt = new Date(d + 'T00:00:00');
   return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
-const defaultValue = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${Math.round(n)}`;
-};
+const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' }).text;
 
 /**
  * Reusable inline-SVG area+line chart with gridlines, axis labels, and a hover

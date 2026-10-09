@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatMoney } from '@ledger/shared';
 import { useCachedApi } from '../useCachedApi';
 import AreaLineChart, { type ChartPoint } from '../../charts/AreaLineChart';
 import DashboardCard, { CardSection, CardSkeleton, CardError, CardHeaderControl } from '../DashboardCard';
@@ -15,9 +16,7 @@ const RANGE_OPTIONS = [
 ] as const;
 type Range = typeof RANGE_OPTIONS[number]['value'];
 
-const usd0 = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
-const usd2 = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const kFmt = (n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${Math.round(n)}`);
+const whole = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole', showZero: true }).text;
 
 function RangeDropdown({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
   const [open, setOpen] = useState(false);
@@ -69,6 +68,7 @@ export default function NetWorthCard({ dragHandleProps }: DashboardCardProps) {
 
   const last = points?.[points.length - 1];
   const delta = points && points.length > 1 ? points[points.length - 1].netWorth - points[0].netWorth : 0;
+  const change = formatMoney(delta, { kind: 'total', showZero: true });
   const chart: ChartPoint[] = (points ?? []).map((p) => ({ date: p.date, value: p.netWorth }));
 
   return (
@@ -76,14 +76,14 @@ export default function NetWorthCard({ dragHandleProps }: DashboardCardProps) {
       headline={
         <>
           <span className="text-[22px] font-extrabold tracking-[-0.01em] tabular-nums">
-            {last ? `${usd0(last.netWorth)} net worth` : 'Net worth'}
+            {last ? `${whole(last.netWorth)} net worth` : 'Net worth'}
           </span>
           {last && (
             <span
               className="text-[18px] font-semibold tabular-nums"
-              style={{ color: delta > 0 ? 'var(--positive)' : delta < 0 ? 'var(--negative)' : 'var(--text-3)' }}
+              style={{ color: change.tone === 'positive' ? 'var(--positive)' : change.tone === 'negative' ? 'var(--negative)' : 'var(--text-3)' }}
             >
-              {usd2(delta)}
+              {change.text}
             </span>
           )}
         </>
@@ -99,7 +99,7 @@ export default function NetWorthCard({ dragHandleProps }: DashboardCardProps) {
         <CardSection className="px-6 py-[22px] text-sm text-content-3 text-center">Not enough history yet.</CardSection>
       ) : (
         <CardSection className="px-6 pt-[22px] pb-3">
-          <AreaLineChart points={chart} height={220} formatValue={kFmt} highlightLast lastLabel="date" />
+          <AreaLineChart points={chart} height={220} highlightLast lastLabel="date" />
         </CardSection>
       )}
     </DashboardCard>

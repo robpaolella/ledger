@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { formatMoney } from '@ledger/shared';
 import CurrencyInput from './CurrencyInput';
 import { ReimbursementBadge } from './badges';
 
@@ -177,12 +178,8 @@ export default function SplitEditor({
     onApply(finalSplits);
   };
 
-  const fmt = (n: number) =>
-    '$' +
-    Math.abs(n).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+  // The editor works in magnitudes; the parent's sign is applied on save.
+  const balance = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
 
   const inputCls = 'w-full h-10 px-3 rounded-[10px] bg-surface border border-line-strong text-content text-sm outline-none';
   const selectCls = `${inputCls} pr-9 appearance-none cursor-pointer`;
@@ -193,7 +190,7 @@ export default function SplitEditor({
     <div className={`rounded-[12px] border border-line bg-surface-2 ${compact ? 'p-3' : 'p-4'}`}>
       {/* Header */}
       <div className="flex justify-between items-center gap-3 mb-3">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-content-3">Split · {fmt(totalAmount)}</span>
+        <span className="font-mono text-[11px] uppercase tracking-wide text-content-3">Split · {balance(Math.abs(totalAmount))}</span>
         <button
           type="button"
           onClick={() => setMode((m) => (m === '$' ? '%' : '$'))}
@@ -292,10 +289,10 @@ export default function SplitEditor({
       <div className="mt-3 flex justify-between items-center flex-wrap gap-2">
         <div className="font-mono text-[12px] tabular-nums">
           <span className="text-content-3">Allocated </span>
-          <span className={`font-semibold ${balanced ? 'text-positive' : remaining < 0 ? 'text-negative' : 'text-content'}`}>{fmt(allocated)}</span>
+          <span className={`font-semibold ${balanced ? 'text-positive' : remaining < 0 ? 'text-negative' : 'text-content'}`}>{balance(allocated)}</span>
           {!balanced && (
             <span className={`ml-1.5 ${remaining < 0 ? 'text-negative' : 'text-warning'}`}>
-              ({remaining > 0 ? '+' : ''}{fmt(Math.abs(remaining))} {remaining > 0 ? 'remaining' : 'over'})
+              ({balance(Math.abs(remaining))} {remaining > 0 ? 'remaining' : 'over'})
             </span>
           )}
         </div>

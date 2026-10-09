@@ -92,8 +92,6 @@ function categoryOf(t: Txn): { label: string; subName: string | undefined; group
   return { label: 'Uncategorized', subName: undefined, groupName: undefined, type: 'expense' };
 }
 
-const fmtY = (n: number) => { const a = Math.abs(n); return a >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${Math.round(n)}`; };
-
 export default function AccountDetailPage() {
   const { id: idParam } = useParams();
   const id = parseInt(idParam ?? '', 10);
@@ -259,7 +257,7 @@ export default function AccountDetailPage() {
           {points.length === 0 ? (
             <div className="h-[260px] flex items-center justify-center text-sm text-content-3">No balance history yet.</div>
           ) : (
-            <AreaLineChart points={points} height={260} formatValue={fmtY} formatDate={fmtAxisDate} highlightLast xTicks={6} />
+            <AreaLineChart points={points} height={260} formatDate={fmtAxisDate} highlightLast xTicks={6} />
           )}
         </div>
       </div>
