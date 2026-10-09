@@ -51,7 +51,9 @@ export default function MerchantPicker({
   const pick = (name: string) => { onSelect(name); setOpen(false); setSearch(''); };
 
   return (
-    <div className="relative" ref={ref}>
+    // Escape closes the list from any control inside it (search box or an option), not just the search box.
+    <div className="relative" ref={ref}
+      onKeyDown={(e) => { if (open && e.key === 'Escape') { e.stopPropagation(); setOpen(false); setSearch(''); } }}>
       <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)}
         className={`${triggerClassName ?? 'w-full h-12 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none'} flex items-center justify-between gap-2 text-left cursor-pointer disabled:opacity-60`}>
         <span className="flex items-center gap-2.5 min-w-0">
@@ -74,7 +76,6 @@ export default function MerchantPicker({
         <div className="absolute z-[75] left-0 right-0 mt-1 bg-elevated border border-line-strong rounded-[12px] shadow-md overflow-hidden">
           <div className="p-2 border-b border-line">
             <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants…"
-              onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); setSearch(''); } }}
               className="w-full h-9 px-3 rounded-lg bg-surface-2 border border-line text-content text-sm outline-none" />
           </div>
           <div className="max-h-60 overflow-y-auto p-1.5">

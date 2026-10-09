@@ -7,7 +7,7 @@ import { VendorAvatar } from './primitives';
  * 64px tall, 16px side padding, hairline between rows.
  */
 export function ListRow({
-  avatar, title, titleExtra, subtitle, amount, amountClass = '', meta, onClick, chevron = false, className = '', leading,
+  avatar, title, titleExtra, subtitle, amount, amountClass = '', meta, onClick, chevron = false, className = '', leading, rowId,
 }: {
   avatar?: { name: string; src?: string | null; color?: string; size?: number };
   /** Custom leading element instead of an avatar (e.g. a category emoji tile). */
@@ -19,6 +19,8 @@ export function ListRow({
   amountClass?: string;
   meta?: ReactNode;
   onClick?: () => void;
+  /** Stable id, so a page can return keyboard focus to this row (data-row-id). */
+  rowId?: string;
   chevron?: boolean;
   className?: string;
 }) {
@@ -27,7 +29,15 @@ export function ListRow({
     <div
       onClick={onClick}
       role={clickable ? 'button' : undefined}
-      className={`flex items-center gap-3 px-4 min-h-16 py-2.5 border-t border-line first:border-t-0 ${clickable ? 'cursor-pointer active:bg-surface-2 hover:bg-surface-2/40' : ''} ${className}`}
+      tabIndex={clickable ? 0 : undefined}
+      data-row-id={rowId}
+      // Enter / Space act like a click, but only when the row itself has focus.
+      onKeyDown={clickable ? (e) => {
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault(); // Space must not scroll the page
+        onClick();
+      } : undefined}
+      className={`flex items-center gap-3 px-4 min-h-16 py-2.5 border-t border-line first:border-t-0 ${clickable ? 'cursor-pointer active:bg-surface-2 hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring' : ''} ${className}`}
     >
       {leading ?? (avatar && <VendorAvatar name={avatar.name} src={avatar.src || undefined} color={avatar.color} size={avatar.size ?? 36} />)}
       <div className="flex-1 min-w-0">
