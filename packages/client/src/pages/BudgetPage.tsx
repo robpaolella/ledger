@@ -369,7 +369,7 @@ export default function BudgetPage() {
                   </span>
                   <span className="text-right tabular-nums">{whole(sec.planned)}</span>
                   <span className="text-right tabular-nums">{whole(sec.actual)}</span>
-                  <RemainingCell value={secRem} income={sec.key === 'income'} long className="text-right" />
+                  <RemainingCell value={secRem} income={sec.key === 'income'} long className="text-right normal-case" />
                 </div>
                 {!secCollapsed && sec.groups.map((g) => {
                   const groupKey = sec.key + '|' + g.groupName;
@@ -583,7 +583,7 @@ export default function BudgetPage() {
             <Button onClick={saveEdit}>Save</Button>
           </div>}>
           <div className="text-[12px] font-bold uppercase tracking-[0.05em] text-content-3 mb-[9px]">Monthly budget</div>
-          <div className={`flex items-center gap-0.5 h-16 px-[18px] rounded-[14px] bg-surface border-2 transition-colors focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_20%,transparent)] ${below && !overriding ? 'border-warning' : 'border-line-strong focus-within:border-primary'}`}>
+          <div className={`flex items-center gap-0.5 h-16 px-[18px] rounded-[14px] bg-surface border-2 transition-colors ${below && !overriding ? 'border-warning focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--warning)_20%,transparent)]' : 'border-line-strong focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_20%,transparent)]'}`}>
             <span className="text-[26px] text-content-3 font-semibold">$</span>
             <input autoFocus value={editValue} onChange={(e) => { setEditValue(e.target.value.replace(/[^0-9.]/g, '')); setEditOverride(false); }} inputMode="decimal"
               aria-label="Monthly budget"
@@ -624,13 +624,13 @@ export default function BudgetPage() {
               </div>
             </div>
           )}
+          <BudgetHistory categoryId={editModal.categoryId} targetMonth={editModal.targetMonth} income={editModal.income} />
           <label onClick={() => setApplyFuture((v) => !v)} className="flex items-center gap-3 mt-5 cursor-pointer select-none">
             <span className="w-[22px] h-[22px] shrink-0 rounded-[7px] flex items-center justify-center" style={{ border: `2px solid ${applyFuture ? 'var(--primary)' : 'var(--line-strong)'}`, background: applyFuture ? 'var(--primary)' : 'transparent', transition: '.12s' }}>
               {applyFuture && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 6"/></svg>}
             </span>
             <span className="text-[15px] font-semibold">Apply to the rest of {month.getFullYear()}</span>
           </label>
-          <BudgetHistory categoryId={editModal.categoryId} targetMonth={editModal.targetMonth} income={editModal.income} />
         </ResponsiveModal>
         );
       })()}
