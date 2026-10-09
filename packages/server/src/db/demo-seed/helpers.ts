@@ -57,7 +57,7 @@ export function createHelpers(db: Database.Database, now = new Date()) {
 
 
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return { db: db as Database.Database, rel, catId, insertTx, insertSplit, today };
+  return { db: db as Database.Database, rel, catId, insertTx, insertSplit, today, now };
 }
 
 export type Helpers = ReturnType<typeof createHelpers>;

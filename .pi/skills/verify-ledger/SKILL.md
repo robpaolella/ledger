@@ -140,7 +140,7 @@ endpoints. Record the action AND result, then reload/reopen to prove persistence
 For example, Settings → Preferences → change Display Name → Save Profile → reload
 Preferences; capture the saved name. For imports check the resulting transactions,
 not just a success toast. Use only synthetic files and never connect SimpleFIN to
-an outside account; the seed deliberately has no connections.
+an outside account; the seed's connections are synthetic `demo://` ones that cannot reach the network.
 
 Capture the relevant states for each affected role at BOTH widths:
 
