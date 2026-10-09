@@ -24,6 +24,7 @@ import { seedBudgetAlerts, seedBudgets, seedRecurring } from './demo-seed/budget
 import { seedNetWorth } from './demo-seed/net-worth.js';
 import { seedInvestments } from './demo-seed/investments.js';
 import { seedReviewsRules } from './demo-seed/reviews-rules.js';
+import { seedSettings } from './demo-seed/settings.js';
 
 const dbPath = process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'ledger.db');
 const db = new Database(dbPath);
@@ -73,6 +74,7 @@ const amazonOrderCount = seedAmazonOrders(helpers);
 seedReviewsRules(helpers, peopleAccounts);
 const budgetCount = seedBudgets(helpers, CAT);
 const investments = seedInvestments(helpers);
+seedSettings(helpers, peopleAccounts);
 const { balances, assetDefs } = seedNetWorth(helpers, investments.balances, investments.days);
 seedRecurring(helpers, peopleAccounts, CAT);
 // Alerts depend on transactions, budgets, recurring floors, and all other
