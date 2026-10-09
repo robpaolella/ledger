@@ -27,6 +27,33 @@ const mapRow = (r: NotifRow) => ({
   createdAt: r.created_at,
 });
 
+// GET /api/notifications/preferences — the caller's own alert choices
+router.get('/preferences', (req: Request, res: Response) => {
+  try {
+    const row = sqlite.prepare('SELECT over_budget_alerts AS on_ FROM users WHERE id = ?')
+      .get(req.user!.userId) as { on_: number } | undefined;
+    if (!row) return res.status(404).json({ error: 'User not found' });
+    res.json({ data: { overBudgetAlerts: row.on_ === 1 } });
+  } catch (err) {
+    console.error('GET /notifications/preferences error:', err);
+    res.status(500).json({ error: 'Failed to load notification preferences' });
+  }
+});
+
+// PUT /api/notifications/preferences { overBudgetAlerts: boolean } — always the caller's own row
+router.put('/preferences', (req: Request, res: Response) => {
+  try {
+    const value = req.body?.overBudgetAlerts;
+    if (typeof value !== 'boolean') return res.status(400).json({ error: 'overBudgetAlerts must be true or false' });
+    const r = sqlite.prepare('UPDATE users SET over_budget_alerts = ? WHERE id = ?').run(value ? 1 : 0, req.user!.userId);
+    if (r.changes === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ data: { overBudgetAlerts: value } });
+  } catch (err) {
+    console.error('PUT /notifications/preferences error:', err);
+    res.status(500).json({ error: 'Failed to save notification preferences' });
+  }
+});
+
 // GET /api/notifications?readLimit=30 — unread (all) + read (capped), newest first
 router.get('/', (req: Request, res: Response) => {
   try {

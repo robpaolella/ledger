@@ -12,6 +12,7 @@ export const users = sqliteTable('users', {
   twofa_secret: text('twofa_secret'),
   twofa_backup_codes: text('twofa_backup_codes'),
   twofa_enabled_at: text('twofa_enabled_at'),
+  over_budget_alerts: integer('over_budget_alerts').notNull().default(1),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 

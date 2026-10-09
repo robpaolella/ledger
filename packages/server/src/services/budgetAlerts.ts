@@ -1,12 +1,13 @@
 import type Database from 'better-sqlite3';
 import { getRecurringFloors, effectiveBudgetedAmount } from './recurringBudget.js';
-import { upsertNotification, activeUserIds } from './notifications.js';
+import { upsertNotification } from './notifications.js';
 import { getStoredPlans } from './budgetPlan.js';
 
 /**
  * Budget-exceeded notifications with crossing-state semantics: the FIRST time
  * a category's month actual crosses its effective budget, every active user
- * gets an unread notification; later growth only refreshes the body (no
+ * gets an unread notification (except people who switched over-budget alerts off
+ * in Settings → Notifications); later growth only refreshes the body (no
  * re-ping, and a user who cleared it stays clear until next month). The
  * budget_alerts table is the "already alerted this (category, month)" ledger.
  *
@@ -57,6 +58,9 @@ export function checkBudgetExceeded(
   const alertExists = sqlite.prepare('SELECT 1 FROM budget_alerts WHERE category_id = ? AND month = ?');
   const insertAlert = sqlite.prepare('INSERT OR IGNORE INTO budget_alerts (category_id, month) VALUES (?, ?)');
   let users: number[] | null = null;
+  // Only people who kept over-budget alerts on. Rows already in a bell from before
+  // someone switched off are left alone (no refresh, no delete).
+  const optedIn = () => (sqlite.prepare('SELECT id FROM users WHERE is_active = 1 AND over_budget_alerts = 1').all() as { id: number }[]).map((r) => r.id);
 
   for (const c of candidates) {
     const stored = budgetMap.get(c.id);
@@ -72,7 +76,7 @@ export function checkBudgetExceeded(
     const firstCrossing = !alertExists.get(c.id, month);
     if (firstCrossing) {
       insertAlert.run(c.id, month);
-      users ??= activeUserIds(sqlite);
+      users ??= optedIn();
       for (const userId of users) {
         upsertNotification(sqlite, userId, {
           type: 'budget_exceeded',
@@ -87,7 +91,10 @@ export function checkBudgetExceeded(
     } else {
       // Growth after the first crossing: refresh the number in place, silently.
       // UPDATE (not upsert) so a row the user cleared stays cleared this month.
-      sqlite.prepare('UPDATE notifications SET body = ? WHERE dedupe_key = ?').run(body, dedupeKey);
+      sqlite.prepare(`
+        UPDATE notifications SET body = ? WHERE dedupe_key = ?
+          AND user_id IN (SELECT id FROM users WHERE over_budget_alerts = 1)
+      `).run(body, dedupeKey);
     }
   }
 }

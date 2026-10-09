@@ -18,7 +18,7 @@ function fixture() {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, role TEXT, is_active INTEGER DEFAULT 1);
+    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, role TEXT, is_active INTEGER DEFAULT 1, over_budget_alerts INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT, is_active INTEGER DEFAULT 1);
     CREATE TABLE account_owners (account_id INTEGER REFERENCES accounts(id), user_id INTEGER REFERENCES users(id));
     CREATE TABLE categories (id INTEGER PRIMARY KEY, display_name TEXT, type TEXT, exclude_from_budget INTEGER DEFAULT 0);
