@@ -1,0 +1,41 @@
+{
+  "design_issue": 104,
+  "covers": [
+    105
+  ],
+  "revision": 1,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "menu-owner",
+    "menu-everyday",
+    "menu-view-only",
+    "users-owner",
+    "users-admin",
+    "user-detail",
+    "user-switches",
+    "user-actions",
+    "accounts",
+    "bank-working",
+    "bank-problems",
+    "bank-member",
+    "bank-paused",
+    "bank-empty",
+    "daily-problems",
+    "daily-member",
+    "daily-paused",
+    "rules",
+    "rules-search",
+    "rules-empty",
+    "notifications",
+    "extras",
+    "extras-on",
+    "loading",
+    "error"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}
