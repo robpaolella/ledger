@@ -25,10 +25,13 @@ router.get('/status', requireRole('admin'), (_req: Request, res: Response) => {
         (SELECT COUNT(*) FROM amazon_matches) AS matched,
         (SELECT COUNT(*) FROM amazon_matches WHERE enriched_at IS NOT NULL) AS enriched
     `).get();
+    const lastMatchCount = getConfig(sqlite, 'amazon.last_match_count');
     res.json({
       data: {
         enabled: getConfig(sqlite, 'amazon.enabled') === '1',
         lastIngestAt: getConfig(sqlite, 'amazon.last_ingest_at'),
+        lastMatchAt: getConfig(sqlite, 'amazon.last_match_at'),
+        lastMatchCount: lastMatchCount === null ? null : Number(lastMatchCount),
         dataDir: amazonDir(),
         sidecar,
         counts,
