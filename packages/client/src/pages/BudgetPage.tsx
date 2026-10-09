@@ -75,6 +75,8 @@ interface AnnualSummary {
 // Planned, actual and monthly cells are plain balances; remaining figures are totals.
 const whole = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole' }).text;
 const full = (n: number) => formatMoney(n, { kind: 'balance' }).text;
+// Over plan as displayed: a remaining that rounds to "—" is not over, so colour and text agree.
+const isOver = (rem: number) => formatMoney(rem, { kind: 'total', precision: 'whole' }).tone === 'negative';
 
 // A remaining figure: real minus and bad colour when negative, otherwise good (zero included).
 function Remaining({ value, className }: { value: number; className?: string }) {
@@ -284,7 +286,7 @@ export default function BudgetPage() {
                 const showUn = showUnbudgeted[groupKey];
                 const unbudgeted = g.subs.filter((r) => r.budgeted === 0 && r.actual === 0);
                 const rows = showUn ? g.subs : g.subs.filter((r) => r.budgeted > 0 || r.actual > 0);
-                const pillTint = (v: number) => ({ background: `color-mix(in srgb, ${v < 0 ? 'var(--negative)' : 'var(--positive)'} 12%, transparent)`, color: v < 0 ? 'var(--negative)' : 'var(--positive)' });
+                const pillTint = (over: boolean) => ({ background: `color-mix(in srgb, ${over ? 'var(--negative)' : 'var(--positive)'} 12%, transparent)`, color: over ? 'var(--negative)' : 'var(--positive)' });
                 return (
                   <div key={groupKey} className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-3">
@@ -307,7 +309,7 @@ export default function BudgetPage() {
                             className="w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
                             {whole(r.budgeted)}
                           </button>
-                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(rem)}
+                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(isOver(rem))}
                             title={r.recurring ? `Recurring (minimum): ${r.recurring.items.map((i) => i.label).join(', ')}` : undefined}>
                             {r.recurring && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>}
                             {formatMoney(rem, { kind: 'total', precision: 'whole' }).text}
@@ -452,7 +454,7 @@ export default function BudgetPage() {
                   <div className="flex items-center justify-between mb-2.5"><span className="text-[15px] font-bold">{b.label}</span><span className="text-[13px] text-content-3 tabular-nums">{whole(b.planned)} planned</span></div>
                   <div className="h-[7px] rounded-full bg-surface-2 overflow-hidden mb-2"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--positive)' }} /></div>
                   <div className="flex items-center justify-between text-sm"><span className="font-semibold">{whole(b.actual)} {b.verb}</span>
-                    {rem >= 0
+                    {!isOver(rem)
                       ? <span className="text-content-3"><Remaining value={rem} className="font-bold" /> remaining</span>
                       /* Exceeding plan is only bad for expenses — earning past it stays green (mirrors the dashboard BudgetCard). */
                       : <span className="text-content-3"><span className={`font-bold tabular-nums ${b.label === 'Income' ? 'text-positive' : 'text-negative'}`}>{whole(-rem)}</span> over</span>}
