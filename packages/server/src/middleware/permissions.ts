@@ -108,6 +108,11 @@ export function requireRole(role: string) {
  * Admins bypass all permission checks.
  */
 export function requirePermission(permission: string) {
+  return requireAnyPermission(permission);
+}
+
+/** Middleware: require at least one of the permissions. Admins bypass all permission checks. */
+export function requireAnyPermission(...permissions: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       res.status(401).json({ error: 'Authentication required' });
@@ -121,7 +126,7 @@ export function requirePermission(permission: string) {
     }
 
     const perms = loadPermissions(req.user.userId);
-    if (perms.get(permission)) {
+    if (permissions.some((p) => perms.get(p))) {
       next();
       return;
     }
@@ -129,7 +134,7 @@ export function requirePermission(permission: string) {
     res.status(403).json({
       error: 'Forbidden',
       message: "You don't have permission to perform this action",
-      requiredPermission: permission,
+      requiredPermission: permissions[0],
     });
   };
 }

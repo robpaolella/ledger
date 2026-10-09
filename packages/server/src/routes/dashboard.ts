@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
-import { transactions, accounts, categories, budgets, balanceSnapshots, assets, merchants } from '../db/schema.js';
+import { transactions, accounts, categories, balanceSnapshots, assets, merchants } from '../db/schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { calculateCurrentValue } from '../utils/depreciation.js';
+import { getStoredPlans } from '../services/budgetPlan.js';
 
 const router = Router();
 
@@ -133,12 +134,12 @@ router.get('/summary', (req: Request, res: Response) => {
 
     // Total budgeted expenses for month — exclude hidden-from-budget categories
     // so the budgeted total reconciles with the (now-filtered) actual expenses.
-    const [budgetTotal] = db.select({
-      total: sql<number>`coalesce(sum(${budgets.amount}), 0)`,
-    }).from(budgets)
-      .innerJoin(categories, eq(budgets.category_id, categories.id))
-      .where(and(eq(budgets.month, month), sql`coalesce(${categories.exclude_from_budget}, 0) = 0 AND ${categories.type} <> 'transfer'`))
-      .all();
+    // Plans are carried forward from the latest earlier month (stored amounts, no floors).
+    const plans = getStoredPlans(sqlite, month);
+    let budgetTotal = 0;
+    for (const c of db.select().from(categories).where(sql`coalesce(${categories.exclude_from_budget}, 0) = 0 AND ${categories.type} <> 'transfer'`).all()) {
+      budgetTotal += plans.get(c.id)?.amount ?? 0;
+    }
 
     res.json({
       data: {
@@ -146,7 +147,7 @@ router.get('/summary', (req: Request, res: Response) => {
         liquidAssets,
         monthIncome: monthTotals.income,
         monthExpenses: monthTotals.expenses,
-        totalBudgetedExpenses: budgetTotal.total,
+        totalBudgetedExpenses: budgetTotal,
         priorMonthIncome: priorTotals.income,
         priorMonthExpenses: priorTotals.expenses,
       },
@@ -180,17 +181,12 @@ router.get('/spending-by-category', (req: Request, res: Response) => {
       GROUP BY c.group_name
     `).all(startDate, endDate, startDate, endDate) as { groupName: string; totalSpent: number }[];
 
-    // Get budgets for each group
-    const groupBudgets = db.select({
-      groupName: categories.group_name,
-      totalBudgeted: sql<number>`coalesce(sum(${budgets.amount}), 0)`,
-    }).from(budgets)
-      .innerJoin(categories, eq(budgets.category_id, categories.id))
-      .where(and(eq(budgets.month, month), eq(categories.type, 'expense'), sql`coalesce(${categories.exclude_from_budget}, 0) = 0`))
-      .groupBy(categories.group_name)
-      .all();
-
-    const budgetMap = new Map(groupBudgets.map((b) => [b.groupName, b.totalBudgeted]));
+    // Get carried-forward budgets for each group
+    const plans = getStoredPlans(sqlite, month);
+    const budgetMap = new Map<string, number>();
+    for (const c of db.select().from(categories).where(and(eq(categories.type, 'expense'), sql`coalesce(${categories.exclude_from_budget}, 0) = 0`)).all()) {
+      budgetMap.set(c.group_name, (budgetMap.get(c.group_name) ?? 0) + (plans.get(c.id)?.amount ?? 0));
+    }
 
     const data = spending
       .filter((s) => s.totalSpent > 0)
