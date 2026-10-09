@@ -5,7 +5,7 @@
  * 18px-radius cards, square 19px checkboxes.
  */
 import type { ReactNode } from 'react';
-import { buttonClasses } from '../Button';
+import { buttonClasses } from '../buttonClasses';
 
 export const inputCls =
   'w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line-strong text-content text-sm outline-none placeholder:text-content-3 disabled:opacity-60 disabled:cursor-default';
