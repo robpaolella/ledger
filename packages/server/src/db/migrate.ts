@@ -62,11 +62,11 @@ export function runMigrations(sqlite: Database.Database): void {
   migrateTxnCategorize(sqlite);
   migrateSyncStatus(sqlite);
   migrateNotifications(sqlite);
-  migrateTransfersCategory(sqlite);
+  migrateSettingsColumns(sqlite);    // additive columns (category emoji/exclude, account avatar, merchant logo); after merchants
+  migrateTransfersCategory(sqlite);  // after settings columns — its seed row sets emoji/exclude_from_budget
   migrateRecurringItems(sqlite); // after categories/merchants/accounts/users (FK targets)
   migrateBudgetOverride(sqlite);
   migrateTransactionReviews(sqlite); // last table-creating migration — FK target transactions must be stable
-  migrateSettingsColumns(sqlite);    // additive columns (category emoji/exclude, account avatar, merchant logo)
   migrateCategoryGroups(sqlite);     // first-class category_groups entity + backfill
   migrateFinancialInstitutions(sqlite); // financial_institutions table + accounts.institution_id + backfill
   migrateVendorLogos(sqlite);           // vendor_logos catalog + backfill merchant logos

@@ -3,23 +3,19 @@ import { apiFetch } from '../../lib/api';
 import { timeAgo } from '../../lib/formatters';
 import { useToast } from '../../context/ToastContext';
 import { Switch } from '../primitives';
-import { Card, Field, PanelHeader, inputCls, btnPrimary, btnSecondary } from './ui';
+import Spinner from '../Spinner';
+import { Card, Field, LoadError, PanelHeader, inputCls, btnPrimary, btnSecondary } from './ui';
 
-function OllamaCard() {
+interface LlmConfig { enabled: boolean; baseUrl: string; model: string }
+
+function OllamaCard({ config }: { config: LlmConfig }) {
   const { addToast } = useToast();
-  const [enabled, setEnabled] = useState(false);
-  const [baseUrl, setBaseUrl] = useState('');
-  const [model, setModel] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [enabled, setEnabled] = useState(config.enabled);
+  const [baseUrl, setBaseUrl] = useState(config.baseUrl);
+  const [model, setModel] = useState(config.model);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState<{ reachable: boolean; modelAvailable: boolean; latencyMs?: number; error?: string } | null>(null);
-
-  useEffect(() => {
-    apiFetch<{ data: { enabled: boolean; baseUrl: string; model: string } }>('/llm/config')
-      .then((res) => { setEnabled(res.data.enabled); setBaseUrl(res.data.baseUrl); setModel(res.data.model); setLoaded(true); })
-      .catch(() => setLoaded(true));
-  }, []);
 
   const save = async () => {
     setSaving(true);
@@ -66,13 +62,13 @@ function OllamaCard() {
       </div>
       <div className="px-6 py-5 flex flex-col gap-4 max-w-[560px]">
         <Field label="Ollama base URL">
-          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://192.168.1.50:11434" disabled={!loaded} className={`${inputCls} font-mono`} />
+          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://192.168.1.50:11434" className={`${inputCls} font-mono`} />
         </Field>
         <Field label="Model" hint="Any chat model Ollama has pulled, e.g. qwen3:4b.">
-          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen3:4b" disabled={!loaded} className={`${inputCls} font-mono`} />
+          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen3:4b" className={`${inputCls} font-mono`} />
         </Field>
         <div className="flex items-center gap-3 flex-wrap">
-          <button type="button" onClick={save} disabled={saving || !loaded} className={btnPrimary}>{saving ? 'Saving…' : 'Save'}</button>
+          <button type="button" onClick={save} disabled={saving} className={btnPrimary}>{saving ? 'Saving…' : 'Save'}</button>
           <button type="button" onClick={test} disabled={testing || !baseUrl} className={btnSecondary}>{testing ? 'Testing…' : 'Test connection'}</button>
           {status && (
             <span className={`text-[13px] font-semibold ${status.reachable && status.modelAvailable ? 'text-positive' : 'text-negative'}`}>
@@ -171,11 +167,25 @@ function AmazonCard() {
 
 /** Settings → AI (admins): the local-LLM categorizer and the Amazon order enrichment. */
 export default function AiPanel() {
+  const [config, setConfig] = useState<LlmConfig | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoadFailed(false);
+    try { setConfig((await apiFetch<{ data: LlmConfig }>('/llm/config')).data); }
+    catch { setLoadFailed(true); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
   return (
     <div className="flex flex-col gap-[22px]">
-      <PanelHeader title="AI" description="Optional helpers that run on your own hardware. Nothing leaves your network." />
-      <OllamaCard />
-      <AmazonCard />
+      <PanelHeader title="Optional extras" description="Optional helpers that run on your own hardware. Nothing leaves your network." />
+      {loadFailed ? <LoadError onRetry={load} /> : !config ? <Card><Spinner /></Card> : (
+        <>
+          <OllamaCard config={config} />
+          <AmazonCard />
+        </>
+      )}
     </div>
   );
 }
