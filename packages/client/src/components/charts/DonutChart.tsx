@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatMoney } from '@ledger/shared';
 
 export interface DonutSegment {
   label: string;
@@ -15,7 +16,7 @@ interface Props {
   formatValue?: (n: number) => string;
 }
 
-const defaultFmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole', showZero: true }).text;
 
 /**
  * Reusable inline-SVG donut chart. Hovering a segment highlights it and shows
@@ -27,7 +28,7 @@ export default function DonutChart({
   thickness = 22,
   centerLabel,
   centerValue,
-  formatValue = defaultFmt,
+  formatValue = defaultValue,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
   const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);

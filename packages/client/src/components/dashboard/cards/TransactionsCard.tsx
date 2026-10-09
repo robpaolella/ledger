@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCachedApi } from '../useCachedApi';
 import { VendorAvatar } from '../../primitives';
 import { getCategoryColorHex } from '../../../lib/categoryMeta';
+import { Money } from '../../Money';
 import DashboardCard, { CardSkeleton, CardError, CardHeaderLink } from '../DashboardCard';
 import type { DashboardCardProps } from '../cardRegistry';
 
@@ -13,8 +14,6 @@ interface RecentTxn {
   category: { id: number; groupName: string; subName: string; displayName: string | null; type: string } | null;
   splits: { categoryId: number; groupName: string; subName: string; displayName: string | null; type: string; amount: number }[] | null;
 }
-
-const usd2 = (n: number) => `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // Category label + dot color: own category, or the first non-hidden split leg
 // (+N when the split has more legs).
@@ -57,6 +56,7 @@ export default function TransactionsCard({ dragHandleProps }: DashboardCardProps
           const cat = categoryOf(t);
           const color = getCategoryColorHex(cat.groupName);
           const vendor = t.merchant?.name ?? t.description;
+          const transfer = (t.category?.type ?? t.splits?.[0]?.type) === 'transfer';
           return (
             <div
               key={t.id}
@@ -76,7 +76,7 @@ export default function TransactionsCard({ dragHandleProps }: DashboardCardProps
                 <span className="w-[9px] h-[9px] rounded-full flex-none" style={{ background: color }} />
                 {cat.label}
               </div>
-              <div className="md:w-[92px] flex-none text-right font-bold text-[15px] tabular-nums">{usd2(t.amount)}</div>
+              <div className="md:w-[92px] flex-none text-right font-bold text-[15px] tabular-nums"><Money amount={t.amount} transfer={transfer} /></div>
               <svg className="flex-none text-content-3" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="m9 6 6 6-6 6" />
               </svg>

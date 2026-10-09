@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { formatMoney } from '@ledger/shared';
 
 export interface HoldingRow {
   symbol: string;
@@ -22,7 +23,7 @@ export interface HoldingsGroup {
 const PALETTE = ['var(--c-teal)', 'var(--c-blue)', 'var(--c-indigo)', 'var(--c-violet)', 'var(--c-fuchsia)', 'var(--c-green)', 'var(--c-orange)', 'var(--c-amber)', 'var(--c-rose)'];
 const GRID = { gridTemplateColumns: '2.4fr 1fr 1.1fr 1.2fr 0.9fr 1.2fr' };
 
-const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const balance = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
 const qty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 });
 
 function RangePill({ pct }: { pct: number | null }) {
@@ -112,9 +113,9 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
                     <div className="text-[13px] text-content-3 truncate">{h.name}</div>
                   </div>
                 </div>
-                <div className="text-right font-semibold text-[14px] tabular-nums">{h.price == null ? '—' : money(h.price)}</div>
+                <div className="text-right font-semibold text-[14px] tabular-nums">{h.price == null ? '—' : balance(h.price)}</div>
                 <div className="text-right text-[14px] text-content-2 tabular-nums">{qty(h.quantity)}</div>
-                <div className="text-right font-semibold text-[14px] tabular-nums">{money(h.value)}</div>
+                <div className="text-right font-semibold text-[14px] tabular-nums">{balance(h.value)}</div>
                 <div className="text-right text-[14px] text-content-2 tabular-nums">{h.weightPct.toFixed(2)}%</div>
                 <div className="flex justify-end"><RangePill pct={h.rangePct} /></div>
               </div>
@@ -128,7 +129,7 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
         <div className="font-extrabold text-[16px]">Total</div>
         <div />
         <div />
-        <div className="text-right font-extrabold text-[15px] tabular-nums">{money(total.value)}</div>
+        <div className="text-right font-extrabold text-[15px] tabular-nums">{balance(total.value)}</div>
         <div className="text-right font-bold text-[14px] text-content-2 tabular-nums">100.00%</div>
         <div className="flex justify-end"><RangePill pct={total.rangePct} /></div>
       </div>

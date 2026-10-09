@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
-import { fmt } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { Money, Change } from '../components/Money';
 import { getCategoryEmoji, getCategoryColorHex, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +43,10 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
+// Recurring amounts are positive magnitudes plus a type. Shown in stored sign so the
+// money rule applies: income is money in (green "+$X"), an expense is money out ("$X").
+const flow = (amount: number, type: 'income' | 'expense') => (type === 'income' ? -Math.abs(amount) : Math.abs(amount));
+const plain = (n: number) => formatMoney(n, { kind: 'balance' }).text;
 function ymOfOffset(offset: number): string {
   const n = new Date();
   const d = new Date(n.getFullYear(), n.getMonth() + offset, 1);
@@ -179,9 +184,6 @@ export default function RecurringPage() {
     return { income: sum('income'), expense: sum('expense'), count: active.length };
   }, [items]);
 
-  const amountText = (o: { amount: number; type: 'income' | 'expense' }) =>
-    o.type === 'income' ? `+${fmt(o.amount)}` : fmt(o.amount);
-
   // ---------- render helpers ----------
   const occRow = (o: ROcc) => {
     const color = getCategoryColorHex(o.groupName);
@@ -206,7 +208,7 @@ export default function RecurringPage() {
           <span className="truncate">{o.subName}</span>
         </div>
         <div className="md:w-[110px] shrink-0 text-right">
-          <div className={`font-bold text-[15px] tabular-nums ${o.type === 'income' ? 'text-positive' : 'text-content'}`}>{amountText(o)}</div>
+          <div className="font-bold text-[15px]"><Money amount={flow(o.amount, o.type)} /></div>
           <div className="md:hidden text-[11.5px] tabular-nums mt-0.5"><span className="font-semibold" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</span><span className="text-content-3"> · {relativeLabel(o.date, today)}</span></div>
         </div>
       </button>
@@ -260,19 +262,19 @@ export default function RecurringPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-line">
               <div className="px-4 md:px-6 py-4 sm:border-r border-line">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><span className="text-[15px] font-extrabold tabular-nums text-positive">+{fmt(inc.total)}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} className="text-[15px] font-extrabold" /></div>
                 {bar(inc.paid, inc.total, 'var(--positive)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(inc.paid)} received</span><span>{fmt(inc.remaining)} remaining</span></div>
+                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.paid)} received</span><span>{plain(inc.remaining)} remaining</span></div>
               </div>
               <div className="px-4 md:px-6 py-4 sm:border-r border-line border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Expenses</span><span className="text-[15px] font-extrabold tabular-nums">{fmt(exp.total)}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Expenses</span><Money amount={exp.total} className="text-[15px] font-extrabold" /></div>
                 {bar(exp.paid, exp.total, 'var(--primary)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(exp.paid)} paid</span><span>{fmt(exp.remaining)} remaining</span></div>
+                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(exp.paid)} paid</span><span>{plain(exp.remaining)} remaining</span></div>
               </div>
               <div className="px-4 md:px-6 py-4 border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><span className={`text-[15px] font-extrabold tabular-nums ${net >= 0 ? 'text-positive' : 'text-negative'}`}>{net > 0 ? '+' : ''}{fmt(net)}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><Change value={net} className="text-[15px] font-extrabold" /></div>
                 {bar(net >= 0 ? net : 0, Math.max(inc.total, 1), 'var(--positive)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{fmt(inc.total)} in</span><span>{fmt(exp.total)} out</span></div>
+                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.total)} in</span><span>{plain(exp.total)} out</span></div>
               </div>
             </div>
           </div>
@@ -292,7 +294,7 @@ export default function RecurringPage() {
                         <span className="font-bold text-sm">{g.title}</span>
                         <span className="text-[12px] text-content-3">{g.list.length} item{g.list.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <span className={`font-bold text-sm tabular-nums ${g.net >= 0 ? 'text-positive' : 'text-content'}`}>{g.net > 0 ? '+' : ''}{fmt(g.net)}</span>
+                      <Money amount={-g.net} className="font-bold text-sm" />
                     </div>
                     {g.list.map(occRow)}
                   </div>
@@ -356,7 +358,7 @@ function CalendarGrid({ month, today, occByDay, onOcc }: {
                         className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] font-semibold text-left truncate"
                         style={{ background: o.type === 'income' ? 'color-mix(in srgb, var(--positive) 18%, transparent)' : `color-mix(in srgb, ${color} 16%, transparent)`, color: o.type === 'income' ? 'var(--positive)' : 'var(--text)' }}>
                         <span className="leading-none">{o.type === 'income' ? '💵' : getCategoryEmoji(o.subName)}</span>
-                        <span className="tabular-nums truncate">{fmt(o.amount)}</span>
+                        <Money amount={flow(o.amount, o.type)} className="truncate" />
                       </button>
                     );
                   })}
@@ -375,11 +377,12 @@ function AllRecurring({ items, annual, onOpen }: {
   items: RItem[]; annual: { income: number; expense: number; count: number }; onOpen: (i: RItem) => void;
 }) {
   const sorted = [...items].sort((a, b) => a.label.localeCompare(b.label));
+  const annualIncome = formatMoney(-annual.income);
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <KPICard label="Annual recurring expenses" value={fmt(annual.expense)} />
-        <KPICard label="Annual recurring income" value={`+${fmt(annual.income)}`} valueColor="var(--positive)" />
+        <KPICard label="Annual recurring expenses" value={formatMoney(annual.expense).text} />
+        <KPICard label="Annual recurring income" value={annualIncome.text} valueColor={annualIncome.tone === 'positive' ? 'var(--positive)' : undefined} />
         <KPICard label="Active recurring items" value={String(annual.count)} />
       </div>
       <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
@@ -401,7 +404,7 @@ function AllRecurring({ items, annual, onOpen }: {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-[13px] text-content-2 min-w-0"><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName)}</span><span className="truncate">{it.subName}</span></div>
-              <div className={`text-right font-bold text-[14px] tabular-nums ${it.type === 'income' ? 'text-positive' : 'text-content'}`}>{it.type === 'income' ? '+' : ''}{fmt(it.amount ?? 0)}</div>
+              <div className="text-right font-bold text-[14px]"><Money amount={flow(it.amount ?? 0, it.type)} /></div>
               <div className="text-[13px] text-content-2">
                 {it.freq_kind === 'custom_months'
                   ? <div className="flex flex-wrap gap-1">{months.map((mo) => <span key={mo} className="px-1.5 py-0.5 rounded-md bg-surface-2 border border-line text-[11px] font-semibold">{MONTH_NAMES[mo - 1]}</span>)}</div>
@@ -450,7 +453,7 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
               </div>
             </div>
           </div>
-          <div className={`text-[30px] font-extrabold tracking-tight tabular-nums mb-1 ${item.type === 'income' ? 'text-positive' : 'text-content'}`}>{item.type === 'income' ? '+' : ''}{fmt(item.amount ?? 0)}</div>
+          <div className="text-[30px] font-extrabold tracking-tight mb-1"><Money amount={flow(item.amount ?? 0, item.type)} /></div>
           {next && <div className="text-[13px] text-content-3 mb-6">Next: {dateChip(next.date)} · {relativeLabel(next.date, today)}</div>}
           {row('Vendor', item.merchantName ?? '—')}
           {row('Account', item.accountName ? `${item.accountName}${item.accountLastFour ? ` (…${item.accountLastFour})` : ''}` : '—')}

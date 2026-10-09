@@ -5,6 +5,7 @@
  * Day-N x labels, hover crosshair. ResizeObserver pattern from AreaLineChart.
  */
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { formatMoney } from '@ledger/shared';
 
 interface Props {
   thisMonth: number[]; // cumulative $ per day, day 1..today
@@ -12,13 +13,8 @@ interface Props {
   height?: number;
 }
 
-const money = (n: number) =>
-  `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const axisLabel = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1000) return `$${(n / 1000).toFixed(1)}K`;
-  return `$${Math.round(n)}`;
-};
+const full = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
+const axisLabel = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' }).text;
 
 export default function SpendingTrendChart({ thisMonth, lastMonth, height = 240 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -149,13 +145,13 @@ export default function SpendingTrendChart({ thisMonth, lastMonth, height = 240 
             {hoverThis != null && (
               <div className="flex items-center gap-1.5 font-bold tabular-nums text-content">
                 <span className="w-2 h-2 rounded-full" style={{ background: 'var(--primary)' }} />
-                {money(hoverThis)}
+                {full(hoverThis)}
               </div>
             )}
             {hoverLast != null && (
               <div className="flex items-center gap-1.5 tabular-nums text-content-2">
                 <span className="w-2 h-2 rounded-full" style={{ background: 'var(--text-3)' }} />
-                {money(hoverLast)}
+                {full(hoverLast)}
               </div>
             )}
           </div>
