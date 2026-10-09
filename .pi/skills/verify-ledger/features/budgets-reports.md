@@ -2,8 +2,8 @@
 
 ## Sub-features
 
-- Monthly budget amounts, actuals, category expansion and household/owner filtering.
-- Budget templates, recurring items and pay-cycle flows when relevant to the change.
+- Monthly budget amounts, actuals, category expansion and shared accounts.
+- Recurring items when relevant to the change.
 - Annual reports, monthly category detail and annual totals on phone.
 
 ## How to get to it (user POV)
@@ -14,7 +14,7 @@ More → Reports. Dashboard income/expense summaries are another comparison poin
 ## Driving it with chrome-devtools-axi
 
 - Snapshot Budget; select the launch month and a past populated month with the visible month/year controls. Expand
-  a category and compare planned/actual values; recent months include several over-budget categories. Switch All/owner filters and confirm
+  a category and compare planned/actual values; recent months include several over-budget categories. Confirm
   shared accounts are not counted twice in the household total.
 - Edit one planned amount, save through the UI, reload and check persistence. Repeat
   as member: the default fixture permits budget editing. Capture empty future-month
@@ -24,8 +24,7 @@ More → Reports. Dashboard income/expense summaries are another comparison poin
   inspect the annual table. Capture refund/negative-actual display if affected.
 - Open Recurring and confirm exactly Paycheck — John ($1,750 semi-monthly), Paycheck — Jane
   ($1,500 semi-monthly), and Rent ($1,400 monthly). Their amounts match the generated
-  transactions and Rent's budget floor. For templates/pay-cycle work, prove saved results
-  in a second monthly view rather than assuming the monthly edit proves it.
+  transactions and Rent's budget floor.
 
 ## Gotchas
 
