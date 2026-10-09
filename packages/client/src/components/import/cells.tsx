@@ -28,6 +28,15 @@ export function AmountText({ amount }: { amount: number }) {
   );
 }
 
+// ── Unreadable amount — shown in place of the amount; the row is never imported. ──
+export function UnreadableAmount({ className = 'w-[110px]' }: { className?: string }) {
+  return (
+    <span className={`${className} flex-none text-right text-xs font-semibold`} style={{ color: 'var(--negative)' }}>
+      Amount unreadable
+    </span>
+  );
+}
+
 // ── Vendor monogram palette (matches the design: 8 hues hashed by first char) ──
 const VENDOR_PALETTE = [
   '--c-teal', '--c-green', '--c-blue', '--c-indigo',

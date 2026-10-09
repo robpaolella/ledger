@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
-import { readCsv } from '@ledger/shared';
+import { readCsv, readAmount } from '@ledger/shared';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { initOwnerSlots } from '../components/badges';
@@ -49,14 +49,6 @@ interface ParseResult {
 }
 
 // ── CSV helpers (ported from the previous ImportPage) ────────────────────────
-function normalizeAmount(raw: string): number {
-  let s = (raw ?? '').trim().replace(/"/g, '');
-  const paren = /^\(.*\)$/.test(s);
-  s = s.replace(/[($,+\s)]/g, '');
-  const v = parseFloat(s);
-  if (isNaN(v)) return 0;
-  return paren ? -v : v;
-}
 function parseDate(s: string): string {
   const d = new Date(s);
   return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
@@ -69,7 +61,9 @@ function isImportableVenmoRow(type: string, status: string, from: string, to: st
   if (!from.trim() && !to.trim()) return false;
   return t === 'payment' || t === 'charge';
 }
-function buildVenmoDescription(type: string, from: string, to: string, note: string, amount: number): string {
+function buildVenmoDescription(type: string, from: string, to: string, note: string, amount: number | null): string {
+  // Unreadable amount: the direction is unknown, so no "From"/"To" prefix.
+  if (amount == null) return note || from || to || 'Venmo';
   const t = type.trim().toLowerCase();
   const moneyIn = amount >= 0;
   const cp = t === 'charge' ? (moneyIn ? to : from) : (moneyIn ? from : to);
@@ -182,14 +176,14 @@ export default function ImportPage() {
     const acctLabel = acct ? `${acct.name}${acct.last_four ? ` ····${acct.last_four}` : ''}` : '—';
     const ownerLabel = acct ? (acct.isShared ? 'Shared' : acct.owners[0]?.displayName ?? '—') : '—';
     return allRows.slice(0, 5).map((row) => {
-      const amt = normalizeAmount(row[mapping.amount] || '0');
+      const amt = readAmount(row[mapping.amount]);
       return {
         date: parseDate(row[mapping.date] || ''),
         merchant: row[mapping.description] || '',
         category: '—',
         account: acctLabel,
         stmt: row[mapping.description] || '',
-        amount: sign === 'bank' ? -amt : amt,
+        amount: amt == null ? null : sign === 'bank' ? -amt : amt,
         owner: ownerLabel,
       };
     });
@@ -251,17 +245,21 @@ export default function ImportPage() {
     const items = allRows.map((row, rowIdx) => {
       let description = row[mapping.description] || '';
       let venmoNote: string | undefined;
+      const rawAmt = readAmount(row[mapping.amount]);
       if (isVenmo && venmoMapping.from >= 0 && venmoMapping.to >= 0) {
         const from = row[venmoMapping.from]?.trim() || '';
         const to = row[venmoMapping.to]?.trim() || '';
         const note = venmoMapping.note >= 0 ? row[venmoMapping.note]?.trim() || '' : '';
         venmoNote = note || undefined;
-        const rawAmt = normalizeAmount(row[mapping.amount] || '0');
         const type = venmoTypeIdx >= 0 ? row[venmoTypeIdx]?.trim() || '' : '';
         description = buildVenmoDescription(type, from, to, note, rawAmt);
       }
-      return { description, amount: normalizeAmount(row[mapping.amount] || '0'), venmoNote, rowIdx };
+      // Ledger sign (positive = money out), matching what the row will be imported as.
+      const amount = rawAmt == null ? null : sign === 'bank' ? -rawAmt : rawAmt;
+      return { description, amount, venmoNote, rowIdx };
     }).filter((it) => it.description.trim());
+    // Rows with an unreadable amount are not categorized; they are shown flagged and never imported.
+    const readable = items.flatMap((it) => (it.amount != null ? [{ ...it, amount: it.amount }] : []));
 
     try {
       const res = await apiFetch<{ data: { description: string; suggestedCategoryId: number | null; confidence: number; source?: string }[] }>(
@@ -270,55 +268,53 @@ export default function ImportPage() {
           method: 'POST',
           body: JSON.stringify({
             accountId: csvAccountId,
-            // Ledger sign (positive = money out), matching what the row will be
-            // imported as. The resolver reads direction to tell a card payment
+            // Ledger sign: the resolver reads direction to tell a card payment
             // from a card refund, so an unflipped amount would mislead it.
-            items: items.map((it) => ({
-              description: it.description,
-              amount: sign === 'bank' ? -it.amount : it.amount,
-              venmoNote: it.venmoNote,
-            })),
+            items: readable.map((it) => ({ description: it.description, amount: it.amount, venmoNote: it.venmoNote })),
           }),
         },
       );
-      const rows: ImpCsvRow[] = res.data.map((cat, i) => {
-        const src = items[i];
+      const suggestions = new Map(readable.map((it, i) => [it.rowIdx, res.data[i]]));
+      const rows: ImpCsvRow[] = items.map((src) => {
         const row = allRows[src.rowIdx];
-        const amt = normalizeAmount(row[mapping.amount] || '0');
+        const cat = suggestions.get(src.rowIdx);
         return {
           date: parseDate(row[mapping.date] || ''),
-          description: cat.description,
+          description: cat?.description ?? src.description,
           note: src.venmoNote,
-          amount: sign === 'bank' ? -amt : amt,
-          confidence: cat.confidence,
-          categoryId: cat.suggestedCategoryId,
-          source: cat.source ?? null,
+          amount: src.amount,
+          confidence: cat?.confidence ?? 0,
+          categoryId: cat?.suggestedCategoryId ?? null,
+          source: cat?.source ?? null,
           duplicateStatus: 'none',
           isLikelyTransfer: false,
           isDismissedTransfer: false,
         };
       });
+      // Duplicate and transfer checks only see rows with a real amount.
+      const checkIdx = rows.flatMap((r, i) => (r.amount != null ? [i] : []));
+      const checkItems = checkIdx.map((i) => ({ date: rows[i].date, amount: rows[i].amount, description: rows[i].description }));
 
       // Duplicate detection (batch).
       try {
         const dupRes = await apiFetch<{ data: { index: number; status: 'exact' | 'possible' | 'none' }[] }>(
           '/import/check-duplicates',
-          { method: 'POST', body: JSON.stringify({ items: rows.map((r) => ({ date: r.date, amount: r.amount, description: r.description })) }) },
+          { method: 'POST', body: JSON.stringify({ items: checkItems }) },
         );
-        for (const d of dupRes.data) if (d.status !== 'none' && rows[d.index]) rows[d.index].duplicateStatus = d.status;
+        for (const d of dupRes.data) { const r = rows[checkIdx[d.index]]; if (d.status !== 'none' && r) r.duplicateStatus = d.status; }
       } catch { /* ignore */ }
 
       // Previously-dismissed transfers → auto-unselect.
       try {
         const dis = await apiFetch<{ data: boolean[] }>(
           '/import/check-dismissed-transfers',
-          { method: 'POST', body: JSON.stringify({ accountId: csvAccountId, items: rows.map((r) => ({ date: r.date, amount: r.amount, description: r.description })) }) },
+          { method: 'POST', body: JSON.stringify({ accountId: csvAccountId, items: checkItems }) },
         );
-        dis.data.forEach((d, i) => { if (d && rows[i]) { rows[i].isLikelyTransfer = true; rows[i].isDismissedTransfer = true; } });
+        dis.data.forEach((d, j) => { const r = rows[checkIdx[j]]; if (d && r) { r.isLikelyTransfer = true; r.isDismissedTransfer = true; } });
       } catch { /* ignore */ }
 
       const sel = new Set(rows.map((_, i) => i));
-      rows.forEach((r, i) => { if (r.duplicateStatus === 'exact' || r.categoryId == null || r.isDismissedTransfer) sel.delete(i); });
+      rows.forEach((r, i) => { if (r.amount == null || r.duplicateStatus === 'exact' || r.categoryId == null || r.isDismissedTransfer) sel.delete(i); });
       setCsvRows(rows);
       setCsvSelected(sel);
       setCsvStep(3);
@@ -330,7 +326,8 @@ export default function ImportPage() {
 
   const handleCsvImport = async () => {
     if (!csvAccountId) return;
-    const valid = csvRows.filter((r, i) => csvSelected.has(i) && r.categoryId != null);
+    // A row whose amount is unreadable is never sent, even if it were somehow selected.
+    const valid = csvRows.filter((r, i): r is ImpCsvRow & { amount: number } => csvSelected.has(i) && r.categoryId != null && r.amount != null);
     if (valid.length === 0) { addToast('No categorized transactions selected.', 'error'); return; }
     setCsvImporting(true);
     try {
@@ -349,8 +346,9 @@ export default function ImportPage() {
       });
       addToast(`Import complete — ${valid.length} transactions imported`);
       navigate('/transactions');
-    } catch {
-      addToast('Import failed', 'error');
+    } catch (err) {
+      // The server's refusal names the row; show it rather than a generic failure.
+      addToast(err instanceof ApiError && err.status === 400 && err.message ? err.message : 'Import failed', 'error');
     } finally {
       setCsvImporting(false);
     }

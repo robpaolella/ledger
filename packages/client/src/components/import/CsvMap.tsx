@@ -1,5 +1,5 @@
 /** CSV Import · Step 2 — Map Columns (docs/Import Flow §CSV IMPORT step 2). */
-import { money, amountParts } from './cells';
+import { money, amountParts, UnreadableAmount } from './cells';
 
 export interface CsvPreviewRow {
   date: string;
@@ -7,7 +7,7 @@ export interface CsvPreviewRow {
   category: string;
   account: string;
   stmt: string;
-  amount: number;   // ledger sign (money-out positive)
+  amount: number | null;   // ledger sign (money-out positive); null = unreadable
   owner: string;
 }
 
@@ -99,7 +99,7 @@ export default function CsvMap({
             <span className="w-[70px] flex-none">Owner</span>
           </div>
           {preview.map((p, i) => {
-            const { sign, moneyIn } = amountParts(p.amount);
+            const { sign, moneyIn } = amountParts(p.amount ?? 0);
             return (
               <div key={i} className="flex items-center gap-3.5 px-4 py-3 border-b border-line text-[12.5px] last:border-b-0">
                 <span className="w-[88px] flex-none font-mono text-content-3">{p.date}</span>
@@ -107,7 +107,9 @@ export default function CsvMap({
                 <span className="w-[130px] flex-none text-content-2 truncate">{p.category}</span>
                 <span className="w-[150px] flex-none font-mono text-[11px] text-content-3 truncate">{p.account}</span>
                 <span className="flex-1 min-w-0 font-mono text-[11px] text-content-3 truncate">{p.stmt}</span>
-                <span className="w-[100px] flex-none text-right font-mono font-semibold" style={{ color: moneyIn ? 'var(--positive)' : 'var(--text)' }}>{sign}{money(p.amount)}</span>
+                {p.amount == null
+                  ? <UnreadableAmount className="w-[100px]" />
+                  : <span className="w-[100px] flex-none text-right font-mono font-semibold" style={{ color: moneyIn ? 'var(--positive)' : 'var(--text)' }}>{sign}{money(p.amount)}</span>}
                 <span className="w-[70px] flex-none text-content-3 truncate">{p.owner}</span>
               </div>
             );

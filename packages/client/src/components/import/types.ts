@@ -46,7 +46,7 @@ export interface ImpCsvRow {
   date: string;              // 'YYYY-MM-DD'
   description: string;       // editable
   note?: string;
-  amount: number;            // ledger sign (money-out positive)
+  amount: number | null;     // ledger sign (money-out positive); null = unreadable, never imported
   confidence: number;        // 0–1
   categoryId: number | null;
   source?: string | null;    // suggestion origin; null = user-picked
