@@ -45,7 +45,7 @@ export const ACCESS_LABEL: Record<AccessLevel, string> = {
 
 /** Which access level these stored permissions amount to. Unknown keys are ignored. */
 export function accessLevelOf(permissions: Record<string, boolean> | null | undefined): AccessLevel {
-  const granted = new Set(PERMISSION_KEYS.filter((k) => permissions?.[k] === true));
+  const granted = new Set<string>(PERMISSION_KEYS.filter((k) => permissions?.[k] === true));
   for (const [level, preset] of Object.entries(ACCESS_PRESETS) as [AccessPreset, typeof ACCESS_PRESETS[AccessPreset]][]) {
     if (preset.keys.length === granted.size && preset.keys.every((k) => granted.has(k))) return level;
   }

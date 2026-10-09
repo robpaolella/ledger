@@ -3,6 +3,8 @@ interface InlineNotificationProps {
   message: string;
   dismissible?: boolean;
   onDismiss?: () => void;
+  /** Buttons shown inside the notice, after the message. */
+  actions?: React.ReactNode;
   className?: string;
 }
 
@@ -21,7 +23,7 @@ const ICON: Record<InlineNotificationProps['type'], React.ReactNode> = {
 };
 
 /** Tinted callout (design system: color-mix 12% fill, 35% border, solid text). */
-export default function InlineNotification({ type, message, dismissible, onDismiss, className = '' }: InlineNotificationProps) {
+export default function InlineNotification({ type, message, dismissible, onDismiss, actions, className = '' }: InlineNotificationProps) {
   const tone = TONE[type];
   return (
     <div
@@ -35,6 +37,7 @@ export default function InlineNotification({ type, message, dismissible, onDismi
     >
       <svg className="shrink-0 mt-[1px]" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{ICON[type]}</svg>
       <span className="flex-1 min-w-0">{message}</span>
+      {actions}
       {dismissible && onDismiss && (
         <button
           type="button"

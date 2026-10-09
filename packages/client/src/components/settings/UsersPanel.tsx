@@ -8,45 +8,10 @@ import ResponsiveModal from '../ResponsiveModal';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
 import { ownerColor } from '../badges';
-import { LoadError, Card, CardHeader, Caption, Field, PanelHeader, Pill, CheckBox, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
-
-// --- Permission catalogue: what a member may do, grouped for the checkbox cards ---
-const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; desc: string }[] }[] = [
-  {
-    label: 'Transactions',
-    permissions: [
-      { key: 'transactions.create', label: 'Add transactions', desc: 'Enter transactions by hand' },
-      { key: 'transactions.edit', label: 'Edit transactions', desc: 'Change merchant, category, notes, splits' },
-      { key: 'transactions.delete', label: 'Delete transactions', desc: 'Remove transactions for good' },
-      { key: 'transactions.bulk_edit', label: 'Edit in bulk', desc: 'Multi-select and change many at once' },
-    ],
-  },
-  {
-    label: 'Household',
-    permissions: [
-      { key: 'accounts.create', label: 'Manage accounts', desc: 'Add, edit, and remove accounts' },
-      { key: 'categories.create', label: 'Manage categories', desc: 'Groups, categories, emoji, budget exclusion' },
-      { key: 'simplefin.manage', label: 'Manage connections', desc: 'SimpleFIN connections and account links' },
-    ],
-  },
-  {
-    label: 'Finance',
-    permissions: [
-      { key: 'budgets.edit', label: 'Edit budgets', desc: 'Planned amounts and overrides' },
-      { key: 'balances.update', label: 'Update balances', desc: 'Record and refresh account balances' },
-      { key: 'assets.create', label: 'Manage assets', desc: 'Physical assets and depreciation' },
-      { key: 'import.csv', label: 'Import CSV files', desc: 'Upload statements' },
-      { key: 'import.bank_sync', label: 'Run bank sync', desc: 'Pull transactions from SimpleFIN' },
-    ],
-  },
-];
-
-// Compound permissions: one card sets create/edit/delete together.
-const COMPOUND_PERMISSIONS: Record<string, string[]> = {
-  'accounts.create': ['accounts.create', 'accounts.edit', 'accounts.delete'],
-  'categories.create': ['categories.create', 'categories.edit', 'categories.delete'],
-  'assets.create': ['assets.create', 'assets.edit', 'assets.delete'],
-};
+import { ACCESS_LABEL, ACCESS_PRESETS, accessLevelOf, presetPermissions, type AccessPreset } from '@ledger/shared';
+import AccessEditor from './users/AccessEditor';
+import { COMPOUND_PERMISSIONS } from './users/permissionSwitches';
+import { LoadError, Card, CardHeader, Caption, Field, PanelHeader, Pill, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
 
 export interface ManagedUser {
   id: number;
@@ -396,6 +361,18 @@ export default function UsersPanel() {
     }
   };
 
+  const applyPreset = async (mu: ManagedUser, preset: AccessPreset) => {
+    const permissions = presetPermissions(preset);
+    setManagedUsers((prev) => prev.map((u) => (u.id === mu.id ? { ...u, permissions } : u)));
+    try {
+      await apiFetch(`/users/${mu.id}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions }) });
+      addToast(`${mu.displayName.trim().split(/\s+/)[0]} now has ${ACCESS_PRESETS[preset].label}`);
+    } catch {
+      addToast('Failed to update access', 'error');
+      loadUsers();
+    }
+  };
+
   const setRequirement = async (which: 'admin' | 'member', next: boolean) => {
     const set = which === 'admin' ? setRequireAdmin2FA : setRequireMember2FA;
     set(next);
@@ -414,7 +391,7 @@ export default function UsersPanel() {
     <div className="flex flex-col gap-[22px]">
       <PanelHeader
         title="Users & permissions"
-        description="Everyone who can sign in to this household. Admins manage settings; members get exactly the permissions you tick."
+        description="Everyone who can sign in to this household. Admins manage people; each member gets View only, Everyday, Everything except managing people, or switches you choose."
         actions={<Pill color="var(--primary)" className="h-[30px] px-3">{ICON.shield}You are {ROLE_LABEL[callerRole]}</Pill>}
       />
 
@@ -435,8 +412,9 @@ export default function UsersPanel() {
                     {!mu.isActive && <Pill color="var(--negative)" className="h-[22px] px-2 text-[11px]">Inactive</Pill>}
                     {mu.twofaEnabled && <Pill color="var(--positive)" className="h-[22px] px-2 text-[11px]" title="Two-factor authentication is on">2FA</Pill>}
                   </div>
-                  <div className="text-[13px] text-content-3 font-mono truncate">@{mu.username}</div>
+                  <div className="text-[12.5px] text-content-3 truncate">{ROLE_LABEL[mu.role]}{mu.role === 'member' && ` · ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}</div>
                 </div>
+                <span className="hidden md:block font-mono text-[12.5px] text-content-3 truncate max-w-[160px]">@{mu.username}</span>
                 <div className="flex items-center gap-2 shrink-0">
                   {mu.role === 'owner' ? (
                     <Pill color="var(--c-orange)" className="h-[26px] rounded-[7px]">Owner</Pill>
@@ -477,38 +455,21 @@ export default function UsersPanel() {
                 </div>
               </div>
 
-              {mu.role === 'owner' ? (
-                <div className="px-6 pb-4 text-[12.5px] italic text-content-3" style={{ paddingLeft: 80 }}>App owner. Cannot be restricted or removed.</div>
-              ) : mu.role === 'admin' ? (
-                <div className="px-6 pb-4 text-[12.5px] italic text-content-3" style={{ paddingLeft: 80 }}>Admins have every permission{callerRole !== 'owner' ? ' and can only be changed by the owner' : ''}.</div>
+              {mu.role !== 'member' ? (
+                <div className="px-6 pb-4 text-[12.5px] italic text-content-3" style={{ paddingLeft: 80 }}>
+                  {mu.role === 'owner' ? 'App owner. Cannot be restricted or removed.' : `Admins can use everything and manage members.${callerRole !== 'owner' ? ' Only the owner can change admins.' : ''}`}
+                </div>
               ) : mu.permissions && (
                 <div className="pb-4" style={{ paddingLeft: 80, paddingRight: 24 }}>
-                  <button type="button" onClick={() => toggleExpanded(mu.id)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-content-2 hover:text-content">
+                  <button type="button" onClick={() => toggleExpanded(mu.id)} aria-expanded={isOpen} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-content-2 hover:text-content">
                     <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>{ICON.chevron}</span>
-                    {isOpen ? 'Hide permissions' : 'Show permissions'}
+                    {isOpen ? 'Hide access' : `Access: ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}
                   </button>
                   {isOpen && (
-                    <div className="mt-3 flex flex-col gap-4">
-                      {PERMISSION_GROUPS.map((group) => (
-                        <div key={group.label}>
-                          <Caption className="mb-2">{group.label}</Caption>
-                          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-                            {group.permissions.map((p) => {
-                              const granted = mu.permissions![p.key] ?? false;
-                              return (
-                                <button key={p.key} type="button" role="checkbox" aria-checked={granted} onClick={() => togglePermission(mu.id, p.key, granted)}
-                                  className="flex items-start gap-3 px-3.5 py-[11px] rounded-[11px] border border-line bg-surface-2 text-left hover:border-line-strong transition-colors">
-                                  <CheckBox checked={granted} className="mt-0.5" />
-                                  <span className="min-w-0">
-                                    <span className="block text-[13.5px] font-semibold text-content">{p.label}</span>
-                                    <span className="block text-[12px] text-content-3 leading-snug">{p.desc}</span>
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="mt-3">
+                      <AccessEditor name={mu.displayName} permissions={mu.permissions} canEdit={canTouch(mu)}
+                        onApplyPreset={(preset) => applyPreset(mu, preset)}
+                        onTogglePermission={(key, current) => togglePermission(mu.id, key, current)} />
                     </div>
                   )}
                 </div>
