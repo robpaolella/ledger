@@ -32,7 +32,13 @@ export async function runAmazonPipeline(sqlite: Database.Database): Promise<Amaz
     result.match = matchAmazonCharges(sqlite);
     result.notes = writeAmazonItemNotes(sqlite);
     result.enrich = await enrichMatchedTransactions(sqlite);
-    setConfig(sqlite, 'amazon.last_ingest_at', new Date().toISOString());
+    const now = new Date().toISOString();
+    setConfig(sqlite, 'amazon.last_ingest_at', now);
+    // A night with no new matches keeps the last one that matched something.
+    if (result.match.matched > 0) {
+      setConfig(sqlite, 'amazon.last_match_at', now);
+      setConfig(sqlite, 'amazon.last_match_count', String(result.match.matched));
+    }
     if (result.ingest.files > 0 || (result.match?.matched ?? 0) > 0 || (result.notes?.written ?? 0) > 0 || (result.enrich?.enriched ?? 0) > 0) {
       console.log(
         `[amazon] ingested ${result.ingest.files} file(s) (${result.ingest.orders} orders, ${result.ingest.charges} charges), ` +
