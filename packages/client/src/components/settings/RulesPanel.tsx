@@ -112,11 +112,11 @@ export default function RulesPanel() {
               </label>
             </div>
             {visible.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 px-4 md:px-6 min-h-[64px] py-2.5 border-t border-line">
+              <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 md:px-6 min-h-[64px] py-2.5 border-t border-line">
                 {r.matchType === 'merchant'
                   ? <VendorAvatar name={r.merchantName ?? '?'} src={logoById.get(r.pattern) || undefined} color="var(--c-indigo)" size={34} />
                   : <span aria-hidden="true" className="w-[34px] h-[34px] rounded-full bg-surface-2 text-content-3 flex items-center justify-center shrink-0">{ICON.search}</span>}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[9rem]">
                   <div className="text-[15px] font-bold text-content max-md:line-clamp-2 max-md:[overflow-wrap:anywhere] md:truncate">
                     {r.matchType === 'merchant' ? r.merchantName
                       : r.matchType === 'contains' ? <>Description contains “<span className="font-mono text-[13.5px]">{r.pattern}</span>”</>
@@ -126,7 +126,7 @@ export default function RulesPanel() {
                     <span className="text-content-2 font-semibold">{getCategoryEmoji(r.subName, r.groupName)} {r.subName}</span> · {r.groupName}
                   </div>
                 </div>
-                <ConfirmDeleteButton onConfirm={() => deleteRule(r.id)} />
+                <div className="ml-auto"><ConfirmDeleteButton onConfirm={() => deleteRule(r.id)} /></div>
               </div>
             ))}
             {short && (
