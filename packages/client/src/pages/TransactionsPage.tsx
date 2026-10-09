@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { fmt, fmtTransaction, todayYmd } from '../lib/formatters';
+import { todayYmd } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { Money } from '../components/Money';
 import { getCategoryColorHex, getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -544,7 +546,7 @@ function TransactionForm({
                   <span className="text-warning">Description</span>
                   <span className="text-warning">{duplicateMatch.description}</span>
                   <span className="text-warning">Amount</span>
-                  <span className="font-mono font-semibold text-warning">{fmt(Math.abs(duplicateMatch.amount))}</span>
+                  <span className="font-mono font-semibold text-warning">{formatMoney(duplicateMatch.amount).text}</span>
                   {duplicateMatch.accountName && <>
                     <span className="text-warning">Account</span>
                     <span className="text-warning">{duplicateMatch.accountName}</span>
@@ -1423,7 +1425,6 @@ export default function TransactionsPage() {
     if (split) {
       const scolor = getCategoryColorHex(split.groupName);
       const sinitial = (splitVendorLabel(t, split)?.trim()?.[0] ?? '?').toUpperCase();
-      const { text: sAmt, className: sClass } = fmtTransaction(split.amount, split.type);
       return (
         <div key={`${t.id}-split-${split.id}`}
           onClick={(e) => { if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t, split); }}
@@ -1446,13 +1447,12 @@ export default function TransactionsPage() {
             <span className="truncate">{split.subName}</span>
           </div>
           <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-3"><VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={18} /><span className="truncate">{accountLabel(t.account)}</span></div>
-          <div className={`w-[128px] shrink-0 text-right font-bold text-[15px] tabular-nums ${sClass}`}>{sAmt}</div>
+          <Money amount={split.amount} transfer={split.type === 'transfer'} className="w-[128px] shrink-0 text-right font-bold text-[15px]" />
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
         </div>
       );
     }
-    const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
-    const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
+    const isTransfer = (t.category?.type ?? t.splits?.[0]?.type) === 'transfer';
     const isSplit = !!(t.splits && t.splits.length > 0);
     const emoji = isSplit ? '🔀' : getCategoryEmoji(t.category?.subName ?? t.category?.groupName);
     const color = getCategoryColorHex(t.category?.groupName);
@@ -1561,7 +1561,7 @@ export default function TransactionsPage() {
           )}
         </div>
         {/* amount */}
-        <div className={`w-[128px] shrink-0 text-right font-bold text-[15px] tabular-nums ${amtClass}`}>{amtText}</div>
+        <Money amount={t.amount} transfer={isTransfer} className="w-[128px] shrink-0 text-right font-bold text-[15px]" />
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
       </div>
     );
@@ -1739,10 +1739,9 @@ export default function TransactionsPage() {
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
           {dateGroups.map((g) => (
             <div key={g.date}>
-              <GroupHeader label={formatDateHeader(g.date)} right={g.net < 0 ? `+${fmt(Math.abs(g.net))}` : fmt(g.net)} rightClass={g.net < 0 ? 'text-positive' : 'text-content-3'} className="first:border-t-0" />
+              <GroupHeader label={formatDateHeader(g.date)} right={<Money amount={g.net} />} className="first:border-t-0" />
               {g.rows.map(({ t, split }) => {
-                const catType = split ? split.type : (t.category?.type ?? t.splits?.[0]?.type ?? 'expense');
-                const { text: amtText, className: amtClass } = fmtTransaction(split ? split.amount : t.amount, catType);
+                const isTransfer = (split ? split.type : (t.category?.type ?? t.splits?.[0]?.type)) === 'transfer';
                 const label = split ? splitVendorLabel(t, split) : vendorLabel(t);
                 const catName = split ? split.subName : t.category?.subName;
                 const catGroup = split ? split.groupName : t.category?.groupName;
@@ -1756,7 +1755,7 @@ export default function TransactionsPage() {
                       {t.needsReview && !split && <NeedsReviewBadge />}
                     </>}
                     subtitle={catName ? <CategoryTag color={catGroup ? getCategoryColorHex(catGroup) : undefined}>{catName}</CategoryTag> : <span className="text-content-3">Uncategorized</span>}
-                    amount={amtText} amountClass={amtClass}
+                    amount={<Money amount={split ? split.amount : t.amount} transfer={isTransfer} />}
                     meta={<span className="font-mono">{accountLabel(t.account)}</span>}
                   />
                 );
@@ -1799,11 +1798,8 @@ export default function TransactionsPage() {
               {selectedIds.size > 0 && (
                 <>
                   <span className="text-content-3">·</span>
-                  {/* Same convention as the date-group net: money in reads as +$X. */}
-                  <span className="font-mono text-[15px] font-bold tabular-nums"
-                    style={{ color: selectedTotal < 0 ? 'var(--positive)' : 'var(--text)' }}>
-                    {selectedTotal < 0 ? `+${fmt(Math.abs(selectedTotal))}` : fmt(selectedTotal)}
-                  </span>
+                  {/* Same rule as the day totals: money in reads as +$X. */}
+                  <Money amount={selectedTotal} className="font-mono text-[15px] font-bold" />
                 </>
               )}
               <span className="text-[13px] text-content-3">(ESC)</span>
@@ -1831,7 +1827,7 @@ export default function TransactionsPage() {
           <div key={g.date}>
             <div className="flex items-center justify-between px-6 py-2.5 bg-surface-2 border-t border-b border-line">
               <span className="text-[13px] font-semibold text-content-2">{formatDateHeader(g.date)}</span>
-              <span className="font-mono text-xs tabular-nums" style={{ color: g.net < 0 ? 'var(--positive)' : 'var(--text-3)' }}>{g.net < 0 ? `+${fmt(Math.abs(g.net))}` : fmt(g.net)}</span>
+              <Money amount={g.net} className="font-mono text-xs" />
             </div>
             {g.rows.map((r) => renderRow(r.t, r.split))}
           </div>
@@ -1909,8 +1905,7 @@ export default function TransactionsPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6">
               {(() => {
-                const catType = detail.category?.type ?? detail.splits?.[0]?.type ?? 'expense';
-                const { text: amtText, className: amtClass } = fmtTransaction(detail.amount, catType);
+                const isTransfer = (detail.category?.type ?? detail.splits?.[0]?.type) === 'transfer';
                 const color = getCategoryColorHex(detail.category?.groupName);
                 const initial = (vendorLabel(detail)?.trim()?.[0] ?? '?').toUpperCase();
                 const isSplit = !!(detail.splits && detail.splits.length > 0);
@@ -1940,7 +1935,6 @@ export default function TransactionsPage() {
                 const activeSplit = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
                 if (activeSplit) {
                   const scolor = getCategoryColorHex(activeSplit.groupName);
-                  const { text: sAmt, className: sClass } = fmtTransaction(activeSplit.amount, activeSplit.type);
                   const sLabel = splitVendorLabel(detail, activeSplit);
                   const sInitial = (sLabel?.trim()?.[0] ?? '?').toUpperCase();
                   const childDir: 'income' | 'expense' = activeSplit.type === 'income' ? 'income' : 'expense';
@@ -1960,7 +1954,7 @@ export default function TransactionsPage() {
                           ? <img src={((activeSplit.merchant ?? detail.merchant)?.logoUrl) as string} alt="" className="shrink-0 rounded-full object-cover" style={{ width: 52, height: 52 }} />
                           : <span className="shrink-0 rounded-full flex items-center justify-center font-bold text-xl" style={{ width: 52, height: 52, background: `color-mix(in srgb, ${scolor} 16%, transparent)`, color: scolor }}>{sInitial}</span>}
                         <div className="min-w-0 text-right">
-                          <div className={`text-[28px] font-extrabold tracking-tight tabular-nums leading-none ${sClass}`}>{sAmt}</div>
+                          <Money amount={activeSplit.amount} transfer={activeSplit.type === 'transfer'} className="block text-[28px] font-extrabold tracking-tight leading-none" />
                           <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[12px] text-content-3">
                             <VendorAvatar name={detail.account.name} src={detail.account.logoUrl || undefined} color={detail.account.color || 'var(--c-blue)'} size={16} />
                             <span className="truncate">{accountLabel(detail.account)}</span>
@@ -1973,7 +1967,7 @@ export default function TransactionsPage() {
                         <span className="shrink-0 mt-0.5" style={{ color: 'var(--primary)' }}>{splitIcon(16)}</span>
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] text-content-2 leading-snug">
-                            This is a split of <span className="font-bold text-content">{fmt(Math.abs(detail.amount))}</span> from <span className="font-bold text-content">{vendorLabel(detail)}</span> on {dateLabel}.
+                            This is a split of <Money amount={detail.amount} transfer={isTransfer} className="font-bold" /> from <span className="font-bold text-content">{vendorLabel(detail)}</span> on {dateLabel}.
                           </div>
                           <button onClick={openSplit} className="mt-2.5 h-9 px-3.5 rounded-[9px] bg-primary text-on-primary font-bold text-[13px] shadow-sm">Open splits</button>
                         </div>
@@ -2033,10 +2027,10 @@ export default function TransactionsPage() {
                             className="w-44 h-11 px-3 rounded-[11px] bg-surface-2 border border-primary text-content text-[22px] font-extrabold tabular-nums text-right outline-none" />
                         ) : (
                           <div
-                            className={`text-[28px] font-extrabold tracking-tight tabular-nums leading-none ${amtClass} ${!isSplit && canEdit ? 'cursor-pointer hover:opacity-80' : ''}`}
+                            className={`text-[28px] font-extrabold tracking-tight leading-none ${!isSplit && canEdit ? 'cursor-pointer hover:opacity-80' : ''}`}
                             title={!isSplit && canEdit ? 'Click to edit amount' : undefined}
                             onClick={() => { if (!isSplit && canEdit) { setDetailAmount(displayAmount(detail)); amountCancelled.current = false; setAmountEditing(true); } }}>
-                            {amtText}
+                            <Money amount={detail.amount} transfer={isTransfer} />
                           </div>
                         )}
                         <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[12px] text-content-3">
@@ -2074,13 +2068,12 @@ export default function TransactionsPage() {
                         </div>
                         <div className="flex flex-col gap-1 mb-3.5">
                           {detail.splits!.map((s) => {
-                            const { text, className } = fmtTransaction(s.amount, s.type);
                             return (
                               <button key={s.id} onClick={() => openDetail(detail, s)}
                                 className="flex items-center gap-2 text-sm text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-surface-2">
                                 <span className="text-[15px] leading-none">{getCategoryEmoji(s.subName)}</span>
                                 <span className="flex-1 truncate text-content">{splitVendorLabel(detail, s)} · {s.subName}</span>
-                                <span className={`tabular-nums font-semibold ${className}`}>{text}</span>
+                                <Money amount={s.amount} transfer={s.type === 'transfer'} className="font-semibold" />
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
                               </button>
                             );
@@ -2233,7 +2226,7 @@ export default function TransactionsPage() {
                   <span className="flex items-center gap-1.5 text-[13px] text-content-2 shrink-0">
                     {detail.category && <><span className="text-[15px] leading-none">{getCategoryEmoji(detail.category.subName ?? detail.category.groupName)}</span><span className="truncate max-w-[120px]">{detail.category.subName}</span></>}
                   </span>
-                  <span className="font-bold tabular-nums text-[15px] shrink-0 ml-2">{fmt(absTotal)}</span>
+                  <Money amount={detail.amount} transfer={detail.category?.type === 'transfer'} className="font-bold text-[15px] shrink-0 ml-2" />
                 </button>
                 {splitOrigExpanded && (
                   <div className="px-3.5 pb-3.5 pt-1 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line">
@@ -2300,7 +2293,7 @@ export default function TransactionsPage() {
                 <div className="flex items-center gap-2">
                   {balanced && <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--positive)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg></span>}
                   <div className="text-right leading-tight">
-                    <div className="text-[17px] font-extrabold tabular-nums" style={{ color: balanced ? 'var(--positive)' : 'var(--negative)' }}>{fmt(Math.abs(splitRemainingVal))}</div>
+                    <div className="text-[17px] font-extrabold tabular-nums" style={{ color: balanced ? 'var(--positive)' : 'var(--negative)' }}>{formatMoney(Math.abs(splitRemainingVal), { kind: 'balance' }).text}</div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-content-3">{splitRemainingVal < -0.005 ? 'Over by' : 'Left to split'}</div>
                   </div>
                 </div>

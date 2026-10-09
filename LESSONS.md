@@ -86,8 +86,9 @@ Checked against: `packages/client/src/components/Tooltip.tsx`.
 **Problem:** Treating negative amounts as income mislabels refunds (negative expenses) and
 income reversals (positive income).
 **Rule going forward:** Storage is always positive = money out, negative = money in. Never
-infer income or expense from the sign; check `categories.type`. Format amounts only through
-`fmtTransaction()` in `packages/client/src/lib/formatters.ts`.
+infer income or expense from the sign; check `categories.type`. Display amounts only through
+`formatMoney()` (`packages/shared/src/money.ts`) and its `Money`/`Change` components, which
+show money in as green "+$X" and money out as plain "$X" (#88).
 
 ### Income categories follow the group/sub pattern (2026-02-20)
 **Problem:** Income categories were seeded with the group name equal to the sub name, which

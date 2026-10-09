@@ -99,9 +99,11 @@ wired to any actual server without checking with Robert first.
   only `ledger.db` and misses recent data, so ask Robert before any backup or restore.
 - Amount sign convention is not intuitive: positive = money out, negative = money in, for
   every category type. Never infer income/expense from the amount sign — check
-  `categories.type` instead, and use `fmtTransaction()` (`packages/client/src/lib/formatters.ts`)
-  for display. Card CSVs and bank CSVs use opposite signs, and some institutions write
-  negatives as `(123.45)`. Full rule in `PRODUCT.md` ("Money rules") and `LESSONS.md`.
+  `categories.type` instead. Display every amount with `formatMoney()`
+  (`packages/shared/src/money.ts`) through the `Money` and `Change` components
+  (`packages/client/src/components/Money.tsx`), never a local formatter. Card CSVs and
+  bank CSVs use opposite signs, and some institutions write negatives as `(123.45)`.
+  Full rule in `PRODUCT.md` ("Money rules") and `LESSONS.md`.
 - Visual values (colors, spacing, component patterns) come from
   `packages/client/src/index.css` and `DESIGN.md`. Never hardcode hex colors or category
   colors — use CSS custom properties and the helpers in
