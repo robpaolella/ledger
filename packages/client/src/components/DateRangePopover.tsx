@@ -120,7 +120,7 @@ export default function DateRangePopover({
                   })}
                 </div>
               </div>
-              <div className="flex-1 p-4 md:p-6">
+              <div className="flex-1 p-3 md:p-6">
                 {(['start', 'end'] as const).map((f) => {
                   const val = f === 'start' ? draft.start : draft.end;
                   const fieldError = textBad(f);
@@ -146,7 +146,7 @@ export default function DateRangePopover({
                       {fieldError && <div className="text-negative text-[13px] font-semibold mt-1.5">{DATE_ERROR}</div>}
                       {/* In flow (not floating) so the pop-up grows or scrolls instead of clipping it. */}
                       {calOpen === f && (
-                        <div className="mt-2 bg-elevated border border-line-strong rounded-[14px] p-3">
+                        <div className="mt-2 bg-elevated border border-line-strong rounded-[14px] p-2 md:p-3">
                           <Calendar value={val} onChange={(d) => { setDraft((prev) => ({ ...prev, preset: 'custom', [f]: d })); setText((t) => ({ ...t, [f]: toText(d) })); setCalOpen(null); }} />
                         </div>
                       )}
