@@ -46,15 +46,14 @@ export default function DashboardPage() {
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } });
   const sensors = useSensors(pointerSensor, touchSensor);
 
-  // Escape leaves customize mode, keeping the layout. During a drag, dnd-kit's own
-  // Escape handler cancels the drag; `activeId` is still set in this render's
-  // closure when that happens, so the mode stays.
+  // Escape leaves customize mode, keeping the layout. Mid-drag, dnd-kit's own Escape
+  // handler also cancels the drag (restoring the snapshot), so one press does both.
   useEffect(() => {
     if (!customizing) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !activeId) setCustomizing(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCustomizing(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [customizing, activeId]);
+  }, [customizing]);
 
   // Customize is desktop-only; leaving for a phone-width viewport ends the mode.
   useEffect(() => { if (isMobile) setCustomizing(false); }, [isMobile]);

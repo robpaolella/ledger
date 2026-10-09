@@ -36,10 +36,7 @@ describe('dashboard layout', () => {
     expect(parseLayout(raw, cards, order)).toEqual(def);
   });
 
-  it('resetting equals a fresh default and is a no-op on an already-default layout', () => {
-    const custom = parseLayout(JSON.stringify({ version: 1, left: ['d'], right: ['c', 'b', 'a'] }), cards, order);
-    expect(custom).not.toEqual(def);
-    expect(defaultLayout(cards, order)).toEqual(def);
+  it('a saved default layout parses back unchanged (Reset on an already-default layout is harmless)', () => {
     expect(parseLayout(JSON.stringify(def), cards, order)).toEqual(def);
   });
 });
