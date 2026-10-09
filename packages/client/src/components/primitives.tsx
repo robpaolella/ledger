@@ -118,7 +118,7 @@ export function Switch({
       className="relative w-11 h-[26px] rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
       style={{ background: checked ? 'var(--primary)' : 'var(--line-strong)' }}
     >
-      <span className="absolute top-[3px] w-5 h-5 rounded-full bg-on-primary shadow-sm transition-all" style={{ left: checked ? 21 : 3 }} />
+      <span className="absolute top-[3px] w-5 h-5 rounded-full bg-white shadow-sm transition-all" style={{ left: checked ? 21 : 3 }} />
     </button>
   );
 }
