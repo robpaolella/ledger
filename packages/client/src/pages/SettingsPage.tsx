@@ -16,6 +16,7 @@ import MerchantsPanel from '../components/MerchantsPanel';
 import AccountForm, { type Account, type AccountOwner, type AccountFormData } from '../components/settings/AccountForm';
 import SimpleFinCard from '../components/settings/SimpleFinCard';
 import { useSimpleFin } from '../components/settings/useSimpleFin';
+import { useSaveAccount } from '../components/accounts/useSaveAccount';
 import CategoriesPanel, { type Category, type Group } from '../components/settings/CategoriesPanel';
 import ProfilePanel from '../components/settings/ProfilePanel';
 import SecurityPanel from '../components/settings/SecurityPanel';
@@ -89,33 +90,16 @@ export default function SettingsPage() {
   // accountId → its SimpleFIN link (drives the link pill + the import toggle)
   const sfByAccount = new Map(sf.sfAccounts.filter((s) => s.link).map((s) => [s.link!.accountId, s]));
 
+  const { save: saveAccountShared, reset: resetAccountSave } = useSaveAccount({
+    sfAccounts: sf.sfAccounts,
+    reloadSf: sf.reload,
+    onSaved: () => { loadData(); },
+  });
+  const closeAccountForm = () => { resetAccountSave(); setEditingAccount(null); };
   const saveAccount = async (data: AccountFormData, linkKey: string | null | undefined) => {
-    let accountId: number;
-    if (editingAccount === 'new') {
-      const res = await apiFetch<{ data: { id: number } }>('/accounts', { method: 'POST', body: JSON.stringify(data) });
-      accountId = res.data.id;
-    } else if (editingAccount) {
-      await apiFetch(`/accounts/${editingAccount.id}`, { method: 'PUT', body: JSON.stringify(data) });
-      accountId = editingAccount.id;
-    } else return;
-
-    // Link change: drop the previous link on this account (and on the target
-    // SimpleFIN account, if it was linked elsewhere), then create the new one.
-    if (linkKey !== undefined) {
-      const previous = sfByAccount.get(accountId);
-      if (previous?.link) await apiFetch(`/simplefin/links/${previous.link.id}`, { method: 'DELETE' });
-      if (linkKey) {
-        const target = sf.sfAccounts.find((s) => s.key === linkKey);
-        if (target) {
-          if (target.link && target.link.accountId !== accountId) await apiFetch(`/simplefin/links/${target.link.id}`, { method: 'DELETE' });
-          await apiFetch('/simplefin/links', { method: 'POST', body: JSON.stringify({ simplefinConnectionId: target.connectionId, simplefinAccountId: target.simplefinAccountId, accountId, simplefinAccountName: target.name, simplefinOrgName: target.org }) });
-        }
-      }
-      sf.reload();
-    }
-    setEditingAccount(null);
-    addToast(editingAccount === 'new' ? 'Account created' : 'Account saved');
-    loadData();
+    if (!editingAccount) return;
+    await saveAccountShared(editingAccount === 'new' ? null : editingAccount.id, data, linkKey);
+    closeAccountForm();
   };
 
   const toggleAutoImport = async (accountId: number, next: boolean) => {
@@ -301,7 +285,7 @@ export default function SettingsPage() {
           onToggleAutoImport={editingAccount !== 'new' ? (next) => toggleAutoImport(editingAccount.id, next) : undefined}
           onSave={saveAccount}
           onDelete={editingAccount !== 'new' && hasPermission('accounts.delete') ? deleteAccount : undefined}
-          onClose={() => setEditingAccount(null)}
+          onClose={closeAccountForm}
           onAvatarChanged={loadData}
         />
       )}
