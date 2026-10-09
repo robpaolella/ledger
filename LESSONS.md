@@ -67,8 +67,8 @@ Never use `alert()`, `confirm()` or `window.confirm()` in product UI. Destructiv
 the shared `ConfirmDeleteButton` (two clicks, resets itself after 3 seconds by default);
 never build delete confirmation ad hoc.
 
-Checked against: `packages/client/src/components/ConfirmDeleteButton.tsx`. The only
-`window.confirm` left is in the developer-only QA page, which is not product UI.
+Checked against: `packages/client/src/components/ConfirmDeleteButton.tsx`. No
+`window.confirm` calls are left in the client.
 
 ## Tooltips
 
