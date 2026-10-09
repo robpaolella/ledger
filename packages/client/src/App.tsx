@@ -19,14 +19,10 @@ import InvestmentsPage from './pages/InvestmentsPage';
 import ReviewsPage from './pages/ReviewsPage';
 import MobileHeader from './components/MobileHeader';
 import Sidebar from './components/Sidebar';
-import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import Spinner from './components/Spinner';
 import { apiFetch } from './lib/api';
 import { loadCategoryEmojis } from './lib/categoryMeta';
-
-// Dev-only tooling pages: lazy so they never enter the production bundle.
-const MockupPage = lazy(() => import('./pages/MockupPage'));
-const QAPage = lazy(() => import('./pages/QAPage'));
 
 function FullScreenLoading() {
   return (
@@ -122,8 +118,6 @@ export default function App() {
               <Route path="*" element={<SetupPage />} />
             ) : (
               <>
-                {import.meta.env.DEV && <Route path="/mockup" element={<Suspense fallback={<FullScreenLoading />}><MockupPage /></Suspense>} />}
-                {import.meta.env.DEV && <Route path="/qa" element={<Suspense fallback={<FullScreenLoading />}><QAPage /></Suspense>} />}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/setup-2fa" element={<ProtectedRoute><TwoFASetupPage /></ProtectedRoute>} />
                 <Route

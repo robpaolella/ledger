@@ -4,7 +4,7 @@ import LedgerLogo from './LedgerLogo';
 /**
  * Full-screen frame for the signed-out pages (sign in, first-run setup,
  * forced two-factor setup): the brand backdrop, the logo lockup, and one
- * elevated card with the design-system header anatomy.
+ * elevated card with the header anatomy in `DESIGN.md`.
  */
 export default function AuthShell({ title, description, children, maxWidth = 400 }: {
   title: string;
