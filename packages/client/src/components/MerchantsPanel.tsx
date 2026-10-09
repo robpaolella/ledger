@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import ImageCropModal from './ImageCropModal';
 import ResponsiveModal from './ResponsiveModal';
 import Spinner from './Spinner';
-import { PanelHeader, Field, SelectShell, CheckBox, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './settings/ui';
+import Button from './Button';
+import { PanelHeader, Field, SelectShell, CheckBox, inputCls, selectCls, ICON } from './settings/ui';
 
 interface Merchant {
   id: number; name: string; logo_url: string | null; txn_count: number;
@@ -165,11 +166,11 @@ export default function MerchantsPanel() {
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
         <div className="relative">
-          <button onClick={() => setSortOpen((o) => !o)} className="h-10 px-3.5 flex items-center gap-2 rounded-[11px] bg-surface border text-sm font-semibold" style={{ borderColor: sortOpen ? 'var(--primary)' : 'var(--line-strong)' }}>
+          <Button variant="outline" size="sm" onClick={() => setSortOpen((o) => !o)} active={sortOpen}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><path d="M3 6h18M6 12h12M10 18h4" /></svg>
             {sort === 'count' ? 'Transaction count' : 'Name (A–Z)'}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
-          </button>
+          </Button>
           {sortOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setSortOpen(false)} />
@@ -205,7 +206,7 @@ export default function MerchantsPanel() {
                 <div className="font-bold text-[15px] truncate">{m.name}</div>
                 <div className="text-[13px] text-primary mt-0.5">{m.txn_count} transaction{m.txn_count === 1 ? '' : 's'}</div>
               </div>
-              {canEdit && <button onClick={(e) => { e.stopPropagation(); openEdit(m); }} className={`${btnRow} opacity-60 group-hover:opacity-100 transition-opacity`}>{ICON.pencil}Edit</button>}
+              {canEdit && <Button variant="secondary" size="row" onClick={(e) => { e.stopPropagation(); openEdit(m); }} className="opacity-60 group-hover:opacity-100 transition-opacity">{ICON.pencil}Edit</Button>}
             </div>
           ))}
       </div>
@@ -215,10 +216,10 @@ export default function MerchantsPanel() {
         <ResponsiveModal isOpen onClose={() => setEdit(null)} title="Edit merchant" maxWidth="460px"
           footer={(
             <div className="flex items-center gap-2.5">
-              <button type="button" onClick={() => { setDel(edit); setMergeInto(''); setKeepAlias(true); }} className={btnDanger}>Merge &amp; delete</button>
+              <Button variant="danger" onClick={() => { setDel(edit); setMergeInto(''); setKeepAlias(true); }}>Merge &amp; delete</Button>
               <div className="ml-auto flex items-center gap-2.5">
-                <button type="button" onClick={() => setEdit(null)} className={btnSecondary}>Cancel</button>
-                <button type="button" onClick={saveName} disabled={busy} className={btnPrimary}>{busy ? 'Saving…' : 'Save changes'}</button>
+                <Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button>
+                <Button onClick={saveName} loading={busy}>{busy ? 'Saving…' : 'Save changes'}</Button>
               </div>
             </div>
           )}>
@@ -293,8 +294,8 @@ export default function MerchantsPanel() {
         <ResponsiveModal isOpen onClose={() => setDel(null)} title="Delete merchant" maxWidth="460px"
           footer={(
             <div className="flex justify-end gap-2.5">
-              <button type="button" onClick={() => setDel(null)} className={btnSecondary}>Cancel</button>
-              <button type="button" onClick={doMerge} disabled={!mergeInto || busy} className={`${btnPrimary} bg-negative hover:bg-negative`}>{busy ? 'Deleting…' : 'Delete merchant'}</button>
+              <Button variant="secondary" onClick={() => setDel(null)}>Cancel</Button>
+              <Button onClick={doMerge} disabled={!mergeInto} loading={busy} className="bg-negative hover:bg-negative">{busy ? 'Deleting…' : 'Delete merchant'}</Button>
             </div>
           )}>
           <div className="flex flex-col gap-5">

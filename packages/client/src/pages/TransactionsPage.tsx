@@ -7,6 +7,7 @@ import { Money } from '../components/Money';
 import { getCategoryColorHex, getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import Button from '../components/Button';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
 import Calendar from '../components/Calendar';
@@ -1611,10 +1612,9 @@ export default function TransactionsPage() {
               <button onClick={() => { setSearch(''); setSearchOpen(false); }} className="text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
           ) : (
-            <button onClick={() => setSearchOpen(true)} title="Search"
-              className={`w-10 h-10 flex items-center justify-center rounded-[11px] bg-surface border ${search ? 'border-primary' : 'border-line-strong'} text-content-2 hover:bg-surface-2`}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            </button>
+            <Button variant="outline" size="sm" iconOnly aria-label="Search" onClick={() => setSearchOpen(true)} title="Search" active={!!search}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            </Button>
           )}
   </>);
   const dateRangeEl = (<>
@@ -1632,24 +1632,22 @@ export default function TransactionsPage() {
   const filtersEl = (<>
           {/* Filters overlay (design system) */}
           <div className="relative">
-            <button onClick={openFilterPopover}
-              className={`flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border-2 ${filterOpen || filterCount ? 'border-primary' : 'border-line-strong'} text-content font-semibold text-sm hover:bg-surface-2`}>
+            <Button variant="outline" size="sm" onClick={openFilterPopover} active={filterOpen || filterCount > 0}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
               Filters
               {filterCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center">{filterCount}</span>}
-            </button>
+            </Button>
             {filterPopoverEl}
           </div>
   </>);
   const sortEl = (<>
           {/* Sort */}
           <div className="relative">
-            <button onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); }}
-              className={`flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border ${sortTouched ? 'border-primary' : 'border-line-strong'} text-content font-semibold text-sm hover:bg-surface-2`}>
+            <Button variant="outline" size="sm" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); }} active={sortTouched}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
               {sortLabel}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
-            </button>
+            </Button>
             {sortOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
@@ -1671,21 +1669,19 @@ export default function TransactionsPage() {
   const importEl = (<>
           {/* Manual Import — on-demand SimpleFIN pull for a date range */}
           <PermissionGate permission="import.bank_sync">
-            <button onClick={() => setImportOpen(true)} title="Pull transactions from your bank for a date range"
-              className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2" aria-label="Manual import">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} title="Pull transactions from your bank for a date range" aria-label="Manual import">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
               <span className="hidden md:inline">Manual Import</span>
-            </button>
+            </Button>
           </PermissionGate>
   </>);
   const addEl = (<>
           {/* Add (phones: app-bar action) */}
           <PermissionGate permission="transactions.create" fallback="disabled">
-            <button onClick={() => setEditing('new')}
-              className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover" aria-label="Add transaction">
+            <Button size="sm" onClick={() => setEditing('new')} aria-label="Add transaction">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
               <span className="hidden md:inline">Add</span>
-            </button>
+            </Button>
           </PermissionGate>
   </>);
   const phoneToolbar = (

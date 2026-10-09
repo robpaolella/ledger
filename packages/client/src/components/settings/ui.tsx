@@ -5,6 +5,7 @@
  * 18px-radius cards, square 19px checkboxes.
  */
 import type { ReactNode } from 'react';
+import { buttonClasses } from '../Button';
 
 export const inputCls =
   'w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line-strong text-content text-sm outline-none placeholder:text-content-3 disabled:opacity-60 disabled:cursor-default';
@@ -12,19 +13,15 @@ export const selectCls = `${inputCls} pr-10 appearance-none cursor-pointer`;
 export const textareaCls =
   'w-full px-3.5 py-3 rounded-[11px] bg-surface-2 border border-line-strong text-content text-sm outline-none placeholder:text-content-3 resize-none';
 
-export const btnPrimary =
-  'inline-flex items-center justify-center gap-2 h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
-export const btnSecondary =
-  'inline-flex items-center justify-center gap-2 h-[42px] px-5 rounded-[11px] bg-surface-2 border border-line-strong text-content font-semibold text-sm hover:bg-elevated transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+export const btnPrimary = buttonClasses({ variant: 'primary' });
+export const btnSecondary = buttonClasses({ variant: 'secondary' });
 /** Outlined destructive (single-click) — pair with a confirm step where the action is irreversible. */
-export const btnDanger =
-  'inline-flex items-center justify-center gap-2 h-[42px] px-[18px] rounded-[11px] bg-transparent border border-line-strong text-negative font-bold text-sm hover:bg-negative/8 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+export const btnDanger = buttonClasses({ variant: 'danger' });
 /** Toolbar-sized variants (h-10) for panel headers. */
-export const btnPrimarySm = btnPrimary.replace('h-[42px] px-[22px]', 'h-10 px-[18px]');
-export const btnSecondarySm = btnSecondary.replace('h-[42px] px-5', 'h-10 px-3.5');
+export const btnPrimarySm = buttonClasses({ variant: 'primary', size: 'sm' });
+export const btnSecondarySm = buttonClasses({ variant: 'secondary', size: 'sm' });
 /** Row-level action (h-[34px]). */
-export const btnRow =
-  'inline-flex items-center justify-center gap-1.5 h-[34px] px-3.5 rounded-[9px] bg-surface-2 border border-line-strong text-content-2 font-semibold text-[13px] hover:text-content hover:bg-elevated transition-colors whitespace-nowrap';
+export const btnRow = buttonClasses({ variant: 'secondary', size: 'row' });
 
 export const chevronIcon = (
   <svg className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-content-3" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
