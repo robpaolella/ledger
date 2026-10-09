@@ -259,7 +259,7 @@ export default function BankSyncSelect({
         </div>
 
         <button onClick={doFetch} disabled={selectedTotal === 0 || fetching}
-          className="h-12 rounded-[11px] text-on-primary font-sans font-bold text-[15px] shadow-sm flex items-center justify-center gap-2.5 transition-opacity"
+          className={`h-12 rounded-[11px] ${selectedTotal === 0 ? 'text-content-3' : 'text-on-primary'} font-sans font-bold text-[15px] shadow-sm flex items-center justify-center gap-2.5 transition-opacity`}
           style={{ background: selectedTotal === 0 ? 'var(--surface-2)' : 'var(--primary)', cursor: selectedTotal === 0 ? 'not-allowed' : 'pointer', opacity: selectedTotal === 0 ? 0.6 : fetching ? 0.7 : 1 }}>
           {fetching ? 'Fetching…' : selectedTotal === 0 ? 'Select accounts to fetch' : `Fetch transactions (${selectedTotal})`}
           {!fetching && selectedTotal > 0 && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>}

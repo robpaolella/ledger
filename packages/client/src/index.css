@@ -103,7 +103,7 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   --text:   #161a20;        /* primary text              */
   --text-2: #586172;        /* secondary / labels        */
-  --text-3: #8a93a2;        /* muted / placeholder       */
+  --text-3: #5f6b7a;        /* muted / placeholder       */
 
   --primary:       #2563eb;
   --primary-hover: #1d4ed8;
@@ -112,7 +112,7 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   --positive: #059669;      /* income, under budget      */
   --negative: #dc2626;      /* over budget, amount owed  */
-  --warning:  #d97706;      /* near limit                */
+  --warning:  #a84e08;      /* near limit                */
 
   /* Categorical — shared chroma, rotating hue (light) */
   --c-teal:    #0d9488;
@@ -285,11 +285,11 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   --text:   #f2f4f7;
   --text-2: #a3abb8;
-  --text-3: #6d7684;
+  --text-3: #939caa;
 
   --primary:       #3d7bf4;
   --primary-hover: #5b92ff;
-  --on-primary:    #ffffff;
+  --on-primary:    #0b1220;
   --ring:          #3d7bf4;
 
   --positive: #34d399;
