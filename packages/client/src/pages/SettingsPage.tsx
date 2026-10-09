@@ -9,7 +9,6 @@ import { setCategoryEmojiOverrides } from '../lib/categoryMeta';
 import { initOwnerSlots, OwnerBadge, SharedBadge } from '../components/badges';
 import { VendorAvatar } from '../components/primitives';
 import Spinner from '../components/Spinner';
-import PermissionGate from '../components/PermissionGate';
 import InstitutionManager from '../components/InstitutionManager';
 import ManualImportModal from '../components/ManualImportModal';
 import MerchantsPanel from '../components/MerchantsPanel';
@@ -22,10 +21,10 @@ import ProfilePanel from '../components/settings/ProfilePanel';
 import SecurityPanel from '../components/settings/SecurityPanel';
 import UsersPanel from '../components/settings/UsersPanel';
 import AiPanel from '../components/settings/AiPanel';
-import { Card, CardHeader, PanelHeader, btnPrimarySm, btnSecondarySm, btnRow, ICON } from '../components/settings/ui';
+import { Card, CardHeader, LoadError, PanelHeader, btnPrimarySm, btnSecondarySm, btnRow, ICON } from '../components/settings/ui';
 import { TYPE_LABEL, sfLabel } from '../components/settings/simplefin';
 
-type PanelId = 'profile' | 'security' | 'accounts' | 'categories' | 'merchants' | 'users' | 'ai';
+type PanelId = 'profile' | 'security' | 'accounts' | 'categories' | 'merchants' | 'users' | 'extras';
 
 const NAV_ICON: Record<PanelId, ReactNode> = {
   profile: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>,
@@ -34,7 +33,7 @@ const NAV_ICON: Record<PanelId, ReactNode> = {
   categories: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>,
   merchants: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6" /></svg>,
   users: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>,
-  ai: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /><circle cx="12" cy="12" r="4" /></svg>,
+  extras: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /><circle cx="12" cy="12" r="4" /></svg>,
 };
 
 export default function SettingsPage() {
@@ -46,6 +45,7 @@ export default function SettingsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [userList, setUserList] = useState<AccountOwner[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null | 'new'>(null);
   const [showInstitutions, setShowInstitutions] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
@@ -53,14 +53,7 @@ export default function SettingsPage() {
 
   const rawPanel = searchParams.get('panel');
   const legacyTab = searchParams.get('tab');
-  const panel = (rawPanel || (legacyTab === 'preferences' ? 'profile' : 'accounts')) as PanelId;
   const setPanel = (p: PanelId) => setSearchParams({ panel: p });
-  // Phones: /settings is an index of sections; picking one shows that panel
-  // full-width with a back link. Desktop keeps the two-column layout.
-  const isMobile = useIsMobile();
-  const showIndex = isMobile && !rawPanel && !legacyTab;
-  const showNav = !isMobile || showIndex;
-  const showPanel = !isMobile || !showIndex;
 
   const loadData = useCallback(async () => {
     try {
@@ -78,12 +71,15 @@ export default function SettingsPage() {
       setCategoryEmojiOverrides(catRes.data, groupRes.data);
       setUserList(userRes.data.map((u) => ({ id: u.id, displayName: u.display_name })));
       initOwnerSlots(userRes.data.map((u) => u.id));
+      setLoadFailed(false);
     } catch {
-      addToast('Failed to load settings', 'error');
+      setLoadFailed(true);
     } finally {
       setLoaded(true);
     }
-  }, [addToast]);
+  }, []);
+
+  const retryLoad = () => { setLoaded(false); setLoadFailed(false); loadData(); };
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -129,16 +125,40 @@ export default function SettingsPage() {
 
   const refreshAll = async () => { await Promise.all([loadData(), sf.reload()]); addToast('Refreshed'); };
 
-  const navSections: { title: string; items: { id: PanelId; label: string }[] }[] = [
-    { title: 'Account', items: [{ id: 'profile', label: 'Profile' }, { id: 'security', label: 'Security' }] },
+  // Show only what the person can use. Accounts also stays for bank-sync users
+  // while the Bank sync card lives inside it (until it gets its own panel).
+  const canAny = (prefix: string) => ['create', 'edit', 'delete'].some((a) => hasPermission(`${prefix}.${a}`));
+  const admin = isAdmin();
+  const allSections: { title: string; items: { id: PanelId; label: string; show: boolean }[] }[] = [
+    { title: 'You', items: [{ id: 'profile', label: 'Profile', show: true }, { id: 'security', label: 'Security', show: true }] },
     { title: 'Household', items: [
-      { id: 'accounts', label: 'Accounts' },
-      { id: 'categories', label: 'Categories' },
-      { id: 'merchants', label: 'Merchants' },
-      { id: 'users', label: 'Users' },
-      ...(isAdmin() ? [{ id: 'ai' as PanelId, label: 'AI' }] : []),
+      { id: 'accounts', label: 'Accounts', show: canAny('accounts') || hasPermission('simplefin.manage') || hasPermission('import.bank_sync') },
+      { id: 'categories', label: 'Categories', show: canAny('categories') },
+      { id: 'merchants', label: 'Merchants', show: hasPermission('transactions.edit') },
+    ] },
+    { title: 'Admin', items: [
+      { id: 'users', label: 'Users & permissions', show: admin },
+      { id: 'extras', label: 'Optional extras', show: admin },
     ] },
   ];
+  const navSections = allSections
+    .map((sec) => ({ title: sec.title, items: sec.items.filter((it) => it.show) }))
+    .filter((sec) => sec.items.length > 0);
+  const visibleIds = navSections.flatMap((sec) => sec.items.map((it) => it.id));
+
+  // A panel the person can't see behaves like no panel: Profile on desktop, the index on phones.
+  // ?panel=ai is kept for Amazon alerts already stored in notification bells.
+  const requested = rawPanel
+    ? (rawPanel === 'ai' ? 'extras' : rawPanel)
+    : legacyTab === 'preferences' ? 'profile' : legacyTab ? 'accounts' : null;
+  const requestedOk = visibleIds.includes(requested as PanelId);
+  const panel: PanelId = requestedOk ? (requested as PanelId) : 'profile';
+  // Phones: /settings is an index of sections; picking one shows that panel
+  // full-width with a back link. Desktop keeps the two-column layout.
+  const isMobile = useIsMobile();
+  const showIndex = isMobile && !requestedOk;
+  const showNav = !isMobile || showIndex;
+  const showPanel = !isMobile || !showIndex;
 
   const activeAccounts = accounts.filter((a) => a.is_active);
 
@@ -187,23 +207,30 @@ export default function SettingsPage() {
           {panel === 'security' && <SecurityPanel />}
           {panel === 'merchants' && <MerchantsPanel />}
           {panel === 'users' && <UsersPanel />}
-          {panel === 'ai' && isAdmin() && <AiPanel />}
-          {panel === 'categories' && (loaded ? <CategoriesPanel categories={categories} groups={groups} onChanged={loadData} /> : <Spinner />)}
+          {panel === 'extras' && <AiPanel />}
+          {panel === 'categories' && (loadFailed ? (
+            <div className="flex flex-col gap-[22px]">
+              <PanelHeader title="Categories" description="Groups and categories are shared by the whole household. Changes apply everywhere in Ledger — tailor the structure to fit how you budget." />
+              <LoadError onRetry={retryLoad} />
+            </div>
+          ) : loaded ? <CategoriesPanel categories={categories} groups={groups} onChanged={loadData} /> : <Spinner />)}
 
           {panel === 'accounts' && (
             <div className="flex flex-col gap-[22px]">
               <PanelHeader
                 title="Accounts"
                 description="Create the accounts you want to track in Ledger, then link each one to a SimpleFIN account to sync balances and transactions automatically."
-                actions={(
+                actions={loadFailed ? undefined : (
                   <>
                     <button type="button" onClick={refreshAll} className={btnSecondarySm}>{ICON.refresh}Refresh all</button>
-                    <PermissionGate permission="accounts.create" fallback="disabled">
+                    {hasPermission('accounts.create') && (
                       <button type="button" onClick={() => setEditingAccount('new')} className={btnPrimarySm}>{ICON.plus}Add account</button>
-                    </PermissionGate>
+                    )}
                   </>
                 )}
               />
+
+              {loadFailed ? <LoadError onRetry={retryLoad} /> : (<>
 
               <SimpleFinCard
                 accounts={accounts}
@@ -270,6 +297,7 @@ export default function SettingsPage() {
                   </div>
                 )}
               </Card>
+              </>)}
             </div>
           )}
         </div>

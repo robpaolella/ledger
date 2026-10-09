@@ -8,7 +8,7 @@ import ResponsiveModal from '../ResponsiveModal';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
 import { ownerColor } from '../badges';
-import { Card, CardHeader, Caption, Field, PanelHeader, Pill, CheckBox, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
+import { LoadError, Card, CardHeader, Caption, Field, PanelHeader, Pill, CheckBox, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
 
 // --- Permission catalogue: what a member may do, grouped for the checkbox cards ---
 const PERMISSION_GROUPS: { label: string; permissions: { key: string; label: string; desc: string }[] }[] = [
@@ -329,6 +329,7 @@ export default function UsersPanel() {
   const { addToast } = useToast();
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
   const [deleting, setDeleting] = useState<ManagedUser | null>(null);
@@ -344,9 +345,12 @@ export default function UsersPanel() {
     try {
       const res = await apiFetch<{ users: ManagedUser[] }>('/users');
       setManagedUsers(res.users);
-    } catch { addToast('Failed to load users', 'error'); }
+      setLoadFailed(false);
+    } catch { setLoadFailed(true); }
     finally { setLoaded(true); }
-  }, [addToast, canManage]);
+  }, [canManage]);
+
+  const retryLoad = () => { setLoaded(false); setLoadFailed(false); loadUsers(); };
 
   const load2FA = useCallback(async () => {
     try {
@@ -356,21 +360,6 @@ export default function UsersPanel() {
   }, []);
 
   useEffect(() => { loadUsers(); load2FA(); }, [loadUsers, load2FA]);
-
-  if (!canManage) {
-    return (
-      <div className="flex flex-col gap-[22px]">
-        <PanelHeader title="Users" actions={<Pill color="var(--primary)" className="h-[30px] px-3">{ICON.shield}You are {ROLE_LABEL[callerRole]}</Pill>} />
-        <Card>
-          <div className="flex flex-col items-center text-center px-6 py-14 gap-3">
-            <span className="w-14 h-14 rounded-full bg-surface-2 text-content-3 flex items-center justify-center">{ICON.lock}</span>
-            <div className="text-[18px] font-extrabold tracking-tight text-content">Restricted setting</div>
-            <div className="text-sm text-content-3 max-w-[360px] leading-snug">Only the app owner or an admin can manage users and permissions. Ask an admin to change your access.</div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
 
   const canTouch = (mu: ManagedUser) => mu.role !== 'owner' && (callerRole === 'owner' || (callerRole === 'admin' && mu.role === 'member'));
 
@@ -423,11 +412,12 @@ export default function UsersPanel() {
   return (
     <div className="flex flex-col gap-[22px]">
       <PanelHeader
-        title="Users"
+        title="Users & permissions"
         description="Everyone who can sign in to this household. Admins manage settings; members get exactly the permissions you tick."
         actions={<Pill color="var(--primary)" className="h-[30px] px-3">{ICON.shield}You are {ROLE_LABEL[callerRole]}</Pill>}
       />
 
+      {loadFailed ? <LoadError onRetry={retryLoad} /> : (
       <Card>
         <CardHeader title="Household members" meta={loaded ? `${managedUsers.length} ${managedUsers.length === 1 ? 'user' : 'users'}` : undefined} />
         {!loaded ? <Spinner /> : managedUsers.map((mu) => {
@@ -530,8 +520,9 @@ export default function UsersPanel() {
           {ICON.plus}Add user
         </button>
       </Card>
+      )}
 
-      {callerRole === 'owner' && (
+      {!loadFailed && callerRole === 'owner' && (
         <Card>
           <div className="px-6 py-3.5 border-b border-line"><Caption>Two-factor authentication requirements</Caption></div>
           <div className="flex items-center justify-between gap-4 px-6 py-4">

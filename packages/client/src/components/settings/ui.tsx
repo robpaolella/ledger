@@ -6,6 +6,7 @@
  */
 import type { ReactNode } from 'react';
 import { buttonClasses } from '../buttonClasses';
+import InlineNotification from '../InlineNotification';
 
 export const inputCls =
   'w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line-strong text-content text-sm outline-none placeholder:text-content-3 disabled:opacity-60 disabled:cursor-default';
@@ -65,6 +66,17 @@ export function PanelHeader({ title, description, actions }: { title: string; de
         {description && <p className="text-sm text-content-3 mt-1.5 m-0 max-w-[640px] leading-snug">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2.5 shrink-0 flex-wrap">{actions}</div>}
+    </div>
+  );
+}
+
+/** Shared panel load failure: the error callout with a "Try again" button that re-runs the load.
+ *  While loading, panels show `<Spinner />` inside their card as before. */
+export function LoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col gap-3 items-start">
+      <InlineNotification type="error" message="Couldn’t load your settings. Check your connection and try again." className="self-stretch" />
+      <button type="button" onClick={onRetry} className={btnSecondary}>{ICON.refresh}Try again</button>
     </div>
   );
 }

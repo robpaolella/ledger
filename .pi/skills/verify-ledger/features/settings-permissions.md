@@ -8,9 +8,13 @@
 
 ## How to get to it (user POV)
 
-Desktop sidebar Settings; phone More → Settings. Preferences is a tab at
-`/settings?tab=preferences`; phone also has Edit Profile & Password. Users &
-Permissions appears only for John/Jane, as a desktop section or phone drill-through.
+Desktop sidebar Settings; phone More → Settings. The menu shows only what the person
+can use, in groups: You (Profile, Security), Household (Accounts, Categories,
+Merchants) and Admin (Users & permissions, Optional extras, John/Jane only). A group
+with no entries is not drawn. Desktop opens on Profile; phones open the index.
+`/settings?tab=preferences` opens Profile; `?panel=ai` opens Optional extras
+(`?panel=extras`). A `?panel=` the person can't see behaves like no panel (Profile on
+desktop, the index on phones). There is no "Restricted setting" card.
 
 ## Driving it with chrome-devtools-axi
 
@@ -22,9 +26,14 @@ Permissions appears only for John/Jane, as a desktop section or phone drill-thro
   from the role badge alone—open the relevant controls when permissions are changed.
 - As John, change one member permission; sign in as member and confirm the affected
   control and its user-visible result. Sign out/in or refresh to fetch current grants.
-- As member, Settings still has Accounts/Categories/Bank Sync but no Users &
-  Permissions. Desktop Add Account/Add Category/Add Connection are disabled.
-  Capture this and the corresponding owner view at both widths.
+- As member, the menu follows the grants: Accounts needs any `accounts.*` grant (or
+  bank sync for now), Categories any `categories.*`, Merchants `transactions.edit`;
+  Users & permissions and Optional extras never show. Controls the member can't use
+  (Add account, Add category) are hidden, not dimmed. Capture this and the owner view
+  at both widths.
+- Panel load failure: set the network offline (`emulate --network Offline`), open
+  Users, Categories, Accounts, Merchants or Optional extras: the error message and
+  "Try again" show; back online, "Try again" loads the panel.
 - For 2FA work use only this throwaway user's generated secret, exercise setup,
   verification and recovery via the real UI, and never publish secrets/recovery codes.
 

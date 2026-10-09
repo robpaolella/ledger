@@ -9,6 +9,12 @@ import { Card, CardHeader, Field, PanelHeader, Pill, InitialsAvatar, inputCls, b
 const ROLE_TONE: Record<string, string> = { owner: 'var(--c-orange)', admin: 'var(--positive)', member: 'var(--c-blue)' };
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
 
+const ROLE_SENTENCE: Record<string, string> = {
+  owner: 'You own this Ledger. You can use everything and manage everyone.',
+  admin: 'Admins can use everything and manage members.',
+  member: 'Your access is set by the owner or an admin.',
+};
+
 const sun = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>;
 const moon = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>;
 
@@ -38,7 +44,7 @@ export default function ProfilePanel() {
 
   return (
     <div className="flex flex-col gap-[22px]">
-      <PanelHeader title="Profile" description="Your name as it appears across Ledger, and the appearance of the app on this device." />
+      <PanelHeader title="Profile" description="Your name as it appears across Ledger, and how the app looks on this device." />
 
       <Card>
         <CardHeader title="Your details" divider actions={<Pill color={ROLE_TONE[role]}>{ROLE_LABEL[role]}</Pill>} />
@@ -46,7 +52,7 @@ export default function ProfilePanel() {
           <div className="flex items-center gap-4">
             <InitialsAvatar name={displayName || user?.displayName || '?'} color="var(--primary)" size={56} />
             <div className="text-[13px] text-content-3 leading-snug">
-              Avatars are your initials in the household color. Your role is set by the app owner{role === 'member' ? '; permissions are managed by an admin' : ''}.
+              {ROLE_SENTENCE[role]}
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

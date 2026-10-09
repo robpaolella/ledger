@@ -6,7 +6,7 @@ import ImageCropModal from './ImageCropModal';
 import ResponsiveModal from './ResponsiveModal';
 import Spinner from './Spinner';
 import Button from './Button';
-import { PanelHeader, Field, SelectShell, CheckBox, inputCls, selectCls, ICON } from './settings/ui';
+import { LoadError, PanelHeader, Field, SelectShell, CheckBox, inputCls, selectCls, ICON } from './settings/ui';
 
 interface Merchant {
   id: number; name: string; logo_url: string | null; txn_count: number;
@@ -34,6 +34,7 @@ export default function MerchantsPanel() {
   const { addToast } = useToast();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'count' | 'name'>('count');
@@ -51,10 +52,10 @@ export default function MerchantsPanel() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setMerchants((await apiFetch<{ data: Merchant[] }>('/merchants')).data); }
-    catch { addToast('Failed to load merchants', 'error'); }
+    try { setMerchants((await apiFetch<{ data: Merchant[] }>('/merchants')).data); setLoadFailed(false); }
+    catch { setLoadFailed(true); }
     finally { setLoading(false); }
-  }, [addToast]);
+  }, []);
   useEffect(() => { load(); }, [load]);
 
   // Rule targets: transfers are applied by categorization, not chosen per merchant.
@@ -157,6 +158,15 @@ export default function MerchantsPanel() {
     catch { addToast('Merge failed', 'error'); }
     finally { setBusy(false); }
   };
+
+  if (loadFailed) {
+    return (
+      <div className="flex flex-col gap-[22px]">
+        <PanelHeader title="Merchants" description="Every merchant from your transaction history. Edit how one displays throughout Ledger, set a rule for how it’s categorized, or merge merchants you don’t need." />
+        <LoadError onRetry={load} />
+      </div>
+    );
+  }
 
   return (
     <div>
