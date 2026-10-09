@@ -7,6 +7,7 @@ import { ownerColor, initOwnerSlots } from '../components/badges';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { formatMoney } from '@ledger/shared';
 import { Money } from '../components/Money';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
@@ -136,7 +137,7 @@ export default function ReviewsPage() {
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
   const anyFilter = dateFilter !== 'all' || selUsers.size > 0 || q !== '';
-  const shownTotal = shown.reduce((s, r) => s + r.transaction.amount, 0);
+  const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
   const groups = useMemo(() => {
@@ -337,7 +338,7 @@ export default function ReviewsPage() {
               {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Reset filters</span>}
               {refreshing && <span className="text-[12px] text-content-3 animate-pulse">Refreshing…</span>}
             </div>
-            <span className="font-mono text-[13px] text-content-2 tabular-nums"><Money amount={shownTotal} showZero /> pending</span>
+            <span className="font-mono text-[13px] text-content-2 tabular-nums">{formatMoney(shownTotal, { kind: 'balance', showZero: true }).text} pending</span>
           </div>
 
           {initialLoading ? (
