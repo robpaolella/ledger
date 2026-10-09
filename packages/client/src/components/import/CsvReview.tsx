@@ -1,6 +1,6 @@
 /** CSV Import · Step 3 — Review & Categorize (docs/Import Flow §CSV IMPORT step 3). */
 import type { Dispatch, SetStateAction } from 'react';
-import { ImpCheckbox, VendorCell, CategoryCell, ConfidenceLabel, AmountText, DuplicateIcon, type ImpCategory } from './cells';
+import { ImpCheckbox, VendorCell, CategoryCell, ConfidenceLabel, AmountText, DuplicateIcon, UnreadableAmount, type ImpCategory } from './cells';
 import type { ImpCsvRow } from './types';
 
 export default function CsvReview({
@@ -18,17 +18,21 @@ export default function CsvReview({
   importing: boolean;
 }) {
   const selectedCount = selected.size;
-  const importable = rows.filter((r, i) => selected.has(i) && r.categoryId != null).length;
-  const dupCount = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.duplicateStatus !== 'none').length;
-  const allOn = rows.length > 0 && selected.size === rows.length;
+  const importable = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.amount != null).length;
+  const dupCount = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.amount != null && r.duplicateStatus !== 'none').length;
+  const unreadableCount = rows.filter((r) => r.amount == null).length;
+  // Rows with an unreadable amount can never be selected.
+  const selectable = rows.flatMap((r, i) => (r.amount != null ? [i] : []));
+  const allOn = selectable.length > 0 && selected.size === selectable.length;
   const someOn = selected.size > 0 && !allOn;
 
-  const toggle = (i: number) => setSelected((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-  const toggleAll = () => setSelected(() => (allOn ? new Set<number>() : new Set(rows.map((_, i) => i))));
+  const toggle = (i: number) => setSelected((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else if (rows[i]?.amount != null) n.add(i); return n; });
+  const toggleAll = () => setSelected(() => (allOn ? new Set<number>() : new Set(selectable)));
   const setCategory = (i: number, catId: number) => {
     setRows((prev) => prev.map((r, j) => j === i ? { ...r, categoryId: catId, confidence: 1, source: null } : r));
-    // Categorizing arms the row for import — except don't re-arm auto-skipped duplicates.
-    if (rows[i]?.duplicateStatus !== 'exact') setSelected((prev) => new Set(prev).add(i));
+    // Categorizing arms the row for import — except don't re-arm auto-skipped
+    // duplicates, and never arm a row whose amount is unreadable.
+    if (rows[i]?.duplicateStatus !== 'exact' && rows[i]?.amount != null) setSelected((prev) => new Set(prev).add(i));
   };
   const setVendor = (i: number, name: string) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, description: name } : r));
   const logoFor = (name: string) => merchantLogos.get(name.trim().toLowerCase());
@@ -64,7 +68,7 @@ export default function CsvReview({
           const on = selected.has(i);
           return (
             <div key={i} className="flex items-center gap-4 px-5 py-3.5 border-b border-line" style={{ background: on ? 'transparent' : 'color-mix(in srgb, var(--bg) 40%, transparent)' }}>
-              <ImpCheckbox checked={on} onClick={() => toggle(i)} />
+              <ImpCheckbox checked={on} disabled={r.amount == null} title={r.amount == null ? 'Amount unreadable. Fix it in the file and import again.' : undefined} onClick={() => toggle(i)} />
               <span className="w-[74px] flex-none font-mono text-xs text-content-3">{r.date}</span>
               <VendorCell
                 value={r.description}
@@ -77,7 +81,7 @@ export default function CsvReview({
                 <CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />
                 <ConfidenceLabel confidence={r.confidence} variant="csv" />
               </div>
-              <AmountText amount={r.amount} />
+              {r.amount == null ? <UnreadableAmount /> : <AmountText amount={r.amount} />}
             </div>
           );
         })}
@@ -85,7 +89,7 @@ export default function CsvReview({
       </div>
 
       <div className="flex items-center justify-between gap-4 mt-5 px-5 py-4 border border-line rounded-[16px] bg-surface shadow-sm sticky bottom-4">
-        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} transactions</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.</div>
+        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} transactions</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.{unreadableCount > 0 ? ` ${unreadableCount} ${unreadableCount === 1 ? 'row' : 'rows'} skipped: amount unreadable.` : ''}</div>
         <div className="flex gap-2.5">
           <button onClick={onBack} className="h-12 px-5 border border-line-strong rounded-[11px] bg-surface-2 text-content font-sans font-semibold text-sm cursor-pointer">Back</button>
           <button onClick={onImport} disabled={importable === 0 || importing}
