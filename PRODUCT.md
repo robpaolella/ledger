@@ -136,7 +136,7 @@ Data stays untouched; these are never rebuilt.
 
 - Stored transaction amounts always mean **positive = money out; negative = money in**, for every category type. Income versus expense is determined by `categories.type`, never by amount sign alone.
 - A minus in the entry form reverses that category's normal direction.
-- Display follows the Display rules below; #88 replaces `fmtTransaction()` and the local formatters with one shared money display.
+- Display follows the Display rules below, through one shared function, `formatMoney()` (`packages/shared/src/money.ts`), and its `Money` (transaction amounts) and `Change` (totals that can go either way) components. #88 moves every screen onto them.
 - Convert SimpleFIN transaction amounts to Ledger's convention. Never apply that conversion to balances, holding market values, or cost basis.
 - All categories use the group → sub-category hierarchy, including income.
 - Account ownership comes from the many-to-many `account_owners` relationship, not the legacy single-owner field.
@@ -145,7 +145,8 @@ Data stays untouched; these are never rebuilt.
 
 - Money in shows as green **+$X**: paychecks, interest, and refunds.
 - Money out shows as plain **$X** with no minus sign, including income reversals.
-- Transfers follow the same sign rule, in grey.
+- Transfers follow the same sign rule, in grey: the incoming leg shows **+$X**, the outgoing leg **$X**.
+- Balances (account balances, net worth, holdings, investment values, chart axes) are plain text with a real minus when negative and no colour.
 - Totals that can go either way (Net, budget remaining, changes) show a real minus when negative and are coloured good or bad.
 - Refunds still lower their category's spending; they remain expenses, not income.
 

@@ -184,7 +184,7 @@ The front matter lists the literal values from `index.css`, prefixed `light-` an
 
 Tailwind utilities for these: `bg-bg`, `bg-surface`, `bg-surface-2`, `bg-elevated`, `border-line`, `border-line-strong`, `text-content`, `text-content-2`, `text-content-3`, `bg-primary`, `text-positive`, `text-negative`, `text-warning`.
 
-Money colours follow the money rules in `PRODUCT.md`: use `fmtTransaction()` for transaction amounts and never infer income or expense from a number's sign.
+Money colours follow the money rules in `PRODUCT.md`: show transaction amounts with `Money` and totals that can go either way with `Change` (`packages/client/src/components/Money.tsx`, both built on `formatMoney()` in `packages/shared/src/money.ts`), and never infer income or expense from a number's sign.
 
 ### Categorical colours
 
