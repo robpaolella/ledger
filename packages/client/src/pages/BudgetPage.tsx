@@ -144,7 +144,7 @@ export default function BudgetPage() {
   const [showUnbudgeted, setShowUnbudgeted] = useState<Record<string, boolean>>({});
   const [editModal, setEditModal] = useState<{ categoryId: number; groupName: string; subName: string; emoji: string; planned: number; targetMonth: string; recurring: RecMeta | null; manual: number; income: boolean } | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [applyFuture, setApplyFuture] = useState(false);
+  const [editScope, setEditScope] = useState<'month' | 'forward'>('month');
   const [editOverride, setEditOverride] = useState(false); // per-month sub-floor override
 
   const loadData = useCallback(async () => {
@@ -173,7 +173,7 @@ export default function BudgetPage() {
     // fold mode so the floor stays applied per-month; an override bypasses the floor.
     setEditModal({ categoryId, groupName, subName, emoji: getCategoryEmoji(subName.split(' · ')[0]), planned, targetMonth, recurring, manual: manual ?? planned, income });
     setEditValue(planned ? String(planned) : '');
-    setApplyFuture(false);
+    setEditScope('month');
     setEditOverride(overridden);
   };
 
@@ -192,27 +192,15 @@ export default function BudgetPage() {
     // - overriding: save the raw sub-floor value + override=1; THIS MONTH ONLY.
     // - below (not overriding): clamp up to the floor.
     // - at/above: store the entered total.
-    let stored: number; let override = 0; let applyForward = applyFuture;
-    if (overriding) {
-      stored = val; override = 1; applyForward = false;
-    } else {
-      stored = below ? floor : val;
-    }
-
-    const [by, bm] = editModal.targetMonth.split('-').map(Number); // year, month (1-12)
-    const months: string[] = [editModal.targetMonth];
-    if (applyForward) {
-      for (let m = bm; m <= 11; m++) months.push(`${by}-${String(m + 1).padStart(2, '0')}`);
-    }
+    const stored = overriding ? val : below ? floor : val;
+    const override = overriding ? 1 : 0;
+    const scope = overriding ? 'month' : editScope;
     try {
-      await Promise.all(months.map((mo) =>
-        apiFetch('/budgets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // Override is this-month-only; future months (apply-forward) reset to non-override.
-          body: JSON.stringify({ categoryId: editModal.categoryId, month: mo, amount: stored, override: mo === editModal.targetMonth ? override : 0 }),
-        })
-      ));
+      await apiFetch('/budgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryId: editModal.categoryId, month: editModal.targetMonth, amount: stored, override, scope }),
+      });
     } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to save budget', 'error'); return; }
     closeEdit();
     await loadData();
@@ -636,12 +624,11 @@ export default function BudgetPage() {
             </div>
           )}
           <BudgetHistory categoryId={editModal.categoryId} targetMonth={editModal.targetMonth} income={editModal.income} />
-          <label onClick={() => setApplyFuture((v) => !v)} className="flex items-center gap-3 mt-5 cursor-pointer select-none">
-            <span className="w-[22px] h-[22px] shrink-0 rounded-[7px] flex items-center justify-center" style={{ border: `2px solid ${applyFuture ? 'var(--primary)' : 'var(--line-strong)'}`, background: applyFuture ? 'var(--primary)' : 'transparent', transition: '.12s' }}>
-              {applyFuture && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 6"/></svg>}
-            </span>
-            <span className="text-[15px] font-semibold">Apply to the rest of {month.getFullYear()}</span>
-          </label>
+          {/* An override is this month only, so the choice is hidden while it's on. */}
+          {!overriding && (
+            <SegmentedControl className="mt-5" value={editScope} onChange={setEditScope}
+              options={[{ value: 'month', label: 'This month only' }, { value: 'forward', label: 'This month and after' }]} />
+          )}
         </ResponsiveModal>
         );
       })()}
