@@ -87,6 +87,15 @@ describe('formatMoney: signed totals', () => {
   it('shows a zero total as a plain dash', () => {
     expect(formatMoney(0, { kind: 'total' })).toEqual({ text: '—', tone: 'neutral' });
   });
+
+  it('lets a zero total take a given tone (Budget keeps zero remaining good)', () => {
+    expect(formatMoney(0, { kind: 'total', precision: 'whole', zeroTone: 'positive' })).toEqual({ text: '—', tone: 'positive' });
+    expect(formatMoney(0.4, { kind: 'total', precision: 'whole', zeroTone: 'positive' })).toEqual({ text: '—', tone: 'positive' });
+    expect(formatMoney(-0.4, { kind: 'total', precision: 'whole', zeroTone: 'positive' })).toEqual({ text: '—', tone: 'positive' });
+    // Only zero is affected: non-zero totals keep their good or bad tone.
+    expect(formatMoney(-12, { kind: 'total', precision: 'whole', zeroTone: 'positive' })).toEqual({ text: '-$12', tone: 'negative' });
+    expect(formatMoney(12, { kind: 'total', precision: 'whole', zeroTone: 'positive' })).toEqual({ text: '$12', tone: 'positive' });
+  });
 });
 
 describe('formatMoney: balances', () => {
