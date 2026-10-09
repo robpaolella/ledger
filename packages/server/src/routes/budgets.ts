@@ -4,6 +4,7 @@ import { budgets, categories } from '../db/schema.js';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { getRecurringFloors, effectiveBudgetedAmount } from '../services/recurringBudget.js';
+import { getStoredPlans } from '../services/budgetPlan.js';
 import { isValidMonth, toFinite, toId } from '../utils/validate.js';
 
 const router = Router();
@@ -25,19 +26,23 @@ router.get('/', (req: Request, res: Response) => {
       return;
     }
 
-    const rows = db.select({
-      id: budgets.id,
-      category_id: budgets.category_id,
-      month: budgets.month,
-      amount: budgets.amount,
-      group_name: categories.group_name,
-      sub_name: categories.sub_name,
-      display_name: categories.display_name,
-      type: categories.type,
-    }).from(budgets)
-      .innerJoin(categories, eq(budgets.category_id, categories.id))
-      .where(eq(budgets.month, month))
-      .all();
+    // Carried-forward plans: an inherited category has id null and the requested month.
+    const plans = getStoredPlans(sqlite, month);
+    const rows = db.select().from(categories).all()
+      .filter((c) => plans.has(c.id))
+      .map((c) => {
+        const p = plans.get(c.id)!;
+        return {
+          id: p.budgetId,
+          category_id: c.id,
+          month,
+          amount: p.amount,
+          group_name: c.group_name,
+          sub_name: c.sub_name,
+          display_name: c.display_name,
+          type: c.type,
+        };
+      });
 
     res.json({ data: rows });
   } catch (err) {
@@ -148,11 +153,8 @@ router.get('/summary', (req: Request, res: Response) => {
       .orderBy(asc(categories.sort_order), asc(categories.sub_name))
       .all();
 
-    // Get budgets for this month
-    const monthBudgets = db.select().from(budgets)
-      .where(eq(budgets.month, month))
-      .all();
-    const budgetMap = new Map(monthBudgets.map((b) => [b.category_id, b]));
+    // This month's plans, carried forward from the latest earlier row
+    const budgetMap = getStoredPlans(sqlite, month);
 
     // Recurring overlay: each category's recurring total for the month folds into
     // its budget — 'set' = floor (max of manual & recurring), 'add' = manual +
@@ -213,7 +215,7 @@ router.get('/summary', (req: Request, res: Response) => {
         manual: fold.manual,
         recurring: fold.recurring,
         overridden: fold.overridden,
-        budgetId: budget?.id ?? null,
+        budgetId: budget?.budgetId ?? null,
         actual: actualIncome,
       };
     });
@@ -239,7 +241,7 @@ router.get('/summary', (req: Request, res: Response) => {
         manual: fold.manual,
         recurring: fold.recurring,
         overridden: fold.overridden,
-        budgetId: budget?.id ?? null,
+        budgetId: budget?.budgetId ?? null,
         actual: actualExpense,
       });
     }
@@ -289,22 +291,10 @@ router.get('/annual', (req: Request, res: Response) => {
       .orderBy(asc(categories.sort_order), asc(categories.sub_name))
       .all();
 
-    const yearBudgets = sqlite.prepare(
-      'SELECT category_id, month, amount, override FROM budgets WHERE month LIKE ?'
-    ).all(`${year}-%`) as { category_id: number; month: string; amount: number; override: number }[];
-
-    const plannedMap = new Map<number, number[]>();
-    const overrideMap = new Map<number, boolean[]>();
-    for (const b of yearBudgets) {
-      const mi = parseInt(b.month.slice(5, 7), 10) - 1;
-      if (mi < 0 || mi > 11) continue;
-      if (!plannedMap.has(b.category_id)) plannedMap.set(b.category_id, new Array(12).fill(0));
-      if (!overrideMap.has(b.category_id)) overrideMap.set(b.category_id, new Array(12).fill(false));
-      plannedMap.get(b.category_id)![mi] = b.amount;
-      overrideMap.get(b.category_id)![mi] = !!b.override;
-    }
-    const plannedFor = (id: number) => plannedMap.get(id) ?? new Array(12).fill(0);
-    const overrideFor = (id: number) => overrideMap.get(id) ?? new Array(12).fill(false);
+    // Each month's carried-forward plan (may come from an earlier year).
+    const monthPlans = Array.from({ length: 12 }, (_, i) => getStoredPlans(sqlite, `${year}-${String(i + 1).padStart(2, '0')}`));
+    const plannedFor = (id: number) => monthPlans.map((p) => p.get(id)?.amount ?? 0);
+    const overrideFor = (id: number) => monthPlans.map((p) => p.get(id)?.override ?? false);
 
     // Recurring overlay, per month, so the year view agrees with the month view.
     const monthFloors = Array.from({ length: 12 }, (_, i) => getRecurringFloors(`${year}-${String(i + 1).padStart(2, '0')}`));
@@ -465,10 +455,7 @@ router.get('/category-detail', (req: Request, res: Response) => {
 
     // ---- current effective monthly plan (floor model), summed over the set ----
     const floors = getRecurringFloors(curMonth);
-    const curBudgets = sqlite.prepare(
-      `SELECT category_id, amount, override FROM budgets WHERE month = ? AND category_id IN (${placeholders})`
-    ).all(curMonth, ...ids) as { category_id: number; amount: number; override: number }[];
-    const bMap = new Map(curBudgets.map((b) => [b.category_id, b]));
+    const bMap = getStoredPlans(sqlite, curMonth, ids);
     let plannedPerMonth = 0;
     for (const id of ids) {
       const b = bMap.get(id);
