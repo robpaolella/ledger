@@ -78,7 +78,7 @@ export default function PageHeader({
           } ${className}`}
         >
           {(!isMobile || left) && (
-            <div className="flex items-center gap-3 md:gap-6 min-w-0">
+            <div className="flex items-center gap-3 md:gap-6 min-w-0 md:shrink-0">
               {!isMobile && title != null && <PageTitle subtitle={subtitle}>{title}</PageTitle>}
               {left}
             </div>
