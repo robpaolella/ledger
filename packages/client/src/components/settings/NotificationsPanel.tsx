@@ -28,6 +28,7 @@ export default function NotificationsPanel() {
     setOverBudget(next);
     try {
       await apiFetch('/notifications/preferences', { method: 'PUT', body: JSON.stringify({ overBudgetAlerts: next }) });
+      addToast(next ? 'Over-budget alerts on' : 'Over-budget alerts off');
     } catch {
       setOverBudget(!next);
       addToast('Couldn’t save that change. Try again.', 'error');
@@ -40,7 +41,7 @@ export default function NotificationsPanel() {
   return (
     <div className="flex flex-col gap-[22px]">
       <PanelHeader title="Notifications" description="Which alerts Ledger shows you. These choices are yours alone; other people set their own." />
-      {loadFailed ? <LoadError onRetry={load} /> : overBudget === null ? <Spinner /> : (
+      {loadFailed ? <LoadError onRetry={load} /> : overBudget === null ? <Card><Spinner /></Card> : (
         <Card>
           <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4">
             <div className="min-w-0">
