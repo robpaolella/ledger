@@ -1694,7 +1694,7 @@ export default function TransactionsPage() {
           {/* Search */}
           {searchOpen ? (
             // Width follows the window (not a fixed w-44) so the field gives way to the title and tabs on narrow desktops
-            <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2 w-[clamp(9rem,16vw,15rem)]">
+            <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2 w-[clamp(9rem,10vw,15rem)]">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" autoCapitalize="off"
                 onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
