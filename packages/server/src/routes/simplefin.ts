@@ -8,7 +8,9 @@ import {
 import { eq, or, isNull } from 'drizzle-orm';
 import { claimAccessUrl, fetchAccounts } from '../services/simplefin.js';
 import { runSyncPipeline, commitSync, withSyncLock, type CommitPayload } from '../services/simplefinSync.js';
-import { requirePermission } from '../middleware/permissions.js';
+import { requirePermission, requireAnyPermission } from '../middleware/permissions.js';
+import { getRetrySnapshot } from '../services/scheduler.js';
+import { connectionSyncState, dailySyncInfo, setDailySyncEnabled } from '../services/dailySync.js';
 
 import { deleteLinksCascade, linkIdsForConnection } from '../services/simplefinLinks.js';
 
@@ -63,6 +65,7 @@ router.post('/connections', requirePermission('simplefin.manage'), async (req: R
         isShared: shared,
         linkedAccountCount: 0,
         lastSyncedAt: null,
+        syncState: connectionSyncState(sqlite, { id: Number(result.lastInsertRowid), sync_status: null, sync_error_kind: null, sync_message: null, sync_attempt_at: null }, null),
       },
     });
   } catch (err) {
@@ -84,6 +87,10 @@ router.get('/connections', (req: Request, res: Response) => {
         sc.label,
         sc.created_at,
         sc.updated_at,
+        sc.sync_status,
+        sc.sync_error_kind,
+        sc.sync_message,
+        sc.sync_attempt_at,
         COUNT(a.id) as linked_account_count,
         MAX(sl.last_synced_at) as last_synced_at
       FROM simplefin_connections sc
@@ -98,16 +105,22 @@ router.get('/connections', (req: Request, res: Response) => {
       label: string;
       created_at: string;
       updated_at: string;
+      sync_status: string | null;
+      sync_error_kind: string | null;
+      sync_message: string | null;
+      sync_attempt_at: string | null;
       linked_account_count: number;
       last_synced_at: string | null;
     }[];
 
+    const retry = getRetrySnapshot();
     const data = rows.map((r) => ({
       id: r.id,
       label: r.label,
       isShared: r.user_id === null,
       linkedAccountCount: r.linked_account_count,
       lastSyncedAt: r.last_synced_at,
+      syncState: connectionSyncState(sqlite, r, retry),
     }));
 
     res.json({ data });
@@ -430,6 +443,40 @@ router.delete('/links/:id', requirePermission('simplefin.manage'), (req: Request
   } catch (err) {
     console.error('DELETE /simplefin/links/:id error:', err);
     res.status(500).json({ error: 'Failed to delete link' });
+  }
+});
+
+// === Daily sync ===
+
+function dailySyncFor(userId: number) {
+  const ids = (sqlite.prepare('SELECT id FROM simplefin_connections WHERE user_id IS NULL OR user_id = ?')
+    .all(userId) as { id: number }[]).map((r) => r.id);
+  return dailySyncInfo(sqlite, ids, getRetrySnapshot());
+}
+
+// GET /api/simplefin/daily-sync — anyone who can see Bank sync
+router.get('/daily-sync', requireAnyPermission('simplefin.manage', 'import.bank_sync'), (req: Request, res: Response) => {
+  try {
+    res.json({ data: dailySyncFor(req.user!.userId) });
+  } catch (err) {
+    console.error('GET /simplefin/daily-sync error:', err);
+    res.status(500).json({ error: 'Failed to load daily sync' });
+  }
+});
+
+// PUT /api/simplefin/daily-sync — { enabled: boolean }; the scheduler reads it on its next tick
+router.put('/daily-sync', requirePermission('simplefin.manage'), (req: Request, res: Response) => {
+  try {
+    const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled (boolean) is required' });
+      return;
+    }
+    setDailySyncEnabled(sqlite, enabled);
+    res.json({ data: dailySyncFor(req.user!.userId) });
+  } catch (err) {
+    console.error('PUT /simplefin/daily-sync error:', err);
+    res.status(500).json({ error: 'Failed to save daily sync' });
   }
 });
 

@@ -231,6 +231,31 @@ export interface SimpleFINConnection {
   isShared: boolean;
   linkedAccountCount: number;
   lastSyncedAt: string | null;
+  syncState: ConnectionSyncState;
+}
+
+/** A connection's last fetch, written by the daily run and manual syncs. */
+export interface ConnectionSyncState {
+  status: 'working' | 'failed' | 'reconnect_needed' | null; // null = never fetched
+  kind: 'auth' | 'rate_limit' | 'other' | null;
+  message: string | null;        // Ledger's own sentence, never the raw error
+  lastAttemptAt: string | null;
+  nextRetryAt: string | null;    // null: working, reconnect needed, or daily sync off
+  triesToday: number;            // failed daily-run tries today
+  gaveUp: boolean;               // today's retries ran out; next try is tomorrow's run
+}
+
+export interface DailySyncInfo {
+  enabled: boolean;              // the saved switch
+  forcedOff: boolean;            // DISABLE_DAILY_SYNC=1 on the server overrides the switch
+  runTime: string;               // HH:MM, server time
+  lastRun: {
+    at: string;
+    transactionsImported: number;
+    connections: number;
+    connectionsWithProblems: number;
+  } | null;
+  nextRun: { at: string; reason: 'scheduled' | 'retry' | 'gave_up' } | null; // null while off
 }
 
 export interface SimpleFINLink {

@@ -12,6 +12,12 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
   const seed = value ? new Date(value + 'T00:00:00') : today;
   const [vm, setVm] = useState(seed.getMonth());
   const [vy, setVy] = useState(seed.getFullYear());
+  // Follow a changed value (e.g. a date typed in the field) to its month.
+  const [seenValue, setSeenValue] = useState(value);
+  if (value !== seenValue) {
+    setSeenValue(value);
+    if (value) { setVm(seed.getMonth()); setVy(seed.getFullYear()); }
+  }
 
   const startWd = new Date(vy, vm, 1).getDay();
   const daysInMonth = new Date(vy, vm + 1, 0).getDate();
@@ -27,7 +33,9 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
   const prev = () => { if (vm === 0) { setVm(11); setVy(vy - 1); } else setVm(vm - 1); };
   const next = () => { if (vm === 11) { setVm(0); setVy(vy + 1); } else setVm(vm + 1); };
   const years: number[] = [];
-  for (let y = today.getFullYear() - 12; y <= today.getFullYear() + 3; y++) years.push(y);
+  const firstYear = Math.min(today.getFullYear() - 12, vy);
+  const lastYear = Math.max(today.getFullYear() + 3, vy);
+  for (let y = firstYear; y <= lastYear; y++) years.push(y);
 
   const navBtn = 'w-10 h-10 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 shrink-0';
   const selectCls = 'h-10 px-3 pr-8 rounded-[10px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';

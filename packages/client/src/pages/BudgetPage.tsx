@@ -99,6 +99,15 @@ function RemainingCell({ value, income, long, className }: { value: number; inco
 const leftTint = (v: number) =>
   formatMoney(v, { kind: 'total', precision: 'whole', zeroTone: 'positive' }).tone === 'negative' ? 'var(--negative)' : 'var(--positive)';
 
+// Decorative emoji tile before a group name; same recipe as the editor's tile, scaled to the row.
+function GroupTile({ name, compact }: { name: string; compact?: boolean }) {
+  return (
+    <span aria-hidden="true" className={`shrink-0 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center leading-none ${compact ? 'w-6 h-6 -my-0.5 text-[13px]' : 'w-7 h-7 text-[15px]'}`}>
+      {getCategoryEmoji(name)}
+    </span>
+  );
+}
+
 function monthStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -311,7 +320,7 @@ export default function BudgetPage() {
                         aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
                       </button>
-                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex-1 min-w-0 text-left font-bold text-[15px] truncate">{g.groupName}</button>
+                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className="truncate">{g.groupName}</span></button>
                       <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{whole(gPlanned)}</span>
                       <RemainingCell value={gRem} income={sec.key === 'income'} className="w-[82px] text-right font-bold text-[15px]" />
                     </div>
@@ -390,6 +399,7 @@ export default function BudgetPage() {
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
                           </button>
                           <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex items-center gap-2.5 min-w-0 text-left group/drill">
+                            <GroupTile name={g.groupName} />
                             <span className="font-bold text-[15px] truncate group-hover/drill:underline">{g.groupName}</span>
                           </button>
                         </div>
@@ -521,6 +531,7 @@ export default function BudgetPage() {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
                           </button>
                           <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex items-center gap-2.5 min-w-0 text-left group/drill">
+                            <GroupTile name={g.groupName} compact />
                             <span className="font-bold text-sm truncate group-hover/drill:underline">{g.groupName}</span>
                           </button>
                         </div>

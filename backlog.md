@@ -11,3 +11,4 @@
 - verify-ledger feature map: phone directions still say "Budget tab" and "More →"; phones now use the app bar and nav drawer (`budgets-reports.md`, `transactions-import.md`, `settings-permissions.md`, `design-states.md`).
 - README Configuration table omits settings it relies on: `TIINGO_TOKEN`, `DAILY_SYNC_HOUR`/`DAILY_SYNC_MINUTE`, `DISABLE_DAILY_SYNC`, `AMAZON_DATA_DIR`, `LOGODEV_TOKEN`.
 - theme-color follows the phone's light/dark setting, not Ledger's chosen theme; fixing it needs ThemeContext.
+- Date filter button label drops the year, so an old range (e.g. Jan 15 2005 – Mar 1 2005) reads like this year's.
