@@ -1,0 +1,52 @@
+{
+  "design_issue": 104,
+  "covers": [
+    105,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155
+  ],
+  "revision": 2,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "menu-owner",
+    "menu-everyday",
+    "menu-view-only",
+    "users-owner",
+    "users-admin",
+    "user-detail",
+    "user-switches",
+    "user-switches-more",
+    "user-everyday-switches",
+    "user-actions",
+    "accounts",
+    "bank-working",
+    "bank-problems",
+    "bank-member",
+    "bank-paused",
+    "bank-empty",
+    "daily-problems",
+    "daily-member",
+    "daily-paused",
+    "daily-gave-up",
+    "daily-off-failing",
+    "rules",
+    "rules-search",
+    "rules-empty",
+    "notifications",
+    "extras",
+    "extras-on",
+    "loading",
+    "error"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

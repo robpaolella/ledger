@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { scopeTxnsToCategory, type ScopeLeg } from '../lib/categoryScope';
-import { fmtTransaction } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { Money } from '../components/Money';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
@@ -39,8 +40,9 @@ const hueOf = (name: string) => `var(${HUES[(name.charCodeAt(0) || 0) % HUES.len
 
 const parseYm = (ym: string) => { const [y, m] = ym.split('-').map(Number); return { y, m: m - 1 }; };
 const lastDayOf = (ym: string) => { const { y, m } = parseYm(ym); return `${ym}-${String(new Date(y, m + 1, 0).getDate()).padStart(2, '0')}`; };
-const f0 = (v: number) => { const r = Math.round(v); return `${r < 0 ? '-' : ''}$${Math.abs(r).toLocaleString('en-US')}`; };
-const fmtK = (v: number) => { const a = Math.abs(v), sign = v < 0 ? '-' : ''; return a >= 1000 ? `${sign}$${Math.round(a / 1000)}K` : `${sign}$${Math.round(a)}`; };
+// Budget tile figures: plain whole dollars, "$0" at zero (as before).
+const wholeDollars = (v: number) => formatMoney(v, { kind: 'balance', precision: 'whole', showZero: true }).text;
+const axis = (v: number) => formatMoney(v, { kind: 'balance', precision: 'axis' }).text;
 
 interface Bucket {
   monthIdx: number[];
@@ -174,10 +176,10 @@ export default function CategoryDetailPage() {
   const chart = useMemo(() => {
     const maxV = Math.max(1, ...buckets.map((b) => b.total));
     const top = maxV * 1.08;
-    const ticks = [0, 1 / 3, 2 / 3, 1].map((frac) => ({ bottom: `${(frac * 100).toFixed(1)}%`, label: fmtK(top * frac) }));
+    const ticks = [0, 1 / 3, 2 / 3, 1].map((frac) => ({ bottom: `${(frac * 100).toFixed(1)}%`, label: axis(top * frac) }));
     const bars = buckets.map((b, i) => ({
       barLabel: b.barLabel,
-      value: fmtK(b.total),
+      value: axis(b.total),
       selected: i === selIdx,
       height: `${Math.max((b.total / top) * 100, 1.5).toFixed(2)}%`,
     }));
@@ -213,8 +215,8 @@ export default function CategoryDetailPage() {
     // Largest by magnitude, keeping its stored sign for correct coloring.
     const largest = n ? txns.reduce((a, t) => (Math.abs(t.amount) > Math.abs(a) ? t.amount : a), txns[0].amount) : 0;
     return {
-      days: groups.map((g) => ({ label: g.label, total: fmtTransaction(g.rawTotal, ctype), rows: g.rows })),
-      summary: { count: n, avg: fmtTransaction(avg, ctype), largest: fmtTransaction(largest, ctype), total: fmtTransaction(rawTotal, ctype) },
+      days: groups.map((g) => ({ label: g.label, total: g.rawTotal, rows: g.rows })),
+      summary: { count: n, avg, largest, total: rawTotal, transfer: ctype === 'transfer' },
     };
   }, [txns, cfg]);
 
@@ -226,14 +228,14 @@ export default function CategoryDetailPage() {
     let thirdLabel: string, thirdVal: string, thirdNeg = false;
     if (isIncome) {
       const over = actual - planned;
-      if (over >= 0) { thirdLabel = 'Over plan'; thirdVal = f0(over); }
-      else { thirdLabel = 'Under plan'; thirdVal = f0(-over); thirdNeg = true; }
+      if (over >= 0) { thirdLabel = 'Over plan'; thirdVal = wholeDollars(over); }
+      else { thirdLabel = 'Under plan'; thirdVal = wholeDollars(-over); thirdNeg = true; }
     } else {
       const rem = planned - actual;
-      if (rem >= 0) { thirdLabel = 'Remaining'; thirdVal = f0(rem); }
-      else { thirdLabel = 'Over budget'; thirdVal = f0(-rem); thirdNeg = true; }
+      if (rem >= 0) { thirdLabel = 'Remaining'; thirdVal = wholeDollars(rem); }
+      else { thirdLabel = 'Over budget'; thirdVal = wholeDollars(-rem); thirdNeg = true; }
     }
-    return { planned: f0(planned), actual: f0(actual), thirdLabel, thirdVal, thirdNeg };
+    return { planned: wholeDollars(planned), actual: wholeDollars(actual), thirdLabel, thirdVal, thirdNeg };
   }, [detail, selBucket, isIncome]);
 
   // ── Render ──
@@ -327,26 +329,26 @@ export default function CategoryDetailPage() {
             <div key={d.label}>
               <div className="flex items-center justify-between bg-surface-2 border-t border-b border-line px-4 md:px-6 py-2 md:py-[11px]">
                 <span className="text-[13px] font-semibold text-content-2">{d.label}</span>
-                <span className={`text-[13px] font-semibold tabular-nums ${d.total.className}`}>{d.total.text}</span>
+                <Money amount={d.total} transfer={summary.transfer} className="text-[13px] font-semibold" />
               </div>
               {d.rows.map((t) => {
                 const vendor = t.merchant?.name || t.description || '—';
                 const hue = hueOf(vendor);
                 const subName = t.category?.subName ?? 'Uncategorized';
-                const amt = fmtTransaction(t.amount, t.category?.type ?? cfg.type);
+                const amt = <Money amount={t.amount} transfer={(t.category?.type ?? cfg.type) === 'transfer'} />;
                 if (isMobile) {
                   return (
                     <ListRow key={t.id}
                       avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
                       title={vendor}
                       subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(subName)}</span><span className="truncate">{subName}</span></>}
-                      amount={amt.text} amountClass={amt.className}
+                      amount={amt}
                       meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined}
                       className="border-t-0 border-b" />
                   );
                 }
                 return (
-                  <div key={t.id} className="grid items-center border-b border-line" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,0.7fr)', gap: 16, padding: '13px 24px' }}>
+                  <div key={t.id} className="grid items-center border-b border-line" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.3fr) minmax(max-content,0.7fr)', gap: 16, padding: '13px 24px' }}>
                     <div className="flex items-center gap-3 min-w-0">
                       <VendorAvatar name={vendor} src={t.merchant?.logoUrl || undefined} color={t.merchant?.logoUrl ? undefined : hue} size={32} />
                       <span className="font-semibold text-[15px] truncate">{vendor}</span>
@@ -360,7 +362,7 @@ export default function CategoryDetailPage() {
                       <span className="font-mono truncate">{t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : '—'}</span>
                     </div>
                     <div className="flex items-center justify-end">
-                      <span className={`font-bold text-[15px] tabular-nums ${amt.className}`}>{amt.text}</span>
+                      <span className="font-bold text-[15px]">{amt}</span>
                     </div>
                   </div>
                 );
@@ -399,15 +401,15 @@ export default function CategoryDetailPage() {
             </div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
               <span className="text-sm text-content-2">Average transaction</span>
-              <span className={`text-[15px] font-semibold tabular-nums ${summary.avg.className}`}>{summary.avg.text}</span>
+              <Money amount={summary.avg} transfer={summary.transfer} className="text-[15px] font-semibold" />
             </div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
               <span className="text-sm text-content-2">Largest transaction</span>
-              <span className={`text-[15px] font-semibold tabular-nums ${summary.largest.className}`}>{summary.largest.text}</span>
+              <Money amount={summary.largest} transfer={summary.transfer} className="text-[15px] font-semibold" />
             </div>
             <div className="flex items-center justify-between border-t border-line" style={{ padding: '15px 24px' }}>
               <span className="text-sm text-content-2">Total amount</span>
-              <span className={`text-[15px] font-bold tabular-nums ${summary.total.className}`}>{summary.total.text}</span>
+              <Money amount={summary.total} transfer={summary.transfer} className="text-[15px] font-bold" />
             </div>
           </div>
         </div>
