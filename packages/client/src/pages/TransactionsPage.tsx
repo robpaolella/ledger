@@ -439,8 +439,8 @@ function TransactionForm({
           <Field label="Date" required error={errDate}>
             <div className="relative">
               <button ref={dateRef} type="button" onClick={() => setDateOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={dateOpen}
-                className={`${inputCls(!!errDate)} font-mono flex items-center justify-between text-left cursor-pointer`}>
-                <span className={date ? 'text-content' : 'text-content-3'}>{date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Choose date…'}</span>
+                className={`${inputCls(!!errDate)} flex items-center justify-between text-left cursor-pointer`}>
+                <span className={`truncate ${date ? 'text-content' : 'text-content-3'}`}>{date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose date…'}</span>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
               </button>
               {dateOpen && (
@@ -1507,6 +1507,7 @@ export default function TransactionsPage() {
   };
 
   const renderRow = (t: Transaction, split?: TransactionSplit) => {
+    const rowActive = bulkMode || canEdit; // rows that do nothing are not focusable
     const checked = selectedIds.has(t.id);
     // Split sub-row: parent merchant + this split's own category + amount + marker.
     if (split) {
@@ -1514,7 +1515,7 @@ export default function TransactionsPage() {
       const sinitial = (splitVendorLabel(t, split)?.trim()?.[0] ?? '?').toUpperCase();
       return (
         <div key={`${t.id}-split-${split.id}`}
-          data-row-id={`${t.id}-split-${split.id}`} role="button" tabIndex={0}
+          data-row-id={`${t.id}-split-${split.id}`} role={rowActive ? 'button' : undefined} tabIndex={rowActive ? 0 : undefined}
           onClick={(e) => activateRow(e, t, split)} onKeyDown={(e) => onRowKeyDown(e, t, split)}
           className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${bulkMode ? 'select-none' : ''}`}
           style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined, boxShadow: 'inset 3px 0 0 color-mix(in srgb, var(--primary) 30%, transparent)' }}>
@@ -1551,7 +1552,7 @@ export default function TransactionsPage() {
     const catMatches = categories.filter((c) => `${c.sub_name} ${c.group_name}`.toLowerCase().includes(cellSearch.toLowerCase())).slice(0, 60);
     return (
       <div key={t.id}
-        data-row-id={String(t.id)} role="button" tabIndex={0}
+        data-row-id={String(t.id)} role={rowActive ? 'button' : undefined} tabIndex={rowActive ? 0 : undefined}
         onClick={(e) => activateRow(e, t)} onKeyDown={(e) => onRowKeyDown(e, t)}
         className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${bulkMode ? 'select-none' : ''}`}
         style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined }}>
@@ -1692,12 +1693,13 @@ export default function TransactionsPage() {
   const searchEl = (<>
           {/* Search */}
           {searchOpen ? (
-            <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            // Width follows the window (not a fixed w-44) so the field gives way to the title and tabs on narrow desktops
+            <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2 w-[clamp(9rem,16vw,15rem)]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" autoCapitalize="off"
                 onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
-                className="w-44 bg-transparent outline-none text-sm text-content" />
-              <button onClick={() => { setSearch(''); setSearchOpen(false); }} className="text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                className="flex-1 min-w-0 bg-transparent outline-none text-sm text-content" />
+              <button onClick={() => { setSearch(''); setSearchOpen(false); }} aria-label="Close search" className="shrink-0 text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
           ) : (
             <Button variant="outline" size="sm" iconOnly aria-label="Search" onClick={() => setSearchOpen(true)} title="Search" active={!!search}>
@@ -2402,7 +2404,7 @@ export default function TransactionsPage() {
       {/* Infinite scroll: sentinel loads the next batch as it nears the viewport */}
       <div ref={loadMoreRef} />
       <div className={`mt-3 mb-16 text-center font-mono text-[12px] text-content-3`}>
-        {total > 0 ? (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : `All ${txnCount(total)}`) : 'No transactions'}
+        {total > 0 ? (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : (total === 1 ? txnCount(total) : `All ${txnCount(total)}`)) : 'No transactions'}
       </div>
 
       {/* Modal */}
