@@ -27,9 +27,15 @@ export default function DashboardCard({ title, subtitle, headline, headerRight, 
     <div className="rounded-[16px] border border-line bg-surface shadow-sm overflow-hidden">
       <div
         {...dragHandleProps}
-        className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-6 pt-4 md:pt-[22px] pb-4 md:pb-[18px] select-none ${dragHandleProps ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
+        className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-6 pt-4 md:pt-[22px] pb-4 md:pb-[18px] select-none ${dragHandleProps ? 'relative cursor-grab active:cursor-grabbing touch-none' : ''}`}
       >
         {/* phones: subtitle stacks under the title (native-app card header) */}
+        {dragHandleProps && (
+          // Sits in the header's left padding so showing it never reflows the title or controls.
+          <span title="Drag to reorder" aria-hidden="true" className="absolute left-1.5 top-1/2 -translate-y-1/2 text-content-3">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+          </span>
+        )}
         <div className="flex flex-col md:flex-row md:items-baseline gap-0.5 md:gap-3 md:flex-wrap min-w-0">
           {headline ?? (
             <>
