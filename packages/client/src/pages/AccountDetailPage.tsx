@@ -152,6 +152,7 @@ export default function AccountDetailPage() {
   const deltaPct = delta != null && points[0].value !== 0 ? (delta / Math.abs(points[0].value)) * 100 : null;
   // Oriented so up is good (liabilities are plotted negative); zero keeps today's "+$0.00" in green.
   const change = delta != null ? formatMoney(delta, { kind: 'total', showZero: true, zeroTone: 'positive' }) : null;
+  const up = change?.tone !== 'negative';
   const rangeLabel = RANGES.find((r) => r.key === range)?.label ?? range;
 
   // Axis date format tracks the plotted span: ≤3m "Jun 12", ≤1y "Mar", all "Mar '24".
@@ -238,13 +239,13 @@ export default function AccountDetailPage() {
             <div className="font-mono text-[11px] uppercase tracking-[.1em] text-content-3 mb-2 md:mb-2.5">Current balance</div>
             <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{formatMoney(displayBalance, { kind: 'balance', showZero: true }).text}</span>
-              {change != null && delta != null && (
+              {change != null && (
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold tabular-nums"
-                  style={{ color: change.tone === 'negative' ? 'var(--negative)' : 'var(--positive)' }}>
+                  style={{ color: up ? 'var(--positive)' : 'var(--negative)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={delta >= 0 ? 'M7 17 17 7M9 7h8v8' : 'M7 7l10 10M17 9v8H9'} />
+                    <path d={up ? 'M7 17 17 7M9 7h8v8' : 'M7 7l10 10M17 9v8H9'} />
                   </svg>
-                  {`${delta >= 0 ? '+' : ''}${change.text}${deltaPct != null ? ` (${delta >= 0 ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
+                  {`${up ? '+' : ''}${change.text}${deltaPct != null ? ` (${up ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
                 </span>
               )}
               <span className="text-[15px] font-medium text-content-3">{rangeLabel} change</span>

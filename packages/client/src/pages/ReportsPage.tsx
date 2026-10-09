@@ -270,11 +270,14 @@ export default function ReportsPage() {
 
   const k = report.kpis;
   const months = Math.max(1, report.range.months);
+  // Direction comes from the rounded Net, so a few cents short reads "$0", not "over income".
+  const kept = netFigure(k.net).tone !== 'negative';
+  const netTone = kept ? 'text-positive' : 'text-negative';
   const kpis = [
     { label: 'Income', value: dollars(k.income), sub: `${k.incomeSourceCount} income source${k.incomeSourceCount === 1 ? '' : 's'}`, color: 'text-content', subColor: 'text-content-3' },
     { label: 'Expenses', value: dollars(k.expenses), sub: `${dollars(k.expenses / months)} avg / mo`, color: 'text-content', subColor: 'text-content-3' },
-    { label: 'Net', value: netFigure(k.net).text, sub: k.net >= 0 ? '▲ money kept' : '▼ over income', color: netFigure(k.net).tone === 'negative' ? 'text-negative' : 'text-positive', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
-    { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${netFigure(k.net / months).text} avg / mo`, color: 'text-content', subColor: k.net >= 0 ? 'text-positive' : 'text-negative' },
+    { label: 'Net', value: netFigure(k.net).text, sub: kept ? '▲ money kept' : '▼ over income', color: netTone, subColor: netTone },
+    { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${netFigure(k.net / months).text} avg / mo`, color: 'text-content', subColor: netTone },
   ];
 
   // ── FLOW BAR (where the money that went out went: top expense groups + Other) ──
