@@ -2293,6 +2293,7 @@ export default function TransactionsPage() {
                 <div className="flex items-center gap-2">
                   {balanced && <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--positive)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg></span>}
                   <div className="text-right leading-tight">
+                    {/* A remainder, not money in or out: plain magnitude; colour shows balanced or not. */}
                     <div className="text-[17px] font-extrabold tabular-nums" style={{ color: balanced ? 'var(--positive)' : 'var(--negative)' }}>{formatMoney(Math.abs(splitRemainingVal), { kind: 'balance' }).text}</div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-content-3">{splitRemainingVal < -0.005 ? 'Over by' : 'Left to split'}</div>
                   </div>
