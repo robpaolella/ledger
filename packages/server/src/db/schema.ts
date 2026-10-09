@@ -271,6 +271,11 @@ export const simplefinConnections = sqliteTable('simplefin_connections', {
   label: text('label').notNull(),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
   updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
+  // Last fetch: 'working' | 'failed' | 'reconnect_needed' (null = never fetched).
+  sync_status: text('sync_status'),
+  sync_error_kind: text('sync_error_kind'),
+  sync_message: text('sync_message'), // Ledger's sentence, never the raw error
+  sync_attempt_at: text('sync_attempt_at'),
 });
 
 // === SimpleFIN Account Links ===
