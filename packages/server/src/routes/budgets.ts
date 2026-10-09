@@ -4,7 +4,7 @@ import { budgets, categories } from '../db/schema.js';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { getRecurringFloors, effectiveBudgetedAmount } from '../services/recurringBudget.js';
-import { getStoredPlans } from '../services/budgetPlan.js';
+import { getStoredPlans, saveBudgetPlan } from '../services/budgetPlan.js';
 import { isValidMonth, toFinite, toId } from '../utils/validate.js';
 
 const router = Router();
@@ -70,24 +70,18 @@ router.post('/', requirePermission('budgets.edit'), (req: Request, res: Response
       return;
     }
     const override = req.body.override ? 1 : 0; // per-month sub-floor override
-
-    // Check if exists
-    const existing = db.select().from(budgets)
-      .where(and(eq(budgets.category_id, categoryId), eq(budgets.month, month)))
-      .get();
-
-    if (existing) {
-      db.update(budgets)
-        .set({ amount, override })
-        .where(eq(budgets.id, existing.id))
-        .run();
-      res.json({ data: { ...existing, amount, override } });
-    } else {
-      const result = db.insert(budgets)
-        .values({ category_id: categoryId, month, amount, override })
-        .run();
-      res.status(201).json({ data: { id: result.lastInsertRowid, category_id: categoryId, month, amount, override } });
+    const scope = req.body.scope === undefined ? 'month' : req.body.scope;
+    if (scope !== 'month' && scope !== 'forward') {
+      res.status(400).json({ error: 'scope must be "month" or "forward"' });
+      return;
     }
+    if (override && scope === 'forward') {
+      res.status(400).json({ error: 'An override applies to this month only' });
+      return;
+    }
+
+    const { row, created } = saveBudgetPlan(sqlite, { categoryId, month, amount, override, scope });
+    res.status(created ? 201 : 200).json({ data: row });
   } catch (err) {
     console.error('POST /budgets error:', err);
     res.status(500).json({ error: 'Failed to save budget' });

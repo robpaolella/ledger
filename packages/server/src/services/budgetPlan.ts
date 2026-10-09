@@ -29,3 +29,49 @@ export function getStoredPlans(sqlite: Database.Database, month: string, categor
   }
   return plans;
 }
+
+export type SaveScope = 'month' | 'forward';
+
+/** The calendar month after `month` (YYYY-MM), rolling December into January. */
+export function nextMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Save a category's plan for `month` in one transaction, under the carry-forward rule:
+ * - 'month': only this month changes. If the next month has no row of its own and there
+ *   was a plan before the edit, it is saved at that pre-edit amount (never overridden).
+ * - 'forward': this month and every existing later row take the amount; later rows are
+ *   updated in place with their override cleared, never deleted.
+ * Returns the edited month's row and whether it was newly created.
+ */
+export function saveBudgetPlan(
+  sqlite: Database.Database,
+  p: { categoryId: number; month: string; amount: number; override: 0 | 1; scope: SaveScope },
+): { row: { id: number; category_id: number; month: string; amount: number; override: number }; created: boolean } {
+  return sqlite.transaction(() => {
+    const before = getStoredPlans(sqlite, p.month, [p.categoryId]).get(p.categoryId);
+    const existing = sqlite.prepare('SELECT id FROM budgets WHERE category_id = ? AND month = ?')
+      .get(p.categoryId, p.month) as { id: number } | undefined;
+    let id: number;
+    if (existing) {
+      sqlite.prepare('UPDATE budgets SET amount = ?, override = ? WHERE id = ?').run(p.amount, p.override, existing.id);
+      id = existing.id;
+    } else {
+      id = Number(sqlite.prepare('INSERT INTO budgets (category_id, month, amount, override) VALUES (?, ?, ?, ?)')
+        .run(p.categoryId, p.month, p.amount, p.override).lastInsertRowid);
+    }
+
+    if (p.scope === 'forward') {
+      sqlite.prepare('UPDATE budgets SET amount = ?, override = 0 WHERE category_id = ? AND month > ?')
+        .run(p.amount, p.categoryId, p.month);
+    } else if (before) {
+      const next = nextMonth(p.month);
+      sqlite.prepare(`INSERT INTO budgets (category_id, month, amount, override)
+        SELECT ?, ?, ?, 0 WHERE NOT EXISTS (SELECT 1 FROM budgets WHERE category_id = ? AND month = ?)`)
+        .run(p.categoryId, next, before.amount, p.categoryId, next);
+    }
+    return { row: { id, category_id: p.categoryId, month: p.month, amount: p.amount, override: p.override }, created: !existing };
+  })();
+}
