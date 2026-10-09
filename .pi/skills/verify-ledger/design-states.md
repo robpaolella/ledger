@@ -3,7 +3,7 @@
 Start with [Launch, Doctor and Drive](SKILL.md). Use a separate launch/evidence folder
 and named browser per checkout. These recipes change only that run's new sample data.
 Never inspect or copy `data/`, inject auth tokens, set React state, edit SQLite, or
-fake a state by changing the live page's DOM. `/mockup` and `/qa` are not production routes.
+fake a state by changing the live page's DOM.
 
 ## Map each approved entry before driving
 

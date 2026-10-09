@@ -32,7 +32,6 @@ import amazonRoutes from './routes/amazon.js';
 import setupRoutes from './routes/setup.js';
 import twofaRoutes from './routes/twofa.js';
 import recurringRoutes from './routes/recurring.js';
-import devRoutes from './routes/dev.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startDailyScheduler } from './services/scheduler.js';
 
@@ -89,9 +88,6 @@ app.use('/api/import', importRoutes);
 app.use('/api/simplefin', simplefinRoutes);
 app.use('/api/llm', llmRoutes);
 app.use('/api/amazon', amazonRoutes);
-if (!isProd) {
-  app.use('/api/dev', devRoutes);
-}
 
 // Uploaded images (account avatars, merchant logos) — public (referenced by <img>),
 // served in dev + prod, before the SPA catch-all. Harden the response so a stored

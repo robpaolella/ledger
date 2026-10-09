@@ -1,5 +1,5 @@
 /**
- * Settings building blocks — the design-system form/card recipes used by every
+ * Settings building blocks — the form/card recipes in `DESIGN.md` used by every
  * Settings panel and modal (docs/Settings handoff): 13/700 labels, h-11 inputs
  * on `--surface-2` with `--line-strong`, radius 11, h-[42px] footer buttons,
  * 18px-radius cards, square 19px checkboxes.

@@ -47,7 +47,6 @@ says port 0; **use Doctor's URL**, not that log line.
 Each launch has separate data, build snapshots, ports, control token and logs.
 Use separate worktrees for workers building concurrently, and a fresh evidence
 folder for every launch. Do not reinstall dependencies while a run is active.
-Production excludes `/mockup`, `/qa` and `/api/dev`; they are not verification routes.
 
 ## Optional bank and merchant logos
 
