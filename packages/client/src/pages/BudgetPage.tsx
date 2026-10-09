@@ -90,7 +90,7 @@ function Remaining({ value, className }: { value: number; className?: string }) 
 // so it reads positive; `long` spells out "over plan" (the phone pill is too narrow).
 function RemainingCell({ value, income, long, className }: { value: number; income: boolean; long?: boolean; className?: string }) {
   if (income && isOver(value)) {
-    return <span className={`tabular-nums text-positive ${className ?? ''}`}>+{whole(-value)}{long ? ' over plan' : ''}</span>;
+    return <span className={`tabular-nums whitespace-nowrap text-positive ${className ?? ''}`}>+{whole(-value)}{long ? ' over plan' : ''}</span>;
   }
   return <Remaining value={value} className={className} />;
 }
@@ -352,7 +352,7 @@ export default function BudgetPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_316px] gap-5 items-start">
         {/* Budget table */}
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-          <div className="grid gap-3 px-6 py-3.5 border-b border-line font-mono text-[11px] uppercase tracking-wide text-content-3" style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 128px' }}>
+          <div className="grid gap-3 px-6 py-3.5 border-b border-line font-mono text-[11px] uppercase tracking-wide text-content-3" style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 144px' }}>
             <span>Category</span><span className="text-right">Planned</span><span className="text-right">Actual</span><span className="text-right">Remaining</span>
           </div>
           {sections.map((sec) => {
@@ -362,7 +362,7 @@ export default function BudgetPage() {
               <div key={sec.key}>
                 <div onClick={() => setCollapsedSections((s) => ({ ...s, [sec.key]: !s[sec.key] }))}
                   className="grid gap-3 px-6 py-2.5 bg-surface-2 border-t border-b border-line text-[13px] font-bold uppercase tracking-wide text-content-2 cursor-pointer items-center"
-                  style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 128px' }}>
+                  style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 144px' }}>
                   <span className="flex items-center gap-2.5">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-content-3" style={{ transform: secCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
                     {sec.label}
@@ -383,7 +383,7 @@ export default function BudgetPage() {
                   return (
                     <div key={groupKey}>
                       <div className="grid gap-3 px-6 py-3.5 border-b border-line items-center"
-                        style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 128px' }}>
+                        style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 144px' }}>
                         <div className="flex items-center gap-2.5 min-w-0">
                           <button type="button" onClick={() => setCollapsedGroups((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
                             aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="shrink-0 w-7 h-7 -m-1 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface-2 transition-colors">
@@ -402,7 +402,7 @@ export default function BudgetPage() {
                           {rows.map((r) => {
                             const rem = r.budgeted - r.actual;
                             return (
-                              <div key={r.categoryId} className="grid gap-3 pr-6 py-3 border-b border-line items-center" style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 128px', paddingLeft: 52 }}>
+                              <div key={r.categoryId} className="grid gap-3 pr-6 py-3 border-b border-line items-center" style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 144px', paddingLeft: 52 }}>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                                     <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(r.subName)}</span>
