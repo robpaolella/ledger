@@ -49,7 +49,7 @@ export default function ProfilePanel() {
       <PanelHeader title="Profile" description="Your name as it appears across Ledger, and how the app looks on this device." />
 
       <Card>
-        <CardHeader title="Your details" divider actions={<Pill color={ROLE_TONE[role]}>{roleLabel}</Pill>} />
+        <CardHeader title="Your details" divider actions={<Pill color={ROLE_TONE[role]} className="max-md:max-w-[190px] max-md:h-auto max-md:py-1 max-md:whitespace-normal max-md:leading-snug">{roleLabel}</Pill>} />
         <div className="px-6 py-5 flex flex-col gap-5">
           <div className="flex items-center gap-4">
             <InitialsAvatar name={displayName || user?.displayName || '?'} color="var(--primary)" size={56} />

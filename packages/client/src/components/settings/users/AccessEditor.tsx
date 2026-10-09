@@ -9,10 +9,13 @@ const btnRowPrimary = buttonClasses({ variant: 'primary', size: 'row' });
 
 const PRESET_ORDER: AccessPreset[] = ['view', 'everyday', 'everything'];
 
+const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+const phoneTap = 'max-md:min-h-[44px]';
+
 function AccessRow({ label, desc, checked, pending, onPick }: { label: string; desc: React.ReactNode; checked: boolean; pending: boolean; onPick?: () => void }) {
   return (
-    <button type="button" role="radio" aria-checked={checked} aria-disabled={!onPick || undefined} onClick={onPick}
-      className={`flex items-start gap-3 w-full text-left px-3.5 py-3 rounded-[11px] transition-colors ${pending ? 'border-[1.5px] border-dashed border-primary' : checked ? 'border border-primary' : 'border border-line'} ${onPick ? 'cursor-pointer hover:border-line-strong' : 'cursor-default'}`}
+    <button type="button" role="radio" aria-checked={checked} aria-disabled={!onPick || undefined} onClick={onPick} tabIndex={checked ? 0 : -1}
+      className={`flex items-start gap-3 w-full text-left px-3.5 py-3 rounded-[11px] transition-colors ${focusRing} ${pending ? 'border-[1.5px] border-dashed border-primary' : checked ? 'border border-primary' : 'border border-line'} ${onPick ? 'cursor-pointer hover:border-line-strong' : 'cursor-default'}`}
       style={{ background: checked ? 'color-mix(in srgb, var(--primary) 9%, var(--surface))' : 'var(--surface-2)' }}>
       <span aria-hidden="true" className={`w-[19px] h-[19px] flex-none mt-px rounded-full border-[1.5px] bg-surface flex items-center justify-center ${checked || pending ? 'border-primary' : 'border-line-strong'}`}>
         {checked && <span className="w-[9px] h-[9px] rounded-full bg-primary" />}
@@ -45,10 +48,20 @@ export default function AccessEditor({ name, permissions, canEdit, onApplyPreset
     onApplyPreset(preset);
   };
   const confirm = () => { if (pending) onApplyPreset(pending); setPending(null); };
+  // Arrow keys move between the rows without applying anything; Enter or Space picks.
+  const moveFocus = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    const rows = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    e.preventDefault();
+    rows[(at + step + rows.length) % rows.length].focus();
+  };
 
   return (
     <div className="flex flex-col gap-3">
-      <div role="radiogroup" aria-label={`Access for ${name}`} className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
+      <div role="radiogroup" aria-label={`Access for ${name}`} onKeyDown={moveFocus} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {PRESET_ORDER.map((k) => (
           <AccessRow key={k} label={ACCESS_PRESETS[k].label} checked={current === k} pending={pending === k}
             desc={pending === k ? <span className="font-semibold text-primary">Picked. Confirm below to apply.</span> : ACCESS_PRESETS[k].desc}
@@ -61,15 +74,15 @@ export default function AccessEditor({ name, permissions, canEdit, onApplyPreset
         <InlineNotification type="warning" message={`This replaces ${firstName}’s custom switches with ${ACCESS_PRESETS[pending].label}.`}
           actions={(
             <span className="flex gap-2 shrink-0">
-              <button type="button" onClick={() => setPending(null)} className={btnRow}>Cancel</button>
-              <button type="button" onClick={confirm} className={btnRowPrimary}>Confirm</button>
+              <button type="button" onClick={() => setPending(null)} className={`${btnRow} ${phoneTap}`}>Cancel</button>
+              <button type="button" onClick={confirm} className={`${btnRowPrimary} ${phoneTap}`}>Confirm</button>
             </span>
           )} />
       )}
 
       <div>
         <button type="button" onClick={() => setCustomizing((v) => !v)} aria-expanded={customizing}
-          className="inline-flex items-center gap-1.5 min-h-[32px] text-[13px] font-semibold text-content-2 hover:text-content">
+          className={`inline-flex items-center gap-1.5 min-h-[32px] ${phoneTap} text-[13px] font-semibold text-content-2 hover:text-content`}>
           <span className={`flex transition-transform ${customizing ? 'rotate-180' : ''}`}>{ICON.chevron}</span>
           {customizing ? 'Hide switches' : 'Customize'}
         </button>
@@ -86,7 +99,7 @@ export default function AccessEditor({ name, permissions, canEdit, onApplyPreset
                   return (
                     <button key={p.key} type="button" role="checkbox" aria-checked={granted} aria-disabled={!canEdit || undefined}
                       onClick={canEdit ? () => { setPending(null); onTogglePermission(p.key, granted); } : undefined}
-                      className={`flex items-start gap-3 px-3.5 py-[11px] rounded-[11px] border border-line bg-surface-2 text-left transition-colors ${canEdit ? 'hover:border-line-strong' : 'cursor-default'}`}>
+                      className={`flex items-start gap-3 px-3.5 py-[11px] rounded-[11px] border border-line bg-surface-2 text-left transition-colors ${focusRing} ${canEdit ? 'hover:border-line-strong' : 'cursor-default'}`}>
                       <CheckBox checked={granted} className="mt-0.5" />
                       <span className="min-w-0">
                         <span className="block text-[13.5px] font-semibold text-content">{p.label}</span>

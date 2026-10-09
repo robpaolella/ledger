@@ -409,7 +409,7 @@ export default function UsersPanel() {
                   <div className="text-[12.5px] text-content-3 truncate">{ROLE_LABEL[mu.role]}{mu.role === 'member' && ` · ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}</div>
                 </div>
                 <span className="hidden md:block font-mono text-[12.5px] text-content-3 truncate max-w-[160px]">@{mu.username}</span>
-                <div className="flex items-center gap-2 shrink-0 max-md:ml-14">
+                <div className="flex items-center gap-2 shrink-0">
                   {mu.role === 'owner' ? (
                     <Pill color="var(--c-orange)" className="h-[26px] rounded-[7px]">Owner</Pill>
                   ) : callerRole === 'owner' ? (
@@ -450,12 +450,12 @@ export default function UsersPanel() {
               </div>
 
               {mu.role !== 'member' ? (
-                <div className="px-6 pb-4 text-[12.5px] italic text-content-3" style={{ paddingLeft: 80 }}>
+                <div className="px-6 md:pl-20 pb-4 text-[12.5px] italic text-content-3">
                   {mu.role === 'owner' ? 'App owner. Cannot be restricted or removed.' : `Admins can use everything and manage members.${callerRole !== 'owner' ? ' Only the owner can change admins.' : ''}`}
                 </div>
               ) : mu.permissions && (
                 <div className="pb-4 pl-6 pr-6 md:pl-20">
-                  <button type="button" onClick={() => toggleExpanded(mu.id)} aria-expanded={isOpen} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-content-2 hover:text-content">
+                  <button type="button" onClick={() => toggleExpanded(mu.id)} aria-expanded={isOpen} className="inline-flex items-center gap-1.5 max-md:min-h-[44px] text-[13px] font-semibold text-content-2 hover:text-content">
                     <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>{ICON.chevron}</span>
                     {isOpen ? 'Hide access' : `Access: ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}
                   </button>
