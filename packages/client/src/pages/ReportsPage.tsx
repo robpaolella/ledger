@@ -276,28 +276,32 @@ export default function ReportsPage() {
   const kpis = [
     { label: 'Income', value: dollars(k.income), sub: `${k.incomeSourceCount} income source${k.incomeSourceCount === 1 ? '' : 's'}`, color: 'text-content', subColor: 'text-content-3' },
     { label: 'Expenses', value: dollars(k.expenses), sub: `${dollars(k.expenses / months)} avg / mo`, color: 'text-content', subColor: 'text-content-3' },
-    { label: 'Net', value: netFigure(k.net).text, sub: kept ? '▲ money kept' : '▼ over income', color: netTone, subColor: netTone },
+    { label: 'Net', value: netFigure(k.net).text, sub: kept ? '▲ saved' : '▼ over income', color: netTone, subColor: netTone },
     { label: 'Savings rate', value: `${Math.round(k.savingsRate * 100)}%`, sub: `${netFigure(k.net / months).text} avg / mo`, color: 'text-content', subColor: netTone },
   ];
 
-  // ── FLOW BAR (where the money that went out went: top expense groups + Other) ──
+  // ── FLOW BAR (where the period's income went: Saved, top expense groups, Other) ──
   const expGroups = sections.expenses.groups;
   const flowSegs: { name: string; color: string; emoji: string; amount: number; pct: number; drill: string | null }[] = [];
-  // Focused: shares of the group total. Unfocused: allocation of money that went OUT
-  // — expenses only (no income / no "unspent"), so it fills the bar.
-  const flowDenom = focusObj ? focusObj.group.total : k.expenses;
+  // Focused: shares of the group total. Unfocused: where the period's income went —
+  // Saved (the Net card's figure) first, then the expense groups. With nothing saved
+  // (rounded Net not above $0) there is no Saved segment and the bar is expenses only,
+  // so shares never pass 100%.
+  const savedAmt = Math.round(k.net) > 0 ? k.net : 0;
+  const flowDenom = focusObj ? focusObj.group.total : savedAmt > 0 ? k.income : k.expenses;
   const showFlow = flowDenom > 0;
   if (showFlow) {
     if (focusObj) {
       focusObj.group.subs.forEach((s, i) => flowSegs.push({ name: s.subName, color: subColor(i), emoji: getCategoryEmoji(s.subName), amount: s.total, pct: s.total / flowDenom, drill: null }));
     } else {
+      if (savedAmt > 0) flowSegs.push({ name: 'Saved', color: 'var(--positive)', emoji: '💰', amount: savedAmt, pct: savedAmt / flowDenom, drill: null });
       const top = expGroups.slice(0, 6);
       top.forEach((g) => flowSegs.push({ name: g.groupName, color: groupColorVar('expense', g.groupName), emoji: getCategoryEmoji(g.groupName), amount: g.total, pct: g.total / flowDenom, drill: g.groupName }));
       const otherAmt = expGroups.slice(6).reduce((s, g) => s + g.total, 0);
       if (otherAmt > 0) flowSegs.push({ name: 'Other', color: 'var(--text-3)', emoji: '📦', amount: otherAmt, pct: otherAmt / flowDenom, drill: null });
     }
   }
-  const flowDenomLabel = focusObj ? focusObj.group.groupName : `Spent ${dollars(k.expenses)}`;
+  const flowDenomLabel = focusObj ? focusObj.group.groupName : savedAmt > 0 ? `Income ${dollars(k.income)}` : `Spent ${dollars(k.expenses)}`;
   // Lay the bar out in whole DEVICE pixels so the gap AND every segment edge land
   // on the device grid — then all gaps render at an identical device-pixel width
   // at any DPR (fractional CSS px otherwise anti-aliases gaps to 2 vs 3 px).
@@ -561,7 +565,7 @@ export default function ReportsPage() {
                   style={{ ...(flowWidthsCss.length ? { width: flowWidthsCss[i], flex: 'none' } : { flexGrow: Math.max(0, s.pct), flexBasis: 0, minWidth: 0 }), background: s.color, borderRadius: i === 0 ? '6px 0 0 6px' : i === flowSegs.length - 1 ? '0 6px 6px 0' : '0', cursor: s.drill ? 'pointer' : 'default', filter: flowHover === i ? 'brightness(1.12)' : 'none', transform: flowHover === i ? 'scaleY(1.28)' : 'scaleY(1)', zIndex: flowHover === i ? 3 : 1, transition: 'transform .12s ease, filter .12s ease' }}>
                   {flowHover === i && (
                     <div className="absolute whitespace-nowrap bg-elevated border border-line-strong rounded-[10px] shadow-md" style={{ bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%) scaleY(0.781)', transformOrigin: 'bottom center', pointerEvents: 'none', padding: '8px 11px', zIndex: 10 }}>
-                      <div className="flex items-center gap-2 text-[13px] font-bold mb-0.5">{focusObj ? <span className="text-sm leading-none">{s.emoji}</span> : <span className="shrink-0 w-3 h-3 rounded-[3px]" style={{ background: s.color }} />}{s.name}</div>
+                      <div className="flex items-center gap-2 text-[13px] font-bold mb-0.5"><span className="text-sm leading-none">{s.emoji}</span>{s.name}</div>
                       <div className="text-[13px] text-content-2 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</div>
                     </div>
                   )}
@@ -571,9 +575,7 @@ export default function ReportsPage() {
             <div className="flex flex-wrap gap-x-[22px] gap-y-3.5">
               {flowSegs.map((s, i) => (
                 <div key={i} onClick={() => s.drill && drillTo(s.drill)} className="flex items-center gap-2 text-[13px]" style={{ cursor: s.drill ? 'pointer' : 'default' }}>
-                  {focusObj
-                    ? <span className="text-sm leading-none">{s.emoji}</span>
-                    : <span className="shrink-0 w-3 h-3 rounded-[3px]" style={{ background: s.color }} />}
+                  <span className="text-sm leading-none">{s.emoji}</span>
                   <span className="font-semibold">{s.name}</span>
                   <span className="text-content-3 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</span>
                 </div>
