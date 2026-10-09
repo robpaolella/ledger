@@ -8,6 +8,15 @@ import {
 } from './simplefinSync.js';
 import { notifySyncFailure } from './notifications.js';
 import { getConfig as getAppConfig, setConfig as setAppConfig } from './appConfig.js';
+import {
+  LAST_SUCCESS_KEY,
+  localDate,
+  targetAt,
+  dailySyncOn,
+  dailySyncForcedOff,
+  recordDailyRun,
+  type RetrySnapshot,
+} from './dailySync.js';
 import { runAmazonPipeline } from './amazonPipeline.js';
 import { syncBenchmarkPrices } from './benchmarks.js';
 import { checkBudgetExceeded } from './budgetAlerts.js';
@@ -28,13 +37,12 @@ import { checkBudgetExceeded } from './budgetAlerts.js';
  * notify after the 2nd consecutive failure, and again when retries exhaust.
  * A missed day widens the next run's fetch window, so data is never lost —
  * "at least once per day the server is up".
+ *
+ * On/off: the saved 'daily_sync.enabled' switch, checked every tick, so it
+ * needs no restart; DISABLE_DAILY_SYNC=1 forces it off regardless.
  */
 
 const BACKOFF_MS = [15 * 60_000, 60 * 60_000, 3 * 60 * 60_000, 6 * 60 * 60_000];
-const LAST_SUCCESS_KEY = 'daily_sync.last_success';
-
-const localDate = (d = new Date()): string => d.toLocaleDateString('en-CA'); // YYYY-MM-DD
-
 const getConfig = (key: string): string | null => getAppConfig(sqlite, key);
 const setConfig = (key: string, value: string): void => setAppConfig(sqlite, key, value);
 
@@ -50,6 +58,18 @@ interface DayState {
 
 let state: DayState | null = null;
 let running = false;
+
+/** Today's retry state for Bank sync; null before today's first tick. */
+export function getRetrySnapshot(): RetrySnapshot | null {
+  if (!state || state.day !== localDate()) return null;
+  return {
+    attempts: state.attempts,
+    nextAttemptAt: state.nextAttemptAt === Number.MAX_SAFE_INTEGER ? null : state.nextAttemptAt,
+    failedConnectionIds: state.failedConnectionIds,
+    failureCounts: new Map(state.failureCounts),
+    authFailed: new Set(state.authFailed),
+  };
+}
 
 function freshState(day: string): DayState {
   return {
@@ -168,6 +188,14 @@ async function runOnce(): Promise<void> {
   }
 
   const stillFailing = result.failures.map((f) => f.connectionId);
+  // Earlier auth failures drop out of retries but are still problems today.
+  const problems = new Set([...stillFailing, ...state.authFailed]).size;
+  recordDailyRun(sqlite, {
+    day: today,
+    transactionsImported: commit.transactionsImported,
+    connections: result.connectionCount,
+    connectionsWithProblems: problems,
+  });
   if (result.failures.length === 0) {
     setConfig(LAST_SUCCESS_KEY, today);
     state.failedConnectionIds = null;
@@ -196,17 +224,15 @@ async function runOnce(): Promise<void> {
   }
 }
 
-async function tick(): Promise<void> {
+/** One scheduler check (exported for tests). */
+export async function tick(): Promise<void> {
   if (running || isSyncInFlight()) return; // a manual sync is running — next minute
   const today = localDate();
   if (!state || state.day !== today) state = freshState(today);
+  if (!dailySyncOn(sqlite)) return;
   if (getConfig(LAST_SUCCESS_KEY) === today) return; // done for the day
 
-  const hour = Number(process.env.DAILY_SYNC_HOUR ?? 5);
-  const minute = Number(process.env.DAILY_SYNC_MINUTE ?? 30);
-  const target = new Date();
-  target.setHours(hour, minute, 0, 0);
-  if (Date.now() < target.getTime() || Date.now() < state.nextAttemptAt) return;
+  if (Date.now() < targetAt(new Date()).getTime() || Date.now() < state.nextAttemptAt) return;
 
   running = true;
   try {
@@ -234,10 +260,7 @@ export async function runDailySyncNow(): Promise<void> {
 }
 
 export function startDailyScheduler(): void {
-  if (process.env.DISABLE_DAILY_SYNC === '1') {
-    console.log('[daily-sync] disabled via DISABLE_DAILY_SYNC=1');
-    return;
-  }
+  if (dailySyncForcedOff()) console.log('[daily-sync] forced off via DISABLE_DAILY_SYNC=1');
   const interval = setInterval(() => { void tick(); }, 60_000);
   interval.unref();
   const boot = setTimeout(() => { void tick(); }, 15_000);
