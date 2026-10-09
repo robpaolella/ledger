@@ -4,6 +4,7 @@ import { transactions, accounts, categories, balanceSnapshots, assets, merchants
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { calculateCurrentValue } from '../utils/depreciation.js';
 import { getStoredPlans } from '../services/budgetPlan.js';
+import { getRecurringFloors, effectiveBudgetedAmount } from '../services/recurringBudget.js';
 
 const router = Router();
 
@@ -29,6 +30,21 @@ function monthRange(month: string): { startDate: string; endDate: string } {
   const lastDay = new Date(year, m, 0).getDate();
   const endDate = `${year}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   return { startDate, endDate };
+}
+
+// Expense categories shown on Budget, each with its effective plan for the month:
+// the carried-forward stored plan, raised to the recurring floor unless that
+// month's own row is overridden (the same rule as GET /api/budgets/summary).
+function effectiveExpensePlans(month: string): { groupName: string; budgeted: number }[] {
+  const plans = getStoredPlans(sqlite, month);
+  const floors = getRecurringFloors(month);
+  return db.select().from(categories)
+    .where(and(eq(categories.type, 'expense'), sql`coalesce(${categories.exclude_from_budget}, 0) = 0`))
+    .all()
+    .map((c) => {
+      const plan = plans.get(c.id);
+      return { groupName: c.group_name, budgeted: effectiveBudgetedAmount(plan?.amount ?? 0, !!plan?.override, floors.get(c.id)?.amount) };
+    });
 }
 
 function priorMonth(month: string): string {
@@ -132,14 +148,9 @@ router.get('/summary', (req: Request, res: Response) => {
     `).get(priorStart, priorEnd, priorStart, priorEnd) as { income: number; expenses: number };
     const priorTotals = priorRows ?? { income: 0, expenses: 0 };
 
-    // Total budgeted expenses for month — exclude hidden-from-budget categories
-    // so the budgeted total reconciles with the (now-filtered) actual expenses.
-    // Plans are carried forward from the latest earlier month (stored amounts, no floors).
-    const plans = getStoredPlans(sqlite, month);
-    let budgetTotal = 0;
-    for (const c of db.select().from(categories).where(sql`coalesce(${categories.exclude_from_budget}, 0) = 0 AND ${categories.type} <> 'transfer'`).all()) {
-      budgetTotal += plans.get(c.id)?.amount ?? 0;
-    }
+    // Total budgeted expenses for month: expense categories only (not hidden from
+    // budget), with recurring floors, so it equals Budget's totals.budgetedExpenses.
+    const budgetTotal = effectiveExpensePlans(month).reduce((sum, p) => sum + p.budgeted, 0);
 
     res.json({
       data: {
@@ -181,11 +192,9 @@ router.get('/spending-by-category', (req: Request, res: Response) => {
       GROUP BY c.group_name
     `).all(startDate, endDate, startDate, endDate) as { groupName: string; totalSpent: number }[];
 
-    // Get carried-forward budgets for each group
-    const plans = getStoredPlans(sqlite, month);
     const budgetMap = new Map<string, number>();
-    for (const c of db.select().from(categories).where(and(eq(categories.type, 'expense'), sql`coalesce(${categories.exclude_from_budget}, 0) = 0`)).all()) {
-      budgetMap.set(c.group_name, (budgetMap.get(c.group_name) ?? 0) + (plans.get(c.id)?.amount ?? 0));
+    for (const p of effectiveExpensePlans(month)) {
+      budgetMap.set(p.groupName, (budgetMap.get(p.groupName) ?? 0) + p.budgeted);
     }
 
     const data = spending

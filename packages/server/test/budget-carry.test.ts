@@ -105,7 +105,7 @@ describe('every budget reader agrees on the carried plan', () => {
     ['2031-01', 450, 50], // carried from 2026-05 and 2025-12
   ])('%s', async (month, carry, other) => {
     const before = sqlite.prepare('SELECT * FROM budgets ORDER BY id').all();
-    const floorStored = 40; // the floor category's own stored plan carries too
+    const floorBudgeted = 100; // the floor category's carried 40 is raised to its $100 recurring floor
 
     const list = await get<{ category_id: number }[]>(`/budgets?month=${month}`);
     expect(list.find((r) => r.category_id === cat.carry)).toMatchObject({ id: null, month, amount: carry });
@@ -122,12 +122,12 @@ describe('every budget reader agrees on the carried plan', () => {
     vi.useRealTimers();
     expect(detail.plannedPerMonth).toBe(carry);
 
-    // Only the test categories have budget rows, so the Dashboard total is theirs.
+    // Only the test categories have budget rows or floors, so the Dashboard total is theirs.
     const dash = await get<{ totalBudgetedExpenses: number }>(`/dashboard/summary?month=${month}`);
-    expect(dash.totalBudgetedExpenses).toBe(carry + other + floorStored);
+    expect(dash.totalBudgetedExpenses).toBe(carry + other + floorBudgeted);
 
     const spending = await get<{ groupName: string; totalBudgeted: number }[]>(`/dashboard/spending-by-category?month=${month}`);
-    expect(spending.find((g) => g.groupName === 'Carry Test')!.totalBudgeted).toBe(carry + other + floorStored);
+    expect(spending.find((g) => g.groupName === 'Carry Test')!.totalBudgeted).toBe(carry + other + floorBudgeted);
 
     checkBudgetExceeded(sqlite, { month, categoryIds: [cat.carry] });
     const note = sqlite.prepare('SELECT body FROM notifications WHERE dedupe_key = ?').get(`budget_exceeded:${cat.carry}:${month}`) as { body: string };
