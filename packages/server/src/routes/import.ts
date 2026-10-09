@@ -6,6 +6,7 @@ import { buildCategorizer } from '../services/categorize.js';
 import { llmConfig, llmCategorizeBatch, mergeLlmResult, type LlmTxnInput } from '../services/llmCategorize.js';
 import { normalizeMerchantName } from '../services/merchantNormalize.js';
 import { eq } from 'drizzle-orm';
+import { readCsv } from '@ledger/shared';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 import { detectTransfers } from '../services/transferDetector.js';
@@ -13,30 +14,6 @@ import { commitImport, IMPORT_FAILED_MESSAGE, type ImportCommitInput } from '../
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-
-function parseLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
 
 const HEADER_PATTERNS = [
   /^date$/i, /datetime/i, /posting\s?date/i, /trans(action)?\s?date/i,
@@ -66,15 +43,15 @@ function findHeaderRow(parsedLines: string[][]): number {
   return bestIdx;
 }
 
-function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number } {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length === 0) return { headers: [], rows: [], headerRowIndex: 0 };
+// headerRowIndex counts non-blank records, so the browser's readCsv slice agrees with it.
+export function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number; unclosedQuoteLine: number | null } {
+  const { records, unclosedQuoteLine } = readCsv(text);
+  if (records.length === 0) return { headers: [], rows: [], headerRowIndex: 0, unclosedQuoteLine };
 
-  const parsedLines = lines.map(parseLine);
-  const headerRowIndex = findHeaderRow(parsedLines);
-  const headers = parsedLines[headerRowIndex];
-  const rows = parsedLines.slice(headerRowIndex + 1).filter((r) => r.some((c) => c.trim()));
-  return { headers, rows, headerRowIndex };
+  const headerRowIndex = findHeaderRow(records);
+  const headers = records[headerRowIndex];
+  const rows = records.slice(headerRowIndex + 1);
+  return { headers, rows, headerRowIndex, unclosedQuoteLine };
 }
 
 function detectFormat(headers: string[]): 'chase' | 'venmo' | 'generic' {
@@ -105,10 +82,15 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
     }
 
     const text = req.file.buffer.toString('utf-8');
-    const { headers, rows, headerRowIndex } = parseCSV(text);
+    const { headers, rows, headerRowIndex, unclosedQuoteLine } = parseCSV(text);
+
+    if (unclosedQuoteLine !== null) {
+      res.status(400).json({ error: `This file has a quote mark on line ${unclosedQuoteLine} that is never closed, so it can't be read safely. Fix the file and upload it again.` });
+      return;
+    }
 
     if (headers.length === 0) {
-      res.status(400).json({ error: 'Could not parse CSV headers' });
+      res.status(400).json({ error: "We couldn't find any rows in this file. Check that it's a CSV export and try again." });
       return;
     }
 
