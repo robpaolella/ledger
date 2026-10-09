@@ -6,12 +6,14 @@ interface BottomSheetProps {
   onClose: () => void;
   title?: string;
   description?: string;
+  /** Optional emoji or glyph, shown in a tile to the left of the title. */
+  icon?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
 }
 
 /** Phone counterpart of ResponsiveModal — same header · body · footer anatomy. */
-export default function BottomSheet({ isOpen, onClose, title, description, footer, children }: BottomSheetProps) {
+export default function BottomSheet({ isOpen, onClose, title, description, icon, footer, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const currentTranslateY = useRef(0);
@@ -99,9 +101,12 @@ export default function BottomSheet({ isOpen, onClose, title, description, foote
 
         {title && (
           <div className="flex items-start justify-between gap-3 shrink-0 px-5 pt-1 pb-3 border-b border-line">
-            <div className="min-w-0">
-              <div className="text-[18px] font-extrabold tracking-tight text-content leading-tight">{title}</div>
-              {description && <div className="text-[13px] text-content-3 mt-1 leading-snug">{description}</div>}
+            <div className="min-w-0 flex items-center gap-3">
+              {icon && <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{icon}</span>}
+              <div className="min-w-0">
+                <div className="text-[18px] font-extrabold tracking-tight text-content leading-tight">{title}</div>
+                {description && <div className="text-[13px] text-content-3 mt-1 leading-snug">{description}</div>}
+              </div>
             </div>
             <button
               type="button"
