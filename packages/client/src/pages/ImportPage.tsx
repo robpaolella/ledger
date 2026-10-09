@@ -348,7 +348,9 @@ export default function ImportPage() {
       navigate('/transactions');
     } catch (err) {
       // The server's refusal names the row; show it rather than a generic failure.
-      addToast(err instanceof ApiError && err.status === 400 && err.message ? err.message : 'Import failed', 'error');
+      // apiFetch fills in "Request failed with status N" when the server sent no message.
+      const refused = err instanceof ApiError && err.status === 400 && err.message && err.message !== `Request failed with status ${err.status}`;
+      addToast(refused ? err.message : 'Import failed', 'error');
     } finally {
       setCsvImporting(false);
     }
