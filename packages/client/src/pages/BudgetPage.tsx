@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { fmt, fmtWhole } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { Change } from '../components/Money';
 import Spinner from '../components/Spinner';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { SegmentedControl, BudgetBar } from '../components/primitives';
@@ -69,6 +70,15 @@ interface AnnualGroup {
 interface AnnualSummary {
   income: AnnualRow[];
   expenseGroups: AnnualGroup[];
+}
+
+// Planned, actual and monthly cells are plain balances; remaining figures are totals.
+const whole = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole' }).text;
+const full = (n: number) => formatMoney(n, { kind: 'balance' }).text;
+
+// A remaining figure: real minus and bad colour when negative, otherwise good (zero included).
+function Remaining({ value, className }: { value: number; className?: string }) {
+  return <Change value={value} precision="whole" zeroTone="positive" className={className} />;
 }
 
 function monthStr(d: Date): string {
@@ -254,7 +264,7 @@ export default function BudgetPage() {
       <div>
         <div className="-mx-4 -mt-5 mb-4 px-4 py-3 flex items-center justify-between" style={{ background: 'color-mix(in srgb, var(--positive) 14%, transparent)' }}>
           <span className="text-[15px] font-extrabold">Left to budget</span>
-          <span className="text-[17px] font-extrabold tabular-nums" style={{ color: totals.leftToBudget < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(totals.leftToBudget)}</span>
+          <Remaining value={totals.leftToBudget} className="text-[17px] font-extrabold" />
         </div>
         {sections.map((sec) => (
           <div key={sec.key} className="mb-6">
@@ -283,8 +293,8 @@ export default function BudgetPage() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
                       </button>
                       <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex-1 min-w-0 text-left font-bold text-[15px] truncate">{g.groupName}</button>
-                      <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{fmtWhole(gPlanned)}</span>
-                      <span className="w-[82px] text-right font-bold text-[15px] tabular-nums" style={{ color: gRem < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(gRem)}</span>
+                      <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{whole(gPlanned)}</span>
+                      <Remaining value={gRem} className="w-[82px] text-right font-bold text-[15px]" />
                     </div>
                     {!gCollapsed && rows.map((r) => {
                       const rem = r.budgeted - r.actual;
@@ -295,12 +305,12 @@ export default function BudgetPage() {
                           <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden); }}
                             disabled={!canEditBudgets}
                             className="w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
-                            {fmtWhole(r.budgeted)}
+                            {whole(r.budgeted)}
                           </button>
                           <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(rem)}
                             title={r.recurring ? `Recurring (minimum): ${r.recurring.items.map((i) => i.label).join(', ')}` : undefined}>
                             {r.recurring && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>}
-                            {fmtWhole(rem)}
+                            {formatMoney(rem, { kind: 'total', precision: 'whole' }).text}
                           </span>
                         </div>
                       );
@@ -338,9 +348,9 @@ export default function BudgetPage() {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-content-3" style={{ transform: secCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
                     {sec.label}
                   </span>
-                  <span className="text-right tabular-nums">{fmtWhole(sec.planned)}</span>
-                  <span className="text-right tabular-nums">{fmtWhole(sec.actual)}</span>
-                  <span className="text-right tabular-nums">{fmtWhole(secRem)}</span>
+                  <span className="text-right tabular-nums">{whole(sec.planned)}</span>
+                  <span className="text-right tabular-nums">{whole(sec.actual)}</span>
+                  <Remaining value={secRem} className="text-right" />
                 </div>
                 {!secCollapsed && sec.groups.map((g) => {
                   const groupKey = sec.key + '|' + g.groupName;
@@ -364,9 +374,9 @@ export default function BudgetPage() {
                             <span className="font-bold text-[15px] truncate group-hover/drill:underline">{g.groupName}</span>
                           </button>
                         </div>
-                        <span className="text-right font-bold text-[15px] tabular-nums">{fmtWhole(gPlanned)}</span>
-                        <span className="text-right text-[15px] text-content-2 tabular-nums">{fmtWhole(gActual)}</span>
-                        <span className="text-right font-bold text-[15px] tabular-nums" style={{ color: gRem < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(gRem)}</span>
+                        <span className="text-right font-bold text-[15px] tabular-nums">{whole(gPlanned)}</span>
+                        <span className="text-right text-[15px] text-content-2 tabular-nums">{whole(gActual)}</span>
+                        <Remaining value={gRem} className="text-right font-bold text-[15px]" />
                       </div>
                       {!gCollapsed && (
                         <div>
@@ -384,7 +394,7 @@ export default function BudgetPage() {
                                         className="shrink-0 inline-flex items-center gap-1 px-1.5 h-[18px] rounded-md text-[10px] font-bold tabular-nums"
                                         style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }}>
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
-                                        {fmt(r.recurring.amount)}
+                                        {full(r.recurring.amount)}
                                       </span>
                                     )}
                                   </div>
@@ -394,11 +404,11 @@ export default function BudgetPage() {
                                   <button onClick={(e) => { e.stopPropagation(); if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden); }}
                                     disabled={!canEditBudgets}
                                     className="min-w-16 text-right text-sm font-semibold text-content tabular-nums px-2.5 py-1.5 rounded-lg border border-line-strong bg-surface-2 enabled:hover:border-primary disabled:cursor-default">
-                                    {fmtWhole(r.budgeted)}
+                                    {whole(r.budgeted)}
                                   </button>
                                 </div>
-                                <span className="text-right text-sm text-content-2 tabular-nums self-center">{fmtWhole(r.actual)}</span>
-                                <span className="text-right text-sm font-semibold tabular-nums self-center" style={{ color: rem < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(rem)}</span>
+                                <span className="text-right text-sm text-content-2 tabular-nums self-center">{whole(r.actual)}</span>
+                                <Remaining value={rem} className="text-right text-sm font-semibold self-center" />
                               </div>
                             );
                           })}
@@ -419,14 +429,14 @@ export default function BudgetPage() {
           })}
           <div className="flex items-center justify-between px-4 md:px-6 py-4" style={{ background: 'color-mix(in srgb, var(--positive) 14%, transparent)' }}>
             <span className="text-base font-extrabold">Left to budget</span>
-            <span className="text-lg font-extrabold tabular-nums" style={{ color: totals.leftToBudget < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(totals.leftToBudget)}</span>
+            <Remaining value={totals.leftToBudget} className="text-lg font-extrabold" />
           </div>
         </div>
 
         {/* Summary rail */}
         <div className="flex flex-col gap-4 lg:sticky lg:top-[88px]">
           <div className="rounded-card border shadow-sm p-6 text-center" style={{ borderColor: 'color-mix(in srgb, var(--positive) 35%, var(--line))', background: 'color-mix(in srgb, var(--positive) 12%, var(--surface))' }}>
-            <div className="text-[34px] font-extrabold tracking-tight tabular-nums" style={{ color: totals.leftToBudget < 0 ? 'var(--negative)' : 'var(--positive)' }}>{fmtWhole(totals.leftToBudget)}</div>
+            <Remaining value={totals.leftToBudget} className="block text-[34px] font-extrabold tracking-tight" />
             <div className="text-sm text-content-2 mt-1">Left to budget</div>
           </div>
           <div className="rounded-card border border-line bg-surface shadow-sm p-6">
@@ -439,13 +449,13 @@ export default function BudgetPage() {
               return (
                 <div key={b.label}>
                   {i > 0 && <div className="h-px bg-line my-[18px]" />}
-                  <div className="flex items-center justify-between mb-2.5"><span className="text-[15px] font-bold">{b.label}</span><span className="text-[13px] text-content-3 tabular-nums">{fmtWhole(b.planned)} planned</span></div>
+                  <div className="flex items-center justify-between mb-2.5"><span className="text-[15px] font-bold">{b.label}</span><span className="text-[13px] text-content-3 tabular-nums">{whole(b.planned)} planned</span></div>
                   <div className="h-[7px] rounded-full bg-surface-2 overflow-hidden mb-2"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--positive)' }} /></div>
-                  <div className="flex items-center justify-between text-sm"><span className="font-semibold">{fmtWhole(b.actual)} {b.verb}</span>
+                  <div className="flex items-center justify-between text-sm"><span className="font-semibold">{whole(b.actual)} {b.verb}</span>
                     {rem >= 0
-                      ? <span className="text-content-3"><span className="text-positive font-bold tabular-nums">{fmtWhole(rem)}</span> remaining</span>
+                      ? <span className="text-content-3"><Remaining value={rem} className="font-bold" /> remaining</span>
                       /* Exceeding plan is only bad for expenses — earning past it stays green (mirrors the dashboard BudgetCard). */
-                      : <span className="text-content-3"><span className={`font-bold tabular-nums ${b.label === 'Income' ? 'text-positive' : 'text-negative'}`}>{fmtWhole(-rem)}</span> over</span>}
+                      : <span className="text-content-3"><span className={`font-bold tabular-nums ${b.label === 'Income' ? 'text-positive' : 'text-negative'}`}>{whole(-rem)}</span> over</span>}
                   </div>
                 </div>
               );
@@ -474,7 +484,7 @@ export default function BudgetPage() {
                 <div className="flex items-center border-t border-b border-line bg-surface-2">
                   <div className="w-[250px] shrink-0 px-6 py-2.5 text-xs font-bold uppercase tracking-wide text-content-2 sticky left-0 bg-surface-2 z-[2]">{sec.label}</div>
                   {secTotals.map((v, m) => (
-                    <div key={m} className="flex-1 min-w-0 px-3 py-2.5 text-right text-xs font-bold text-content-2 tabular-nums" style={{ background: colTint(m) }}>{fmtWhole(v)}</div>
+                    <div key={m} className="flex-1 min-w-0 px-3 py-2.5 text-right text-xs font-bold text-content-2 tabular-nums" style={{ background: colTint(m) }}>{whole(v)}</div>
                   ))}
                 </div>
                 {sec.groups.map((g) => {
@@ -494,7 +504,7 @@ export default function BudgetPage() {
                           </button>
                         </div>
                         {gTotals.map((v, m) => (
-                          <div key={m} className="flex-1 min-w-0 px-3 py-3 text-right text-sm font-semibold tabular-nums" style={{ background: colTint(m) }}>{fmtWhole(v)}</div>
+                          <div key={m} className="flex-1 min-w-0 px-3 py-3 text-right text-sm font-semibold tabular-nums" style={{ background: colTint(m) }}>{whole(v)}</div>
                         ))}
                       </div>
                       {!gCollapsed && g.subs.map((sub) => (
@@ -512,7 +522,7 @@ export default function BudgetPage() {
                                   disabled={!canEditBudgets || past}
                                   className="min-w-16 text-right text-sm tabular-nums px-2.5 py-1.5 rounded-lg enabled:hover:border-primary"
                                   style={{ border: past ? '1px solid transparent' : '1px solid var(--line-strong)', color: past ? 'var(--text-3)' : 'var(--text)' }}>
-                                  {fmtWhole(v)}
+                                  {whole(v)}
                                 </button>
                               </div>
                             );
@@ -541,10 +551,10 @@ export default function BudgetPage() {
         const extra = Math.max(0, +(val - floor).toFixed(2));
         const inputBorder = below && !overriding ? 'var(--warning)' : 'var(--line-strong)';
         let helper = ''; let helperColor = 'var(--text-3)';
-        if (overriding) { helper = `Overriding for this month only — budgeting ${fmt(floor - val)} below the recurring floor (e.g. a month with no paycheck). The floor returns next month.`; helperColor = 'var(--text-2)'; }
-        else if (below) { helper = `Below the ${fmt(floor)} recurring minimum. Set it to the minimum, or override this one month.`; helperColor = 'var(--warning)'; }
-        else if (rec && extra === 0) { helper = `Covers the ${fmt(floor)} recurring exactly — no extra room.`; helperColor = 'var(--text-3)'; }
-        else if (rec) { helper = `${fmt(floor)} recurring + ${fmt(extra)} extra`; helperColor = 'var(--text-2)'; }
+        if (overriding) { helper = `Overriding for this month only — budgeting ${full(floor - val)} below the recurring floor (e.g. a month with no paycheck). The floor returns next month.`; helperColor = 'var(--text-2)'; }
+        else if (below) { helper = `Below the ${full(floor)} recurring minimum. Set it to the minimum, or override this one month.`; helperColor = 'var(--warning)'; }
+        else if (rec && extra === 0) { helper = `Covers the ${full(floor)} recurring exactly — no extra room.`; helperColor = 'var(--text-3)'; }
+        else if (rec) { helper = `${full(floor)} recurring + ${full(extra)} extra`; helperColor = 'var(--text-2)'; }
         const clearToFloor = () => { setEditValue(String(floor)); setEditOverride(false); };
         return (
         <div onClick={closeEdit} className="fixed inset-0 z-[80] flex items-center justify-center p-6" style={{ background: 'var(--bg-modal)', backdropFilter: 'blur(3px)' }}>
@@ -578,7 +588,7 @@ export default function BudgetPage() {
                 <div className="mt-[18px] rounded-[14px] border p-4" style={{ borderColor: 'color-mix(in srgb, var(--primary) 32%, var(--line))', background: 'color-mix(in srgb, var(--primary) 9%, var(--surface))' }}>
                   <div className="flex items-center gap-2.5" style={{ color: 'var(--primary)' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
-                    <span className="text-[15px] font-extrabold tabular-nums">{fmt(floor)} recurring this month</span>
+                    <span className="text-[15px] font-extrabold tabular-nums">{full(floor)} recurring this month</span>
                     {overriding && <span className="text-[11px] font-bold uppercase tracking-[0.04em] px-2 py-[3px] rounded-md" style={{ color: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 16%, transparent)' }}>Overridden</span>}
                   </div>
                   <div className="mt-2 flex flex-col gap-1.5" style={{ marginLeft: 27 }}>

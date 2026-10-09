@@ -28,11 +28,13 @@ export function Money({ amount, transfer = false, precision, className = '' }: {
  * A total that can go either way (Net, remaining, a change), oriented so positive is
  * good: a real minus when negative, coloured good or bad.
  */
-export function Change({ value, precision, className = '' }: {
+export function Change({ value, precision, zeroTone, className = '' }: {
   value: number;
   precision?: MoneyPrecision;
+  /** Tone for a zero ("—"); neutral by default. */
+  zeroTone?: MoneyTone;
   className?: string;
 }) {
-  const { text, tone } = formatMoney(value, { kind: 'total', precision });
+  const { text, tone } = formatMoney(value, { kind: 'total', precision, zeroTone });
   return <span className={`tabular-nums ${TONE_CLASS[tone]} ${className}`}>{text}</span>;
 }

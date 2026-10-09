@@ -26,6 +26,8 @@ export interface MoneyOptions {
   precision?: MoneyPrecision;
   /** A transaction between the user's own accounts (category type `transfer`). */
   transfer?: boolean;
+  /** Tone for a zero result; Budget passes 'positive' so a zero remaining stays good. */
+  zeroTone?: MoneyTone;
 }
 
 export interface MoneyDisplay {
@@ -59,9 +61,9 @@ function magnitude(abs: number, precision: MoneyPrecision): string {
 }
 
 export function formatMoney(amount: number, options: MoneyOptions = {}): MoneyDisplay {
-  const { kind = 'transaction', precision = 'full', transfer = false } = options;
+  const { kind = 'transaction', precision = 'full', transfer = false, zeroTone } = options;
   const mag = Number.isFinite(amount) ? magnitude(Math.abs(amount), precision) : '';
-  if (!mag) return { text: '—', tone: kind === 'transaction' && transfer ? 'muted' : 'neutral' };
+  if (!mag) return { text: '—', tone: zeroTone ?? (kind === 'transaction' && transfer ? 'muted' : 'neutral') };
   const negative = amount < 0;
 
   if (kind === 'balance') return { text: negative ? `-${mag}` : mag, tone: 'neutral' };
