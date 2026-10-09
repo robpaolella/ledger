@@ -3,8 +3,7 @@ import { buildHistory, formatMoney, monthBefore, type HistoryPoint } from '@ledg
 import { apiFetch } from '../../lib/api';
 import Spinner from '../Spinner';
 
-// A zero reads "$0" here (the shared balance format shows "—").
-const whole = (n: number) => (Math.round(n) === 0 ? '$0' : formatMoney(n, { kind: 'balance', precision: 'whole' }).text);
+const whole = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole', showZero: true }).text;
 
 /** Editor "History": last month, monthly average and the six months before `targetMonth`. */
 export default function BudgetHistory({ categoryId, targetMonth, income }: { categoryId: number; targetMonth: string; income: boolean }) {
