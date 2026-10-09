@@ -100,9 +100,9 @@ const leftTint = (v: number) =>
   formatMoney(v, { kind: 'total', precision: 'whole', zeroTone: 'positive' }).tone === 'negative' ? 'var(--negative)' : 'var(--positive)';
 
 // Decorative emoji tile before a group name; same recipe as the editor's tile, scaled to the row.
-function GroupTile({ name }: { name: string }) {
+function GroupTile({ name, compact }: { name: string; compact?: boolean }) {
   return (
-    <span aria-hidden="true" className="shrink-0 w-7 h-7 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center text-[15px] leading-none">
+    <span aria-hidden="true" className={`shrink-0 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center leading-none ${compact ? 'w-6 h-6 -my-0.5 text-[13px]' : 'w-7 h-7 text-[15px]'}`}>
       {getCategoryEmoji(name)}
     </span>
   );
@@ -531,7 +531,7 @@ export default function BudgetPage() {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
                           </button>
                           <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex items-center gap-2.5 min-w-0 text-left group/drill">
-                            <GroupTile name={g.groupName} />
+                            <GroupTile name={g.groupName} compact />
                             <span className="font-bold text-sm truncate group-hover/drill:underline">{g.groupName}</span>
                           </button>
                         </div>
