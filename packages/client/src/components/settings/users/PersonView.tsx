@@ -33,7 +33,7 @@ function RoleControl({ mu, callerRole, isSelf, onSetRole }: { mu: ManagedUser; c
   const tone = mu.role === 'admin' ? 'var(--primary)' : 'var(--c-blue)';
   return (
     <div className="relative shrink-0">
-      <select value={mu.role} onChange={(e) => onSetRole(e.target.value as 'admin' | 'member')} aria-label={`Role for ${mu.displayName}`}
+      <select name="role" value={mu.role} onChange={(e) => onSetRole(e.target.value as 'admin' | 'member')} aria-label={`Role for ${mu.displayName}`}
         className="h-[34px] max-md:h-11 pl-3 pr-8 rounded-[8px] border border-line-strong text-[12.5px] font-bold appearance-none cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         style={mu.role === 'admin'
           ? { background: 'color-mix(in srgb, var(--primary) 16%, transparent)', color: tone }
@@ -76,7 +76,7 @@ export default function PersonView({ mu, callerRole, currentUserId, onClose, onS
           <InitialsAvatar name={mu.displayName} color={ownerColor(mu.id)} size={44} />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[16px] font-bold text-content break-words min-w-0">{mu.displayName}</span>
+              <span className="text-[15px] font-bold text-content break-words min-w-0">{mu.displayName}</span>
               <PersonBadges mu={mu} isSelf={isSelf} />
             </div>
             <div className="text-[13px] text-content-3 font-mono truncate">@{mu.username}</div>
