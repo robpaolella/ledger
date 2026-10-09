@@ -9,17 +9,30 @@ A self-hosted personal finance app for households. Track income, expenses, budge
 
 ## Features
 
-- **Dashboard** — KPI cards, spending breakdown, recent transactions
-- **Transactions** — Full CRUD with filters, search, bulk edit, and pagination
-- **Budget** — Monthly budget vs. actual by category, filterable by household member
+- **Dashboard** — Financial summaries, spending breakdown, and recent transactions
+- **Transactions** — Search, filters, pagination, bulk changes, splits, and reimbursements
+- **Review queue** — Transactions that need a category or a second look
+- **Import** — CSV files or bank sync, with categorization review, duplicate detection, and transfer detection
+- **Budget** — Monthly budget vs. actual by category, including shared accounts
+- **Recurring** — Bills and income that repeat, and whether each has come due
+- **Accounts and Net Worth** — Account balances, investment holdings, and depreciating assets (straight-line and declining balance), with joint accounts for shared ownership
 - **Reports** — Annual income/expense breakdown with expandable categories
-- **Net Worth** — Account balances, investment holdings, and depreciable assets (straight-line & declining balance)
-- **Bank Sync** — Automated transaction and balance import via [SimpleFIN Bridge](https://beta-bridge.simplefin.org/)
-- **CSV Import** — Auto-categorization, duplicate detection, transfer detection, multi-format support
-- **Multi-User** — Owner / Admin / Member roles with 18 granular permissions
-- **Joint Accounts** — Multi-owner support for shared accounts
-- **Mobile Responsive** — Bottom sheets, tab navigation, and card layouts on small screens
+- **Investments** — Holdings and their value over time
+- **Daily Bank Sync** — Automatic transaction and balance import every day via [SimpleFIN Bridge](https://beta-bridge.simplefin.org/), with manual sync on demand
+- **Auto-Categorizing** — Suggestions from your household's rules and transaction history
+- **Notifications** — In-app notices, including bank-sync failures
+- **Users and Permissions** — Owner / Admin / Member roles with 18 granular permissions
+- **Two-Step Sign-In** — Extra protection for your account
+- **Phone-Friendly** — App bar, navigation drawer, bottom sheets, and card layouts on small screens
 - **Dark Mode** — System-aware with manual toggle
+
+### Optional extras
+
+Owner and admin only, and each is off until you set it up:
+
+- **AI categorizing** — Uses a local Ollama server
+- **Amazon order matching** — Matches Amazon orders to transactions
+- **Investment benchmarks** — Needs the `TIINGO_TOKEN` server setting
 
 ## Quick Start
 
