@@ -356,15 +356,17 @@ export default function UsersPanel() {
     }
   };
 
-  const togglePermission = (userId: number, permKey: string, current: boolean) => {
+  // The values to put back if a save fails: each key as stored, even inside a compound switch.
+  const storedValues = (mu: ManagedUser, keys: string[]) => Object.fromEntries(keys.map((k) => [k, mu.permissions?.[k] ?? false]));
+
+  const togglePermission = (mu: ManagedUser, permKey: string, current: boolean) => {
     const keys = COMPOUND_PERMISSIONS[permKey] || [permKey];
-    savePermissions(userId, Object.fromEntries(keys.map((k) => [k, !current])), Object.fromEntries(keys.map((k) => [k, current])));
+    savePermissions(mu.id, Object.fromEntries(keys.map((k) => [k, !current])), storedValues(mu, keys));
   };
 
   const applyPreset = (mu: ManagedUser, preset: AccessPreset) => {
     const changes = presetPermissions(preset);
-    const before = Object.fromEntries(Object.keys(changes).map((k) => [k, mu.permissions?.[k] ?? false]));
-    savePermissions(mu.id, changes, before, `${mu.displayName.trim().split(/\s+/)[0]} now has ${ACCESS_PRESETS[preset].label}`);
+    savePermissions(mu.id, changes, storedValues(mu, Object.keys(changes)), `${mu.displayName.trim().split(/\s+/)[0]} now has ${ACCESS_PRESETS[preset].label}`);
   };
 
   const setRequirement = async (which: 'admin' | 'member', next: boolean) => {
@@ -463,7 +465,7 @@ export default function UsersPanel() {
                     <div className="mt-3">
                       <AccessEditor name={mu.displayName} permissions={mu.permissions} canEdit={canTouch(mu)}
                         onApplyPreset={(preset) => applyPreset(mu, preset)}
-                        onTogglePermission={(key, current) => togglePermission(mu.id, key, current)} />
+                        onTogglePermission={(key, current) => togglePermission(mu, key, current)} />
                     </div>
                   )}
                 </div>
