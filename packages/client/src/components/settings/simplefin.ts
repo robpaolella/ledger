@@ -1,4 +1,6 @@
-/** Shared account/SimpleFIN helpers for the Settings → Accounts panel. */
+/** Shared account/SimpleFIN helpers for the Settings → Accounts and Bank sync panels. */
+
+import type { SimpleFINConnection } from '@ledger/shared';
 
 export const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'investment', 'retirement', 'venmo', 'cash'] as const;
 export const TYPE_LABEL: Record<string, string> = {
@@ -31,13 +33,7 @@ export function parseNameAndLastFour(sfName: string): { name: string; lastFour: 
   return { name: sfName, lastFour: '' };
 }
 
-export interface Connection {
-  id: number;
-  label: string;
-  isShared: boolean;
-  linkedAccountCount: number;
-  lastSyncedAt: string | null;
-}
+export type Connection = SimpleFINConnection;
 
 /** One account SimpleFIN exposes, tagged with its connection + current link. */
 export interface SfAccount {

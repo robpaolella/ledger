@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../lib/api';
-import { timeAgo } from '../../lib/formatters';
+import type { DailySyncInfo } from '@ledger/shared';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmDeleteButton from '../ConfirmDeleteButton';
@@ -8,11 +8,11 @@ import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
 import Spinner from '../Spinner';
 import InstitutionPicker from '../InstitutionPicker';
-import { ConnectedBadge } from '../badges';
 import { SegmentedControl } from '../primitives';
-import { Card, Caption, Field, SelectShell, CheckBox, InitialsAvatar, paletteColor, inputCls, selectCls, textareaCls, btnPrimary, btnSecondary, btnSecondarySm, ICON } from './ui';
+import { Card, Caption, Pill, LoadError, Field, SelectShell, CheckBox, InitialsAvatar, paletteColor, inputCls, selectCls, textareaCls, btnPrimary, btnSecondary, btnSecondarySm, btnRow, ICON } from './ui';
 import { ACCOUNT_TYPES, TYPE_LABEL, CLASSIFICATIONS, CLASSIFICATION_LABEL, classificationForType, guessAccountType, parseNameAndLastFour, sfMask, type Connection, type SfAccount } from './simplefin';
 import type { Account, AccountOwner } from './AccountForm';
+import { STATUS_META, SUMMARY, dailyIsOff, statusLine, statusOf, worstStatus } from './banksync/status';
 
 // --- Connect / edit connection modal ---
 function ConnectionModal({ connection, onSave, onClose }: {
@@ -166,9 +166,14 @@ function CreateAndLinkModal({ sf, users, currentUserId, onSave, onClose }: {
   );
 }
 
+function StatusPill({ status }: { status: keyof typeof STATUS_META }) {
+  const { color, label } = STATUS_META[status];
+  return <Pill color={color}><span className="w-[7px] h-[7px] rounded-full" style={{ background: 'currentColor' }} />{label}</Pill>;
+}
+
 // --- The card ---
 export default function SimpleFinCard({
-  accounts, users, connections, sfAccounts, failures, loading, accountsLoading,
+  accounts, users, connections, sfAccounts, failures, loading, accountsLoading, loadFailed, daily,
   onReload, onAccountCreated, onOpenAccount, onSyncNow,
 }: {
   accounts: Account[];
@@ -178,6 +183,8 @@ export default function SimpleFinCard({
   failures: { connectionId: number; label: string; error: string }[];
   loading: boolean;
   accountsLoading: boolean;
+  loadFailed: boolean;
+  daily: DailySyncInfo | null;
   onReload: () => Promise<void> | void;
   onAccountCreated: () => Promise<void> | void;
   onOpenAccount: (account: Account) => void;
@@ -187,7 +194,7 @@ export default function SimpleFinCard({
   const { user, hasPermission } = useAuth();
   const canManage = hasPermission('simplefin.manage');
   const canSync = hasPermission('import.bank_sync');
-  const [listOpen, setListOpen] = useState(true);
+  const [listOpen, setListOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [openOrgs, setOpenOrgs] = useState<Set<string> | null>(null); // null = default (all collapsed)
   const [connectOpen, setConnectOpen] = useState(false);
@@ -205,11 +212,12 @@ export default function SimpleFinCard({
     }
     return [...by.entries()].map(([org, list]) => ({ org, list, linked: list.filter((a) => a.link).length }));
   }, [sfAccounts, q]);
-  const orgCount = new Set(sfAccounts.map((a) => a.org)).size;
   const allOpen = openOrgs !== null && groups.every((g) => openOrgs.has(g.org));
   const isOpen = (org: string) => q !== '' || (openOrgs?.has(org) ?? false);
   const toggleOrg = (org: string) => setOpenOrgs((prev) => { const n = new Set(prev ?? []); if (n.has(org)) n.delete(org); else n.add(org); return n; });
-  const lastSynced = connections.reduce<string | null>((m, c) => (c.lastSyncedAt && (!m || c.lastSyncedAt > m) ? c.lastSyncedAt : m), null);
+  const off = dailyIsOff(daily);
+  const worst = worstStatus(connections, off);
+  const worstColor = STATUS_META[worst].color;
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const addConnection = async (data: { label: string; shared: boolean; setupToken?: string; accessUrl?: string }) => {
@@ -259,6 +267,7 @@ export default function SimpleFinCard({
   };
 
   if (loading) return <Card><Spinner /></Card>;
+  if (loadFailed) return <LoadError onRetry={() => { onReload(); }} />;
 
   // ---- Disconnected ----
   if (connections.length === 0) {
@@ -275,7 +284,7 @@ export default function SimpleFinCard({
           {canManage ? (
             <button type="button" onClick={() => setConnectOpen(true)} className={btnPrimary}>Connect SimpleFIN</button>
           ) : (
-            <span className="text-[13px] text-content-3">Ask an admin to connect SimpleFIN.</span>
+            <span className="text-[13px] text-content-3">An admin manages connections.</span>
           )}
         </div>
         {connectOpen && <ConnectionModal onSave={addConnection} onClose={() => setConnectOpen(false)} />}
@@ -286,41 +295,51 @@ export default function SimpleFinCard({
   // ---- Connected ----
   return (
     <Card>
-      <div className="flex items-center gap-4 px-6 py-5 flex-wrap">
-        <span className="flex-none w-[46px] h-[46px] rounded-[12px] flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--positive) 15%, transparent)', color: 'var(--positive)' }}>{ICON.wifi}</span>
-        <div className="flex-1 min-w-[220px]">
-          <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-4 px-4 md:px-6 py-5 flex-wrap">
+        <span className="flex-none w-[46px] h-[46px] rounded-[12px] flex items-center justify-center" style={{ background: `color-mix(in srgb, ${worstColor} 15%, transparent)`, color: worstColor }}>{ICON.wifi}</span>
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <span className="text-[17px] font-extrabold tracking-tight text-content">SimpleFIN</span>
-            <ConnectedBadge />
+            <StatusPill status={worst} />
           </div>
-          <div className="text-[13px] text-content-3 mt-0.5">
-            {accountsLoading ? 'Loading accounts…' : `${sfAccounts.length} ${sfAccounts.length === 1 ? 'account' : 'accounts'} available`}
-            {' · '}{lastSynced ? `Synced with SimpleFIN ${timeAgo(lastSynced)}` : 'Not synced yet'}
-          </div>
+          <div className="text-[13px] text-content-3 mt-0.5">{SUMMARY[worst]}</div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {canSync && <button type="button" onClick={onSyncNow} className={btnSecondarySm}>{ICON.refresh}Sync now</button>}
           {canManage && <button type="button" onClick={() => setConnectOpen(true)} className={btnSecondarySm}>{ICON.plus}Add connection</button>}
         </div>
       </div>
 
       {/* connections */}
-      <div className="border-t border-line px-6 py-3.5">
-        <Caption className="mb-2">Connections</Caption>
+      <div className="border-t border-line px-4 md:px-6 py-3.5">
+        <Caption className="mb-1">Connections</Caption>
         <div className="flex flex-col">
-          {connections.map((c) => {
-            const failure = failures.find((f) => f.connectionId === c.id);
+          {connections.map((c, i) => {
+            const status = statusOf(c, off);
+            const reconnect = status === 'reconnect' && <button type="button" onClick={() => setEditingConn(c)} className={btnRow} style={{ color: 'var(--primary)' }}>Reconnect</button>;
+            const disconnect = <ConfirmDeleteButton label="Disconnect" confirmLabel="Confirm disconnect?" onConfirm={() => deleteConnection(c.id)} />;
             return (
-              <div key={c.id} className="flex items-center gap-3 py-2 flex-wrap">
-                <span className="text-sm font-semibold text-content">{c.label}</span>
-                <span className="h-[22px] px-2 rounded-md text-[11px] font-semibold inline-flex items-center bg-surface-2 text-content-2">{c.isShared ? 'Shared' : 'Personal'}</span>
-                <span className="font-mono text-[12px] text-content-3">{c.linkedAccountCount} linked · {c.lastSyncedAt ? `synced ${timeAgo(c.lastSyncedAt)}` : 'never synced'}</span>
-                {failure && <span className="text-[12px] font-semibold text-negative" title={failure.error}>Couldn’t reach SimpleFIN</span>}
+              <div key={c.id} className={`py-3 ${i > 0 ? 'border-t border-line' : ''}`}>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-sm font-semibold text-content">{c.label}</span>
+                  <span className="h-[22px] px-2 rounded-md text-[11px] font-semibold inline-flex items-center bg-surface-2 text-content-2">{c.isShared ? 'Shared' : 'Personal'}</span>
+                  <StatusPill status={status} />
+                  {canManage && (
+                    <span className="ml-auto hidden md:flex items-center gap-1.5">
+                      {reconnect}
+                      <button type="button" onClick={() => setEditingConn(c)} title="Edit connection" aria-label={`Edit ${c.label}`} className="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-3 hover:text-content hover:bg-surface-2">{ICON.pencil}</button>
+                      {disconnect}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[13px] mt-1 leading-snug" style={{ color: status === 'working' || status === 'paused' ? 'var(--text-3)' : STATUS_META[status].color }}>{statusLine(c, off, canManage, daily)}</div>
+                <div className="font-mono text-[12px] text-content-3 mt-1">{c.linkedAccountCount} {c.linkedAccountCount === 1 ? 'account' : 'accounts'} linked</div>
                 {canManage && (
-                  <span className="ml-auto flex items-center gap-1.5">
-                    <button type="button" onClick={() => setEditingConn(c)} title="Edit connection" className="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-3 hover:text-content hover:bg-surface-2">{ICON.pencil}</button>
-                    <ConfirmDeleteButton label="Disconnect" confirmLabel="Confirm disconnect?" onConfirm={() => deleteConnection(c.id)} />
-                  </span>
+                  <div className="md:hidden flex items-center gap-1.5 mt-2.5">
+                    {reconnect}
+                    <button type="button" onClick={() => setEditingConn(c)} className={btnRow}>{ICON.pencil}Edit</button>
+                    {disconnect}
+                  </div>
                 )}
               </div>
             );
@@ -329,12 +348,12 @@ export default function SimpleFinCard({
       </div>
 
       {/* accounts from SimpleFIN */}
-      <div className="border-t border-line">
-        <div className="flex items-center gap-3 px-6 py-3.5 flex-wrap">
+      {canManage && <div className="border-t border-line">
+        <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 flex-wrap">
           <button type="button" onClick={() => setListOpen((v) => !v)} className="flex items-center gap-2 text-left" aria-expanded={listOpen}>
             <span className={`text-content-3 transition-transform ${listOpen ? 'rotate-90' : ''}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg></span>
             <Caption className="tracking-[0.08em]">Accounts from SimpleFIN</Caption>
-            <span className="font-mono text-[12px] text-content-3">· {sfAccounts.length} across {orgCount} {orgCount === 1 ? 'institution' : 'institutions'}</span>
+            <span className="font-mono text-[12px] text-content-3">· {sfAccounts.length} {sfAccounts.length === 1 ? 'account' : 'accounts'}</span>
           </button>
           {listOpen && (
             <div className="ml-auto flex items-center gap-3">
@@ -350,7 +369,7 @@ export default function SimpleFinCard({
           )}
         </div>
         {listOpen && (
-          <div className="px-6 pb-5 flex flex-col gap-2.5">
+          <div className="px-4 md:px-6 pb-5 flex flex-col gap-2.5">
             {accountsLoading && sfAccounts.length === 0 && <Spinner />}
             {!accountsLoading && sfAccounts.length === 0 && failures.length === 0 && <div className="text-sm text-content-3 py-4">SimpleFIN returned no accounts. Add banks on the SimpleFIN side, then refresh.</div>}
             {failures.length > 0 && sfAccounts.length === 0 && <InlineNotification type="error" message={`Couldn’t reach SimpleFIN for ${failures.map((f) => f.label).join(', ')}: ${failures[0].error}`} />}
@@ -406,7 +425,7 @@ export default function SimpleFinCard({
             })}
           </div>
         )}
-      </div>
+      </div>}
 
       {connectOpen && <ConnectionModal onSave={addConnection} onClose={() => setConnectOpen(false)} />}
       {editingConn && <ConnectionModal connection={editingConn} onSave={(d) => editConnection(editingConn.id, d)} onClose={() => setEditingConn(null)} />}

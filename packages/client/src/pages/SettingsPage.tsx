@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '../hooks/useIsMobile';
 import PageHeader from '../components/PageHeader';
 import { apiFetch } from '../lib/api';
@@ -10,10 +10,9 @@ import { initOwnerSlots, OwnerBadge, SharedBadge } from '../components/badges';
 import { VendorAvatar } from '../components/primitives';
 import Spinner from '../components/Spinner';
 import InstitutionManager from '../components/InstitutionManager';
-import ManualImportModal from '../components/ManualImportModal';
 import MerchantsPanel from '../components/MerchantsPanel';
 import AccountForm, { type Account, type AccountOwner, type AccountFormData } from '../components/settings/AccountForm';
-import SimpleFinCard from '../components/settings/SimpleFinCard';
+import BankSyncPanel from '../components/settings/BankSyncPanel';
 import { useSimpleFin } from '../components/settings/useSimpleFin';
 import { useSaveAccount } from '../components/accounts/useSaveAccount';
 import CategoriesPanel, { type Category, type Group } from '../components/settings/CategoriesPanel';
@@ -23,16 +22,17 @@ import RulesPanel from '../components/settings/RulesPanel';
 import NotificationsPanel from '../components/settings/NotificationsPanel';
 import UsersPanel from '../components/settings/UsersPanel';
 import AiPanel from '../components/settings/AiPanel';
-import { Card, CardHeader, LoadError, PanelHeader, btnPrimarySm, btnSecondarySm, btnRow, ICON } from '../components/settings/ui';
+import { Card, CardHeader, LoadError, PanelHeader, btnPrimarySm, btnRow, ICON } from '../components/settings/ui';
 import { TYPE_LABEL, sfLabel } from '../components/settings/simplefin';
 
-type PanelId = 'profile' | 'security' | 'notifications' | 'accounts' | 'categories' | 'merchants' | 'rules' | 'users' | 'extras';
+type PanelId = 'profile' | 'security' | 'notifications' | 'accounts' | 'bank' | 'categories' | 'merchants' | 'rules' | 'users' | 'extras';
 
 const NAV_ICON: Record<PanelId, ReactNode> = {
   profile: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>,
   security: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" /></svg>,
   notifications: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>,
   accounts: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4Z" /></svg>,
+  bank: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18M12 3l9 5H3l9-5Z" /></svg>,
   categories: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>,
   merchants: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6" /></svg>,
   rules: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></svg>,
@@ -52,7 +52,6 @@ export default function SettingsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null | 'new'>(null);
   const [showInstitutions, setShowInstitutions] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
   const sf = useSimpleFin();
 
   const rawPanel = searchParams.get('panel');
@@ -129,16 +128,15 @@ export default function SettingsPage() {
     }
   };
 
-  const refreshAll = async () => { const [ok] = await Promise.all([loadData(), sf.reload()]); if (ok) addToast('Refreshed'); };
-
-  // Show only what the person can use. Accounts also stays for bank-sync users
-  // while the Bank sync card lives inside it (until it gets its own panel).
+  // Show only what the person can use.
   const canAny = (prefix: string) => ['create', 'edit', 'delete'].some((a) => hasPermission(`${prefix}.${a}`));
   const admin = isAdmin();
+  const canBankSync = admin || hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
   const allSections: { title: string; items: { id: PanelId; label: string; show: boolean }[] }[] = [
     { title: 'You', items: [{ id: 'profile', label: 'Profile', show: true }, { id: 'security', label: 'Security', show: true }, { id: 'notifications', label: 'Notifications', show: true }] },
     { title: 'Household', items: [
-      { id: 'accounts', label: 'Accounts', show: canAny('accounts') || hasPermission('simplefin.manage') || hasPermission('import.bank_sync') },
+      { id: 'accounts', label: 'Accounts', show: canAny('accounts') },
+      { id: 'bank', label: 'Bank sync', show: canBankSync },
       { id: 'categories', label: 'Categories', show: canAny('categories') },
       { id: 'merchants', label: 'Merchants', show: hasPermission('transactions.edit') },
       { id: 'rules', label: 'Rules', show: hasPermission('transactions.edit') },
@@ -157,7 +155,7 @@ export default function SettingsPage() {
   // ?panel=ai is kept for Amazon alerts already stored in notification bells.
   const requested = rawPanel
     ? (rawPanel === 'ai' ? 'extras' : rawPanel)
-    : legacyTab === 'preferences' ? 'profile' : legacyTab ? 'accounts' : null;
+    : legacyTab === 'preferences' ? 'profile' : legacyTab === 'banksync' ? 'bank' : legacyTab ? 'accounts' : null;
   const requestedOk = visibleIds.includes(requested as PanelId);
   const panel: PanelId = requestedOk ? (requested as PanelId) : 'profile';
   // Phones: /settings is an index of sections; picking one shows that panel
@@ -224,36 +222,24 @@ export default function SettingsPage() {
             </div>
           ) : loaded ? <CategoriesPanel categories={categories} groups={groups} onChanged={() => { loadData(); }} /> : <Spinner />)}
 
+          {panel === 'bank' && (
+            <BankSyncPanel sf={sf} accounts={accounts} users={userList} onAccountsChanged={() => { loadData(); }}
+              onOpenAccount={(a) => { if (hasPermission('accounts.edit')) setEditingAccount(a); }} />
+          )}
+
           {panel === 'accounts' && (
             <div className="flex flex-col gap-[22px]">
               <PanelHeader
                 title="Accounts"
-                description="Create the accounts you want to track in Ledger, then link each one to a SimpleFIN account to sync balances and transactions automatically."
+                description="The accounts Ledger tracks. Link one to a bank connection in Bank sync to update it automatically."
                 actions={loadFailed ? undefined : (
-                  <>
-                    <button type="button" onClick={refreshAll} className={btnSecondarySm}>{ICON.refresh}Refresh all</button>
-                    {hasPermission('accounts.create') && (
-                      <button type="button" onClick={() => setEditingAccount('new')} className={btnPrimarySm}>{ICON.plus}Add account</button>
-                    )}
-                  </>
+                  hasPermission('accounts.create') && (
+                    <button type="button" onClick={() => setEditingAccount('new')} className={btnPrimarySm}>{ICON.plus}Add account</button>
+                  )
                 )}
               />
 
               {loadFailed ? <LoadError onRetry={retryLoad} /> : (<>
-
-              <SimpleFinCard
-                accounts={accounts}
-                users={userList}
-                connections={sf.connections}
-                sfAccounts={sf.sfAccounts}
-                failures={sf.failures}
-                loading={sf.loading}
-                accountsLoading={sf.accountsLoading}
-                onReload={sf.reload}
-                onAccountCreated={() => { loadData(); }}
-                onOpenAccount={(a) => { if (hasPermission('accounts.edit')) setEditingAccount(a); }}
-                onSyncNow={() => setSyncOpen(true)}
-              />
 
               <Card>
                 <CardHeader
@@ -302,7 +288,11 @@ export default function SettingsPage() {
                 {loaded && activeAccounts.length === 0 && (
                   <div className="border-t border-line px-6 py-10 text-center">
                     <div className="text-[15px] font-bold text-content">No accounts yet</div>
-                    <div className="text-sm text-content-3 mt-1">Add an account by hand, or link one from SimpleFIN above.</div>
+                    <div className="text-sm text-content-3 mt-1">
+                      {canBankSync
+                        ? <>Add an account by hand, or link one from a bank connection in <Link to="/settings?panel=bank" className="text-primary font-semibold">Bank sync</Link>.</>
+                        : 'Add an account by hand.'}
+                    </div>
                   </div>
                 )}
               </Card>
@@ -328,9 +318,6 @@ export default function SettingsPage() {
       )}
       {showInstitutions && (
         <InstitutionManager canEdit={hasPermission('accounts.edit')} onClose={() => { setShowInstitutions(false); loadData(); }} />
-      )}
-      {syncOpen && (
-        <ManualImportModal onClose={() => setSyncOpen(false)} onImported={() => { loadData(); sf.reload(); }} />
       )}
     </div>
   );
