@@ -11,12 +11,17 @@
  * - `balance`: a plain figure (balances, net worth, holdings, chart axes). A real
  *   minus when negative, no colour.
  *
- * Zero (and anything that rounds to zero at the chosen precision) shows "—".
+ * Zero (and anything that rounds to zero at the chosen precision) shows "—", unless
+ * `showZero` asks for "$0" (tables and KPIs that have always read "$0").
  */
 export type MoneyKind = 'transaction' | 'total' | 'balance';
 
-/** full: $1,234.56 · whole: $1,235 · compact: $1.2k, $3.4M, $5.6B (below 1,000 shows full). */
-export type MoneyPrecision = 'full' | 'whole' | 'compact';
+/**
+ * full: $1,234.56 · whole: $1,235 · compact: $1.2k, $3.4M, $5.6B (below 1,000 shows full).
+ * axis (chart axis labels): $250, $1.2k, $12k, $1.5M; whole dollars below 1,000, no
+ * trailing ".0", and "$0" at zero.
+ */
+export type MoneyPrecision = 'full' | 'whole' | 'compact' | 'axis';
 
 /** positive = money in / good, negative = bad, neutral = normal text, muted = transfers. */
 export type MoneyTone = 'positive' | 'negative' | 'neutral' | 'muted';
@@ -28,6 +33,8 @@ export interface MoneyOptions {
   transfer?: boolean;
   /** Tone for a zero result; Budget passes 'positive' so a zero remaining stays good. */
   zeroTone?: MoneyTone;
+  /** Show zero as "$0" ("$0.00" at full precision) instead of "—". */
+  showZero?: boolean;
 }
 
 export interface MoneyDisplay {
@@ -39,6 +46,16 @@ const COMPACT_UNITS: [number, string][] = [[1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
 
 /** The magnitude as text, or '' when it rounds to zero at this precision. */
 function magnitude(abs: number, precision: MoneyPrecision): string {
+  if (precision === 'axis') {
+    const whole = Math.round(abs);
+    if (whole < 1000) return whole ? `$${whole}` : '';
+    // One decimal below 10 of a unit, none above; Number() drops a trailing ".0".
+    for (let i = COMPACT_UNITS.length - 1; i >= 0; i--) {
+      const [size, suffix] = COMPACT_UNITS[i];
+      const scaled = Number((abs / size).toFixed(abs / size < 10 ? 1 : 0));
+      if (scaled < 1000 || i === 0) return `$${scaled.toLocaleString('en-US')}${suffix}`;
+    }
+  }
   if (precision === 'compact') {
     for (let i = 0; i < COMPACT_UNITS.length; i++) {
       const [size, suffix] = COMPACT_UNITS[i];
@@ -61,9 +78,12 @@ function magnitude(abs: number, precision: MoneyPrecision): string {
 }
 
 export function formatMoney(amount: number, options: MoneyOptions = {}): MoneyDisplay {
-  const { kind = 'transaction', precision = 'full', transfer = false, zeroTone } = options;
+  const { kind = 'transaction', precision = 'full', transfer = false, zeroTone, showZero = false } = options;
   const mag = Number.isFinite(amount) ? magnitude(Math.abs(amount), precision) : '';
-  if (!mag) return { text: '—', tone: zeroTone ?? (kind === 'transaction' && transfer ? 'muted' : 'neutral') };
+  if (!mag) return {
+    text: showZero || precision === 'axis' ? (precision === 'full' ? '$0.00' : '$0') : '—',
+    tone: zeroTone ?? (kind === 'transaction' && transfer ? 'muted' : 'neutral'),
+  };
   const negative = amount < 0;
 
   if (kind === 'balance') return { text: negative ? `-${mag}` : mag, tone: 'neutral' };
