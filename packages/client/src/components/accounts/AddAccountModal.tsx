@@ -6,7 +6,7 @@ import { useSimpleFin } from '../settings/useSimpleFin';
 import { useSaveAccount } from './useSaveAccount';
 
 /** Add account from the Accounts page: the Settings account form in a modal. */
-export default function AddAccountModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+export default function AddAccountModal({ onClose, onCreated }: { onClose: () => void; onCreated: (accountId: number) => void }) {
   const { addToast } = useToast();
   const sf = useSimpleFin();
   const [users, setUsers] = useState<AccountOwner[] | null>(null);

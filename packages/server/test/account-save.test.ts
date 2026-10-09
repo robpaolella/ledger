@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LinkStepError, saveAccountWithLink, type LinkableSfAccount, type Request } from '../../client/src/lib/accounts';
+import { LinkStepError, createAccountSaver, saveAccountWithLink, type LinkableSfAccount, type Request } from '../../client/src/lib/accounts';
 
 type Call = { path: string; method?: string; body?: unknown };
 
@@ -65,5 +65,40 @@ describe('saveAccountWithLink', () => {
     const err = await saveAccountWithLink(request, { accountId: null, data, linkKey: undefined, sfAccounts: [] }).catch((e) => e);
     expect(err).not.toBeInstanceOf(LinkStepError);
     expect(err.message).toBe('Bank bridge unavailable');
+  });
+});
+
+describe('createAccountSaver', () => {
+  it('after a link failure, saving again updates the new account (no duplicate) and still counts as created', async () => {
+    let failLink = true;
+    const calls: string[] = [];
+    const request: Request = async (path, init) => {
+      calls.push(`${init?.method} ${path}`);
+      if (failLink && path === '/simplefin/links' && init?.method === 'POST') throw new Error('Bank bridge unavailable');
+      return { data: { id: 42 } } as never;
+    };
+    const saver = createAccountSaver(request);
+    await expect(saver.save(null, data, target.key, [target])).rejects.toBeInstanceOf(LinkStepError);
+    failLink = false;
+    const res = await saver.save(null, data, target.key, [target]);
+    expect(res).toEqual({ accountId: 42, created: true });
+    expect(calls).toEqual(['POST /accounts', 'POST /simplefin/links', 'PUT /accounts/42', 'POST /simplefin/links']);
+  });
+
+  it('forgets the pending account on reset, so a new form creates a new account', async () => {
+    const { request, calls } = fakeRequest({ failOn: 'POST /simplefin/links' });
+    const saver = createAccountSaver(request);
+    await saver.save(null, data, target.key, [target]).catch(() => {});
+    saver.reset();
+    await saver.save(null, data, undefined, []);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /accounts', 'POST /simplefin/links', 'POST /accounts']);
+  });
+
+  it('does not remember an edit whose link failed', async () => {
+    const { request, calls } = fakeRequest({ failOn: 'POST /simplefin/links' });
+    const saver = createAccountSaver(request);
+    await saver.save(5, data, target.key, [target]).catch(() => {});
+    await saver.save(null, data, undefined, []);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['PUT /accounts/5', 'POST /simplefin/links', 'POST /accounts']);
   });
 });

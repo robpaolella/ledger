@@ -254,7 +254,7 @@ export default function AccountsPage() {
             </button>
           )}
           {hasPermission('accounts.create') && (
-            <Button size="sm" onClick={() => setAddingAccount(true)} aria-label="Add account" className="max-md:!px-2.5">
+            <Button size="sm" onClick={() => setAddingAccount(true)} aria-label="Add account">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
               <span className="hidden md:inline">Add account</span>
             </Button>
@@ -481,7 +481,12 @@ export default function AccountsPage() {
       {addingAccount && (
         <AddAccountModal
           onClose={() => setAddingAccount(false)}
-          onCreated={() => { loadData(); loadHistory(range, selected); }}
+          onCreated={(id) => {
+            // a filtered view would otherwise hide the account just created
+            const next = selected ? new Set(selected).add(id) : selected;
+            if (next !== selected) setSelected(next);
+            loadData(); loadHistory(range, next);
+          }}
         />
       )}
 

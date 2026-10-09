@@ -21,7 +21,7 @@ export class LinkStepError extends Error {
   accountId: number;
   constructor(accountId: number, cause: unknown) {
     const reason = cause instanceof Error ? cause.message : 'unknown error';
-    super(`The account was saved, but linking it to SimpleFIN failed: ${reason}. Try again to retry the link.`);
+    super(`The account was saved, but linking it to SimpleFIN failed: ${reason}. Save again to retry the link.`);
     this.name = 'LinkStepError';
     this.accountId = accountId;
   }
@@ -65,4 +65,27 @@ export async function saveAccountWithLink(
     }
   }
   return { accountId, created };
+}
+
+/**
+ * Remembers an account that was created but whose link step failed, so saving
+ * the same form again updates it instead of creating a duplicate. Call
+ * `reset()` when the form closes.
+ */
+export function createAccountSaver(request: Request) {
+  let pendingId: number | null = null;
+  return {
+    async save(existingId: number | null, data: unknown, linkKey: string | null | undefined, sfAccounts: LinkableSfAccount[]) {
+      const retrying = existingId === null && pendingId !== null;
+      try {
+        const res = await saveAccountWithLink(request, { accountId: existingId ?? pendingId, data, linkKey, sfAccounts });
+        pendingId = null;
+        return { accountId: res.accountId, created: res.created || retrying };
+      } catch (err) {
+        if (err instanceof LinkStepError && existingId === null) pendingId = err.accountId;
+        throw err;
+      }
+    },
+    reset() { pendingId = null; },
+  };
 }
