@@ -3,7 +3,7 @@ import LedgerLogo from './LedgerLogo';
 
 /**
  * Full-screen frame for the signed-out pages (sign in, first-run setup,
- * forced two-factor setup): the brand backdrop, the logo lockup, and one
+ * forced two-factor setup): the page backdrop, the logo lockup, and one
  * elevated card with the header anatomy in `DESIGN.md`.
  */
 export default function AuthShell({ title, description, children, maxWidth = 400 }: {
@@ -13,11 +13,11 @@ export default function AuthShell({ title, description, children, maxWidth = 400
   maxWidth?: number;
 }) {
   return (
-    <div className="min-h-screen flex items-center justify-center font-sans px-4 py-10" style={{ background: 'var(--bg-sidebar)' }}>
+    <div className="auth-shell min-h-screen flex items-center justify-center font-sans px-4 py-10 bg-bg">
       <div className="w-full" style={{ maxWidth }}>
         <div className="flex items-center justify-center gap-3 mb-8">
           <LedgerLogo size={40} />
-          <span className="text-[26px] font-extrabold tracking-tight" style={{ color: 'var(--sidebar-text)' }}>Ledger</span>
+          <span className="text-[26px] font-extrabold tracking-tight text-content">Ledger</span>
         </div>
         <div className="bg-surface border border-line rounded-[18px] shadow-md overflow-hidden">
           <div className="px-7 pt-6 pb-5 border-b border-line">

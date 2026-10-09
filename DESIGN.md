@@ -199,7 +199,7 @@ Numbered tokens `--owner-1` to `--owner-6` tint the account-owner tags, plus `--
 
 Existing components still use older names (`--bg-card`, `--text-primary`, `--color-positive`, `--btn-primary-bg`, `--badge-*`, `--bg-inline-*`, `--toggle-*`, and so on). `index.css` points almost all of them at a core token above, so they follow the theme automatically. In new work, use the core tokens. Tinted badges and inline messages are built by mixing a core token into the surface (`color-mix`), which is why they work in both themes without separate values.
 
-A few tokens keep fixed values that do not swap with the core set: `--bg-modal` (the one scrim for every modal, sheet and panel), `--bg-zebra`, and the dark navigation and hero values (`--bg-sidebar`, `--nav-*`, `--sidebar-text`, `--hero-gradient-*`). Use `var(--bg-modal)` for any scrim; do not invent another.
+A few tokens keep fixed values that do not swap with the core set: `--bg-modal` (the one scrim for every modal, sheet and panel), `--bg-zebra`, and the dark navigation and hero values (`--nav-*`, `--hero-gradient-*`). Use `var(--bg-modal)` for any scrim; do not invent another.
 
 ## Typography
 
@@ -269,6 +269,8 @@ The two-step sign-in code is six single-digit boxes (44px by 52px, centred, `--s
 ### Inputs
 
 Inputs and selects are 44px tall with `--surface-2` fill, a `--line-strong` border and 11px corners. Buttons use the shared `Button` component (`components/Button.tsx`) with `--radius-control` (11px) corners: primary is `--primary` with `--on-primary` text, secondary is `--surface-2` with a `--line-strong` border, outline is `--surface` with a `--line-strong` border (toolbar triggers; `active` turns the border `--primary` while open or applied), ghost has no fill or border and `--btn-ghost-text` (hover `--surface-2`), and danger is outlined with `--negative` text. Sizes: `md` 42px (forms and footers), `sm` 40px (toolbars and panel headers), `row` 34px with 9px corners (row actions). `iconOnly` makes the button square and requires an `aria-label`. `loading` disables the button, sets `aria-busy` and ignores clicks; keep the "Saving…" wording as the label (no spinner). Keyboard focus shows a 2px `--ring` outline. Use `Button` for new buttons; pages not yet moved still use the class recipes in `components/settings/ui.tsx`: `inputCls` for fields, and `btnPrimary`, `btnSecondary`, `btnDanger` for buttons, which are built from the same source as `Button` (`buttonClasses.ts`). Input focus shows a `--primary` border with a soft 3px ring; an invalid field (`aria-invalid` or `.error`) shows the same in `--negative`. Number spinners are hidden.
+
+The sign-in, first-run setup and two-step setup pages (`AuthShell`) follow light and dark like the rest of the app, with the `--bg` backdrop and `--text` wordmark. Their field text is 16px so iPhones do not zoom on focus; the rule lives in `index.css` under `.auth-shell` and leaves Settings fields at 14px.
 
 ### Badges, tags and progress
 
