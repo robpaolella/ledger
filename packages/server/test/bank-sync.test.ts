@@ -197,7 +197,7 @@ describe('connection state and retries', () => {
     await tickAt(at(10, 6));
     sf.behaviour.set(CARD, 'ok');
     await tickAt(at(10, 6, 15));
-    expect(conn(2)).toMatchObject({ status: 'working', kind: null, message: null, nextRetryAt: null, gaveUp: false });
+    expect(conn(2)).toMatchObject({ status: 'working', kind: null, message: null, nextRetryAt: null, gaveUp: false, triesToday: 0 });
     expect(info().nextRun).toEqual({ at: iso(at(11, 5, 30)), reason: 'scheduled' });
   });
 

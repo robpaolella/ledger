@@ -23,7 +23,7 @@ export function setDailySyncEnabled(sqlite: Database.Database, enabled: boolean)
   setConfig(sqlite, ENABLED_KEY, enabled ? '1' : '0');
 }
 
-function runTime(): { hour: number; minute: number } {
+export function runTime(): { hour: number; minute: number } {
   return { hour: Number(process.env.DAILY_SYNC_HOUR ?? 5), minute: Number(process.env.DAILY_SYNC_MINUTE ?? 30) };
 }
 
@@ -106,9 +106,11 @@ export function connectionSyncState(
     message: row.sync_message,
     lastAttemptAt: row.sync_attempt_at,
     nextRetryAt: null,
-    triesToday: retry?.failureCounts.get(row.id) ?? 0,
+    triesToday: 0,
     gaveUp: false,
   };
+  // A fetch that succeeded since clears today's tries.
+  if (state.status === 'failed' || state.status === 'reconnect_needed') state.triesToday = retry?.failureCounts.get(row.id) ?? 0;
   // Ledger only retries a plain failure, and only while daily sync is on.
   if (state.status !== 'failed' || !dailySyncOn(sqlite)) return state;
   if (inRetry(row.id, retry)) {

@@ -12,6 +12,7 @@ import {
   LAST_SUCCESS_KEY,
   localDate,
   targetAt,
+  runTime,
   dailySyncOn,
   dailySyncForcedOff,
   recordDailyRun,
@@ -265,8 +266,9 @@ export function startDailyScheduler(): void {
   interval.unref();
   const boot = setTimeout(() => { void tick(); }, 15_000);
   boot.unref();
+  const { hour, minute } = runTime();
   console.log(
-    `[daily-sync] scheduler armed — daily at ${String(process.env.DAILY_SYNC_HOUR ?? 5).padStart(2, '0')}:` +
-    `${String(process.env.DAILY_SYNC_MINUTE ?? 30).padStart(2, '0')} local, boot catch-up in 15s`,
+    `[daily-sync] scheduler armed — daily at ${String(hour).padStart(2, '0')}:` +
+    `${String(minute).padStart(2, '0')} local, boot catch-up in 15s`,
   );
 }
