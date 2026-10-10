@@ -55,7 +55,7 @@ function SortableRow({ cat, canEdit, onEdit }: { cat: Category; canEdit: boolean
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
         </span>
       )}
-      <span className="flex-none text-[17px] leading-none w-[22px] text-center">{cat.emoji || getCategoryEmoji(cat.sub_name)}</span>
+      <span className="flex-none text-[17px] leading-none w-[22px] text-center">{cat.emoji || getCategoryEmoji(cat.sub_name, cat.group_name)}</span>
       <span className="flex-1 text-[14.5px] font-semibold text-content">{cat.sub_name}</span>
       {cat.exclude_from_budget ? (
         <span className="flex-none h-[22px] px-[9px] rounded-[6px] bg-surface-2 border border-line text-content-3 text-[11px] font-semibold flex items-center">Excluded from budget</span>

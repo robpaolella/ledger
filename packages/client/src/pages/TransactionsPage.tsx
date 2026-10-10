@@ -1532,7 +1532,7 @@ export default function TransactionsPage() {
             <span className="shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(11)}</span>
           </div>
           <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-2 px-2">
-            <span className="text-[15px] leading-none">{getCategoryEmoji(split.subName)}</span>
+            <span className="text-[15px] leading-none">{getCategoryEmoji(split.subName, split.groupName)}</span>
             <span className="truncate">{split.subName}</span>
           </div>
           <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-3"><VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={18} /><span className="truncate">{accountLabel(t.account)}</span></div>
@@ -1543,7 +1543,7 @@ export default function TransactionsPage() {
     }
     const isTransfer = (t.category?.type ?? t.splits?.[0]?.type) === 'transfer';
     const isSplit = !!(t.splits && t.splits.length > 0);
-    const emoji = isSplit ? '🔀' : getCategoryEmoji(t.category?.subName ?? t.category?.groupName);
+    const emoji = isSplit ? '🔀' : getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName);
     const color = getCategoryColorHex(t.category?.groupName);
     const initial = (vendorLabel(t)?.trim()?.[0] ?? '?').toUpperCase();
     const vendorEditing = editCell?.id === t.id && editCell.field === 'vendor';
@@ -1616,7 +1616,7 @@ export default function TransactionsPage() {
               <div className="max-h-60 overflow-y-auto p-1.5">
                 {catMatches.map((c) => (
                   <button key={c.id} onClick={() => updateTxnField(t, { categoryId: c.id })} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-lg text-sm text-content hover:bg-surface-2">
-                    <span className="text-[15px] leading-none">{getCategoryEmoji(c.sub_name)}</span>
+                    <span className="text-[15px] leading-none">{getCategoryEmoji(c.sub_name, c.group_name)}</span>
                     <span className="truncate">{c.sub_name}</span>
                     <span className="ml-auto text-xs text-content-3 truncate">{c.group_name}</span>
                   </button>
@@ -2088,7 +2088,7 @@ export default function TransactionsPage() {
                         <select value={activeSplit.categoryId} onChange={(e) => e.target.value && patchSplitField({ categoryId: parseInt(e.target.value) })}
                           className="w-full h-12 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none appearance-none cursor-pointer">
                           {childGroups.map(([group, subs]) => (
-                            <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name)} {c.sub_name}</option>)}</optgroup>
+                            <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name, c.group_name)} {c.sub_name}</option>)}</optgroup>
                           ))}
                         </select>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-4 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
@@ -2159,7 +2159,7 @@ export default function TransactionsPage() {
                             return (
                               <button key={s.id} onClick={() => openDetail(detail, s)}
                                 className="flex items-center gap-2 text-sm text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-surface-2">
-                                <span className="text-[15px] leading-none">{getCategoryEmoji(s.subName)}</span>
+                                <span className="text-[15px] leading-none">{getCategoryEmoji(s.subName, s.groupName)}</span>
                                 <span className="flex-1 truncate text-content">{splitVendorLabel(detail, s)} · {s.subName}</span>
                                 <Money amount={s.amount} transfer={s.type === 'transfer'} className="font-semibold" />
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
@@ -2176,7 +2176,7 @@ export default function TransactionsPage() {
                           <option value="">🏷️ Uncategorized</option>
                           {groupedAll.map(([group, subs]) => (
                             <optgroup key={group} label={group}>
-                              {subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name)} {c.sub_name}</option>)}
+                              {subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name, c.group_name)} {c.sub_name}</option>)}
                             </optgroup>
                           ))}
                         </select>
@@ -2309,7 +2309,7 @@ export default function TransactionsPage() {
                   <span className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]" style={{ background: `color-mix(in srgb, ${oColor} 16%, transparent)`, color: oColor }}>{oInitial}</span>
                   <span className="font-semibold text-[15px] truncate flex-1">{vendorLabel(detail)}</span>
                   <span className="flex items-center gap-1.5 text-[13px] text-content-2 shrink-0">
-                    {detail.category && <><span className="text-[15px] leading-none">{getCategoryEmoji(detail.category.subName ?? detail.category.groupName)}</span><span className="truncate max-w-[120px]">{detail.category.subName}</span></>}
+                    {detail.category && <><span className="text-[15px] leading-none">{getCategoryEmoji(detail.category.subName ?? detail.category.groupName, detail.category.groupName)}</span><span className="truncate max-w-[120px]">{detail.category.subName}</span></>}
                   </span>
                   <Money amount={detail.amount} transfer={detail.category?.type === 'transfer'} className="font-bold text-[15px] shrink-0 ml-2" />
                 </button>

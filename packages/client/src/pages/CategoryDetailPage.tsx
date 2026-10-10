@@ -128,7 +128,7 @@ export default function CategoryDetailPage() {
   const cfg = detail?.category;
   const isIncome = cfg?.type === 'income';
   const catColor = !cfg ? 'var(--primary)' : isIncome ? 'var(--positive)' : getCategoryColorVar(cfg.groupName);
-  const catEmoji = cfg ? getCategoryEmoji(cfg.subName ?? cfg.groupName) : '🏷️';
+  const catEmoji = cfg ? getCategoryEmoji(cfg.subName ?? cfg.groupName, cfg.groupName) : '🏷️';
   const catName = cfg ? (cfg.subName ?? cfg.groupName) : '';
 
   const buckets = useMemo(() => (detail ? buildBuckets(detail.series, period) : []), [detail, period]);
@@ -341,7 +341,7 @@ export default function CategoryDetailPage() {
                     <ListRow key={t.id}
                       avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
                       title={vendor}
-                      subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(subName)}</span><span className="truncate">{subName}</span></>}
+                      subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(subName, t.category?.groupName)}</span><span className="truncate">{subName}</span></>}
                       amount={amt}
                       meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined}
                       className="border-t-0 border-b" />
@@ -354,7 +354,7 @@ export default function CategoryDetailPage() {
                       <span className="font-semibold text-[15px] truncate">{vendor}</span>
                     </div>
                     <div className="flex items-center gap-2 text-content-2 text-sm min-w-0">
-                      <span className="text-[15px] leading-none shrink-0">{getCategoryEmoji(subName)}</span>
+                      <span className="text-[15px] leading-none shrink-0">{getCategoryEmoji(subName, t.category?.groupName)}</span>
                       <span className="truncate">{subName}</span>
                     </div>
                     <div className="flex items-center gap-2.5 text-content-2 text-[13px] min-w-0">

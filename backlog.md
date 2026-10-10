@@ -13,3 +13,4 @@
 - theme-color follows the phone's light/dark setting, not Ledger's chosen theme; fixing it needs ThemeContext.
 - Date filter button label drops the year, so an old range (e.g. Jan 15 2005 – Mar 1 2005) reads like this year's.
 - Settings row buttons (Delete, Undo, `btnRow`) are 34–40px on phones; the Settings design (decision 5) asks for 44px. Fix once in `btnRow`/`ConfirmDeleteButton` for all Settings panels.
+- Categories: two same-named categories with different stored emoji still collide, because stored emoji are looked up by name alone.
