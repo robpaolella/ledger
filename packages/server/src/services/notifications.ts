@@ -53,6 +53,23 @@ export function activeUserIds(sqlite: Database.Database): number[] {
   return (sqlite.prepare('SELECT id FROM users WHERE is_active = 1').all() as { id: number }[]).map((r) => r.id);
 }
 
+/**
+ * Active users who can see Bank sync: owner/admin, or a granted
+ * `simplefin.manage` / `import.bank_sync`. Reads the role and permission rows
+ * fresh, so removed access applies at once rather than after the 60s cache in
+ * middleware/permissions.ts.
+ */
+export function bankSyncUserIds(sqlite: Database.Database): number[] {
+  return (sqlite.prepare(`
+    SELECT id FROM users WHERE is_active = 1 AND (
+      role IN ('owner', 'admin') OR EXISTS (
+        SELECT 1 FROM user_permissions p WHERE p.user_id = users.id AND p.granted = 1
+          AND p.permission IN ('simplefin.manage', 'import.bank_sync')
+      )
+    )
+  `).all() as { id: number }[]).map((r) => r.id);
+}
+
 /* ------ SimpleFIN sync failures ------ */
 
 const syncFailureKey = (connectionId: number) => `sync_failure:conn:${connectionId}`;
@@ -67,13 +84,14 @@ export interface SyncFailureInput {
 /**
  * Raise a sync-failure notification for a connection. Recipients: the
  * connection's user for personal connections, every active user for shared
- * ones (user_id NULL).
+ * ones (user_id NULL); either way only people who can see Bank sync.
  */
 export function notifySyncFailure(sqlite: Database.Database, f: SyncFailureInput): void {
   const conn = sqlite.prepare('SELECT user_id FROM simplefin_connections WHERE id = ?')
     .get(f.connectionId) as { user_id: number | null } | undefined;
   if (!conn) return;
-  const recipients = conn.user_id != null ? [conn.user_id] : activeUserIds(sqlite);
+  const canSee = bankSyncUserIds(sqlite);
+  const recipients = conn.user_id != null ? canSee.filter((id) => id === conn.user_id) : canSee;
   const body =
     f.kind === 'auth' ? `Authentication expired — reconnect ${f.label} in Settings to resume syncing.`
     : f.kind === 'rate_limit' ? `${f.label} hit the SimpleFIN rate limit. Syncing will retry automatically.`
@@ -85,7 +103,7 @@ export function notifySyncFailure(sqlite: Database.Database, f: SyncFailureInput
       title: `Couldn't sync ${f.label}`,
       body,
       actionLabel: 'Open Settings',
-      actionTarget: '/settings?tab=banksync',
+      actionTarget: '/settings?panel=bank',
       dedupeKey: syncFailureKey(f.connectionId),
     });
   }
