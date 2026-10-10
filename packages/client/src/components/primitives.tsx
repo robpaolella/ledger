@@ -104,8 +104,8 @@ export function SegmentedControl<T extends string>({
 /* ------ Switch ------
  * 44×26 pill toggle (design system): `--primary` on, `--line-strong` off. */
 export function Switch({
-  checked, onChange, disabled = false, title,
-}: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean; title?: string }) {
+  checked, onChange, disabled = false, title, className = '',
+}: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean; title?: string; className?: string }) {
   return (
     <button
       type="button"
@@ -115,7 +115,7 @@ export function Switch({
       title={title}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative w-11 h-[26px] rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+      className={`relative w-11 h-[26px] rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ${className}`}
       style={{ background: checked ? 'var(--primary)' : 'var(--line-strong)' }}
     >
       <span className="absolute top-[3px] w-5 h-5 rounded-full bg-white shadow-sm transition-all" style={{ left: checked ? 21 : 3 }} />

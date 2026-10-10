@@ -2,30 +2,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import ConfirmDeleteButton from '../ConfirmDeleteButton';
 import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
 import { ownerColor } from '../badges';
-import { ACCESS_LABEL, ACCESS_PRESETS, accessLevelOf, presetPermissions, type AccessPreset } from '@ledger/shared';
-import AccessEditor from './users/AccessEditor';
+import { ACCESS_PRESETS, presetPermissions, type AccessPreset } from '@ledger/shared';
+import PersonView, { PersonBadges } from './users/PersonView';
+import { ROLE_LABEL, roleLine, type CallerRole, type ManagedUser } from './users/people';
 import { COMPOUND_PERMISSIONS } from './users/permissionSwitches';
-import { LoadError, Card, CardHeader, Caption, Field, PanelHeader, Pill, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, btnRow, ICON } from './ui';
+import { LoadError, Card, CardHeader, Caption, Field, PanelHeader, Pill, SelectShell, InitialsAvatar, inputCls, selectCls, btnPrimary, btnSecondary, btnDanger, ICON } from './ui';
 
-export interface ManagedUser {
-  id: number;
-  username: string;
-  displayName: string;
-  role: 'owner' | 'admin' | 'member';
-  isActive: boolean;
-  twofaEnabled: boolean;
-  createdAt: string;
-  permissions: Record<string, boolean> | null;
-}
-
-const ROLE_TONE: Record<string, string> = { owner: 'var(--c-orange)', admin: 'var(--positive)', member: 'var(--c-blue)' };
-const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
+const chevronRight = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>;
 
 // --- Add user ---
 function AddUserModal({ onClose, onCreated, callerRole }: { onClose: () => void; onCreated: () => void; callerRole: string }) {
@@ -298,11 +286,11 @@ export default function UsersPanel() {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
   const [deleting, setDeleting] = useState<ManagedUser | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [openId, setOpenId] = useState<number | null>(null);
   const [requireAdmin2FA, setRequireAdmin2FA] = useState(false);
   const [requireMember2FA, setRequireMember2FA] = useState(false);
 
-  const callerRole = user?.role || 'member';
+  const callerRole = (user?.role || 'member') as CallerRole;
   const canManage = isAdmin();
 
   const loadUsers = useCallback(async () => {
@@ -327,8 +315,6 @@ export default function UsersPanel() {
 
   const retryLoad = () => { setLoaded(false); setLoadFailed(false); loadUsers(); load2FA(); };
 
-  const canTouch = (mu: ManagedUser) => mu.role !== 'owner' && (callerRole === 'owner' || (callerRole === 'admin' && mu.role === 'member'));
-
   const setRole = async (mu: ManagedUser, role: 'admin' | 'member') => {
     if (role === mu.role) return;
     setManagedUsers((prev) => prev.map((u) => (u.id === mu.id ? { ...u, role } : u)));
@@ -340,6 +326,24 @@ export default function UsersPanel() {
       addToast(err instanceof Error ? err.message : 'Failed to change role', 'error');
       loadUsers();
     }
+  };
+
+  // Saves at once, like the edit window's own switch; a failed save puts the switch back.
+  const setActive = async (mu: ManagedUser, isActive: boolean) => {
+    const patch = (value: boolean) => setManagedUsers((prev) => prev.map((u) => (u.id === mu.id ? { ...u, isActive: value } : u)));
+    patch(isActive);
+    try {
+      await apiFetch(`/users/${mu.id}`, { method: 'PUT', body: JSON.stringify({ isActive }) });
+      addToast(isActive ? `${mu.displayName} can sign in` : `${mu.displayName} can no longer sign in`);
+    } catch (err) {
+      patch(!isActive);
+      addToast(err instanceof Error ? err.message : 'Failed to update user', 'error');
+    }
+  };
+
+  const resetTwoStep = async (mu: ManagedUser) => {
+    try { await apiFetch(`/auth/2fa/reset/${mu.id}`, { method: 'POST' }); addToast(`Two-step sign-in reset for ${mu.displayName}`); loadUsers(); }
+    catch (err) { addToast(err instanceof Error ? err.message : 'Failed to reset two-step sign-in', 'error'); }
   };
 
   // Saves permission changes optimistically; a failed save puts back the values from before.
@@ -381,7 +385,7 @@ export default function UsersPanel() {
     }
   };
 
-  const toggleExpanded = (id: number) => setExpanded((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const openUser = openId === null ? undefined : managedUsers.find((u) => u.id === openId);
 
   return (
     <div className="flex flex-col gap-[22px]">
@@ -393,86 +397,22 @@ export default function UsersPanel() {
 
       {loadFailed ? <LoadError onRetry={retryLoad} /> : (
       <Card>
-        <CardHeader title="Household members" meta={loaded ? `${managedUsers.length} ${managedUsers.length === 1 ? 'user' : 'users'}` : undefined} />
-        {!loaded ? <Spinner /> : managedUsers.map((mu) => {
-          const color = ownerColor(mu.id);
-          const isOpen = expanded.has(mu.id);
-          return (
-            <div key={mu.id} className="border-t border-line">
-              <div className="flex flex-wrap md:flex-nowrap items-center gap-x-4 gap-y-3 px-6 py-[18px]">
-                <InitialsAvatar name={mu.displayName} color={color} size={40} />
-                <div className="flex-1 min-w-[160px]">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[15px] font-bold text-content truncate">{mu.displayName}</span>
-                    {mu.id === user?.id && <span className="text-[12px] text-content-3">(you)</span>}
-                    {!mu.isActive && <Pill color="var(--negative)" className="h-[22px] px-2 text-[11px]">Inactive</Pill>}
-                    {mu.twofaEnabled && <Pill color="var(--positive)" className="h-[22px] px-2 text-[11px]" title="Two-factor authentication is on">2FA</Pill>}
-                  </div>
-                  <div className="text-[12.5px] text-content-3 truncate">{ROLE_LABEL[mu.role]}{mu.role === 'member' && ` · ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}</div>
-                </div>
-                <span className="hidden md:block font-mono text-[12.5px] text-content-3 truncate max-w-[160px]">@{mu.username}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {mu.role === 'owner' ? (
-                    <Pill color="var(--c-orange)" className="h-[26px] rounded-[7px]">Owner</Pill>
-                  ) : callerRole === 'owner' ? (
-                    <div className="relative">
-                      <select value={mu.role} onChange={(e) => setRole(mu, e.target.value as 'admin' | 'member')} aria-label={`Role for ${mu.displayName}`}
-                        className="h-[34px] pl-3 pr-8 rounded-[8px] border border-line-strong text-[12.5px] font-bold appearance-none cursor-pointer outline-none"
-                        style={mu.role === 'admin'
-                          ? { background: 'color-mix(in srgb, var(--primary) 16%, transparent)', color: 'var(--primary)' }
-                          : { background: 'var(--surface-2)', color: 'var(--c-blue)' }}>
-                        <option value="admin">Admin</option>
-                        <option value="member">Member</option>
-                      </select>
-                      <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ color: mu.role === 'admin' ? 'var(--primary)' : 'var(--c-blue)' }}><path d="m6 9 6 6 6-6" /></svg>
-                    </div>
-                  ) : (
-                    <Pill color={ROLE_TONE[mu.role]} className="h-[26px] rounded-[7px]">{ROLE_LABEL[mu.role]}</Pill>
-                  )}
-                  {canTouch(mu) && (
-                    <button type="button" onClick={() => setEditing(mu)} className={btnRow} title="Edit name, password, or active state">{ICON.pencil}Edit</button>
-                  )}
-                  {canTouch(mu) && mu.twofaEnabled && mu.id !== user?.id && (
-                    <ConfirmDeleteButton
-                      label="Reset 2FA"
-                      confirmLabel="Confirm reset?"
-                      onConfirm={async () => {
-                        try { await apiFetch(`/auth/2fa/reset/${mu.id}`, { method: 'POST' }); addToast(`Two-factor reset for ${mu.displayName}`); loadUsers(); }
-                        catch (err) { addToast(err instanceof Error ? err.message : 'Failed to reset 2FA', 'error'); }
-                      }}
-                    />
-                  )}
-                  {canTouch(mu) && mu.id !== user?.id && (
-                    <button type="button" onClick={() => setDeleting(mu)} title="Remove user"
-                      className="inline-flex items-center gap-1.5 h-[34px] px-3 rounded-[8px] border border-line-strong bg-transparent text-negative text-[12.5px] font-bold hover:bg-negative/8 transition-colors">
-                      {ICON.trash}Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {mu.role !== 'member' ? (
-                <div className="px-6 md:pl-20 pb-4 text-[12.5px] italic text-content-3">
-                  {mu.role === 'owner' ? 'App owner. Cannot be restricted or removed.' : `Admins can use everything and manage members.${callerRole !== 'owner' ? ' Only the owner can change admins.' : ''}`}
-                </div>
-              ) : mu.permissions && (
-                <div className="pb-4 pl-6 pr-6 md:pl-20">
-                  <button type="button" onClick={() => toggleExpanded(mu.id)} aria-expanded={isOpen} className="inline-flex items-center gap-1.5 max-md:min-h-[44px] text-[13px] font-semibold text-content-2 hover:text-content">
-                    <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>{ICON.chevron}</span>
-                    {isOpen ? 'Hide access' : `Access: ${ACCESS_LABEL[accessLevelOf(mu.permissions)]}`}
-                  </button>
-                  {isOpen && (
-                    <div className="mt-3">
-                      <AccessEditor name={mu.displayName} permissions={mu.permissions} canEdit={canTouch(mu)}
-                        onApplyPreset={(preset) => applyPreset(mu, preset)}
-                        onTogglePermission={(key, current) => togglePermission(mu, key, current)} />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <CardHeader title="Household members" meta={loaded ? `${managedUsers.length} ${managedUsers.length === 1 ? 'person' : 'people'}` : undefined} />
+        {!loaded ? <Spinner /> : managedUsers.map((mu) => (
+          <button key={mu.id} type="button" onClick={() => setOpenId(mu.id)} aria-haspopup="dialog"
+            className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 min-h-[64px] py-2.5 border-t border-line text-left hover:bg-surface-2 transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+            <InitialsAvatar name={mu.displayName} color={ownerColor(mu.id)} size={40} />
+            <span className="flex-1 min-w-0">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="text-[15px] font-bold text-content truncate">{mu.displayName}</span>
+                <PersonBadges mu={mu} isSelf={mu.id === user?.id} />
+              </span>
+              <span className="block text-[12.5px] text-content-3 truncate">{roleLine(mu)}</span>
+            </span>
+            <span className="hidden md:block font-mono text-[12.5px] text-content-3 truncate max-w-[160px]">@{mu.username}</span>
+            <span className="shrink-0 text-content-3">{chevronRight}</span>
+          </button>
+        ))}
         {loaded && <button type="button" onClick={() => setShowAdd(true)}
           className="w-full flex items-center justify-center gap-2 px-6 py-4 border-t border-line bg-surface-2 text-content-2 text-sm font-bold hover:text-content hover:bg-elevated transition-colors">
           {ICON.plus}Add user
@@ -501,8 +441,18 @@ export default function UsersPanel() {
       )}
 
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onCreated={loadUsers} callerRole={callerRole} />}
+      {openUser && (
+        <PersonView mu={openUser} callerRole={callerRole} currentUserId={user?.id} onClose={() => setOpenId(null)}
+          onSetRole={(role) => setRole(openUser, role)}
+          onSetActive={(next) => setActive(openUser, next)}
+          onResetTwoStep={() => resetTwoStep(openUser)}
+          onApplyPreset={(preset) => applyPreset(openUser, preset)}
+          onTogglePermission={(key, current) => togglePermission(openUser, key, current)}
+          onEdit={() => setEditing(openUser)}
+          onDelete={() => setDeleting(openUser)} />
+      )}
       {editing && <EditUserModal managedUser={editing} currentUserId={user!.id} onClose={() => setEditing(null)} onUpdated={loadUsers} />}
-      {deleting && <DeleteUserModal userId={deleting.id} onClose={() => setDeleting(null)} onDeleted={loadUsers} />}
+      {deleting && <DeleteUserModal userId={deleting.id} onClose={() => setDeleting(null)} onDeleted={() => { setOpenId(null); loadUsers(); }} />}
     </div>
   );
 }

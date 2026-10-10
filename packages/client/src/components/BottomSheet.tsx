@@ -1,5 +1,6 @@
-import { useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useDialogLayer } from '../hooks/useDialogLayer';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -12,25 +13,28 @@ interface BottomSheetProps {
   children: ReactNode;
 }
 
+// Open sheets share one page scroll lock: sheets stacked on each other can close in any
+// order (or together) without leaving the page locked.
+let scrollLocks = 0;
+let unlockedOverflow = '';
+
 /** Phone counterpart of ResponsiveModal — same header · body · footer anatomy. */
 export default function BottomSheet({ isOpen, onClose, title, description, icon, footer, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const currentTranslateY = useRef(0);
+  const descriptionId = useId();
 
+  useDialogLayer(sheetRef, isOpen, onClose);
+
+  // Prevent body scroll while any sheet is open
   useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
-
-  // Prevent body scroll when open
-  useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    if (scrollLocks++ === 0) {
+      unlockedOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    return () => { if (--scrollLocks === 0) document.body.style.overflow = unlockedOverflow; };
   }, [isOpen]);
 
   // Reset translate when opening
@@ -80,6 +84,7 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-describedby={title && description ? descriptionId : undefined}
         className="absolute bottom-0 left-0 right-0 bg-elevated rounded-t-[20px] flex flex-col shadow-md"
         style={{
           animation: 'sheetSlideUp 200ms ease-out',
@@ -104,15 +109,15 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
             <div className="min-w-0 flex items-center gap-3">
               {icon && <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{icon}</span>}
               <div className="min-w-0">
-                <div className="text-[18px] font-extrabold tracking-tight text-content leading-tight">{title}</div>
-                {description && <div className="text-[13px] text-content-3 mt-1 leading-snug">{description}</div>}
+                <div className="text-[18px] font-extrabold tracking-tight text-content leading-tight break-words">{title}</div>
+                {description && <div id={descriptionId} className="text-[13px] text-content-3 mt-1 leading-snug">{description}</div>}
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="shrink-0 w-8 h-8 -mr-1.5 flex items-center justify-center rounded-[8px] text-content-2 hover:bg-surface-2"
+              className="shrink-0 w-11 h-11 -mr-3 -my-1.5 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
             </button>
