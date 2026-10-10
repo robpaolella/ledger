@@ -23,7 +23,7 @@ export default function BankSyncPanel({ sf, accounts, users, onAccountsChanged, 
 
   // Feeds the Paused wording and the Daily sync card; if it can't load, connections read as on and the card is hidden.
   const loadDaily = useCallback(async () => {
-    try { setDaily((await apiFetch<{ data: DailySyncInfo }>('/simplefin/daily-sync')).data); } catch { setDaily(null); }
+    try { setDaily((await apiFetch<{ data: DailySyncInfo }>('/simplefin/daily-sync')).data); } catch { /* keep what's on screen; before the first load it stays null */ }
   }, []);
   useEffect(() => { loadDaily(); }, [loadDaily]);
 
