@@ -24,8 +24,10 @@ export function useSimpleFin() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  /** `quiet` refreshes in place: no spinner, and a failed refresh keeps what's on screen. */
+  const reload = useCallback(async (opts?: { quiet?: boolean }) => {
+    const quiet = opts?.quiet === true;
+    if (!quiet) setLoading(true);
     let conns: Connection[] = [];
     try {
       const res = await apiFetch<{ data: Connection[] }>('/simplefin/connections');
@@ -33,6 +35,7 @@ export function useSimpleFin() {
       setConnections(conns);
       setLoadFailed(false);
     } catch {
+      if (quiet) return;
       setConnections([]);
       setLoadFailed(true);
     } finally {
