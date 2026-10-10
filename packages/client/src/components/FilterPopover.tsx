@@ -219,7 +219,7 @@ export default function FilterPopover({
                       const cat = categories.find((x) => x.id === Number(c.slice(4)));
                       return (
                         <div key={c} className="flex items-center gap-2 py-1.5 text-sm">
-                          <span className="text-[15px] leading-none">{getCategoryEmoji(cat?.sub_name)}</span>
+                          <span className="text-[15px] leading-none">{getCategoryEmoji(cat?.sub_name, cat?.group_name)}</span>
                           <span className="flex-1 truncate">{cat?.sub_name ?? c}</span>
                           <RemoveBtn onClick={() => toggleCategory(c)} />
                         </div>

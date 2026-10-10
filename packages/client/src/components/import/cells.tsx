@@ -258,7 +258,7 @@ export function CategoryCell({
   const current = categoryId != null ? categories.find((c) => c.id === categoryId) : undefined;
   const has = !!current;
 
-  const emoji = has ? getCategoryEmoji(current!.sub_name) : '＋';
+  const emoji = has ? getCategoryEmoji(current!.sub_name, current!.group_name) : '＋';
   const label = has ? current!.sub_name : 'Select…';
 
   const ql = q.trim().toLowerCase();
@@ -291,7 +291,7 @@ export function CategoryCell({
         className="flex items-center gap-2.5 px-[11px] py-[9px] rounded-[8px] text-sm font-medium cursor-pointer"
         style={{ color: sel ? 'var(--primary)' : 'var(--text)', background: sel ? 'color-mix(in srgb, var(--primary) 12%, transparent)' : 'transparent' }}
       >
-        <span className="text-[15px] leading-none flex-none">{getCategoryEmoji(c.sub_name)}</span>
+        <span className="text-[15px] leading-none flex-none">{getCategoryEmoji(c.sub_name, c.group_name)}</span>
         <span className="truncate">{labelText}</span>
       </div>
     );

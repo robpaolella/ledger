@@ -204,7 +204,7 @@ export default function RecurringPage() {
         </div>
         <div className="flex-1 min-w-0 text-[13px] text-content-3 truncate hidden md:block">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</div>
         <div className="flex-1 min-w-0 hidden md:flex items-center gap-1.5 text-[13px] text-content-2">
-          <span className="text-[15px] leading-none">{getCategoryEmoji(o.subName)}</span>
+          <span className="text-[15px] leading-none">{getCategoryEmoji(o.subName, o.groupName)}</span>
           <span className="truncate">{o.subName}</span>
         </div>
         <div className="md:w-[110px] shrink-0 text-right">
@@ -357,7 +357,7 @@ function CalendarGrid({ month, today, occByDay, onOcc }: {
                       <button key={`${o.itemId}-${o.date}`} onClick={() => onOcc(o)} title={`${o.label} · ${o.subName}`}
                         className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] font-semibold text-left truncate"
                         style={{ background: o.type === 'income' ? 'color-mix(in srgb, var(--positive) 18%, transparent)' : `color-mix(in srgb, ${color} 16%, transparent)`, color: o.type === 'income' ? 'var(--positive)' : 'var(--text)' }}>
-                        <span className="leading-none">{o.type === 'income' ? '💵' : getCategoryEmoji(o.subName)}</span>
+                        <span className="leading-none">{o.type === 'income' ? '💵' : getCategoryEmoji(o.subName, o.groupName)}</span>
                         <Money amount={flow(o.amount, o.type)} className="truncate" />
                       </button>
                     );
@@ -403,7 +403,7 @@ function AllRecurring({ items, annual, onOpen }: {
                   {paused && <div className="text-[11px] text-content-3">Paused</div>}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[13px] text-content-2 min-w-0"><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName)}</span><span className="truncate">{it.subName}</span></div>
+              <div className="flex items-center gap-1.5 text-[13px] text-content-2 min-w-0"><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName, it.groupName)}</span><span className="truncate">{it.subName}</span></div>
               <div className="text-right font-bold text-[14px]"><Money amount={flow(it.amount ?? 0, it.type)} /></div>
               <div className="text-[13px] text-content-2">
                 {it.freq_kind === 'custom_months'
@@ -457,7 +457,7 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
           {next && <div className="text-[13px] text-content-3 mb-6">Next: {dateChip(next.date)} · {relativeLabel(next.date, today)}</div>}
           {row('Vendor', item.merchantName ?? '—')}
           {row('Account', item.accountName ? `${item.accountName}${item.accountLastFour ? ` (…${item.accountLastFour})` : ''}` : '—')}
-          {row('Category', <span className="inline-flex items-center gap-1.5">{getCategoryEmoji(item.subName)} {item.subName}</span>)}
+          {row('Category', <span className="inline-flex items-center gap-1.5">{getCategoryEmoji(item.subName, item.groupName)} {item.subName}</span>)}
           {row('Frequency', cadenceLabel(item))}
           {row('Status', <span className={item.status === 'active' ? 'text-positive' : 'text-content-3'}>{item.status === 'active' ? 'Active' : 'Paused'}</span>)}
           {canEdit && (

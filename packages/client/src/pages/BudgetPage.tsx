@@ -171,7 +171,7 @@ export default function BudgetPage() {
     // Input edits the TOTAL monthly budget (recurring floor + extra). Seed with the
     // current effective total (planned). On save we back out the stored manual per
     // fold mode so the floor stays applied per-month; an override bypasses the floor.
-    setEditModal({ categoryId, groupName, subName, emoji: getCategoryEmoji(subName.split(' · ')[0]), planned, targetMonth, recurring, manual: manual ?? planned, income });
+    setEditModal({ categoryId, groupName, subName, emoji: getCategoryEmoji(subName.split(' · ')[0], groupName), planned, targetMonth, recurring, manual: manual ?? planned, income });
     setEditValue(planned ? String(planned) : '');
     setEditScope('month');
     setEditOverride(overridden);
@@ -316,7 +316,7 @@ export default function BudgetPage() {
                       const rem = r.budgeted - r.actual;
                       return (
                         <div key={r.categoryId} className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
-                          <span className="w-7 shrink-0 text-center text-[16px] leading-none">{getCategoryEmoji(r.subName)}</span>
+                          <span className="w-7 shrink-0 text-center text-[16px] leading-none">{getCategoryEmoji(r.subName, g.groupName)}</span>
                           <button type="button" onClick={() => drillSub(r.categoryId)} className="flex-1 min-w-0 text-left text-[15px] font-medium truncate">{r.subName}</button>
                           <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden, sec.key === 'income'); }}
                             disabled={!canEditBudgets}
@@ -403,7 +403,7 @@ export default function BudgetPage() {
                               <div key={r.categoryId} className="grid gap-3 pr-6 py-3 border-b border-line items-center" style={{ gridTemplateColumns: 'minmax(0,1fr) 82px 82px 144px', paddingLeft: 52 }}>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
-                                    <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(r.subName)}</span>
+                                    <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(r.subName, g.groupName)}</span>
                                     <button type="button" onClick={() => drillSub(r.categoryId)}
                                       className="text-sm font-medium truncate text-left hover:underline">{r.subName}</button>
                                     {r.recurring && (
@@ -530,7 +530,7 @@ export default function BudgetPage() {
                       {!gCollapsed && g.subs.map((sub) => (
                         <div key={sub.categoryId} className="flex items-center border-b border-line">
                           <div className="w-[250px] shrink-0 px-6 py-2.5 text-sm text-content-2 sticky left-0 bg-surface z-[1] flex items-center gap-1.5" style={{ paddingLeft: 52 }}>
-                            <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(sub.subName)}</span>
+                            <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(sub.subName, g.groupName)}</span>
                             <button type="button" onClick={() => drillSub(sub.categoryId)} className="truncate text-left hover:underline">{sub.subName}</button>
                           </div>
                           {sub.planned.map((v, m) => {
