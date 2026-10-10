@@ -283,7 +283,7 @@ export default function AccountDetailPage() {
                   <ListRow key={t.id}
                     avatar={{ name: vendor, src: t.merchant?.logoUrl, color }}
                     title={vendor}
-                    subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(cat.subName)}</span><span className="truncate">{cat.label}</span></>}
+                    subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(cat.subName, cat.groupName)}</span><span className="truncate">{cat.label}</span></>}
                     amount={amt}
                     meta={<span className="font-mono">{new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                     className="border-t" />
@@ -297,7 +297,7 @@ export default function AccountDetailPage() {
                   <VendorAvatar name={vendor} src={t.merchant?.logoUrl || undefined} color={color} size={26} />
                   <span className="flex-[1.4] min-w-0 font-semibold text-[15px] truncate">{vendor}</span>
                   <span className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-2">
-                    <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(cat.subName)}</span>
+                    <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(cat.subName, cat.groupName)}</span>
                     <span className="truncate">{cat.label}</span>
                   </span>
                   <span className="min-w-32 shrink-0 text-right font-bold text-[15px]">{amt}</span>

@@ -293,7 +293,7 @@ export default function ReportsPage() {
   const showFlow = flowDenom > 0 && (!!focusObj || k.expenses > 0);
   if (showFlow) {
     if (focusObj) {
-      focusObj.group.subs.forEach((s, i) => flowSegs.push({ name: s.subName, color: subColor(i), emoji: getCategoryEmoji(s.subName), amount: s.total, pct: s.total / flowDenom, drill: null }));
+      focusObj.group.subs.forEach((s, i) => flowSegs.push({ name: s.subName, color: subColor(i), emoji: getCategoryEmoji(s.subName, focusObj.group.groupName), amount: s.total, pct: s.total / flowDenom, drill: null }));
     } else {
       if (savedAmt > 0) flowSegs.push({ name: 'Saved', color: 'var(--positive)', emoji: '💰', amount: savedAmt, pct: savedAmt / flowDenom, drill: null });
       const top = expGroups.slice(0, 6);
@@ -378,14 +378,14 @@ export default function ReportsPage() {
   let summarySecs: SumSec[];
   if (focusObj) {
     const g = focusObj.group; const meta = secMeta(g.groupName);
-    summarySecs = [{ label: g.groupName, total: g.total, ...meta, rows: g.subs.map((s, i) => ({ key: `s${s.categoryId}`, gkey: '', name: s.subName, emoji: getCategoryEmoji(s.subName), color: subColor(i), leaf: true, amount: s.total, pct: g.total > 0 ? s.total / g.total : 0, drill: null, subs: [] })) }];
+    summarySecs = [{ label: g.groupName, total: g.total, ...meta, rows: g.subs.map((s, i) => ({ key: `s${s.categoryId}`, gkey: '', name: s.subName, emoji: getCategoryEmoji(s.subName, g.groupName), color: subColor(i), leaf: true, amount: s.total, pct: g.total > 0 ? s.total / g.total : 0, drill: null, subs: [] })) }];
   } else {
     summarySecs = (['income', 'expenses'] as const).map((sk) => {
       const sec = sections[sk]; const meta = secMeta(sec.label);
       return { label: sec.label, total: sec.total, ...meta, rows: sec.groups.map((g) => ({
         key: g.groupName, gkey: gkeyOf(sec.label, g.groupName), name: g.groupName, emoji: getCategoryEmoji(g.groupName), color: groupColorVar(typeOfSection(sk), g.groupName), leaf: false, amount: g.total, pct: sec.total > 0 ? g.total / sec.total : 0,
         drill: g.subs.length > 0 ? g.groupName : null,
-        subs: g.subs.length > 0 ? g.subs.map((s, i) => ({ key: `s${s.categoryId}`, name: s.subName, emoji: getCategoryEmoji(s.subName), amount: s.total, pct: g.total > 0 ? s.total / g.total : 0, color: subColor(i) })) : [],
+        subs: g.subs.length > 0 ? g.subs.map((s, i) => ({ key: `s${s.categoryId}`, name: s.subName, emoji: getCategoryEmoji(s.subName, g.groupName), amount: s.total, pct: g.total > 0 ? s.total / g.total : 0, color: subColor(i) })) : [],
       })) };
     });
   }
@@ -404,14 +404,14 @@ export default function ReportsPage() {
   let timelineSecs: TLSec[];
   if (focusObj) {
     const g = focusObj.group;
-    timelineSecs = [buildTL(g.groupName, g.total, g.subs.map((s, i) => ({ key: `s${s.categoryId}`, gkey: '', name: s.subName, emoji: getCategoryEmoji(s.subName), color: subColor(i), leaf: true, buckets: s.buckets, total: s.total, drill: null, subs: [] })))];
+    timelineSecs = [buildTL(g.groupName, g.total, g.subs.map((s, i) => ({ key: `s${s.categoryId}`, gkey: '', name: s.subName, emoji: getCategoryEmoji(s.subName, g.groupName), color: subColor(i), leaf: true, buckets: s.buckets, total: s.total, drill: null, subs: [] })))];
   } else {
     timelineSecs = (['income', 'expenses'] as const).map((sk) => {
       const sec = sections[sk];
       return buildTL(sec.label, sec.total, sec.groups.map((g) => ({
         key: g.groupName, gkey: gkeyOf(sec.label, g.groupName), name: g.groupName, emoji: getCategoryEmoji(g.groupName), color: groupColorVar(typeOfSection(sk), g.groupName), leaf: false, buckets: g.buckets, total: g.total,
         drill: g.subs.length > 0 ? g.groupName : null,
-        subs: g.subs.length > 0 ? g.subs.map((s) => ({ key: `s${s.categoryId}`, name: s.subName, emoji: getCategoryEmoji(s.subName), cells: s.buckets, peak: Math.max(...s.buckets, 0), total: s.total })) : [],
+        subs: g.subs.length > 0 ? g.subs.map((s) => ({ key: `s${s.categoryId}`, name: s.subName, emoji: getCategoryEmoji(s.subName, g.groupName), cells: s.buckets, peak: Math.max(...s.buckets, 0), total: s.total })) : [],
       })));
     });
   }
@@ -812,7 +812,7 @@ export default function ReportsPage() {
                     <ListRow key={t.id} className="border-t-0 border-b"
                       avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
                       title={vendor}
-                      subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
+                      subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
                       amount={amt}
                       meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined} />
                   );
@@ -822,7 +822,7 @@ export default function ReportsPage() {
                     <VendorAvatar name={vendor} src={t.merchant?.logoUrl || undefined} color={t.merchant?.logoUrl ? undefined : hue} size={26} />
                     <div className="min-w-0 font-semibold text-[15px] truncate" style={{ flex: 1.4 }}>{vendor}</div>
                     <div className="flex-1 min-w-0 flex items-center gap-2.5 text-[13px] text-content-2">
-                      <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName)}</span>
+                      <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName)}</span>
                       <span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span>
                     </div>
                     <div className="flex-1 min-w-0 text-[13px] text-content-3 hidden md:flex items-center gap-1.5">
