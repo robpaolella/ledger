@@ -22,6 +22,7 @@ export function useSimpleFin() {
   const [failures, setFailures] = useState<{ connectionId: number; label: string; error: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -30,8 +31,10 @@ export function useSimpleFin() {
       const res = await apiFetch<{ data: Connection[] }>('/simplefin/connections');
       conns = res.data;
       setConnections(conns);
+      setLoadFailed(false);
     } catch {
       setConnections([]);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -62,5 +65,5 @@ export function useSimpleFin() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  return { connections, sfAccounts, failures, loading, accountsLoading, reload };
+  return { connections, sfAccounts, failures, loading, accountsLoading, loadFailed, reload };
 }
