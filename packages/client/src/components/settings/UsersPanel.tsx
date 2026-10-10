@@ -422,15 +422,15 @@ export default function UsersPanel() {
 
       {loaded && !loadFailed && callerRole === 'owner' && (
         <Card>
-          <div className="px-6 py-3.5 border-b border-line"><Caption>Two-step sign-in requirements</Caption></div>
-          <div className="flex items-center justify-between gap-4 px-6 py-4">
+          <div className="px-4 md:px-6 py-3.5 border-b border-line"><Caption>Two-step sign-in requirements</Caption></div>
+          <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4">
             <div className="min-w-0">
               <div className="text-[14.5px] font-semibold text-content">Require two-step sign-in for admins</div>
               <div className="text-[12.5px] text-content-3 mt-0.5">Admins must set it up before they can use Ledger.</div>
             </div>
             <Switch checked={requireAdmin2FA} onChange={(v) => setRequirement('admin', v)} title="Require two-step sign-in for admins" />
           </div>
-          <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-line">
+          <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 border-t border-line">
             <div className="min-w-0">
               <div className="text-[14.5px] font-semibold text-content">Require two-step sign-in for members</div>
               <div className="text-[12.5px] text-content-3 mt-0.5">Every member must set it up.</div>
