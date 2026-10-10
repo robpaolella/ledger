@@ -1,29 +1,38 @@
-import Database from 'better-sqlite3';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { notifySyncFailure } from '../src/services/notifications.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type Database from 'better-sqlite3';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-// Plain in-memory tables: the service only needs these four, and takes the raw handle.
+// The real schema, built the way the server builds it, in a scratch file (never data/).
+process.env.DATABASE_PATH = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-sync-recipients-')), 'test.db');
+
 let db: Database.Database;
+let notifySyncFailure: typeof import('../src/services/notifications.js').notifySyncFailure;
 const SHARED = 1;
 const PERSONAL_OWNER = 2; // personal connection of user 3 (a member with Bank sync)
 const PERSONAL_VIEWER = 3; // personal connection of user 4 (View-only member)
 
+beforeAll(async () => {
+  ({ sqlite: db } = await import('../src/db/index.js'));
+  (await import('../src/db/migrate.js')).runMigrations(db);
+  ({ notifySyncFailure } = await import('../src/services/notifications.js'));
+});
+
 beforeEach(() => {
-  db = new Database(':memory:');
   db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, role TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1);
-    CREATE TABLE user_permissions (user_id INTEGER, permission TEXT, granted INTEGER);
-    CREATE TABLE simplefin_connections (id INTEGER PRIMARY KEY, user_id INTEGER);
-    CREATE TABLE notifications (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, severity TEXT, title TEXT, body TEXT,
-      action_label TEXT, action_target TEXT, dedupe_key TEXT, is_read INTEGER DEFAULT 0, UNIQUE (user_id, dedupe_key));
-    INSERT INTO users (id, role, is_active) VALUES
-      (1, 'owner', 1), (2, 'admin', 1), (3, 'member', 1), (4, 'member', 1),
-      (5, 'member', 1), (6, 'member', 0), (7, 'admin', 0), (8, 'member', 1);
-    INSERT INTO user_permissions VALUES
-      (3, 'simplefin.manage', 1), (4, 'import.bank_sync', 0), (4, 'simplefin.manage', 0),
-      (5, 'import.bank_sync', 1), (6, 'import.bank_sync', 1), (8, 'transactions.create', 1);
-    INSERT INTO simplefin_connections (id, user_id) VALUES (1, NULL), (2, 3), (3, 4);
+    DELETE FROM notifications; DELETE FROM simplefin_links; DELETE FROM simplefin_connections;
+    DELETE FROM user_permissions; DELETE FROM users;
   `);
+  const user = db.prepare('INSERT INTO users (id, username, password_hash, display_name, role, is_active) VALUES (?, ?, ?, ?, ?, ?)');
+  [[1, 'owner', 1], [2, 'admin', 1], [3, 'member', 1], [4, 'member', 1], [5, 'member', 1], [6, 'member', 0], [7, 'admin', 0], [8, 'member', 1]]
+    .forEach(([id, role, active]) => user.run(id, `u${id}`, 'x', `User ${id}`, role, active));
+  const perm = db.prepare('INSERT INTO user_permissions (user_id, permission, granted) VALUES (?, ?, ?)');
+  [[3, 'simplefin.manage', 1], [4, 'import.bank_sync', 0], [4, 'simplefin.manage', 0],
+    [5, 'import.bank_sync', 1], [6, 'import.bank_sync', 1], [8, 'transactions.create', 1]]
+    .forEach(([u, p, g]) => perm.run(u, p, g));
+  const conn = db.prepare('INSERT INTO simplefin_connections (id, user_id, access_url, label) VALUES (?, ?, ?, ?)');
+  [[1, null], [2, 3], [3, 4]].forEach(([id, u]) => conn.run(id, u, `demo://sample-${id}`, `Sample ${id}`));
 });
 
 const fail = (connectionId: number) =>
