@@ -13,3 +13,6 @@
 - theme-color follows the phone's light/dark setting, not Ledger's chosen theme; fixing it needs ThemeContext.
 - Date filter button label drops the year, so an old range (e.g. Jan 15 2005 – Mar 1 2005) reads like this year's.
 - Settings row buttons (Delete, Undo, `btnRow`) are 34–40px on phones; the Settings design (decision 5) asks for 44px. Fix once in `btnRow`/`ConfirmDeleteButton` for all Settings panels.
+- Daily sync card: LAST SYNC counts every connection in the household, not just the ones the viewer can see (server `readLastRun`, #151); a member can infer how many personal connections exist.
+- Daily sync times mix server and browser clocks (RUNS vs NEXT SYNC/"Trying again at"); show one clock, same for the gave-up line in `banksync/status.ts`.
+- Client has no test runner; `dayTime`, `lastSyncText`, `nextSyncText` in `DailySyncCard.tsx` are untested.

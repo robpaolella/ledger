@@ -49,7 +49,7 @@ export default function BankSyncPanel({ sf, accounts, users, onAccountsChanged, 
         onSyncNow={() => setSyncOpen(true)}
       />
       {!sf.loading && !sf.loadFailed && (
-        <DailySyncCard daily={daily} hasConnections={sf.connections.length > 0} canManage={hasPermission('simplefin.manage')} onReload={loadDaily} />
+        <DailySyncCard daily={daily} hasConnections={sf.connections.length > 0} canManage={hasPermission('simplefin.manage')} onReload={async () => { await Promise.all([sf.reload(), loadDaily()]); }} />
       )}
       {syncOpen && <ManualImportModal onClose={() => setSyncOpen(false)} onImported={() => { onAccountsChanged(); sf.reload(); }} />}
     </div>
