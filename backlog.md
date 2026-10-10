@@ -16,3 +16,4 @@
 - Daily sync card: LAST SYNC counts every connection in the household, not just the ones the viewer can see (server `readLastRun`, #151); a member can infer how many personal connections exist.
 - Daily sync times mix server and browser clocks (RUNS vs NEXT SYNC/"Trying again at"); show one clock, same for the gave-up line in `banksync/status.ts`.
 - Client has no test runner; `dayTime`, `lastSyncText`, `nextSyncText` in `DailySyncCard.tsx` are untested.
+- Categories: two same-named categories with different stored emoji still collide, because stored emoji are looked up by name alone.

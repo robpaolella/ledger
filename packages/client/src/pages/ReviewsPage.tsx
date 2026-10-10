@@ -394,7 +394,7 @@ export default function ReviewsPage() {
                       {/* category (inline-editable) */}
                       <div className="flex-1 min-w-0 relative" onClick={(e) => { if (canEdit) { e.stopPropagation(); setEditCat((v) => (v === t.id ? null : t.id)); setCatSearch(''); setMenu(null); setEditAssign(null); } }}>
                         <div className="flex items-center gap-2.5 h-9 px-2 -mx-2 rounded-[8px] text-[13px] text-content-2 border border-transparent hover:border-line-strong transition-colors" style={{ cursor: canEdit ? 'pointer' : 'default' }}>
-                          <span className="flex-none text-[15px] leading-none">{t.category ? getCategoryEmoji(t.category.subName ?? t.category.groupName) : '🏷️'}</span>
+                          <span className="flex-none text-[15px] leading-none">{t.category ? getCategoryEmoji(t.category.subName ?? t.category.groupName, t.category.groupName) : '🏷️'}</span>
                           <span className="truncate flex-1">{t.category?.subName ?? 'Uncategorized'}</span>
                           {canEdit && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="flex-none opacity-0 group-hover:opacity-100 transition-opacity"><path d="m6 9 6 6 6-6" /></svg>}
                         </div>
@@ -404,7 +404,7 @@ export default function ReviewsPage() {
                             <div className="max-h-60 overflow-y-auto p-1.5">
                               {catMatches.map((c) => (
                                 <button key={c.id} onClick={() => setTxnCategory(t, c.id)} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-lg text-sm text-content hover:bg-surface-2">
-                                  <span className="text-[15px] leading-none">{getCategoryEmoji(c.sub_name)}</span>
+                                  <span className="text-[15px] leading-none">{getCategoryEmoji(c.sub_name, c.group_name)}</span>
                                   <span className="truncate">{c.sub_name}</span>
                                   <span className="ml-auto text-xs text-content-3 truncate">{c.group_name}</span>
                                 </button>
