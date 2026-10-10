@@ -68,7 +68,9 @@ export default function DailySyncCard({ daily, hasConnections, canManage, onRelo
     ...(next ? [['Next sync', next] as [string, string]] : []),
   ];
 
+  // Not `disabled` while saving: a disabled button drops keyboard focus.
   const toggle = async (value: boolean) => {
+    if (saving) return;
     setSaving(true);
     try {
       await apiFetch('/simplefin/daily-sync', { method: 'PUT', body: JSON.stringify({ enabled: value }) });
@@ -95,7 +97,7 @@ export default function DailySyncCard({ daily, hasConnections, canManage, onRelo
             {daily.forcedOff && ' Daily sync is turned off in the server’s settings.'}
           </div>
         </div>
-        {canManage && !daily.forcedOff && <Switch checked={daily.enabled} onChange={toggle} disabled={saving} title="Daily sync" />}
+        {canManage && !daily.forcedOff && <Switch checked={daily.enabled} onChange={toggle} title="Daily sync" />}
       </div>
       <dl className="m-0 px-4 md:px-6 py-2">
         {rows.map(([k, v]) => (
