@@ -1085,7 +1085,7 @@ export default function TransactionsPage() {
   const flagForReview = async () => {
     if (!detail) return;
     try { await apiFetch('/reviews/flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: detail.id }) }); afterReviewChange(detail.id); }
-    catch { addToast('Failed to flag for review', 'error'); }
+    catch { addToast('Failed to mark to review', 'error'); }
   };
   /** Resolve a review by id — used by the detail panel and by the row badge popover. */
   const markReviewedById = async (id: number) => {
@@ -1598,7 +1598,7 @@ export default function TransactionsPage() {
           </div>
           {reviewPopId === t.id && (
             <div onClick={(e) => e.stopPropagation()} className="absolute top-9 right-0 z-[60] w-[248px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-3">
-              <div className="text-[13px] font-bold text-content">Needs review</div>
+              <div className="text-[13px] font-bold text-content">To review</div>
               <p className="text-[12px] text-content-3 leading-snug mt-1 mb-2.5">{NEEDS_REVIEW_HINT}</p>
               <button onClick={() => { setReviewPopId(null); void markReviewedById(t.id); }}
                 className="w-full h-9 rounded-[10px] bg-primary text-on-primary font-bold text-[13px] border-none cursor-pointer">
@@ -1621,7 +1621,7 @@ export default function TransactionsPage() {
                     <span className="ml-auto text-xs text-content-3 truncate">{c.group_name}</span>
                   </button>
                 ))}
-                {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">No matches</div>}
+                {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">{cellSearch.trim() ? <span className="block truncate">Nothing matches “{cellSearch.trim()}”</span> : 'No matches'}</div>}
               </div>
             </div>
           )}
@@ -2244,7 +2244,7 @@ export default function TransactionsPage() {
                               <span className="text-[13px] font-semibold" style={{ color: 'var(--warning)' }}>
                                 {detail.review?.reason === 'auto_uncategorized' ? 'Uncategorized on import'
                                   : detail.review?.reason === 'auto_low_confidence' ? 'Low-confidence auto-category'
-                                  : 'Flagged for review'}
+                                  : 'Marked to review'}
                               </span>
                               <button onClick={markReviewed} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>
                             </div>
@@ -2262,7 +2262,7 @@ export default function TransactionsPage() {
                           </div>
                         ) : (
                           <button onClick={flagForReview} className="w-full h-11 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm hover:bg-surface">
-                            Flag for review
+                            Mark to review
                           </button>
                         )}
                       </div>

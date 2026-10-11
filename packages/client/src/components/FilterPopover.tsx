@@ -132,7 +132,7 @@ export default function FilterPopover({
             })}
             {tab === 'Accounts' && (
               accountSections.length === 0 ? (
-                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No accounts match</div>
+                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">{search.trim() ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : 'No accounts match'}</div>
               ) : (
                 <>
                   <CheckRow on={acctAllChecked} onToggle={() => setDraft((d) => ({ ...d, account: acctAllChecked ? d.account.filter((id) => !visibleAccountIds.includes(id)) : [...new Set([...d.account, ...visibleAccountIds])] }))} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={acctAllChecked} />Select all</CheckRow>
@@ -200,7 +200,7 @@ export default function FilterPopover({
             {tab === 'Other' && showNeedsReview && (
               <div className="py-2">
                 <button type="button" role="checkbox" aria-checked={!!draft.needsReview} onClick={() => setDraft((d) => ({ ...d, needsReview: !d.needsReview }))} className={`flex items-center gap-3 w-full text-left px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px] ${FOCUS}`}>
-                  <Chk on={!!draft.needsReview} /><span className="flex-1">Needs review only</span>
+                  <Chk on={!!draft.needsReview} /><span className="flex-1">To review only</span>
                 </button>
                 <p className="px-1 pt-1 text-[13px] text-content-3 leading-snug">Transactions auto-categorized with low confidence, or left uncategorized on import.</p>
               </div>
@@ -270,7 +270,7 @@ export default function FilterPopover({
                 {draft.needsReview && (
                   <div>
                     <div className="flex items-center justify-between mb-1.5"><span className="text-[13px] font-semibold text-content-3">Review</span><button onClick={() => setDraft((d) => ({ ...d, needsReview: false }))} className="text-[13px] font-semibold text-primary">Clear</button></div>
-                    <div className="flex items-center gap-2 py-1.5 text-sm"><span className="flex-1 truncate">Needs review only</span><RemoveBtn onClick={() => setDraft((d) => ({ ...d, needsReview: false }))} /></div>
+                    <div className="flex items-center gap-2 py-1.5 text-sm"><span className="flex-1 truncate">To review only</span><RemoveBtn onClick={() => setDraft((d) => ({ ...d, needsReview: false }))} /></div>
                   </div>
                 )}
               </div>
