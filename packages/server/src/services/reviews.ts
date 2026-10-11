@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import type { UncategorizedTotals } from '@ledger/shared/src/types.js';
 
 /**
  * Review-task lifecycle helpers. Single source of the invariant:
@@ -10,6 +11,38 @@ import type Database from 'better-sqlite3';
  */
 
 import { upsertNotification, deleteByDedupeKey } from './notifications.js';
+
+/**
+ * SQL condition: transaction `t` is uncategorized — no category, no splits, and
+ * not one leg of a linked transfer (transfers stay out of totals). Money totals
+ * count these under Expenses (money out) or Income (money in) by direction.
+ */
+export const isUncategorizedSql = (t: string): string => `(
+  ${t}.category_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM transaction_splits uts WHERE uts.transaction_id = ${t}.id)
+  AND NOT EXISTS (SELECT 1 FROM transfer_links utl WHERE utl.status = 'linked'
+    AND (utl.from_transaction_id = ${t}.id OR utl.to_transaction_id = ${t}.id))
+)`;
+
+/**
+ * Count, money out and money in (positive magnitudes) of uncategorized
+ * transactions dated start..end (YYYY-MM-DD), optionally only accounts owned by
+ * the user with that display name.
+ */
+export function uncategorizedTotals(
+  sqlite: Database.Database,
+  opts: { start: string; end: string; owner?: string },
+): UncategorizedTotals {
+  const { start, end, owner } = opts;
+  return sqlite.prepare(`
+    SELECT count(*) AS count,
+           coalesce(sum(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS moneyOut,
+           coalesce(sum(CASE WHEN t.amount < 0 THEN -t.amount ELSE 0 END), 0) AS moneyIn
+    FROM transactions t
+    WHERE ${isUncategorizedSql('t')} AND t.date >= ? AND t.date <= ?
+      ${owner ? 'AND EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = t.account_id AND u.display_name = ?)' : ''}
+  `).get(...(owner ? [start, end, owner] : [start, end])) as UncategorizedTotals;
+}
 
 export type ReviewReason = 'auto_uncategorized' | 'auto_low_confidence' | 'manual';
 
