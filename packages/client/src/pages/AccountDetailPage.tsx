@@ -136,15 +136,16 @@ const dateLabelOf = (d: DateRangeValue) => d.preset === 'all' ? 'Date'
     ? (d.start && d.end ? `${shortDate(d.start)} – ${shortDate(d.end)}` : d.start ? `From ${shortDate(d.start)}` : d.end ? `Until ${shortDate(d.end)}` : 'Custom')
     : (DATE_PRESETS.find((p) => p.value === d.preset)?.label ?? 'Date');
 
-// The /transactions query for this account's list; category groups send `groupNames` as the Transactions page does.
-function listQuery(accountId: number, search: string, date: DateRangeValue, f: FilterDraft): string {
+// The /transactions query for this account's list. A fully ticked category group also sends its `groupNames`, as the Transactions page does.
+function listQuery(accountId: number, search: string, date: DateRangeValue, f: FilterDraft, groups: { group: string; subs: { id: number }[] }[]): string {
   const params = new URLSearchParams({ accountIds: String(accountId), limit: String(LIMIT) });
   const { startDate, endDate } = dateRangeOf(date);
   if (startDate) params.set('startDate', startDate);
   if (endDate) params.set('endDate', endDate);
   if (search) params.set('search', search);
   if (f.type !== 'All') params.set('type', f.type.toLowerCase());
-  const groupNames = f.category.filter((v) => v.startsWith('group:')).map((v) => v.slice(6));
+  const wholeGroups = groups.filter((g) => g.subs.length > 0 && g.subs.every((s) => f.category.includes(`sub:${s.id}`))).map((g) => g.group);
+  const groupNames = [...new Set([...f.category.filter((v) => v.startsWith('group:')).map((v) => v.slice(6)), ...wholeGroups])];
   const catIds = f.category.filter((v) => v.startsWith('sub:')).map((v) => v.slice(4));
   if (groupNames.length) params.set('groupNames', groupNames.join(','));
   if (catIds.length) params.set('categoryIds', catIds.join(','));
@@ -235,20 +236,23 @@ function AccountDetail() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Only the newest request may write the list: a slow older response must not overwrite it.
-  useEffect(() => {
-    const seq = ++loadSeq.current;
-    setListState('loading');
-    apiFetch<{ data: Txn[]; total: number }>(`/transactions?${listQuery(id, query, date, applied)}`)
-      .then((res) => { if (seq === loadSeq.current) { setTxns(res.data); setMatchTotal(res.total); setListState('ready'); } })
-      .catch(() => { if (seq === loadSeq.current) setListState('error'); });
-  }, [id, query, date, applied, retryKey]);
-
   const categoryGroups = useMemo(() => {
     const groups = new Map<string, { id: number; sub: string }[]>();
     for (const c of categories) groups.set(c.group_name, [...(groups.get(c.group_name) ?? []), { id: c.id, sub: c.sub_name }]);
     return [...groups].map(([group, subs]) => ({ group, subs }));
   }, [categories]);
+  const groupsRef = useRef(categoryGroups); // read at request time: the panel can't apply category filters before they load
+  groupsRef.current = categoryGroups;
+
+  // Only the newest request may write the list: a slow older response must not overwrite it.
+  useEffect(() => {
+    const seq = ++loadSeq.current;
+    setListState('loading');
+    apiFetch<{ data: Txn[]; total: number }>(`/transactions?${listQuery(id, query, date, applied, groupsRef.current)}`)
+      .then((res) => { if (seq === loadSeq.current) { setTxns(res.data); setMatchTotal(res.total); setListState('ready'); } })
+      .catch(() => { if (seq === loadSeq.current) setListState('error'); });
+  }, [id, query, date, applied, retryKey]);
+
   const filterCount = filterDraftCount(applied);
   const anyActive = query !== '' || date.preset !== 'all' || filterCount > 0;
   const clearAll = () => { setSearch(''); setQuery(''); setSearchOpen(false); setDate(ALL_TIME); setApplied(EMPTY_FILTER); setDraft(EMPTY_FILTER); };
