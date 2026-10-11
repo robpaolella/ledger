@@ -11,7 +11,8 @@ them, even if no single version had all of them:
 
 | # | Decision | Options (version) | Robert's pick and why |
 | --- | --- | --- | --- |
-| 1 | <e.g. how names show> | <a: ...; b: ...> | <pick, reference/date> |
+| 13 | 12-month layout on phones (Budget Year, Reports Timeline) | a: one month at a time with month arrows plus a year/range total column; b: totals only, tap a category for a month-tile grid; c: swipeable table with pinned names | **A**. Robert, herdr 2026-10-11: "I agree, version A is the best." |
+| 19 | Month/Year selector on phones | a: keep it, Year labelled as the plan ("Planned · this month", columns "Oct" / "2026"); b: drop it on phones; c: keep it unchanged | **Keep the selector** (a, as now in version A). Robert, herdr 2026-10-11: "let's keep A. I see the annual column now, I like that." then "lets keep the Month/Year label as it is." |
 
 Robert's exact confirmation and date/reference authorizing the
 PR. Design PR: use the linked PR on the design issue once created; the session adds
@@ -74,6 +75,7 @@ Notes for the reviewer:
 | herdr, decision 16 | All / import-upload (phone) | "Choose your CSV file / Download it from your bank's website first." | Robert agreed. Kept. | 2026-10-11 |
 | herdr, decision 17 | All / merchant-edit merge row (phone) | "Move its 93 transactions to another merchant, then delete Larkspindle Finance." | Robert agreed. Kept. | 2026-10-11 |
 | herdr, decision 18 | All / Security two-factor card | "Scan a QR code…" becomes "Add Ledger to an authenticator app…" | Robert agreed. Kept. | 2026-10-11 |
+| Open Design cmt_23077cb2 (pin 1) | a.html / Budget Month-Year selector (phone) | "It's currently set to year, but the design for mobile only shows one month at a time. Is there a point in having this selector at all now on mobile?" | Decision 19: selector kept on phones; version A's Year view labels the bar "Planned · this month" and the columns "Oct" / "2026" so it reads as the plan. Checked at 390 in both themes; smoke test re-run clean. | 2026-10-11 resolved |
 
 ## Experiment
 None, or Robert's permission, question, branch/preview, chosen behaviour, rejected
