@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
 import { ownerColor, initOwnerSlots } from '../components/badges';
@@ -194,12 +194,19 @@ export default function ReviewsPage() {
   const resolve = async (ids: number[]) => {
     if (busy || ids.length === 0) return;
     setBusy(true);
-    setRows((rs) => rs.filter((r) => !ids.includes(r.transaction.id)));
+    // No optimistic removal: the server may keep uncategorized rows, and hiding them
+    // before the reply made them vanish and reappear. The reload drops the cleared ones.
     try {
-      await apiFetch('/reviews/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ids.length === 1 ? { transactionId: ids[0] } : { transactionIds: ids }) });
+      const res = await apiFetch<{ data: { resolved: number; needsCategory: number } }>('/reviews/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ids.length === 1 ? { transactionId: ids[0] } : { transactionIds: ids }) });
       notifyChanged(); load({ silent: true });
+      const { resolved, needsCategory } = res.data;
+      if (needsCategory > 0) addToast(`Marked ${resolved} reviewed. ${needsCategory} still ${needsCategory === 1 ? 'needs' : 'need'} a category.`);
       if (detail && ids.includes(detail.id)) await refetchDetail(detail.id);
-    } catch { load({ silent: true }); addToast('Failed to approve', 'error'); }
+    } catch (err) {
+      load({ silent: true });
+      // A 400 carries the server's plain-English reason (e.g. choose a category first).
+      addToast(err instanceof ApiError && err.status === 400 ? err.message : 'Failed to approve', 'error');
+    }
     finally { setBusy(false); }
   };
   const reassign = async (txnId: number, assigneeId: number) => {
