@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
 import { formatMoney } from '@ledger/shared';
-import { Money, Change } from '../components/Money';
+import { Money } from '../components/Money';
 import { getCategoryEmoji, getCategoryColorHex, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -46,7 +46,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 // Recurring amounts are positive magnitudes plus a type. Shown in stored sign so the
 // money rule applies: income is money in (green "+$X"), an expense is money out ("$X").
 const flow = (amount: number, type: 'income' | 'expense') => (type === 'income' ? -Math.abs(amount) : Math.abs(amount));
-const plain = (n: number) => formatMoney(n, { kind: 'balance' }).text;
+const plain = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
 function ymOfOffset(offset: number): string {
   const n = new Date();
   const d = new Date(n.getFullYear(), n.getMonth() + offset, 1);
@@ -154,7 +154,6 @@ export default function RecurringPage() {
   // ----- summary strip -----
   const inc = monthView?.income ?? { total: 0, paid: 0, remaining: 0 };
   const exp = monthView?.expense ?? { total: 0, paid: 0, remaining: 0 };
-  const net = monthView?.net ?? 0;
 
   const occByDay = useMemo(() => {
     const map = new Map<number, ROcc[]>();
@@ -169,12 +168,15 @@ export default function RecurringPage() {
   const groups = useMemo(() => {
     const occ = monthView?.occurrences ?? [];
     const of = (s: ROcc['status']) => occ.filter((o) => o.status === s);
-    const netOf = (list: ROcc[]) => list.reduce((sum, o) => sum + (o.type === 'income' ? o.amount : -o.amount), 0);
+    // Money in and bills are totalled separately, never netted against each other.
+    const sumOf = (list: ROcc[], t: ROcc['type']) => list.filter((o) => o.type === t).reduce((sum, o) => sum + flow(o.amount, o.type), 0);
+    const has = (list: ROcc[], t: ROcc['type']) => list.some((o) => o.type === t);
     return [
       { key: 'due', title: 'Due soon', dot: 'var(--warning)', list: of('due') },
       { key: 'upcoming', title: 'Upcoming', dot: 'var(--primary)', list: of('upcoming') },
-      { key: 'paid', title: 'Paid', dot: 'var(--positive)', list: of('paid') },
-    ].filter((g) => g.list.length > 0).map((g) => ({ ...g, net: netOf(g.list) }));
+      // 'paid' only means the due date has passed; nothing checks a transaction.
+      { key: 'paid', title: 'Due date passed', dot: 'var(--text-3)', list: of('paid') },
+    ].filter((g) => g.list.length > 0).map((g) => ({ ...g, hasIncome: has(g.list, 'income'), hasBills: has(g.list, 'expense'), income: sumOf(g.list, 'income'), bills: sumOf(g.list, 'expense') }));
   }, [monthView]);
 
   const annual = useMemo(() => {
@@ -187,6 +189,7 @@ export default function RecurringPage() {
   // ---------- render helpers ----------
   const occRow = (o: ROcc) => {
     const color = getCategoryColorHex(o.groupName);
+    const dateColor = o.status === 'paid' ? 'var(--text)' : 'var(--warning)';
     return (
       <button key={`${o.itemId}-${o.date}`} onClick={() => { const it = items.find((i) => i.id === o.itemId); if (it) setPanel(it); }}
         className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-5 min-h-16 md:min-h-0 md:h-[58px] py-2 md:py-0 border-b border-line text-left hover:bg-surface-2/40 active:bg-surface-2">
@@ -199,7 +202,7 @@ export default function RecurringPage() {
           </div>
         </div>
         <div className="hidden md:block w-[92px] shrink-0">
-          <div className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</div>
+          <div className="text-[13px] font-semibold tabular-nums" style={{ color: dateColor }}>{dateChip(o.date)}</div>
           <div className="text-[11px] text-content-3">{relativeLabel(o.date, today)}</div>
         </div>
         <div className="flex-1 min-w-0 text-[13px] text-content-3 truncate hidden md:block">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</div>
@@ -209,7 +212,7 @@ export default function RecurringPage() {
         </div>
         <div className="md:w-[110px] shrink-0 text-right">
           <div className="font-bold text-[15px]"><Money amount={flow(o.amount, o.type)} /></div>
-          <div className="md:hidden text-[11.5px] tabular-nums mt-0.5"><span className="font-semibold" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</span><span className="text-content-3"> · {relativeLabel(o.date, today)}</span></div>
+          <div className="md:hidden text-[11.5px] tabular-nums mt-0.5"><span className="font-semibold" style={{ color: dateColor }}>{dateChip(o.date)}</span><span className="text-content-3"> · {relativeLabel(o.date, today)}</span></div>
         </div>
       </button>
     );
@@ -260,21 +263,16 @@ export default function RecurringPage() {
                   options={[{ value: 'list', label: 'List' }, { value: 'calendar', label: 'Calendar' }]} />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-line">
+            <div className="grid grid-cols-1 sm:grid-cols-2 border-t border-line">
               <div className="px-4 md:px-6 py-4 sm:border-r border-line">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} className="text-[15px] font-extrabold" /></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} showZero className="text-[15px] font-extrabold" /></div>
                 {bar(inc.paid, inc.total, 'var(--positive)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.paid)} received</span><span>{plain(inc.remaining)} remaining</span></div>
+                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.paid)} due date passed</span><span>{plain(inc.remaining)} remaining</span></div>
               </div>
-              <div className="px-4 md:px-6 py-4 sm:border-r border-line border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Expenses</span><Money amount={exp.total} className="text-[15px] font-extrabold" /></div>
+              <div className="px-4 md:px-6 py-4 border-line border-t sm:border-t-0">
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Bills</span><Money amount={exp.total} showZero className="text-[15px] font-extrabold" /></div>
                 {bar(exp.paid, exp.total, 'var(--primary)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(exp.paid)} paid</span><span>{plain(exp.remaining)} remaining</span></div>
-              </div>
-              <div className="px-4 md:px-6 py-4 border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><Change value={net} className="text-[15px] font-extrabold" /></div>
-                {bar(net >= 0 ? net : 0, Math.max(inc.total, 1), 'var(--positive)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.total)} in</span><span>{plain(exp.total)} out</span></div>
+                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(exp.paid)} due date passed</span><span>{plain(exp.remaining)} remaining</span></div>
               </div>
             </div>
           </div>
@@ -288,13 +286,17 @@ export default function RecurringPage() {
               <div className="flex flex-col gap-4">
                 {groups.map((g) => (
                   <div key={g.key} className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-line">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 md:px-5 py-3 border-b border-line">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full" style={{ background: g.dot }} />
                         <span className="font-bold text-sm">{g.title}</span>
                         <span className="text-[12px] text-content-3">{g.list.length} item{g.list.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <Money amount={-g.net} className="font-bold text-sm" />
+                      <div className="flex items-baseline gap-1.5 text-sm whitespace-nowrap">
+                        {g.hasIncome && <><Money amount={g.income} showZero className="font-bold" /><span className="text-[12px] text-content-3">in</span></>}
+                        {g.hasIncome && g.hasBills && <span className="text-content-3">·</span>}
+                        {g.hasBills && <><Money amount={g.bills} showZero className="font-bold" /><span className="text-[12px] text-content-3">bills</span></>}
+                      </div>
                     </div>
                     {g.list.map(occRow)}
                   </div>
