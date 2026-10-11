@@ -210,7 +210,7 @@ export function VendorCell({
                   </div>
                 );
               })}
-              {filtered.length === 0 && <div className="px-[11px] py-2.5 text-[13px] text-content-3">No matches</div>}
+              {filtered.length === 0 && <div className="px-[11px] py-2.5 text-[13px] text-content-3">{q.trim() ? <span className="block truncate">Nothing matches “{q.trim()}”</span> : 'No matches'}</div>}
             </div>
           </PopoverMenu>
         )}
@@ -318,7 +318,7 @@ export function CategoryCell({
                 </div>
               ))
               : flat.map((c) => <OptionRow key={c.id} c={c} labelText={c.display_name} />)}
-            {noResults && <div className="px-[11px] py-2.5 text-[13px] text-content-3">No matches</div>}
+            {noResults && <div className="px-[11px] py-2.5 text-[13px] text-content-3">{q.trim() ? <span className="block truncate">Nothing matches “{q.trim()}”</span> : 'No matches'}</div>}
           </div>
         </PopoverMenu>
       )}

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/index.js';
-import { recurringItems, categories, merchants, accounts, users } from '../db/schema.js';
-import { eq, asc } from 'drizzle-orm';
+import { recurringItems, categories, merchants, accounts, users, financialInstitutions } from '../db/schema.js';
+import { eq, asc, sql } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
 import { sanitizeString } from '../utils/sanitize.js';
 import { findOrCreateMerchant } from '../db/merchants.js';
@@ -61,11 +61,15 @@ function baseSelect() {
     merchantLogoUrl: merchants.logo_url,
     accountName: accounts.name,
     accountLastFour: accounts.last_four,
+    // Same rule as Account detail (networth.ts): the account's own image, else its institution's logo.
+    accountLogoUrl: sql<string | null>`coalesce(${accounts.avatar_url}, ${financialInstitutions.logo_url})`,
+    accountColor: financialInstitutions.color,
   })
     .from(recurringItems)
     .innerJoin(categories, eq(recurringItems.category_id, categories.id))
     .leftJoin(merchants, eq(recurringItems.merchant_id, merchants.id))
-    .leftJoin(accounts, eq(recurringItems.account_id, accounts.id));
+    .leftJoin(accounts, eq(recurringItems.account_id, accounts.id))
+    .leftJoin(financialInstitutions, eq(accounts.institution_id, financialInstitutions.id));
 }
 
 type Row = ReturnType<typeof baseSelect> extends { all(): (infer R)[] } ? R : never;
@@ -244,6 +248,7 @@ router.get('/occurrences', (req: Request, res: Response) => {
           categoryId: r.category_id, groupName: r.groupName, subName: r.subName,
           categoryType: r.categoryType as RecurringOccurrence['categoryType'],
           accountName: r.accountName ?? null, accountLastFour: r.accountLastFour ?? null,
+          accountLogoUrl: r.accountLogoUrl ?? null, accountColor: r.accountColor ?? null,
           frequency: r.freq_kind as RecurrenceKind, status,
         });
       }

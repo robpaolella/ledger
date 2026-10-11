@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { sqlite } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
-import { flagReview, resolveReview, assignReview, setReviewNote, reopenReview } from '../services/reviews.js';
+import { flagReview, resolveReview, assignReview, setReviewNote, reopenReview, isUncategorized } from '../services/reviews.js';
 import { recordCategoryFeedback } from '../services/feedback.js';
 
 /** Resolving a review on a categorized txn = confirming its category — a
@@ -14,6 +14,9 @@ function recordConfirmation(txnId: number, userId: number): void {
 }
 
 const router = Router();
+
+const NEEDS_CATEGORY_ONE = 'Choose a category for this transaction before marking it reviewed.';
+const NEEDS_CATEGORY_MANY = 'Choose a category for these transactions before marking them reviewed.';
 
 interface QueueRow {
   review_id: number; status: string; reason: string; note: string | null; created_at: string; resolved_at: string | null;
@@ -47,7 +50,16 @@ const mapRow = (r: QueueRow) => ({
   },
 });
 
-// GET /api/reviews?status=open|resolved|all&assignee=me|unassigned|<id>&limit&offset
+/** A real calendar date written YYYY-MM-DD (rejects 2026-02-30). */
+function isYmd(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+// GET /api/reviews?status=open|resolved|all&assignee=me|unassigned|<id>&from&to&limit&offset
+// from/to: inclusive transaction-date range. Only used when both are valid and from <= to;
+// otherwise ignored (the unfiltered list), never an error.
 router.get('/', (req: Request, res: Response) => {
   try {
     const { status = 'open', assignee, limit: limitStr, offset: offsetStr } = req.query as Record<string, string | undefined>;
@@ -60,6 +72,8 @@ router.get('/', (req: Request, res: Response) => {
     if (assignee === 'me') { where.push('r.assignee_id = ?'); params.push(req.user!.userId); }
     else if (assignee === 'unassigned') { where.push('r.assignee_id IS NULL'); }
     else if (assignee && !isNaN(Number(assignee))) { where.push('r.assignee_id = ?'); params.push(Number(assignee)); }
+    const { from, to } = req.query;
+    if (isYmd(from) && isYmd(to) && from <= to) { where.push('t.date >= ? AND t.date <= ?'); params.push(from, to); }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const base = `
@@ -156,13 +170,17 @@ router.post('/resolve', requirePermission('transactions.edit'), (req: Request, r
     const { transactionId, transactionIds } = req.body as { transactionId?: number; transactionIds?: number[] };
     const ids = transactionIds && Array.isArray(transactionIds) ? transactionIds : (transactionId ? [transactionId] : []);
     if (ids.length === 0) return res.status(400).json({ error: 'transactionId or transactionIds required' });
+    // Uncategorized ones stay open; the rest resolve. Refuse if nothing can.
+    const ready = ids.filter((id) => !isUncategorized(sqlite, id));
+    const needsCategory = ids.length - ready.length;
+    if (ready.length === 0) return res.status(400).json({ error: ids.length === 1 ? NEEDS_CATEGORY_ONE : NEEDS_CATEGORY_MANY });
     sqlite.transaction(() => {
-      for (const id of ids) {
+      for (const id of ready) {
         if (ids.length <= 20) recordConfirmation(id, req.user!.userId);
         resolveReview(sqlite, { txnId: id, resolvedBy: req.user!.userId });
       }
     })();
-    res.json({ data: { resolved: ids.length } });
+    res.json({ data: { resolved: ready.length, needsCategory } });
   } catch (err) {
     console.error('POST /reviews/resolve error:', err);
     res.status(500).json({ error: 'Failed to resolve reviews' });
@@ -178,6 +196,7 @@ router.patch('/:transactionId', requirePermission('transactions.edit'), (req: Re
     const { assigneeId, note, status } = req.body as { assigneeId?: number | null; note?: string | null; status?: string };
     if (assigneeId != null && !sqlite.prepare('SELECT 1 FROM users WHERE id = ? AND is_active = 1').get(assigneeId)) return res.status(400).json({ error: 'assigneeId is not an active user' });
     if (status !== undefined && status !== 'open' && status !== 'resolved') return res.status(400).json({ error: 'status must be open or resolved' });
+    if (status === 'resolved' && isUncategorized(sqlite, txnId)) return res.status(400).json({ error: NEEDS_CATEGORY_ONE });
 
     sqlite.transaction(() => {
       if (status === 'resolved' && existing.status === 'open') recordConfirmation(txnId, req.user!.userId);

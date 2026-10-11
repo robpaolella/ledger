@@ -13,6 +13,9 @@ import ResponsiveModal from '../components/ResponsiveModal';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import PageHeader from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
+import Dropdown from '../components/Dropdown';
+import Calendar from '../components/Calendar';
+import Popover from '../components/Popover';
 import MerchantPicker, { type MerchantOption } from '../components/MerchantPicker';
 
 type Kind = 'monthly' | 'semi_monthly' | 'biweekly' | 'weekly' | 'every_n_months' | 'custom_months';
@@ -26,11 +29,13 @@ interface RItem {
   effective_start: string | null; effective_end: string | null;
   groupName: string; subName: string; displayName: string; categoryType: string;
   merchantName: string | null; merchantLogoUrl: string | null; accountName: string | null; accountLastFour: string | null;
+  accountLogoUrl: string | null; accountColor: string | null;
 }
 interface ROcc {
   itemId: number; label: string; merchantName: string | null; merchantLogoUrl: string | null; date: string; amount: number;
   type: 'income' | 'expense'; categoryId: number; groupName: string; subName: string;
   categoryType: string; accountName: string | null; accountLastFour: string | null;
+  accountLogoUrl: string | null; accountColor: string | null;
   frequency: Kind; status: 'paid' | 'due' | 'upcoming';
 }
 interface Flow { total: number; paid: number; remaining: number }
@@ -116,6 +121,8 @@ export default function RecurringPage() {
 
   const [panel, setPanel] = useState<RItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  // Item the modal edits when Edit comes from the catalogue, so the detail panel stays closed.
+  const [editTarget, setEditTarget] = useState<RItem | null>(null);
 
   const loadItems = useCallback(async () => {
     try { const r = await apiFetch<{ data: RItem[] }>('/recurring'); setItems(r.data); }
@@ -187,6 +194,9 @@ export default function RecurringPage() {
   }, [items]);
 
   // ---------- render helpers ----------
+  const acctAvatar = (o: ROcc, size: number) => (
+    <VendorAvatar name={o.accountName ?? ''} src={o.accountLogoUrl || undefined} color={o.accountColor || 'var(--c-blue)'} size={size} />
+  );
   const occRow = (o: ROcc) => {
     const color = getCategoryColorHex(o.groupName);
     const dateColor = o.status === 'paid' ? 'var(--text)' : 'var(--warning)';
@@ -196,16 +206,19 @@ export default function RecurringPage() {
         <VendorAvatar name={o.merchantName ?? o.label} src={o.merchantLogoUrl || undefined} size={34} color={color} />
         <div className="min-w-0 flex-[1.3]">
           <div className="font-semibold text-[15px] truncate">{o.label}</div>
-          <div className="text-[12px] text-content-3 truncate">
-            {cadenceLabel(items.find((i) => i.id === o.itemId) ?? { freq_kind: o.frequency, interval: null, months_json: null })}
-            <span className="md:hidden">{o.accountName ? ` · ${o.accountName}` : ''}</span>
+          <div className="text-[12px] text-content-3 flex items-center gap-1 min-w-0">
+            <span className="shrink-0">{cadenceLabel(items.find((i) => i.id === o.itemId) ?? { freq_kind: o.frequency, interval: null, months_json: null })}</span>
+            {o.accountName && <span className="md:hidden flex items-center gap-1 min-w-0">· {acctAvatar(o, 16)}<span className="truncate">{o.accountName}</span></span>}
           </div>
         </div>
         <div className="hidden md:block w-[92px] shrink-0">
           <div className="text-[13px] font-semibold tabular-nums" style={{ color: dateColor }}>{dateChip(o.date)}</div>
           <div className="text-[11px] text-content-3">{relativeLabel(o.date, today)}</div>
         </div>
-        <div className="flex-1 min-w-0 text-[13px] text-content-3 truncate hidden md:block">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</div>
+        <div className="flex-1 min-w-0 text-[13px] text-content-3 hidden md:flex items-center gap-1.5">
+          {o.accountName && acctAvatar(o, 18)}
+          <span className="truncate">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</span>
+        </div>
         <div className="flex-1 min-w-0 hidden md:flex items-center gap-1.5 text-[13px] text-content-2">
           <span className="text-[15px] leading-none">{getCategoryEmoji(o.subName, o.groupName)}</span>
           <span className="truncate">{o.subName}</span>
@@ -260,7 +273,10 @@ export default function RecurringPage() {
                 </div>
                 <button onClick={() => setMonthOffset(0)} className="h-8 px-3 flex items-center rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Today</button>
                 <SegmentedControl value={view} onChange={(v) => setView(v as 'list' | 'calendar')}
-                  options={[{ value: 'list', label: 'List' }, { value: 'calendar', label: 'Calendar' }]} />
+                  options={[
+                    { value: 'list', label: <span className="inline-flex items-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>List</span> },
+                    { value: 'calendar', label: <span className="inline-flex items-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Calendar</span> },
+                  ]} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 border-t border-line">
@@ -308,7 +324,8 @@ export default function RecurringPage() {
           )}
         </>
       ) : (
-        <AllRecurring items={items} annual={annual} onOpen={setPanel} />
+        <AllRecurring items={items} annual={annual} canEdit={canEdit} onOpen={setPanel}
+          onEdit={(it) => { setEditTarget(it); setModalOpen(true); }} />
       )}
 
       {panel && (
@@ -318,9 +335,9 @@ export default function RecurringPage() {
       )}
 
       {modalOpen && (
-        <RecurringModal item={panel} cats={cats} accts={accts} merchants={merchants}
-          onClose={() => setModalOpen(false)}
-          onSaved={async () => { setModalOpen(false); setPanel(null); await refresh(); }} />
+        <RecurringModal item={editTarget ?? panel} cats={cats} accts={accts} merchants={merchants}
+          onClose={() => { setModalOpen(false); setEditTarget(null); }}
+          onSaved={async () => { setModalOpen(false); setEditTarget(null); setPanel(null); await refresh(); }} />
       )}
     </div>
   );
@@ -375,9 +392,12 @@ function CalendarGrid({ month, today, occByDay, onOcc }: {
 }
 
 // ============================ All recurring ============================
-function AllRecurring({ items, annual, onOpen }: {
-  items: RItem[]; annual: { income: number; expense: number; count: number }; onOpen: (i: RItem) => void;
+function AllRecurring({ items, annual, canEdit, onOpen, onEdit }: {
+  items: RItem[]; annual: { income: number; expense: number; count: number }; canEdit: boolean;
+  onOpen: (i: RItem) => void; onEdit: (i: RItem) => void;
 }) {
+  // Same columns for header and rows so they stay aligned; the Edit column exists only when it has a button.
+  const cols = canEdit ? 'md:grid-cols-[1.6fr_1.3fr_0.9fr_1fr_64px]' : 'md:grid-cols-[1.6fr_1.3fr_0.9fr_1fr]';
   const sorted = [...items].sort((a, b) => a.label.localeCompare(b.label));
   const annualIncome = formatMoney(-annual.income);
   return (
@@ -388,31 +408,39 @@ function AllRecurring({ items, annual, onOpen }: {
         <KPICard label="Active recurring items" value={String(annual.count)} />
       </div>
       <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-        <div className="hidden md:grid grid-cols-[1.6fr_1.3fr_0.9fr_1fr] px-5 py-3 border-b border-line text-[11px] font-semibold uppercase tracking-[0.05em] text-content-3">
-          <span>Label</span><span>Category</span><span className="text-right">Amount</span><span>Cadence</span>
+        <div className={`hidden md:grid ${cols} gap-x-4 px-5 py-3 border-b border-line text-[11px] font-semibold uppercase tracking-[0.05em] text-content-3`}>
+          <span>Label</span><span>Category</span><span className="text-right">Amount</span><span>Cadence</span>{canEdit && <span className="text-right">Edit</span>}
         </div>
         {sorted.length === 0 && <div className="p-10 text-center text-content-3 text-sm">No recurring items yet.</div>}
         {sorted.map((it) => {
           const paused = it.status === 'paused';
           const months = (() => { try { return JSON.parse(it.months_json ?? '[]') as number[]; } catch { return []; } })();
           return (
-            <button key={it.id} onClick={() => onOpen(it)}
-              className={`w-full grid grid-cols-[1.6fr_1.3fr_0.9fr_1fr] items-center px-5 py-3 border-b border-line text-left hover:bg-surface-2/40 ${paused ? 'opacity-55' : ''}`}>
-              <div className="flex items-center gap-3 min-w-0">
+            <div key={it.id}
+              className={`relative flex md:grid ${cols} items-center gap-x-4 gap-3 px-4 md:px-5 min-h-16 md:min-h-0 py-2 md:py-3 border-b border-line text-left hover:bg-surface-2/40 active:bg-surface-2`}>
+              <div className={`flex items-center gap-3 min-w-0 flex-1 md:flex-none ${paused ? 'opacity-55' : ''}`}>
                 <VendorAvatar name={it.merchantName ?? it.label} src={it.merchantLogoUrl || undefined} size={30} color={getCategoryColorHex(it.groupName)} />
                 <div className="min-w-0">
-                  <div className="font-semibold text-[14px] truncate">{it.label}</div>
+                  {/* The label is the row's keyboard target; its ::after stretches over the row so the whole row opens the panel. */}
+                  <button onClick={() => onOpen(it)} className="block max-w-full text-left font-semibold text-[14px] truncate after:absolute after:inset-0 after:content-['']">{it.label}</button>
                   {paused && <div className="text-[11px] text-content-3">Paused</div>}
+                  <div className="md:hidden text-[12px] text-content-3 truncate">{it.subName} · {cadenceLabel(it)}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[13px] text-content-2 min-w-0"><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName, it.groupName)}</span><span className="truncate">{it.subName}</span></div>
-              <div className="text-right font-bold text-[14px]"><Money amount={flow(it.amount ?? 0, it.type)} /></div>
-              <div className="text-[13px] text-content-2">
+              <div className={`hidden md:flex items-center gap-1.5 text-[13px] text-content-2 min-w-0 ${paused ? 'opacity-55' : ''}`}><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName, it.groupName)}</span><span className="truncate">{it.subName}</span></div>
+              <div className={`shrink-0 text-right font-bold text-[14px] ${paused ? 'opacity-55' : ''}`}><Money amount={flow(it.amount ?? 0, it.type)} /></div>
+              <div className={`hidden md:block text-[13px] text-content-2 ${paused ? 'opacity-55' : ''}`}>
                 {it.freq_kind === 'custom_months'
                   ? <div className="flex flex-wrap gap-1">{months.map((mo) => <span key={mo} className="px-1.5 py-0.5 rounded-md bg-surface-2 border border-line text-[11px] font-semibold">{MONTH_NAMES[mo - 1]}</span>)}</div>
                   : cadenceLabel(it)}
               </div>
-            </button>
+              {canEdit && (
+                <div className="hidden md:flex justify-end relative z-10">
+                  <button onClick={() => onEdit(it)} aria-label={`Edit ${it.label}`}
+                    className="h-8 px-3 rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Edit</button>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -504,6 +532,7 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
   const [startDate, setStartDate] = useState<string>(item?.start_date ?? todayYmd());
   const [status, setStatus] = useState<'active' | 'paused'>(item?.status ?? 'active');
   const [saving, setSaving] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   const catOptions = useMemo(() => {
     const wanted = type === 'income' ? ['income'] : ['expense'];
@@ -532,13 +561,14 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
     && (freqKind !== 'semi_monthly' || day1 !== day2)
     && (freqKind !== 'every_n_months' || interval >= 1);
 
+  const dayOptions = [...Array.from({ length: 31 }, (_, i) => ({ key: String(i + 1), label: String(i + 1) })), { key: '0', label: 'Last day' }];
+  const categoryDropdownOptions = [{ key: '', label: 'Select…' }, ...catOptions.flatMap(([g, list]) => [{ key: `g-${g}`, label: g, heading: true }, ...list.map((c) => ({ key: String(c.id), label: c.sub_name }))])];
+  const accountDropdownOptions = [{ key: '', label: 'None' }, ...acctGroups.flatMap(([g, list]) => [{ key: `g-${g}`, label: g, heading: true }, ...list.map((a) => ({ key: String(a.id), label: `${a.name}${a.last_four ? ` (…${a.last_four})` : ''}` }))])];
+
   const dayField = (val: number, set: (n: number) => void, label2: string) => (
     <div>
       <div className="text-[12px] font-semibold text-content-2 mb-1.5">{label2}</div>
-      <select value={val} onChange={(e) => set(Number(e.target.value))} className="w-full h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none">
-        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-        <option value={0}>Last day</option>
-      </select>
+      <Dropdown fullWidth value={String(val)} onChange={(k) => set(Number(k))} minWidth={0} options={dayOptions} />
     </div>
   );
 
@@ -571,11 +601,17 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
   const labelCls = 'text-[12px] font-semibold uppercase tracking-[0.04em] text-content-2 mb-1.5';
 
   return (
-    <ResponsiveModal isOpen onClose={onClose} title={editing ? 'Edit recurring' : 'Add recurring'} maxWidth="540px">
+    <ResponsiveModal isOpen onClose={onClose} title={editing ? 'Edit recurring' : 'Add recurring'} maxWidth="540px"
+      footer={(
+      <div className="flex items-center justify-end gap-2.5">
+        <button onClick={onClose} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+        <button onClick={save} disabled={!valid || saving} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">{editing ? 'Save' : 'Add recurring'}</button>
+      </div>
+      )}>
       <div className="flex flex-col gap-4">
         <div>
           <div className={labelCls}>Type</div>
-          <SegmentedControl value={type} onChange={(v) => onTypeChange(v as 'income' | 'expense')} className="w-full"
+          <SegmentedControl value={type} onChange={(v) => onTypeChange(v as 'income' | 'expense')} className="w-full [&>button]:flex-1"
             options={[{ value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }]} />
         </div>
         <div>
@@ -595,10 +631,8 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
           </div>
           <div>
             <div className={labelCls}>Category</div>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')} className={fieldCls}>
-              <option value="">Select…</option>
-              {catOptions.map(([g, list]) => <optgroup key={g} label={g}>{list.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>)}
-            </select>
+            <Dropdown fullWidth minWidth={0} value={String(categoryId)} placeholder="Select…" options={categoryDropdownOptions}
+              onChange={(k) => setCategoryId(k ? Number(k) : '')} />
           </div>
         </div>
 
@@ -638,26 +672,31 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <div className={labelCls}>Start date</div>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`${fieldCls} font-mono`} />
+            <div className="relative">
+              <button type="button" onClick={() => setDateOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={dateOpen}
+                className={`${fieldCls} flex items-center justify-between gap-2 text-left cursor-pointer`}>
+                <span className={`truncate ${startDate ? 'text-content' : 'text-content-3'}`}>{startDate ? new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose date…'}</span>
+                <svg className="shrink-0" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+              </button>
+              {dateOpen && (
+                <Popover onClose={() => setDateOpen(false)} label="Choose date" className="absolute bottom-12 left-0 z-50 w-[320px] max-w-[calc(100vw-48px)] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                  <Calendar value={startDate} onChange={(d) => { setStartDate(d); setDateOpen(false); }} />
+                </Popover>
+              )}
+            </div>
           </div>
           <div>
             <div className={labelCls}>Account (optional)</div>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : '')} className={fieldCls}>
-              <option value="">None</option>
-              {acctGroups.map(([g, list]) => <optgroup key={g} label={g}>{list.map((a) => <option key={a.id} value={a.id}>{a.name}{a.last_four ? ` (…${a.last_four})` : ''}</option>)}</optgroup>)}
-            </select>
+            <Dropdown fullWidth minWidth={0} value={String(accountId)} placeholder="None" options={accountDropdownOptions}
+              onChange={(k) => setAccountId(k ? Number(k) : '')} />
           </div>
         </div>
         <div>
           <div className={labelCls}>Status</div>
-          <SegmentedControl value={status} onChange={(v) => setStatus(v as 'active' | 'paused')} className="w-full"
+          <SegmentedControl value={status} onChange={(v) => setStatus(v as 'active' | 'paused')} className="w-full [&>button]:flex-1"
             options={[{ value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }]} />
         </div>
 
-        <div className="flex items-center justify-end gap-2.5 pt-2">
-          <button onClick={onClose} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-          <button onClick={save} disabled={!valid || saving} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">{editing ? 'Save' : 'Add recurring'}</button>
-        </div>
       </div>
     </ResponsiveModal>
   );

@@ -34,7 +34,7 @@ interface Category { id: number; group_name: string; sub_name: string; display_n
 type DateFilter = 'all' | '7' | '30' | 'month' | 'older';
 
 const DATE_DEFS: [DateFilter, string][] = [['all', 'All dates'], ['7', 'Last 7 days'], ['30', 'Last 30 days'], ['month', 'This month'], ['older', 'Older than 30 days']];
-const REASON_LABEL: Record<string, string> = { auto_uncategorized: 'Uncategorized merchant', auto_low_confidence: 'Low-confidence category', manual: 'Flagged for review' };
+const REASON_LABEL: Record<string, string> = { auto_uncategorized: 'Uncategorized merchant', auto_low_confidence: 'Low-confidence category', manual: 'Marked to review' };
 const AV_COLOR: Record<string, string> = {
   A: '--c-orange', J: '--c-violet', M: '--c-amber', C: '--c-blue', H: '--c-amber', D: '--c-violet',
   N: '--c-teal', L: '--c-teal', S: '--c-amber', W: '--c-blue', V: '--c-blue', B: '--c-violet',
@@ -46,6 +46,12 @@ const colorVar = (s: string) => `var(${AV_COLOR[initialOf(s)] || '--c-blue'})`;
 const UNASSIGNED = 0;
 const tint = (v: string) => `color-mix(in srgb, ${v} 16%, transparent)`;
 const parseDate = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const isYmd = (v: string | null): v is string => {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y, m, d] = v.split('-').map(Number); const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
+const toPeriod = (from: string | null, to: string | null) => (isYmd(from) && isYmd(to) && from <= to ? { from, to } : null);
 const friendlyDate = (ymd: string) => parseDate(ymd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
 function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: string; size?: number; font?: number }) {
@@ -59,7 +65,7 @@ export default function ReviewsPage() {
   const canEdit = hasPermission('transactions.edit');
   const { addToast } = useToast();
   useCategoryEmojis(); // re-render when stored category emojis load/change
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [openTotal, setOpenTotal] = useState(0); // server-side open count (the list itself is capped)
@@ -69,6 +75,13 @@ export default function ReviewsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // ?from=YYYY-MM-DD&to=YYYY-MM-DD — an inclusive period from a link (Budget, Reports, Dashboard).
+  // Both must be real dates with from <= to; anything else is ignored and the usual view shows.
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
+  const period = toPeriod(fromParam, toParam);
+  const periodFrom = period?.from; const periodTo = period?.to;
+  const clearPeriod = () => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('from'); n.delete('to'); return n; }, { replace: true });
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   // ?assignee=<id> | me | unassigned — deep links from the dashboard card + notifications.
   const assigneeParam = searchParams.get('assignee');
@@ -105,11 +118,11 @@ export default function ReviewsPage() {
     if (!opts?.silent) setInitialLoading(true); else setRefreshing(true);
     const seq = ++loadSeqRef.current; // drop out-of-order responses so a stale list can't resurrect removed rows
     try {
-      const res = await apiFetch<{ data: ReviewRow[]; total: number }>('/reviews?status=open&limit=500');
+      const res = await apiFetch<{ data: ReviewRow[]; total: number }>(`/reviews?status=open&limit=500${periodFrom && periodTo ? `&from=${periodFrom}&to=${periodTo}` : ''}`);
       if (seq === loadSeqRef.current) { setRows(res.data); setOpenTotal(res.total ?? res.data.length); }
     } catch { addToast('Failed to load reviews', 'error'); }
     finally { setInitialLoading(false); setRefreshing(false); }
-  }, [addToast]);
+  }, [addToast, periodFrom, periodTo]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((r) => { initOwnerSlots(r.data.map((u) => u.id)); setUsers(r.data.map((u) => ({ id: u.id, displayName: u.display_name }))); }).catch(() => {});
@@ -136,7 +149,7 @@ export default function ReviewsPage() {
   const passUser = (r: ReviewRow) => selUsers.size === 0 || (r.assignee ? selUsers.has(r.assignee.id) : selUsers.has(UNASSIGNED));
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
-  const anyFilter = dateFilter !== 'all' || selUsers.size > 0 || q !== '';
+  const anyFilter = period !== null || dateFilter !== 'all' || selUsers.size > 0 || q !== '';
   const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
@@ -226,8 +239,9 @@ export default function ReviewsPage() {
   };
   const openPanel = (id: number) => { setDetail({ id } as DetailTxn); refetchDetail(id); };
 
-  const resetFilters = () => { setDateFilter('all'); setSelUsers(new Set()); setSearch(''); setSearchOpen(false); };
-  const dateLabel = dateFilter === 'all' ? 'Date' : DATE_DEFS.find(([v]) => v === dateFilter)![1];
+  const resetFilters = () => { clearPeriod(); setDateFilter('all'); setSelUsers(new Set()); setSearch(''); setSearchOpen(false); };
+  const periodLabel = period ? `${parseDate(period.from).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${parseDate(period.to).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : '';
+  const dateLabel = period ? periodLabel : dateFilter === 'all' ? 'Date' : DATE_DEFS.find(([v]) => v === dateFilter)![1];
   const usersLabel = selUsers.size === 1
     ? (selUsers.has(UNASSIGNED) ? 'Unassigned' : (users.find((u) => selUsers.has(u.id))?.displayName ?? 'Users'))
     : 'Users';
@@ -242,7 +256,7 @@ export default function ReviewsPage() {
       <PageHeader className="!mb-0" title="Review" left={!isMobile && (
           <span className="inline-flex items-center gap-1.5 h-[26px] px-[11px] rounded-full text-[12px] font-bold" style={{ background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
-            {openTotal} flagged
+            {openTotal} to review
           </span>
         )} right={<>
           {searchOpen ? (
@@ -259,15 +273,15 @@ export default function ReviewsPage() {
             <button onClick={() => toggleMenu('date')} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'date' ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
               {dateLabel}
-              {dateFilter !== 'all' && <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--primary)' }} />}
+              {(period || dateFilter !== 'all') && <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--primary)' }} />}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {menu === 'date' && (
               <div className="absolute top-[46px] right-0 z-40 w-[220px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
                 {DATE_DEFS.map(([v, label]) => {
-                  const on = dateFilter === v;
+                  const on = !period && dateFilter === v;
                   return (
-                    <div key={v} onClick={() => { setDateFilter(v); setMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-[9px] text-sm font-medium cursor-pointer" style={{ color: on ? 'var(--text)' : 'var(--text-2)', background: on ? 'var(--surface-2)' : 'transparent' }}>
+                    <div key={v} onClick={() => { clearPeriod(); setDateFilter(v); setMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-[9px] text-sm font-medium cursor-pointer" style={{ color: on ? 'var(--text)' : 'var(--text-2)', background: on ? 'var(--surface-2)' : 'transparent' }}>
                       <span className="w-4 flex-none flex items-center justify-center">{on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}</span>
                       {label}
                     </div>
@@ -334,8 +348,8 @@ export default function ReviewsPage() {
         <div className="border border-line rounded-[18px] bg-surface shadow-sm" style={{ overflow: 'visible' }}>
           <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px]">
             <div className="flex items-baseline gap-2.5">
-              <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} need review</span>
-              {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Reset filters</span>}
+              <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} to review</span>
+              {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Clear</span>}
               {refreshing && <span className="text-[12px] text-content-3 animate-pulse">Refreshing…</span>}
             </div>
             <span className="font-mono text-[13px] text-content-2 tabular-nums">{formatMoney(shownTotal, { kind: 'balance', showZero: true }).text} pending</span>
@@ -349,7 +363,7 @@ export default function ReviewsPage() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>
               </div>
               <div className="text-[18px] font-extrabold tracking-tight">{anyFilter ? 'No matches' : "You're all caught up"}</div>
-              <div className="text-sm text-content-3 max-w-[320px]">{anyFilter ? 'No transactions match the current filters.' : 'Every flagged transaction has been reviewed. Nice work.'}</div>
+              <div className="text-sm text-content-3 max-w-[320px]">{q !== '' ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : anyFilter ? 'No transactions match the current filters.' : 'Every transaction has been reviewed. Nice work.'}</div>
               {anyFilter && <button onClick={resetFilters} className="mt-1 h-10 px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Clear filters</button>}
             </div>
           ) : (
@@ -362,7 +376,7 @@ export default function ReviewsPage() {
                 {g.rows.map((r) => {
                   const t = r.transaction;
                   const mLabel = t.merchant?.name || t.description;
-                  const reasonText = REASON_LABEL[r.reason] || 'Flagged for review';
+                  const reasonText = REASON_LABEL[r.reason] || 'Marked to review';
                   const noteText = r.note?.trim() || '';
                   const amt = <Money amount={t.amount} transfer={t.category?.type === 'transfer'} />;
                   if (isMobile) {
@@ -409,7 +423,7 @@ export default function ReviewsPage() {
                                   <span className="ml-auto text-xs text-content-3 truncate">{c.group_name}</span>
                                 </button>
                               ))}
-                              {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">No matches</div>}
+                              {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">{catSearch.trim() ? <span className="block truncate">Nothing matches “{catSearch.trim()}”</span> : 'No matches'}</div>}
                             </div>
                           </div>
                         )}
@@ -526,7 +540,7 @@ export default function ReviewsPage() {
                       {canEdit && (
                         <div className="rounded-[12px] border p-3 mb-5" style={{ borderColor: d.needsReview ? 'color-mix(in srgb, var(--warning) 45%, var(--line))' : 'var(--line)', background: d.needsReview ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : 'transparent' }}>
                           <div className="flex items-center justify-between gap-2 mb-3">
-                            <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Flagged for review') : 'Not flagged'}</span>
+                            <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Marked to review') : 'No review needed'}</span>
                             {d.needsReview && <button onClick={() => resolve([d.id])} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>}
                           </div>
                           {d.needsReview && (

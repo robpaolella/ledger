@@ -117,7 +117,7 @@ export default function InstitutionPicker({
                 <span className="truncate">{i.name}</span>
               </button>
             ))}
-            {filtered.length === 0 && <div className="px-3 py-3 text-[13px] text-content-3">No matches</div>}
+            {filtered.length === 0 && <div className="px-3 py-3 text-[13px] text-content-3">{q ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : 'No matches'}</div>}
           </div>
           <div className="border-t border-line p-2">
             {adding ? (

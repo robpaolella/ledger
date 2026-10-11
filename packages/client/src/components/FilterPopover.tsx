@@ -68,7 +68,7 @@ export default function FilterPopover({
     const all = ids.length > 0 && ids.every((id) => d.account.includes(id));
     return { ...d, account: all ? d.account.filter((id) => !ids.includes(id)) : [...new Set([...d.account, ...ids])] };
   });
-  const q = search.toLowerCase();
+  const q = search.trim().toLowerCase();
   const count = filterDraftCount(draft);
 
   // "Select all" bulk toggles for the multi-select checklists.
@@ -117,6 +117,9 @@ export default function FilterPopover({
             {tab === 'Merchants' && visibleMerchantIds.length > 0 && (
               <CheckRow on={merAllChecked} onToggle={toggleAllMerchants} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={merAllChecked} />Select all</CheckRow>
             )}
+            {tab === 'Categories' && q && !categoryGroups.some((g) => g.group.toLowerCase().includes(q) || g.subs.some((s) => `${s.sub} ${g.group}`.toLowerCase().includes(q))) && (
+              <div className="flex items-center justify-center h-full min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
+            )}
             {tab === 'Categories' && categoryGroups.map((g) => {
               const gChecked = g.subs.length > 0 && g.subs.every((s) => draft.category.includes(`sub:${s.id}`));
               const subs = q ? g.subs.filter((s) => `${s.sub} ${g.group}`.toLowerCase().includes(q)) : g.subs;
@@ -132,7 +135,7 @@ export default function FilterPopover({
             })}
             {tab === 'Accounts' && (
               accountSections.length === 0 ? (
-                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No accounts match</div>
+                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">{search.trim() ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : 'No accounts match'}</div>
               ) : (
                 <>
                   <CheckRow on={acctAllChecked} onToggle={() => setDraft((d) => ({ ...d, account: acctAllChecked ? d.account.filter((id) => !visibleAccountIds.includes(id)) : [...new Set([...d.account, ...visibleAccountIds])] }))} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={acctAllChecked} />Select all</CheckRow>
@@ -187,7 +190,9 @@ export default function FilterPopover({
               merchants.length === 0 ? (
                 <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No merchants yet</div>
               ) : (
-                merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => (
+                q && !merchants.some((m) => m.name.toLowerCase().includes(q)) ? (
+                  <div className="flex items-center justify-center h-full min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
+                ) : merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => (
                   <CheckRow key={m.id} on={draft.merchant.includes(m.id.toString())} onToggle={() => toggleMerchant(m.id.toString())} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
                     <Chk on={draft.merchant.includes(m.id.toString())} />
                     <VendorAvatar name={m.name} src={m.logo_url || undefined} color={'var(--c-blue)'} size={18} />
@@ -200,7 +205,7 @@ export default function FilterPopover({
             {tab === 'Other' && showNeedsReview && (
               <div className="py-2">
                 <button type="button" role="checkbox" aria-checked={!!draft.needsReview} onClick={() => setDraft((d) => ({ ...d, needsReview: !d.needsReview }))} className={`flex items-center gap-3 w-full text-left px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px] ${FOCUS}`}>
-                  <Chk on={!!draft.needsReview} /><span className="flex-1">Needs review only</span>
+                  <Chk on={!!draft.needsReview} /><span className="flex-1">To review only</span>
                 </button>
                 <p className="px-1 pt-1 text-[13px] text-content-3 leading-snug">Transactions auto-categorized with low confidence, or left uncategorized on import.</p>
               </div>
@@ -270,7 +275,7 @@ export default function FilterPopover({
                 {draft.needsReview && (
                   <div>
                     <div className="flex items-center justify-between mb-1.5"><span className="text-[13px] font-semibold text-content-3">Review</span><button onClick={() => setDraft((d) => ({ ...d, needsReview: false }))} className="text-[13px] font-semibold text-primary">Clear</button></div>
-                    <div className="flex items-center gap-2 py-1.5 text-sm"><span className="flex-1 truncate">Needs review only</span><RemoveBtn onClick={() => setDraft((d) => ({ ...d, needsReview: false }))} /></div>
+                    <div className="flex items-center gap-2 py-1.5 text-sm"><span className="flex-1 truncate">To review only</span><RemoveBtn onClick={() => setDraft((d) => ({ ...d, needsReview: false }))} /></div>
                   </div>
                 )}
               </div>

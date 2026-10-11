@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import type { UncategorizedTotals } from '@ledger/shared/src/types.js';
 
 /**
  * Review-task lifecycle helpers. Single source of the invariant:
@@ -10,6 +11,38 @@ import type Database from 'better-sqlite3';
  */
 
 import { upsertNotification, deleteByDedupeKey } from './notifications.js';
+
+/**
+ * SQL condition: transaction `t` is uncategorized — no category, no splits, and
+ * not one leg of a linked transfer (transfers stay out of totals). Money totals
+ * count these under Expenses (money out) or Income (money in) by direction.
+ */
+export const isUncategorizedSql = (t: string): string => `(
+  ${t}.category_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM transaction_splits uts WHERE uts.transaction_id = ${t}.id)
+  AND NOT EXISTS (SELECT 1 FROM transfer_links utl WHERE utl.status = 'linked'
+    AND (utl.from_transaction_id = ${t}.id OR utl.to_transaction_id = ${t}.id))
+)`;
+
+/**
+ * Count, money out and money in (positive magnitudes) of uncategorized
+ * transactions dated start..end (YYYY-MM-DD), optionally only accounts owned by
+ * the user with that display name.
+ */
+export function uncategorizedTotals(
+  sqlite: Database.Database,
+  opts: { start: string; end: string; owner?: string },
+): UncategorizedTotals {
+  const { start, end, owner } = opts;
+  return sqlite.prepare(`
+    SELECT count(*) AS count,
+           coalesce(sum(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS moneyOut,
+           coalesce(sum(CASE WHEN t.amount < 0 THEN -t.amount ELSE 0 END), 0) AS moneyIn
+    FROM transactions t
+    WHERE ${isUncategorizedSql('t')} AND t.date >= ? AND t.date <= ?
+      ${owner ? 'AND EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = t.account_id AND u.display_name = ?)' : ''}
+  `).get(...(owner ? [start, end, owner] : [start, end])) as UncategorizedTotals;
+}
 
 export type ReviewReason = 'auto_uncategorized' | 'auto_low_confidence' | 'manual';
 
@@ -77,12 +110,49 @@ export function flagReview(
   }
 }
 
-/** Resolve an open review (mark reviewed / unflag) + set needs_review=0. No-op if none open. */
+/**
+ * Give every uncategorized transaction (only `txnIds`, if given) an open Review
+ * item: reopens its resolved row (one row per transaction) or adds one, assigned
+ * to the default assignee. Leaves open items and categorized ones alone, so it is
+ * safe to repeat. Returns how many items it opened.
+ */
+export function ensureUncategorizedReviews(sqlite: Database.Database, txnIds?: number[]): number {
+  if (txnIds && txnIds.length === 0) return 0;
+  const ids = sqlite.prepare(`
+    SELECT t.id AS id FROM transactions t
+    WHERE ${isUncategorizedSql('t')}
+      AND NOT EXISTS (SELECT 1 FROM transaction_reviews r WHERE r.transaction_id = t.id AND r.status = 'open')
+      ${txnIds ? `AND t.id IN (${txnIds.map(() => '?').join(',')})` : ''}
+  `).all(...(txnIds ?? [])) as { id: number }[];
+  for (const { id } of ids) {
+    flagReview(sqlite, { txnId: id, reason: 'auto_uncategorized', assigneeId: defaultAssigneeForTxn(sqlite, id) });
+  }
+  return ids.length;
+}
+
+/** True if the transaction is uncategorized (see `isUncategorizedSql`). */
+export function isUncategorized(sqlite: Database.Database, txnId: number): boolean {
+  return !!sqlite.prepare(`SELECT 1 FROM transactions t WHERE t.id = ? AND ${isUncategorizedSql('t')}`).get(txnId);
+}
+
+/**
+ * Resolve an open review (mark reviewed / unflag) + set needs_review=0. No-op if none open.
+ * Never closes the item of an uncategorized transaction: it stays open (needs_review
+ * re-synced to the row) and this returns false, so Review always lists them.
+ */
 export function resolveReview(
   sqlite: Database.Database,
   opts: { txnId: number; resolvedBy?: number | null },
-): void {
+): boolean {
   const { txnId, resolvedBy = null } = opts;
+  if (isUncategorized(sqlite, txnId)) {
+    sqlite.prepare(`
+      UPDATE transactions SET needs_review = EXISTS (
+        SELECT 1 FROM transaction_reviews WHERE transaction_id = ? AND status = 'open'
+      ) WHERE id = ?
+    `).run(txnId, txnId);
+    return false;
+  }
   const prior = sqlite.prepare(
     'SELECT assignee_id FROM transaction_reviews WHERE transaction_id = ? AND status = \'open\'',
   ).get(txnId) as { assignee_id: number | null } | undefined;
@@ -98,6 +168,7 @@ export function resolveReview(
   if (res.changes > 0 && prior?.assignee_id != null) {
     syncReviewNotification(sqlite, prior.assignee_id, { ping: false });
   }
+  return true;
 }
 
 /** Reopen a resolved review (status back to open) + needs_review=1. */
