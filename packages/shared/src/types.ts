@@ -407,3 +407,18 @@ export interface RecurringBudgetFloor {
   itemCount: number;
   items: { label: string; cadence: string }[]; // contributing items, for the breakdown
 }
+
+// Money with no category and no splits (and not a linked transfer) in a period.
+// "Uncategorized" is a display line only, never a real category. Side comes from
+// direction: money out counts under Expenses, money in under Income. Both amounts
+// are positive magnitudes; zeros when nothing is uncategorized.
+export interface UncategorizedTotals {
+  count: number;
+  moneyOut: number;
+  moneyIn: number;
+}
+
+// Reports: the same figures per bucket, for the Trends line and the Timeline row.
+export interface UncategorizedBucketed extends UncategorizedTotals {
+  buckets: UncategorizedTotals[];
+}

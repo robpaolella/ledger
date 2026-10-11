@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
 import { transactions, accounts, categories, merchants } from '../db/schema.js';
 import { eq, sql, desc } from 'drizzle-orm';
+import { isUncategorizedSql, uncategorizedTotals } from '../services/reviews.js';
 
 const router = Router();
 
@@ -131,7 +132,8 @@ router.get('/recent-transactions', (req: Request, res: Response) => {
 // GET /api/dashboard/spending-series?month=YYYY-MM — per-day CUMULATIVE
 // expense totals for the month (through today) + the full prior month,
 // aligned by day-of-month. Split-aware UNION + exclude_from_budget filters,
-// so the final cumulative point equals the month's expense total.
+// plus uncategorized money out (counted under Expenses), so the final
+// cumulative point equals the month's expense total.
 router.get('/spending-series', (req: Request, res: Response) => {
   try {
     // Local date parts (not UTC) — the rest of this file builds local months,
@@ -158,8 +160,15 @@ router.get('/spending-series', (req: Request, res: Response) => {
         JOIN categories c ON combined.cat_id = c.id
         WHERE c.type = 'expense' AND COALESCE(c.exclude_from_budget, 0) = 0
         GROUP BY combined.date
-      `).all(startDate, endDate, startDate, endDate) as { date: string; total: number }[];
-      return new Map(rows.map((r) => [r.date, r.total]));
+        UNION ALL
+        SELECT t.date, sum(t.amount)
+        FROM transactions t
+        WHERE ${isUncategorizedSql('t')} AND t.amount > 0 AND t.date >= ? AND t.date <= ?
+        GROUP BY t.date
+      `).all(startDate, endDate, startDate, endDate, startDate, endDate) as { date: string; total: number }[];
+      const byDate = new Map<string, number>();
+      for (const r of rows) byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.total);
+      return byDate;
     };
 
     const today = localToday;
@@ -183,6 +192,8 @@ router.get('/spending-series', (req: Request, res: Response) => {
         month,
         days: buildSeries(month, month === today.slice(0, 7)),
         prior: { month: prior, days: buildSeries(prior, false) },
+        // The month's uncategorized figures, for the card's note.
+        uncategorized: uncategorizedTotals(sqlite, { start: monthRange(month).startDate, end: monthRange(month).endDate }),
       },
     });
   } catch (err) {
