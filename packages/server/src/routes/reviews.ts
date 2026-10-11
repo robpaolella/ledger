@@ -50,7 +50,16 @@ const mapRow = (r: QueueRow) => ({
   },
 });
 
-// GET /api/reviews?status=open|resolved|all&assignee=me|unassigned|<id>&limit&offset
+/** A real calendar date written YYYY-MM-DD (rejects 2026-02-30). */
+function isYmd(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+// GET /api/reviews?status=open|resolved|all&assignee=me|unassigned|<id>&from&to&limit&offset
+// from/to: inclusive transaction-date range. Only used when both are valid and from <= to;
+// otherwise ignored (the unfiltered list), never an error.
 router.get('/', (req: Request, res: Response) => {
   try {
     const { status = 'open', assignee, limit: limitStr, offset: offsetStr } = req.query as Record<string, string | undefined>;
@@ -63,6 +72,8 @@ router.get('/', (req: Request, res: Response) => {
     if (assignee === 'me') { where.push('r.assignee_id = ?'); params.push(req.user!.userId); }
     else if (assignee === 'unassigned') { where.push('r.assignee_id IS NULL'); }
     else if (assignee && !isNaN(Number(assignee))) { where.push('r.assignee_id = ?'); params.push(Number(assignee)); }
+    const { from, to } = req.query;
+    if (isYmd(from) && isYmd(to) && from <= to) { where.push('t.date >= ? AND t.date <= ?'); params.push(from, to); }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const base = `
