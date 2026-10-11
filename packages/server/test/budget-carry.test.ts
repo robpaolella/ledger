@@ -36,7 +36,6 @@ beforeAll(async () => {
   ({ checkBudgetExceeded } = await import('../src/services/budgetAlerts.js'));
   const app = express();
   app.use('/budgets', (await import('../src/routes/budgets.js')).default);
-  app.use('/dashboard', (await import('../src/routes/dashboard.js')).default);
   server = app.listen(0);
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
@@ -112,6 +111,8 @@ describe('every budget reader agrees on the carried plan', () => {
 
     const summary = await get<Groups<MonthSub>>(`/budgets/summary?month=${month}`);
     expect(testSub(summary, cat.carry)).toMatchObject({ manual: carry, budgeted: carry, budgetId: null });
+    expect(testSub(summary, cat.other)).toMatchObject({ manual: other, budgetId: null });
+    expect(testSub(summary, cat.floor)).toMatchObject({ manual: floorStored, budgetId: null });
 
     const annual = await get<Groups<AnnualSub>>(`/budgets/annual?year=${month.slice(0, 4)}`);
     expect(testSub(annual, cat.carry).manual[Number(month.slice(5)) - 1]).toBe(carry);
@@ -121,13 +122,6 @@ describe('every budget reader agrees on the carried plan', () => {
     const detail = await get<{ plannedPerMonth: number }>(`/budgets/category-detail?categoryId=${cat.carry}`);
     vi.useRealTimers();
     expect(detail.plannedPerMonth).toBe(carry);
-
-    // Only the test categories have budget rows, so the Dashboard total is theirs.
-    const dash = await get<{ totalBudgetedExpenses: number }>(`/dashboard/summary?month=${month}`);
-    expect(dash.totalBudgetedExpenses).toBe(carry + other + floorStored);
-
-    const spending = await get<{ groupName: string; totalBudgeted: number }[]>(`/dashboard/spending-by-category?month=${month}`);
-    expect(spending.find((g) => g.groupName === 'Carry Test')!.totalBudgeted).toBe(carry + other + floorStored);
 
     checkBudgetExceeded(sqlite, { month, categoryIds: [cat.carry] });
     const note = sqlite.prepare('SELECT body FROM notifications WHERE dedupe_key = ?').get(`budget_exceeded:${cat.carry}:${month}`) as { body: string };

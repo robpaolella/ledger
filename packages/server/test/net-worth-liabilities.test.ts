@@ -36,7 +36,6 @@ beforeAll(async () => {
   (await import('../src/db/migrate.js')).runMigrations(sqlite);
   const app = express();
   app.use('/networth', (await import('../src/routes/networth.js')).default);
-  app.use('/dashboard', (await import('../src/routes/dashboard.js')).default);
   server = app.listen(0);
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
@@ -75,9 +74,6 @@ describe('net worth with liability balances', () => {
     expect(Object.is(summary.liabilityTotal, -0)).toBe(false);
     // The account keeps its stored sign; nothing is rewritten.
     expect(summary.accounts.find((a) => a.accountId === card[key])!.balance).toBe(key === 'owed' ? -300 : key === 'zero' ? 0 : 212.4);
-
-    const dashboard = await get<{ netWorth: number }>('/dashboard/summary');
-    expect(dashboard.netWorth).toBeCloseTo(netWorth, 2);
 
     const { points } = await get<{ points: Point[] }>('/networth/history?range=1m');
     const today = points[points.length - 1];
