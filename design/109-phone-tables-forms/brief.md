@@ -142,8 +142,9 @@ then Cleanup (scratch folder and server gone). Ten single-file hosts in `hosts/`
 Offline proof: with the app stopped, a fresh browser on network Offline opened every host
 at both widths and themes (40 images); each matches its live capture apart from focus rings
 and scroll position (not preserved, as documented). Requests were only `file:` and `data:`.
-Still owed: the strict offline check (an owned local server request reporting
-`net::ERR_INTERNET_DISCONNECTED`); from a `file:` page the probe only said "Failed to fetch".
+Strict offline check (2026-10-11): with `budgetyear.html` open under network Offline, a fetch to
+an owned local test server (`127.0.0.1:18109`) was logged as `net::ERR_INTERNET_DISCONNECTED`,
+and the server's access log shows no request from the browser. Server and browser stopped after.
 
 ## Real-site experiment
 None.
