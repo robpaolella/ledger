@@ -11,7 +11,7 @@ account detail, budget edit and sign-in are right. The problems cluster in five 
 **wide tables that were never turned into card rows** (6 of them, 3 unreadable), **side
 drawers and pop-ups where the checklist wants bottom sheets**, **tap targets of 20–36px**,
 **amount fields and a few forms without proper styling or keyboards**, and a handful of
-real bugs (6 filed as issues).
+real bugs (7 filed as issues).
 
 ## How it was done
 
@@ -24,7 +24,7 @@ real bugs (6 filed as issues).
   those numbers. Tall pages were captured by resizing the window to the page height.
 - Roles: John (owner) light and dark for every page and state; Jane (admin) and Sample
   Member on every page whose content or actions differ, in light (see Roles).
-- Only the screenshots that back a finding are in `screenshots/`. The full capture set
+- Only the screenshots that back a finding or a "passes" claim are in `screenshots/`. The full capture set
   (about 200 images plus the measurements) stays local, as the issue asks. No real data
   was used. Merchant and bank logos in the pictures come from the optional logo cache.
 - Data changed during the audit through the real UI: one CSV import ("Synthetic Cafe",
@@ -38,7 +38,7 @@ real bugs (6 filed as issues).
 - **Annoying**: works, but is awkward, clipped or hard to hit.
 - **Polish**: small and cosmetic.
 
-Checklist numbers: **1** Touch targets, **2** Thumb reach, **3** No sideways scrolling,
+Checklist numbers (a dash means outside the seven items): **1** Touch targets, **2** Thumb reach, **3** No sideways scrolling,
 **4** Sheets instead of pop-ups, **5** Right keyboard, **6** Sticky action buttons,
 **7** Readable numbers, **W** "Wide tables become card rows".
 
@@ -50,56 +50,63 @@ whole-page version).
 
 | Page / state | Owner light | Owner dark | Admin | Member | Result |
 | --- | --- | --- | --- | --- | --- |
-| Sign in (`/login`) | `login-light-390` | `login-dark-390` | same | same | Passes: 44px fields, `username` / `current-password` autofill, no auto-capitalisation |
-| Two-step setup (`/setup-2fa`) | n/a | n/a | `admin-light-setup2fa`, `-qr` | n/a | Keypad and one-time-code are right; QR is the only prominent path (F30). Shown by switching on the admin requirement; dark not captured |
+| Sign in (`/login`) | `login-light-390` | `login-dark-390` | n/a | n/a | Passes: 44px fields, `username` / `current-password` autofill, no auto-capitalisation |
+| Two-step setup (`/setup-2fa`) | n/a | not captured (reason below) | `admin-light-setup2fa`, `-qr` | n/a | Keypad and one-time-code are right; QR is the only prominent path (F30). Reached by switching on the admin requirement. Dark skipped: the page is a single card on the same surface as Sign in, which was captured in dark |
 | First-run setup (`/setup`) | not reachable | | | | Only appears on an empty database; the seed always has users. Not captured |
 | Two-step code at sign-in | not reachable | | | | Needs a TOTP for a user with two-step enabled; not driven |
-| Dashboard `/` | `dashboard` | `dashboard` | same | same | Passes; F21 |
-| Accounts `/accounts` (and `/net-worth` redirect) | `accounts` | `accounts` | same | no Add account button, as intended | F15, F24, F36 |
-| Account detail `/accounts/:id` | `accounts-detail` | `accounts-detail` | same | same | Passes (best page in the app). Update balance sheet: F06 |
-| Add account sheet | `acc-add` | | | button hidden for member | Passes (pinned footer, numeric last four) |
-| Physical assets: add sheet | `acc-asset-add` | | | hidden for member | F06 |
-| Transactions `/transactions` | `transactions` | `transactions` | same | same | F36, F40, F35 |
-| Add transaction sheet | `tx-add` | `tx-add` | same | same | Passes, except F14 |
-| Filters, Date, Sort popovers | `tx-filters`, `tx-date`, `tx-sort` | | | | F12, F13 |
-| Transaction detail, Split, rule prompt | `tx-detail`, `tx-split`, `tx-rule-prompt` | `tx-detail` | same | `member-light-tx-detail` | F01, F05, F07, F08; member F02 |
-| Manual import sheet | | | | `member-light-tx-manualimport` | Passes |
-| Review `/reviews` | `reviews` | `reviews` | same | same | F09, F11, F42 |
-| Review detail, Approve all, Date menu | `reviews-detail`, `-approveall`, `-date` | `reviews-detail` | | | F09, F11 |
-| Budget, Month `/budget` | `budget` | `budget` | same | same | F20, F36, F37 |
-| Budget, edit planned amount (sheet) | `budget-edit` | | | | Passes (pinned footer, decimal keypad) |
+| Dashboard `/` | `dashboard` | `dashboard` | `dashboard` (identical) | `dashboard` (identical) | Passes; F21 |
+| Accounts `/accounts` (and `/net-worth` redirect) | `accounts` | `accounts` | identical | identical, no Add account button, as intended | F15, F24, F36 |
+| Account detail `/accounts/:id` | `accounts-detail` | `accounts-detail` | not role-dependent, not captured | Update balance sheet: `member-light-acct-update-balance` | Passes (best page in the app); F06 |
+| Add account sheet | `acc-add` | `set-acct-add` (same sheet) | not role-dependent | hidden for member | Passes (pinned footer, numeric last four) |
+| Physical assets: add sheet | `acc-asset-add` | `acc-asset-add` | not role-dependent | hidden for member | F06 |
+| Transactions `/transactions` | `transactions` | `transactions`, `tx-1440` (desktop, for F35) | identical | identical | F35, F36, F40 |
+| Add transaction sheet | `tx-add` | `tx-add` | not role-dependent | `member-light-tx-add` | Passes, except F14 |
+| Filters, Date, Sort popovers | `tx-filters`, `tx-date`, `tx-sort` | same names | not role-dependent | | F12, F13 |
+| Transaction detail, Split, rule prompt | `tx-detail`, `tx-split`, `tx-rule-prompt` | `tx-detail`, `tx-split` (rule prompt not captured in dark: same pill, theme colours only) | not role-dependent | `member-light-tx-detail` | F01, F05, F07, F08; member F02 |
+| Manual import sheet | `member-light-tx-manualimport` (member capture) | not captured | | | Passes |
+| Review `/reviews` | `reviews` | `reviews` | identical | identical | F42 |
+| Review detail, Approve all, Date menu | `reviews-detail`, `-approveall`, `-date` | `reviews-detail`, `reviews-approveall` | not role-dependent | | F09, F11 |
+| Budget, Month `/budget` | `budget` | `budget` | identical | identical | F20, F36, F37 |
+| Budget, edit planned amount (sheet) | `budget-edit` | `budget-edit` | not role-dependent | | Passes (pinned footer, decimal keypad) |
+| Budget, empty/future month | | `budget-future-month` | | | Next month is pre-filled from the current plan, so there is no empty state to show |
 | Budget, Year | `budget-year` | `budget-year` | | | F04 |
 | Budget category detail `/budget/category` | `budget-category` | `budget-category` | | | Passes; amounts 13px (F37) |
-| Recurring, This month (list) | `recurring` | `recurring` | same | same | Passes |
-| Recurring, Calendar | `rec-cal` | | | | F19 |
+| Recurring, This month (list) | `recurring` | `recurring` | identical | identical | Passes |
+| Recurring, Calendar | `rec-cal` | `rec-cal` | | | F19 |
 | Recurring, All recurring | `rec-all` | `rec-all` | | | F16 |
-| Recurring, Add sheet and item detail | `rec-add`, `rec-detail` | | | | F10, F29 |
-| Reports `/reports` | `reports`, `rep-filters`, `rep-date`, `rep-trends`, `rep-timeline` | `reports` | | `member-light-reports` | F17, F38, F39 |
-| Investments `/investments` | `investments`, `inv-accounts`, `inv-holding` | `investments` | same | same | F18, F38 |
-| Import: CSV (upload, map, review) | `import-csv`, `-map`, `-review` | | | | F03, F33, F34 |
-| Import: Bank sync | `import` | `import` | same | same | Passes |
-| Notifications and nav drawer | `notifications`, `nav-drawer` | | | | Pass |
+| Recurring, Add sheet and item detail | `rec-add`, `rec-detail` | `rec-add`, `rec-detail` | | | F10, F29 |
+| Reports `/reports` | `reports`, `rep-filters`, `rep-date`, `rep-trends`, `rep-timeline` | `reports`, `rep-trends`, `rep-timeline`, `rep-list-long` | | `member-light-reports` | F17, F38, F39 |
+| Investments `/investments` | `investments`, `inv-accounts`, `inv-holding` | `investments`, `inv-holding` | identical | identical | F18, F38 |
+| Import: CSV (upload, map, review) | `import-csv`, `-map`, `-review` | `import-csv` only (reason below) | | | F03, F33, F34 |
+| Import: Bank sync | `import` | `import` | identical | identical | Passes |
+| Notifications and nav drawer | `notifications`, `nav-drawer` | `notifications`, `nav-drawer` | not role-dependent | | Pass |
 | Settings menu `/settings` | `settings-index` | `settings-index` | `admin-light-settings-index` | `member-light-settings-index` | Passes: 50px rows. Member sees Profile, Security, Notifications, Bank sync, Merchants, Rules; admin adds Accounts, Categories, Users, Extras |
-| Profile, Security, Notifications | `settings-profile`, `-security`, `-notifications` | same | | | F25. Security sheet for two-step: F30 |
-| Settings → Accounts, Bank sync | `settings-accounts`, `settings-bank`, `set-acct-add`, `set-bank-add`, `set-bank-edit` | same | admin sees 6 of 10 connections; member 3 (shared only, "Ask an admin to reconnect") | same | F26. Sheets pass |
-| Settings → Categories | `settings-categories`, `set-cat-edit`, `set-cat-create` | same | | panel hidden | F23 |
-| Settings → Merchants, Rules | `settings-merchants`, `-rules`, `set-merch-edit` | same | | same | F26, F32 |
-| Settings → Users & permissions | `settings-users`, `set-user-john`, `-member`, `-add` | same | `admin-light-set-user-*` | panel hidden | Sheets pass; F41 |
-| Settings → Optional extras | `settings-extras` | same | | hidden | F31 |
+| Profile, Security, Notifications | `settings-profile`, `-security`, `-notifications` | same names | | | F25. Two-step sheet: F30 |
+| Settings → Accounts, Bank sync | `settings-accounts`, `settings-bank`, `set-acct-add`, `set-bank-add`, `set-bank-edit` | same names | admin sees 6 of 10 connections; member 3 (shared only, "Ask an admin to reconnect") | `member-light-settings-bank` | F26. Sheets pass |
+| Settings → Categories | `settings-categories`, `set-cat-edit`, `set-cat-create` | same names | | panel hidden | F23 |
+| Settings → Merchants, Rules | `settings-merchants`, `-rules`, `set-merch-edit` | same names | | `member-light-settings-merchants` | F26, F32 |
+| Settings → Users & permissions | `settings-users`, `set-user-member`, `set-user-add` | same names | `admin-light-set-user-john`, `admin-light-set-user-member` (both sheets open) | panel hidden | Sheets pass |
+| Settings → Optional extras | `settings-extras` | `settings-extras` | | hidden | F31 |
+
+How to read the Admin and Member columns: "identical" means captured, and the layout
+matches the owner's apart from data; "not role-dependent" means the state is the same
+for every role, so it was captured once (as owner); an empty cell means not captured.
 
 Roles: owner and admin phone layouts are identical apart from data (compared captures
-page by page); admin and owner differ only in Settings (admin can't open the owner's
-row, F41; admin sees fewer bank connections). The member differs in actions: no Add
+page by page); admin and owner differ only in Settings (an admin sees fewer bank
+connections, and Users & permissions opens every row, the owner's as read-only). The member differs in actions: no Add
 account / Add category, no Users or Extras, no Accounts or Categories in Settings,
 transaction detail opens (they can edit) but shows a Delete button they can't use (F02).
 Admin and member passes were light only. Dark was checked for the owner.
 
 Dark theme: no finding is dark-only. Colours, contrast and surfaces hold up in every dark
-capture; every issue below appears in both themes unless stated.
+capture. In the tables, "both" means the issue was seen in a light and a dark capture;
+"light" means it was seen in light only, and since the layout code is the same in both
+themes, none of those is expected to differ in dark.
 
 ## Findings
 
-Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 have their own fix issues.
+Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 and F15 have their own fix issues.
 
 ### Area 1. Sheets, panels and pop-ups (checklist 4)
 
@@ -151,7 +158,7 @@ Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 have their
 | F32 | Settings → Merchants → Edit merchant | owner | light | Three footer buttons fill the width; "Save changes" touches the right screen edge | 6 | Polish | `owner-light-set-merch-edit.png` |
 | F33 | Import → CSV → step 2 Map columns | owner | light | "Next" is top right of the card and scrolls away; sign-convention options wrap and clip. Steps 1–3 labels wrap | 2, 6 | Annoying | `owner-light-import-csv-map.png` |
 | F34 | Import → CSV → step 1 | owner | light | "Drop your CSV file here" is desktop wording (no drag and drop on a phone); reads "1 transactions" on step 3 (see F03) | – | Polish | `owner-light-import-csv.png` |
-| F35 | Transactions → bulk edit | all | n/a | There is no way to select several rows on a phone, so bulk edit can't be reached. The checklist says heavy tasks may be simpler, not missing | – | Annoying | (code: phone branch has no selection) |
+| F35 | Transactions → bulk edit | all | dark | There is no way to select several rows on a phone, so bulk edit can't be reached. Desktop has an "Edit multiple" button; the phone toolbar has no equivalent. The checklist says heavy tasks may be simpler, not missing | – | Annoying | `owner-light-transactions.png` (phone), `owner-dark-tx-1440.png` (desktop) |
 
 ### Area 5. Rows, truncation and numbers (checklist 3 and 7)
 
@@ -160,17 +167,16 @@ Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 have their
 | F36 | Transactions, Budget category, Reports list, Accounts | owner | both | The account name in monospace takes a big share of the right side of each row, so descriptions are cut to "Larkspindle Fin…" and "Pebblewisp …". Same on Accounts (names cut to "John's Travel Savings (…1…"), Budget group names ("Auto/Tran…", "Entertain…", "Tax Not W…") and Review reasons ("Uncategorize…") | 3, 7 | Polish | `owner-light-transactions.png`, `owner-light-budget.png` |
 | F37 | Budget and day totals | owner | both | List-row amounts are 15px as required, but Budget planned/remaining are 14px, category detail has 13px, day-group totals on Transactions 12px | 7 | Polish | `owner-light-budget.png`, `owner-light-transactions.png` |
 | F38 | Reports → Trends; Investments chart | owner | light | The trends chart is about 100px tall with crowded axis labels and similar line colours; the Investments x-axis ends "Oct '" cut off | 7 | Polish | `owner-light-rep-trends.png`, `owner-light-inv-holding.png` |
-| F39 | Reports | owner | light | The transaction list at the bottom is up to 1,000 rows (the page is 6,000px tall) | – | Polish | (local `owner-light-reports-full`) |
+| F39 | Reports | owner | dark | The transaction list at the bottom is up to 1,000 rows (the full-page capture is 6,000px tall); the screenshot is scrolled deep into it | – | Polish | `owner-dark-rep-list-long.png` |
 | F40 | Transactions toolbar | owner | light | The pinned search, Date, Sort and review row takes 117px under a 56px bar: 173px of an 844px screen stays covered while scrolling | 2 | Polish | `owner-light-transactions.png` |
 | F42 | Review toolbar | owner | both | Search, Date and Users fill the first line and "Approve all" sits alone on the second | 3 | Polish | `owner-light-reviews-date.png` |
 
-### Area 6. Permissions on the phone
+### Area 6. Permissions and accessibility
 
 | # | Page / state | Role | Theme | Finding | Item | Severity | Screenshot |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F02 | Transactions → detail → Delete transaction | member | light | **Bug.** The member (no delete permission) sees the Delete button; using it ends in "Failed to delete transaction". Fix issue #205 | – | Annoying | `member-light-tx-detail.png` |
-| F15 | Accounts app bar | all | both | The filter and refresh icon buttons have no accessible name | – | Polish | `owner-light-accounts.png` |
-| F41 | Settings → Users & permissions | admin | light | The owner's row shows a chevron but does nothing when an admin taps it | 1 | Polish | `admin-light-set-user-john.png` |
+| F15 | Accounts app bar | all | both | **Bug.** The filter and refresh icon buttons hide their text on phones and have no `aria-label`, so they have no accessible name. Fix issue #215 | – | Polish | `owner-light-accounts.png`, `owner-dark-accounts.png` |
 
 ## What passes (so nobody redoes it)
 
@@ -179,6 +185,19 @@ Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 have their
 - Keyboards: money fields use the decimal keypad; the last four of a card and the code boxes use the number pad; sign-in and new/current password use the right autofill; username turns auto-capitalisation off.
 - App-bar title and actions, nav drawer (44px rows), notifications, page toolbars pinned under the app bar on Transactions, Budget, Reports, Review, Recurring.
 - Account detail, Settings menu and Dashboard read well; list-row amounts are 15px, right-aligned, and the description is what truncates.
+
+### Evidence for the "passes" claims
+
+Files in `screenshots/` that show pages and states that pass (the other files back the findings):
+`login-light-390.png`, `login-dark-390.png`, `owner-light-settings-index.png`,
+`member-light-settings-bank.png`, `member-light-settings-merchants.png`,
+`member-light-tx-add.png`, `owner-light-acc-add.png`, `owner-light-budget-edit.png`,
+`owner-light-set-user-member.png`, `admin-light-set-user-john.png`,
+`admin-light-set-user-member.png`, `owner-light-nav-drawer.png`,
+`owner-dark-nav-drawer.png`, `owner-light-notifications.png`,
+`owner-dark-notifications.png`, `owner-dark-tx-add.png`, `owner-dark-tx-filters.png`,
+`owner-dark-tx-split.png` (shows F01 in dark), `owner-dark-budget-future-month.png`,
+`owner-light-inv-accounts.png`.
 
 ## Areas for design sessions and builds
 
@@ -189,7 +208,7 @@ Each area can be designed or built on its own. Suggested order is by how much ea
 3. **Touch targets** (F20–F27). Mostly one rule applied in many places (a 44px hit area around small controls). Budget Month and Categories first.
 4. **Forms and keyboards** (F06, F29–F35). Field styling for amount inputs, pinned footer in the Recurring sheet, key-first two-step setup on phones, URL and token keyboards, thumb-reach Next on Import, and a decision on a phone version of bulk edit.
 5. **Rows, truncation and numbers** (F36–F42). Give descriptions more room, lift Budget amounts to 15px, tidy the pinned stack and chart sizes.
-6. **Permissions on the phone** (F02, F15, F41). Small fixes; F02 has its own issue.
+6. **Permissions and accessibility on the phone** (F02, F15). Small fixes; both have their own issues.
 
 ## Fix issues filed
 
@@ -201,6 +220,7 @@ Each area can be designed or built on its own. Suggested order is by how much ea
 | #207 | F04 | Budget Year view overlaps text on phones (needs design) |
 | #208 | F05 | "Always categorize" prompt is clipped on phones |
 | #209 | F06 | Amount fields in Update balance and Add asset sheets have no field styling |
+| #215 | F15 | Accounts Filters and Refresh icon buttons have no accessible name |
 
 ## Limits
 
@@ -211,5 +231,10 @@ Each area can be designed or built on its own. Suggested order is by how much ea
   only the controls and their sizes.
 - Dark theme was captured for the owner only. Admin and member were captured in light.
 - Not reachable on sample data: first-run Setup, the sign-in two-step code step.
+- Not captured: dark CSV import (the browser's file picker would not accept the upload in
+  the second capture session; the F03 overlap does not depend on theme), the dark rule
+  prompt, dark two-step setup, CSV duplicate and transfer flags (they need a second
+  upload of the same file), and the Settings panel load-failure state (offline mode).
+  Each is the same layout as a state shown in the other theme or in the same area.
 - Sizes below 44px are measured from the page; app-bar icon buttons (40px) are allowed
   by DESIGN.md and are not listed.
