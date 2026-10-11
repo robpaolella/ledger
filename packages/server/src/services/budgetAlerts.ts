@@ -17,6 +17,12 @@ import { getStoredPlans } from './budgetPlan.js';
 
 const EPSILON = 0.005; // ignore float dust
 
+/** "2026-05" → "May 2026", so an alert says which month went over. */
+export function monthLabel(month: string): string {
+  const [year, m] = month.split('-').map(Number);
+  return new Date(year, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
 export function checkBudgetExceeded(
   sqlite: Database.Database,
   opts: { month: string; categoryIds?: number[] },
@@ -71,7 +77,7 @@ export function checkBudgetExceeded(
     const overage = actual - budgeted;
     if (overage <= EPSILON) continue;
 
-    const body = `You've exceeded your ${c.display_name} budget by $${overage.toFixed(2)}.`;
+    const body = `You've exceeded your ${c.display_name} budget for ${monthLabel(month)} by $${overage.toFixed(2)}.`;
     const dedupeKey = `budget_exceeded:${c.id}:${month}`;
     const firstCrossing = !alertExists.get(c.id, month);
     if (firstCrossing) {

@@ -2,6 +2,7 @@
 import type { Helpers } from './helpers.js';
 import type { PeopleAccounts } from './people-accounts.js';
 import type { Categories } from './categories.js';
+import { monthLabel } from '../../services/budgetAlerts.js';
 import { findOrCreateMerchant } from '../merchants.js';
 import { sampleMerchantName } from './merchants.js';
 
@@ -137,7 +138,7 @@ export function seedBudgetAlerts({ db, rel }: Helpers, CAT: Categories) {
       if (overage <= 0.005) continue;
       insertAlert.run(budget.category_id, month);
       const dedupeKey = `budget_exceeded:${budget.category_id}:${month}`;
-      const body = `You've exceeded your ${category.display_name} budget by $${overage.toFixed(2)}.`;
+      const body = `You've exceeded your ${category.display_name} budget for ${monthLabel(month)} by $${overage.toFixed(2)}.`;
       for (const user of users) {
         insertNotification.run(user.id, `Over budget: ${category.display_name}`, body, dedupeKey, monthIndex < 6 ? 1 : 0);
       }
