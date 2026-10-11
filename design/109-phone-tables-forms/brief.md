@@ -124,7 +124,7 @@ admin vs owner (identical on these screens per the audit; member differences are
 Captured 2026-10-11 (launch month Oct 2026, owner John, synthetic verify-ledger data) with
 the verify-ledger Launch → Doctor (PASS) → page-snapshot recipe, light/dark × 390×844/1440×900,
 then Cleanup (scratch folder and server gone). Ten single-file hosts in `hosts/` (not committed:
-~51 MB; removed at step 8 once final offline proof is kept):
+~51 MB; removed from the folder at freeze, after `index.html`'s offline proof in `decisions.md`):
 
 | Host | Route / state |
 | --- | --- |
@@ -150,4 +150,5 @@ and the server's access log shows no request from the browser. Server and browse
 None.
 
 ## Open decisions
-- 13. Which 12-month pattern (A, B or C), after seeing the versions.
+None. 13 (version A) and 19 (keep the Month/Year selector on phones, Year labelled as the plan)
+are recorded in `decisions.md`.
