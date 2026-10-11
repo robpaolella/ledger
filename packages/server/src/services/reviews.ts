@@ -110,6 +110,26 @@ export function flagReview(
   }
 }
 
+/**
+ * Give every uncategorized transaction (only `txnIds`, if given) an open Review
+ * item: reopens its resolved row (one row per transaction) or adds one, assigned
+ * to the default assignee. Leaves open items and categorized ones alone, so it is
+ * safe to repeat. Returns how many items it opened.
+ */
+export function ensureUncategorizedReviews(sqlite: Database.Database, txnIds?: number[]): number {
+  if (txnIds && txnIds.length === 0) return 0;
+  const ids = sqlite.prepare(`
+    SELECT t.id AS id FROM transactions t
+    WHERE ${isUncategorizedSql('t')}
+      AND NOT EXISTS (SELECT 1 FROM transaction_reviews r WHERE r.transaction_id = t.id AND r.status = 'open')
+      ${txnIds ? `AND t.id IN (${txnIds.map(() => '?').join(',')})` : ''}
+  `).all(...(txnIds ?? [])) as { id: number }[];
+  for (const { id } of ids) {
+    flagReview(sqlite, { txnId: id, reason: 'auto_uncategorized', assigneeId: defaultAssigneeForTxn(sqlite, id) });
+  }
+  return ids.length;
+}
+
 /** True if the transaction is uncategorized (see `isUncategorizedSql`). */
 export function isUncategorized(sqlite: Database.Database, txnId: number): boolean {
   return !!sqlite.prepare(`SELECT 1 FROM transactions t WHERE t.id = ? AND ${isUncategorizedSql('t')}`).get(txnId);
