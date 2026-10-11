@@ -394,11 +394,6 @@ router.get('/:id/delete-preview', requireRole('admin'), (req: Request, res: Resp
       'SELECT COUNT(*) as cnt FROM simplefin_connections WHERE user_id = ?'
     ).get(id) as { cnt: number };
 
-    // Owned pay cycles (will be unassigned, not deleted, on permanent delete)
-    const payCyclesOwnedCount = sqlite.prepare(
-      'SELECT COUNT(*) as cnt FROM pay_cycles WHERE user_id = ?'
-    ).get(id) as { cnt: number };
-
     // Available owners (all active users except the one being deleted)
     const available = sqlite.prepare(
       'SELECT id, display_name FROM users WHERE is_active = 1 AND id != ? ORDER BY display_name'
@@ -421,7 +416,6 @@ router.get('/:id/delete-preview', requireRole('admin'), (req: Request, res: Resp
         })),
         coOwnedAccounts: coOwnedWithOwners,
         personalConnections: personalConnCount.cnt,
-        payCyclesOwned: payCyclesOwnedCount.cnt,
         availableOwners: available.map(u => ({ id: u.id, displayName: u.display_name })),
       },
     });

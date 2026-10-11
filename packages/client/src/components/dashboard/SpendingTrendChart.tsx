@@ -57,11 +57,11 @@ export default function SpendingTrendChart({ thisMonth, lastMonth, height = 240 
     : '';
 
   const ticks = Array.from({ length: 5 }, (_, i) => min + (i / 4) * (max - min));
-  // Day 1, 4, 7, … then the final day (skipping any tick within 2 days of it).
+  // Day 1, 4, 7, … then the final day (skipping any tick within a step of it).
   // Narrow charts (phones) label every 6th day so labels never collide.
   const step = width < 480 ? 6 : 3;
   const xLabels: number[] = [];
-  for (let d = 1; d <= dayCount; d += step) if (dayCount - d >= step) xLabels.push(d);
+  for (let d = 1; d <= dayCount; d += step) if (dayCount - d > step) xLabels.push(d);
   xLabels.push(dayCount);
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -116,7 +116,7 @@ export default function SpendingTrendChart({ thisMonth, lastMonth, height = 240 
 
             {/* Day-N x labels */}
             {xLabels.map((d) => (
-              <text key={d} x={xFor(d)} y={height - 6} textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--text-3)">
+              <text key={d} x={xFor(d)} y={height - 6} textAnchor={d === dayCount ? 'end' : 'middle'} fontSize="11" fontWeight="500" fill="var(--text-3)">
                 Day {d}
               </text>
             ))}

@@ -102,7 +102,7 @@ export function notifySyncFailure(sqlite: Database.Database, f: SyncFailureInput
       severity: 'error',
       title: `Couldn't sync ${f.label}`,
       body,
-      actionLabel: 'Open Settings',
+      actionLabel: 'Open settings',
       actionTarget: '/settings?panel=bank',
       dedupeKey: syncFailureKey(f.connectionId),
     });
@@ -129,7 +129,7 @@ export function notifyAmazonFailure(sqlite: Database.Database, kind: keyof typeo
       severity: kind === 'stale' ? 'warning' : 'error',
       title: kind === 'auth' ? 'Amazon session expired' : kind === 'stale' ? 'Amazon scrape is stale' : 'Amazon scrape failing',
       body: message,
-      actionLabel: 'Open Settings',
+      actionLabel: 'Open settings',
       actionTarget: '/settings?panel=extras',
       dedupeKey: AMAZON_KEYS[kind],
     });
