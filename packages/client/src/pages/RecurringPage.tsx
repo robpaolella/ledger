@@ -320,7 +320,7 @@ export default function RecurringPage() {
               </div>
             )
           ) : (
-            <CalendarGrid month={month} today={today} occByDay={occByDay} onOcc={(o) => { const it = items.find((i) => i.id === o.itemId); if (it) setPanel(it); }} />
+            <CalendarGrid key={month} month={month} today={today} occByDay={occByDay} isMobile={isMobile} onOcc={(o) => { const it = items.find((i) => i.id === o.itemId); if (it) setPanel(it); }} />
           )}
         </>
       ) : (
@@ -344,8 +344,8 @@ export default function RecurringPage() {
 }
 
 // ============================ Calendar grid ============================
-function CalendarGrid({ month, today, occByDay, onOcc }: {
-  month: string; today: string; occByDay: Map<number, ROcc[]>; onOcc: (o: ROcc) => void;
+function CalendarGrid({ month, today, occByDay, isMobile, onOcc }: {
+  month: string; today: string; occByDay: Map<number, ROcc[]>; isMobile: boolean; onOcc: (o: ROcc) => void;
 }) {
   const [y, m] = month.split('-').map(Number);
   const firstDow = new Date(y, m - 1, 1).getDay();
@@ -355,6 +355,62 @@ function CalendarGrid({ month, today, occByDay, onOcc }: {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
   const todayDay = today.startsWith(month) ? Number(today.split('-')[2]) : -1;
+  // Phone: today is selected on load (the 1st when viewing another month); the page remounts this per month.
+  const [selected, setSelected] = useState(todayDay > 0 ? todayDay : 1);
+
+  if (isMobile) {
+    const dayDate = new Date(y, m - 1, selected);
+    const shortDay = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const selectedOccs = occByDay.get(selected) ?? [];
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="bg-surface rounded-card border border-line shadow-sm p-3">
+          <div className="grid grid-cols-7 mb-1">
+            {WEEKDAYS.map((w) => <div key={w} aria-hidden="true" className="py-1 text-center text-[11px] font-semibold text-content-3">{w[0]}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1">
+            {cells.map((d, i) => {
+              if (d === null) return <div key={i} />;
+              const occs = occByDay.get(d) ?? [];
+              const label = new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              return (
+                <button key={i} type="button" onClick={() => setSelected(d)} aria-pressed={d === selected}
+                  aria-label={`${label}, ${occs.length} ${occs.length === 1 ? 'item' : 'items'}`}
+                  className={`min-h-[48px] min-w-11 flex flex-col items-center justify-center gap-1 rounded-[10px] border focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary ${d === selected ? 'border-primary bg-primary/10' : 'border-transparent'}`}>
+                  <span className={`text-[15px] font-semibold leading-none ${d === todayDay ? 'text-primary' : 'text-content'}`}>{d}</span>
+                  <span className="flex h-1.5 items-center gap-0.5" aria-hidden="true">
+                    {occs.slice(0, 3).map((o) => (
+                      <span key={`${o.itemId}-${o.date}`} className="w-1.5 h-1.5 rounded-full" style={{ background: o.type === 'income' ? 'var(--positive)' : getCategoryColorHex(o.groupName) }} />
+                    ))}
+                    {occs.length > 3 && <span className="text-[9px] leading-none text-content-3">+</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
+          <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-line">
+            <span className="font-bold text-sm">{dayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+            {selectedOccs.length > 0 && <span className="font-mono text-[12px] text-content-3">{selectedOccs.length} {selectedOccs.length === 1 ? 'item' : 'items'}</span>}
+          </div>
+          {selectedOccs.length === 0 ? (
+            <div className="px-4 py-6 text-center text-content-3 text-sm">Nothing due on {shortDay}.</div>
+          ) : selectedOccs.map((o) => (
+            <button key={`${o.itemId}-${o.date}`} type="button" onClick={() => onOcc(o)}
+              className="w-full flex items-center gap-3 px-4 min-h-16 py-2 border-b border-line last:border-b-0 text-left active:bg-surface-2">
+              <VendorAvatar name={o.merchantName ?? o.label} src={o.merchantLogoUrl || undefined} size={34} color={getCategoryColorHex(o.groupName)} />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-[15px] truncate">{o.label}</div>
+                {o.accountName && <div className="text-[12px] text-content-3 truncate">{o.accountName}</div>}
+              </div>
+              <Money amount={flow(o.amount, o.type)} className="shrink-0 font-bold text-[15px]" />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
