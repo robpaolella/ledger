@@ -121,7 +121,29 @@ Not applicable: first-run setup and the sign-in code step (no wide table or form
 admin vs owner (identical on these screens per the audit; member differences are covered).
 
 ## Host snapshot and offline proof
-To be filled in after capture (step 3).
+Captured 2026-10-11 (launch month Oct 2026, owner John, synthetic verify-ledger data) with
+the verify-ledger Launch → Doctor (PASS) → page-snapshot recipe, light/dark × 390×844/1440×900,
+then Cleanup (scratch folder and server gone). Ten single-file hosts in `hosts/` (not committed:
+~51 MB; removed at step 8 once final offline proof is kept):
+
+| Host | Route / state |
+| --- | --- |
+| `budgetyear` | `/budget` → Year (2026) |
+| `timeline` | `/reports` → range This month → Category breakdown Timeline (Year-to-date crashed the capture: ~1,500 logo images) |
+| `investments` | `/investments` (holdings table below the chart) |
+| `calendar` | `/recurring` → Calendar, Oct 2026 |
+| `transactions` | `/transactions` |
+| `security` | `/settings?panel=security` (two-step sheet not captured: the recipe forbids capturing a QR code; versions build the sheet from the Edit merchant sheet's markup) |
+| `merchantedit` | `/settings?panel=merchants` → Larkspindle Finance → Edit merchant |
+| `importupload` | `/import?tab=csv` step 1 |
+| `importmap` | step 2, synthetic `sample-checking.csv` (6 rows) into John's Checking |
+| `authshell` | `/login` (AuthShell, base for the required two-step setup page) |
+
+Offline proof: with the app stopped, a fresh browser on network Offline opened every host
+at both widths and themes (40 images); each matches its live capture apart from focus rings
+and scroll position (not preserved, as documented). Requests were only `file:` and `data:`.
+Still owed: the strict offline check (an owned local server request reporting
+`net::ERR_INTERNET_DISCONNECTED`); from a `file:` page the probe only said "Failed to fetch".
 
 ## Real-site experiment
 None.
