@@ -5,7 +5,7 @@ verify-ledger synthetic sample data. Branch `docs/108-phone-audit`, built from
 `feature/platform-retheme` at `50ba6a7`. Captured 2026-10-10 (the launch month is
 October 2026, so "today" in the data is Oct 10).
 
-**Bottom line:** the phone app is in good shape for everyday use: nothing scrolls
+**Bottom line:** 40 findings (4 block use, 16 annoying, 20 polish). The phone app is in good shape for everyday use: nothing scrolls
 sideways at page level (136 captures checked), and the add/edit sheets, Settings menu,
 account detail, budget edit and sign-in are right. The problems cluster in five places:
 **wide tables that were never turned into card rows** (6 of them, 3 unreadable), **side
