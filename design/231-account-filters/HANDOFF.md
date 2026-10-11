@@ -1,4 +1,4 @@
-# Handoff: design #231 (Account detail filters), 2026-10-11 (fourth handoff)
+# Handoff: design #231 (Account detail filters), 2026-10-11 (fifth handoff)
 
 Delete this file before the design PR.
 
@@ -146,3 +146,27 @@ Start in the ledger herdr workspace, in this tab's place, in
 /git/maestro/skills/design-feature/SKILL.md and design/231-account-filters/HANDOFF.md, then
 continue design #231 with Robert from the next step. Robert makes the decisions in this tab.
 Base: feature/platform-retheme (already recorded on #231)."
+
+## Session 5 (versions built; read this first)
+- `proto.css` and `proto.js` are written in `/tmp/design-231-build/`; `python3 build.py` builds
+  `versions/a.html` and `versions/b.html` (about 1.8 MB each, untracked on purpose, like host.html;
+  commit them with the design PR, not before, to keep history small). Rebuild after any edit to
+  proto.js/proto.css; never hand-edit the versions.
+- Checked: both scripts parse; opened offline (named session, network emulated Offline) with no
+  script errors. `classcheck.js` (run via `chrome-devtools-axi eval "$(cat classcheck.js)"`) walks
+  every state plus the Merchants/Amount/Other tabs and reports class names missing from the app
+  CSS: only `active` (from the captured sidebar), so nothing new is unstyled. The console's
+  "Unsafe attempt to load URL" line is `history.replaceState` on file:// and is harmless
+  (data-state still updates).
+- Not yet done: looking at the screenshots. Light captures of default, filtered and filters-open
+  for both versions at 1440 and 390 are in `/tmp/d231shots/` (taken, not inspected). Next: open
+  them, check every state × theme × width by eye (popover placement in B at 84px/left 0; phone
+  popovers in #overlay under the app bar; long-names truncation; error/loading), fix, then
+  verify the interactions (Apply → 400 ms spinner, Escape/focus return, date presets, custom
+  dates, View all toast). The sidebar's Dark mode button is captured markup and does nothing;
+  either wire it to setTheme or leave it as an inert control.
+- Then fill design.json and decisions.md, step 5 critique, step 6 with Robert (questions
+  unchanged: (1) where the controls sit, (2) how active filters show, plus "11 of 11 matching"
+  vs "11 matching").
+- Previous tab w2V:tQ was closed (old session file
+  `/home/agent/.pi/agent/sessions/--git-ledger-worktrees-docs-231-design-account-filters--/2026-10-11T07-28-43-850Z_01a129dd-2f49-762c-aeeb-36b6ebabd968.jsonl`).
