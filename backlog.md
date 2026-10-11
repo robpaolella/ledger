@@ -25,3 +25,4 @@
 - Account detail shows "View all in Transactions" on an account with no transactions, which opens an empty list; consider hiding it there (raised in the #231 design critique).
 - Reports Category breakdown on a 390px phone cuts off each row's amount (only the % shows); found during the #106 design.
 - Search-empty text in Settings (Merchants, Rules, SimpleFIN accounts, institutions) and the Bank Sync account picker still uses its own wording; move to "Nothing matches “{search}”" (left out of #101, found there).
+- Two-step setup recognises a wrong code by the server message starting "Invalid verification code" (`isWrongCodeError`); have the server return a stable error code and match on that (found in #227).

@@ -49,7 +49,6 @@ export default function TwoFASetupPage() {
     } catch (err) {
       if (isWrongCodeError(err)) setCodeError(WRONG_CODE_MESSAGE);
       else setError(err instanceof Error ? err.message : 'Verification failed');
-      setVerifyCode('');
     } finally { setLoading(false); }
   };
 
