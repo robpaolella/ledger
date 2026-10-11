@@ -2333,11 +2333,11 @@ export default function TransactionsPage() {
 
               <datalist id="split-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
               {splitDraft.map((r, i) => (
-                <div key={r.id ?? `new-${i}`} className="flex items-center gap-2 mb-2.5">
-                  {/* Merchant */}
+                <div key={r.id ?? `new-${i}`} className="grid grid-cols-[minmax(0,1fr)_104px_44px] gap-2 mb-3 md:flex md:items-center md:mb-2.5">
+                  {/* Merchant: own line on phones, category and amount below */}
                   <input value={r.merchant} onChange={(e) => setRow(i, { merchant: e.target.value })}
                     list="split-merchant-list" placeholder="Merchant"
-                    className="w-[150px] shrink-0 h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-medium outline-none" />
+                    className="col-span-3 w-full md:w-[150px] shrink-0 h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-medium outline-none" />
                   {/* Category */}
                   <div className="relative flex-1 min-w-0">
                     <select value={r.categoryId} onChange={(e) => setRow(i, { categoryId: e.target.value ? parseInt(e.target.value) : '' })}
@@ -2348,7 +2348,7 @@ export default function TransactionsPage() {
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-2.5 top-3 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
                   </div>
                   {/* Amount ($ or %) */}
-                  <div className="relative w-[104px] shrink-0">
+                  <div className="relative w-full md:w-[104px] shrink-0">
                     {splitMode === '$' ? (
                       <>
                         <span className="absolute left-3 top-3 text-[14px] text-content-3 font-semibold">$</span>
@@ -2366,8 +2366,8 @@ export default function TransactionsPage() {
                     )}
                   </div>
                   {splitDraft.length > 2 ? (
-                    <button onClick={() => setSplitDraft((d) => d.filter((_, j) => j !== i))} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-[10px] text-content-3 hover:bg-surface-2 hover:text-negative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
-                  ) : <span className="w-9 shrink-0" />}
+                    <button onClick={() => setSplitDraft((d) => d.filter((_, j) => j !== i))} aria-label="Remove split" className="w-11 h-11 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-[10px] text-content-3 hover:bg-surface-2 hover:text-negative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+                  ) : <span className="w-11 md:w-9 shrink-0" />}
                 </div>
               ))}
               {/* Add-a-split pill + LEFT TO SPLIT indicator */}
