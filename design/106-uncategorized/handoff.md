@@ -1,32 +1,35 @@
-# Handoff: design session for #106 (covers #107)
+# Handoff: design session for #106 (covers #107), second handoff
 
 Temporary working note; delete it before the design PR.
 
 Next session: Claude Opus 5.5, medium thinking (`route.ts role design-feature`).
-Start it in this worktree: `cd /git/ledger-worktrees/docs-106-design-uncategorized && pi --model claude-bridge/claude-opus-5-5 --thinking medium`
-Prompt: "Read design/106-uncategorized/handoff.md, then follow /git/maestro/skills/design-feature/SKILL.md from step 2's interview for #106 (covers #107) with Robert. Base: feature/platform-retheme."
+Start command (new labelled tab in Ledger's herdr workspace):
+`cd /git/ledger-worktrees/docs-106-design-uncategorized && pi --model claude-bridge/claude-opus-5-5 --thinking medium`
+Prompt: "Read design/106-uncategorized/handoff.md, then continue /git/maestro/skills/design-feature/SKILL.md for #106 (covers #107) with Robert in this tab, from step 4's re-check and step 5's critique. Base: feature/platform-retheme. Do every remaining step yourself in this tab."
 
-## Done (step 1, 2026-10-10)
-- Design issue is #106 itself (handed over, not created). Labels now `status:in-progress`, risk:low, tier:hard.
-- Worktree `/git/ledger-worktrees/docs-106-design-uncategorized`, branch `docs/106-design-uncategorized` from `origin/feature/platform-retheme` (ef3032a). Branch upstream currently points at the base; push with `-u origin docs/106-design-uncategorized` at ship time.
-- `## Dispatch` comment posted on #106 (Base `feature/platform-retheme`, folder `design/106-uncategorized/`).
-- #107 was already `status:needs-design` and blocked by #106 (also #88, #133). No changes needed.
-- Open PR on the base: #197 (BankSyncPanel/DailySyncCard). No overlap with this design.
-- Maker for critique: claude-bridge/claude-opus-5-5.
-- Not yet done: template files (brief.md, decisions.md, design.json) not copied; no host snapshot.
+## Done
+- Step 1: branch `docs/106-design-uncategorized` from `origin/feature/platform-retheme`, worktree above, `## Dispatch` on #106, #106 `status:in-progress`. #107 already needs-design and blocked by #106.
+- Step 2: interview finished; Robert confirmed the brief ("Go ahead.", 2026-10-10). All decisions 1–8 are in `brief.md` (Confirmed decisions). Robert's words: 1 "for #1 A is fine"; 2 "A"; 3 "A"; 4 "Let's see both versions, yes."; 5 "A"; 6 "I thik Uncategorized still makes the most sense."; 7 "Agreed with A, but also put diagonal lines through it so that it's clear this is different."; 8 "Agreed, A."
+- Step 3: hosts captured on fresh sample data (launch 2026-10-10, owner John, source commit ef3032a), site cleaned (`cleanup` PASS), offline proof done (16 images, no network requests). Files (untracked, ~3.4 MB each): `host-budget.html`, `host-reports.html`, `host-trends.html` (Reports with Trends + Timeline open), `host-dashboard.html`. Reports captures were trimmed to the first 3 transaction days (else 9 MB). Launch command: `LEDGER_LOGODEV_TOKEN_FILE=/nonexistent node .pi/skills/verify-ledger/run.mjs launch "$EVIDENCE"`; captures `snapshot.mjs capture` × {budget, reports, trends, dashboard} × {light,dark} × {390,1440}; theme set with the sidebar `button[title="Dark mode"]`. Evidence: `/tmp/ledger-evidence-iibXYs` (may be gone; not needed again). Fill brief.md "Host snapshot and offline proof" from this.
+- Step 4: `versions/a.html` (row at end of each section) and `versions/b.html` (InlineNotification-style warning notice above the lists), `design.json` (9 states × light/dark). Untracked, ~1 MB each. They are built, not hand-edited: sources live outside git in `/git/ledger-worktrees/docs-106-design-uncategorized-build/` (`proto.js` behaviour, `proto.css`, `build.py`, captured page bodies). Rebuild with `cd …-build && python3 build.py /git/ledger-worktrees/docs-106-design-uncategorized/design/106-uncategorized/versions`.
+- First full shots: `node /git/maestro/scripts/design.ts shots <folder> --out /tmp/design-review-fmaqBD/v1` (72 images, all inspected for budget/reports/trends/dashboard). Looked right: totals, rail, striped slice and legend, dashed Trends line with rescaled axis, timeline row, Dashboard note.
 
-## What the code does today (read on the base branch)
-- **Budget** (`BudgetPage.tsx`, server `routes/budgets.ts`): sections Income and Expenses; desktop table (Category / Planned / Actual / Remaining) with a summary rail (Left to budget card; Income and Expenses planned-vs-actual bars); phone has one card per group with Planned / Remaining pills. "Left to budget" = planned income − planned expenses, so an Uncategorized line affects actuals only, never Left to budget. A line with no plan would read as "over" in red under today's Remaining rule: the design must say how its Planned/Remaining cells look.
-- **Reports** (`ReportsPage.tsx`, `routes/reports.ts`): KPIs (Income, Expenses, Net, Savings rate), Breakdown flow bar (Saved + top 6 expense groups + Other, coloured by group), Trends multi-line chart, Category breakdown (Summary and Timeline, grouped by section), Transactions list (already labels rows "Uncategorized"). No separate phone layout beyond wrapping.
-- **Dashboard Spending card** (`components/dashboard/cards/SpendingCard.tsx`, `/dashboard/spending-series` in `routes/dashboard.ts`): headline "$X this month" + this-month vs last-month cumulative chart. No category list, so "the line" here is only a headline/total question (e.g. a small "includes $X uncategorized · Review" note).
-- Server queries join on `categories` with `c.type = 'expense'`, so `category_id IS NULL` rows (with no splits) drop out. Splits always carry a category (`transaction_splits.category_id` NOT NULL).
+## Fixed after those shots, NOT yet re-checked (do this first)
+1. Phone Budget A card: dropped the "—" planned cell so "$412 · 6 transactions" no longer truncates.
+2. Dashboard Budget card "earned/spent" and "remaining" now also include the uncategorized money (selector rewritten in `updateEarnedSpent`). Verify the Budget page rail still updates too.
+3. Notice (B) on phones: the "Review them" link moves to its own line (`.unc-notice-action`).
+4. Sidebar now spans the full page height (`#root { position: relative }`).
+Re-run shots to a fresh folder and inspect: a-budget-*-390, a-dashboard-*, b-budget-*-1440, b-reports-*-390, a-budget-light-1440.
 
-## Findings to raise with Robert (round 1)
-1. **Review doesn't show every uncategorized transaction.** `/reviews` lists open review items only. An uncategorized transaction whose review was marked reviewed (or never flagged) never appears there, so "links to Review" can land on a page without them. Options: the build makes sure every uncategorized transaction has an open review item; or the line links to Transactions filtered to Uncategorized. Recommend: keep Review (his decision) and have #107 guarantee they're all in it, plus filter Review to the line's period/type.
-2. **Which side is an uncategorized amount on?** No category means no type. Only the sign is left (positive = out, negative = in). Recommend: money out joins Expenses as "Uncategorized", money in joins Income as "Uncategorized", each its own line; this is the one place sign decides side, and PRODUCT.md "Uncategorized" should say so.
-3. **Transfers risk.** An uncategorized card payment or account-to-account move would count as spending once it's in totals. Ask whether that's acceptable (it nudges people to categorize) or whether the line needs a "may include transfers" hint.
+## Notes for Robert / the critique
+- Version A on desktop Budget puts the expense Uncategorized row at the very bottom of a long list, which is far from view; B's notice sits at the top. That's the real trade-off to show him.
+- At typical size the striped slice in the Breakdown bar is a sliver (0.7%); it's obvious in `reports-large`.
+- Pre-existing, not this design: on a 390 px phone the Reports Category breakdown rows cut off their amounts (only % shows). Add to backlog.md as a follow-up; don't fix here.
+- The Dashboard Spending chart line isn't redrawn to include the extra money (prototype limitation; headline and note are right). Say so in decisions.md.
+- The notice reuses `InlineNotification` (warning). Update brief.md's "New kinds of element" line: only the striped grey is new.
+- PRODUCT.md should gain the sign rule for Uncategorized (decision 2); that's for #107/#114, note it in decisions.md Open items.
 
-Later rounds: Budget Planned/Remaining treatment (plan "—", Remaining neutral?); placement (bottom of each section vs top; hidden at $0 vs shown at $0); colour in the Reports flow bar/trends (neutral `--text-3` like "Other", or a hatched/warning tone); phone wording; Dashboard note wording; large counts ("24 transactions"); roles (Review link for View-only members, who can see Review but not categorize?).
-
-## Next step
-Read `/git/maestro/vendor/impeccable/skills/impeccable/reference/new-work.md` (only the established-world part matters) and `.pi/skills/verify-ledger/SKILL.md`, `page-snapshot.md`, `design-states.md`. Then ask Robert round 1 above (numbered 1–3, with the recommendations), copy the templates and fill brief.md.
+## Next steps
+1. Re-check the four fixes (above), then fill brief.md's host section and `decisions.md` (copied template, still blank; maker `claude-bridge/claude-opus-5-5`, medium).
+2. Step 5 critique: `evidence=$(mktemp -d /tmp/design-review-XXXXXX)`; shots to `$evidence/versions`; `node /git/maestro/routing/route.ts role checker --maker claude-bridge/claude-opus-5-5`; `node /git/maestro/scripts/read-only-run.ts "$PWD" review /git/maestro/skills/design-feature/reviewer-prompt.md "Design: <folder>. Images and manifest: $evidence/versions. Maker: claude-bridge/claude-opus-5-5." -- <pi args from route>`. Run it blocking.
+3. Step 6: `design.ts open`, give Robert the link, ask decision by decision (here only one: row vs notice, plus anything the critique raises).
