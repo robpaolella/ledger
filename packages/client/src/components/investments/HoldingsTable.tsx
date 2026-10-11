@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatMoney } from '@ledger/shared';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export interface HoldingRow {
   symbol: string;
@@ -48,11 +49,13 @@ interface Props {
   groups: HoldingsGroup[];
   total: { value: number; rangePct: number | null };
   rangeLabel: string;      // e.g. "3 Months" — drives the "Past {range}" column
+  grouping?: ReactNode;    // "By asset class" label: beside the controls on desktop, under the title on phones
   controls?: ReactNode;    // header-right controls (shared range dropdown etc.)
 }
 
 /** Blended holdings card: one row per symbol, collapsible asset-class groups + TOTAL row. */
-export default function HoldingsTable({ groups, total, rangeLabel, controls }: Props) {
+export default function HoldingsTable({ groups, total, rangeLabel, grouping, controls }: Props) {
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggle = (assetClass: string) => setCollapsed((prev) => {
     const next = new Set(prev);
@@ -68,11 +71,61 @@ export default function HoldingsTable({ groups, total, rangeLabel, controls }: P
     return m;
   }, [groups]);
 
+  if (isMobile) {
+    return (
+      <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
+        <div className="px-4 pt-4 pb-3 border-b border-line">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[19px] font-extrabold tracking-tight">Holdings</span>
+            {controls && <div className="flex items-center gap-3">{controls}</div>}
+          </div>
+          {grouping && <div className="mt-2.5 flex">{grouping}</div>}
+        </div>
+
+        {groups.map((g, i) => (
+          <div key={g.assetClass}>
+            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-surface-2 border-b border-line">
+              <span aria-hidden="true" className="w-[9px] h-[9px] shrink-0 rounded-full" style={{ background: PALETTE[i % PALETTE.length] }} />
+              <span className="flex-1 min-w-0 text-[14px] font-semibold text-content-2">{g.assetClass}</span>
+              <span className="text-[15px] font-bold tabular-nums whitespace-nowrap">{balance(g.value)}</span>
+            </div>
+            {g.holdings.map((h) => (
+              <div key={h.symbol} className="flex items-start gap-3 px-4 py-3 border-b border-line">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-[15px]">{h.symbol}</div>
+                  <div className="text-[13px] text-content-3 mt-0.5">
+                    {h.name} · <span className="tabular-nums">{qty(h.quantity)}{h.price != null && ` × ${balance(h.price)}`}</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold text-[15px] tabular-nums whitespace-nowrap">{balance(h.value)}</div>
+                  <div className="text-[12.5px] text-content-3 mt-0.5 tabular-nums whitespace-nowrap">
+                    {h.rangePct != null && (
+                      <span style={{ color: h.rangePct < 0 ? 'var(--negative)' : 'var(--positive)' }}>
+                        {h.rangePct < 0 ? '▼' : '▲'} {Math.abs(h.rangePct).toFixed(2)}%
+                      </span>
+                    )}
+                    {h.rangePct != null && ' · '}{h.weightPct.toFixed(2)}% of portfolio
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <div className="flex items-center justify-between px-4 py-3.5 bg-surface-2">
+          <span className="font-extrabold text-[16px]">Total</span>
+          <span className="font-extrabold text-[16px] tabular-nums">{balance(total.value)}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
       <div className="flex items-center justify-between gap-4 px-[26px] pt-[22px] pb-[18px]">
         <span className="text-[19px] font-extrabold tracking-tight">Holdings</span>
-        {controls && <div className="flex items-center gap-3">{controls}</div>}
+        {(grouping || controls) && <div className="flex items-center gap-3">{grouping}{controls}</div>}
       </div>
 
       {/* Six columns need ~700px; on phones the table scrolls sideways inside the card. */}

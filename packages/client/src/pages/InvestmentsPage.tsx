@@ -224,12 +224,8 @@ export default function InvestmentsPage() {
               groups={holdings.groups}
               total={holdings.total}
               rangeLabel={rangeLabel}
-              controls={
-                <>
-                  <StaticControl label="By asset class" />
-                  <Dropdown value={range} options={RANGE_OPTIONS} onChange={(k) => setRange(k as RangeKey)} />
-                </>
-              }
+              grouping={<StaticControl label="By asset class" />}
+              controls={<Dropdown value={range} options={RANGE_OPTIONS} onChange={(k) => setRange(k as RangeKey)} />}
             />
           )}
         </>
