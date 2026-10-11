@@ -20,3 +20,4 @@
 - CSV review on phones can't rename a merchant or show match confidence (desktop only); needs a row detail sheet, so ask Robert first (#206).
 - Bank Sync review (`SyncReview.tsx`) still uses the wide table on phones; give it the same card rows as CSV review (#206).
 - Dashboard net worth values physical assets at the current moment (`dashboard.ts` calls `calculateCurrentValue` without `asOf`), while Accounts uses today's date, so the two differ by a dollar or two; pass the same `asOf`.
+- `migrate-savings-retire.ts` deletes budget, template, recurring and alert rows for savings categories, against "Data stays untouched" in PRODUCT.md; a v1.0.2 upgrade can't reach it, but needs its own risk:high issue (found in #111 review).
