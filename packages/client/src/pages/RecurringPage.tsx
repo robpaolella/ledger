@@ -405,13 +405,13 @@ function AllRecurring({ items, annual, canEdit, onOpen, onEdit }: {
           const paused = it.status === 'paused';
           const months = (() => { try { return JSON.parse(it.months_json ?? '[]') as number[]; } catch { return []; } })();
           return (
-            <div key={it.id} role="button" tabIndex={0} onClick={() => onOpen(it)}
-              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen(it); } }}
-              className={`flex md:grid ${cols} items-center gap-x-4 gap-3 px-4 md:px-5 min-h-16 md:min-h-0 py-2 md:py-3 border-b border-line text-left cursor-pointer hover:bg-surface-2/40 active:bg-surface-2`}>
+            <div key={it.id}
+              className={`relative flex md:grid ${cols} items-center gap-x-4 gap-3 px-4 md:px-5 min-h-16 md:min-h-0 py-2 md:py-3 border-b border-line text-left hover:bg-surface-2/40 active:bg-surface-2`}>
               <div className={`flex items-center gap-3 min-w-0 flex-1 md:flex-none ${paused ? 'opacity-55' : ''}`}>
                 <VendorAvatar name={it.merchantName ?? it.label} src={it.merchantLogoUrl || undefined} size={30} color={getCategoryColorHex(it.groupName)} />
                 <div className="min-w-0">
-                  <div className="font-semibold text-[14px] truncate">{it.label}</div>
+                  {/* The label is the row's keyboard target; its ::after stretches over the row so the whole row opens the panel. */}
+                  <button onClick={() => onOpen(it)} className="block max-w-full text-left font-semibold text-[14px] truncate after:absolute after:inset-0 after:content-['']">{it.label}</button>
                   {paused && <div className="text-[11px] text-content-3">Paused</div>}
                   <div className="md:hidden text-[12px] text-content-3 truncate">{it.subName} · {cadenceLabel(it)}</div>
                 </div>
@@ -424,8 +424,8 @@ function AllRecurring({ items, annual, canEdit, onOpen, onEdit }: {
                   : cadenceLabel(it)}
               </div>
               {canEdit && (
-                <div className="hidden md:flex justify-end">
-                  <button onClick={(e) => { e.stopPropagation(); onEdit(it); }} aria-label={`Edit ${it.label}`}
+                <div className="hidden md:flex justify-end relative z-10">
+                  <button onClick={() => onEdit(it)} aria-label={`Edit ${it.label}`}
                     className="h-8 px-3 rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Edit</button>
                 </div>
               )}
