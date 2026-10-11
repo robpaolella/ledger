@@ -11,7 +11,7 @@ import { VendorAvatar } from '../components/primitives';
 import Button from '../components/Button';
 import FilterPopover from '../components/FilterPopover';
 import DateRangePopover, { type DateRangeValue } from '../components/DateRangePopover';
-import { EMPTY_FILTER, filterDraftCount, type FilterDraft, type FilterSection } from '../components/filterModel';
+import { EMPTY_FILTER, filterDraftCount, filtersToParams, type FilterDraft, type FilterSection } from '../components/filterModel';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
 import { formatMoney } from '@ledger/shared';
 import { timeAgo, todayYmd } from '../lib/formatters';
@@ -531,7 +531,7 @@ function AccountDetail() {
               );
             })
           )}
-          <Link to={`/transactions?accountId=${meta.accountId}`}
+          <Link to={`/transactions?${new URLSearchParams({ accountId: String(meta.accountId), ...Object.fromEntries(filtersToParams(search, date, applied)) })}`}
             className="flex items-center justify-center p-4 text-[13px] text-content-3 hover:text-content-2 border-t border-line">
             View all in Transactions
           </Link>
