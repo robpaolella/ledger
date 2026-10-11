@@ -192,3 +192,24 @@ Base: feature/platform-retheme (already recorded on #231)."
   shrink-0 quote / truncating middle structure as the empty-state message. Then rebuild,
   re-run `design.ts shots` into a fresh evidence folder (old one is stale), re-inspect the
   affected states, then step 5 critique.
+
+## Session 7 (approved; freeze in progress; read this first)
+- Fixed B's summary-line quote truncation (search kept as an object part, quotes shrink-0)
+  and a regression it caused; re-inspected every desktop state. itest.js stale-ref fixed;
+  all interactions pass in both versions at both widths.
+- Critique done: GPT-5.6 Terra, FIXES with one finding (View all link on no-transactions);
+  Robert kept it as today; brief amended, backlog line added. Recorded in decisions.md.
+- Robert's picks: 2 = b (controls on the card), 3 = b (summary line), 4 = "11 matching"
+  (applied in proto.js `countText`, both versions rebuilt). Version a dropped ("5. Okay to
+  drop A."). "6. Approved." All recorded in decisions.md. Open Design synced; no comments.
+- Step 8.1 done: all-version evidence (88 images, full matrix, manifest) copied to
+  `screenshots/all/` and committed. Those images match the inspected
+  `/tmp/design-review-iJjLwM/versions` set byte-for-byte except loading-spinner frames.
+- Next: step 8.2 onward. `cp versions/b.html index.html`, remove `versions/`, set
+  design.json `versions` to `{"approved":"index.html"}`; shots into
+  `/tmp/design-review-iJjLwM/approved`, inspect, copy to `screenshots/approved/`; offline
+  recheck of index.html; sync; finish decisions.md (Open items, Comments: none, Experiment:
+  none, approved manifest); remove host.html and HANDOFF.md before the PR (both are
+  working files); check staged diff for private data; ship (`docs(design): Account detail
+  transaction filters`, base feature/platform-retheme, Closes #231, Refs #213, attach
+  approved images); post `## Design PR` on #231. Don't merge.
