@@ -88,7 +88,7 @@ describe('net worth with liability balances', () => {
   it('history counts each date by the balance stored then: owed, then in credit', async () => {
     onlyCard('history');
     const { points } = await get<{ points: Point[] }>('/networth/history?range=1m');
-    const at = (d: string) => points.filter((p) => p.date <= d).at(-1)!;
+    const at = (d: string) => points.filter((p) => p.date <= d).pop()!;
     // Before the card's first snapshot it contributes nothing.
     expect(at(daysAgo(25))).toMatchObject({ netWorth: 1000, liability: 0 });
     expect(at(daysAgo(10))).toMatchObject({ netWorth: 500, liability: 500 });
