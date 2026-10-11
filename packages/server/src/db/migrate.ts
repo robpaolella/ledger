@@ -44,6 +44,7 @@ import { migrateCategoryFeedback } from './migrate-category-feedback.js';
 import { migrateAmazon } from './migrate-amazon.js';
 import { migrateDailySync } from './migrate-daily-sync.js';
 import { migrateNotificationPrefs } from './migrate-notification-prefs.js';
+import { migrateUncategorizedReviews } from './migrate-uncategorized-reviews.js';
 
 export function runMigrations(sqlite: Database.Database): void {
   migrateAccountOwners(sqlite);
@@ -95,4 +96,5 @@ export function runMigrations(sqlite: Database.Database): void {
   migrateTransferCategoryDedupe(sqlite); // last — folds a duplicate Transfers > Transfer onto the canonical row
   enforceTransferBudgetExclusion(sqlite); // invariant: transfers are never budgeted
   migrateSavingsRetire(sqlite);         // fold the retired Savings section into Transfers
+  migrateUncategorizedReviews(sqlite);  // after linking + category folds — every uncategorized txn has an open Review item
 }
