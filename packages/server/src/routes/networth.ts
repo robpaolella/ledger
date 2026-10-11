@@ -80,7 +80,9 @@ router.get('/summary', (_req: Request, res: Response) => {
     for (const a of accountList) {
       if (a.classification === 'liquid') liquidTotal += a.balance;
       else if (a.classification === 'investment') investmentTotal += a.balance;
-      else if (a.classification === 'liability') liabilityTotal += Math.abs(a.balance);
+      // Stored sign: owed is negative, a credit is positive. liabilityTotal is
+      // the amount owed, so a card in credit reduces it (and raises net worth).
+      else if (a.classification === 'liability') liabilityTotal -= a.balance;
     }
 
     // Assets
@@ -257,7 +259,7 @@ router.get('/history', (req: Request, res: Response) => {
         const cls = classOf.get(id);
         if (cls === 'liquid') liquid += bal;
         else if (cls === 'investment') investment += bal;
-        else if (cls === 'liability') liability += Math.abs(bal);
+        else if (cls === 'liability') liability -= bal; // amount owed; a credit reduces it
       }
       let physical = 0;
       for (const a of assetRows) {
