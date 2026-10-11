@@ -1,4 +1,4 @@
-# Handoff: design #231 (Account detail filters), 2026-10-11 (second handoff)
+# Handoff: design #231 (Account detail filters), 2026-10-11 (third handoff)
 
 Delete this file before the design PR.
 
@@ -51,6 +51,76 @@ No new decisions this session; nothing is waiting on Robert.
 - Reference images: `/tmp/ledger-evidence-J4PXt4/tx-dark-390.png` (Transactions phone
   toolbar), `txfilter-dark-{390,1440}.png`, `txdate-dark-{390,1440}.png`.
 
+## Learned in session 3 (step 4 research done, no files written yet)
+Session 3 read everything below again and planned the build; nothing was built. Read these
+notes instead of re-reading the components.
+- Precedent to copy: `design/104-settings/index.html` (two `<style>` blocks: the app CSS,
+  then a ~5 KB prototype block with `#proto-bar` (sticky, `--proto-bar: 48px`, dashed
+  warning border), focus-visible rings, `.sr-only`). Its script: `VERSION` const, `ui`
+  state, `render()`, `renderBar()` with State/Theme selects, `syncUrl()` sets
+  `?state&theme` and `data-state`/`data-theme`, `setTheme()` toggles `dark` on `<html>`,
+  one delegated `click` handler on `[data-act]`. Its shell puts the sidebar
+  `position:absolute;top:0;bottom:0` inside `#root{position:relative}` and the phone
+  app bar `sticky` with `top:var(--proto-bar)`, so the bar doesn't cover them. Do the same
+  (the captured aside is `fixed top-0`, which the proto bar would cover).
+- Sticky tops under the proto bar: page header `top: calc(var(--proto-bar) + 56px)` on
+  phones, `var(--proto-bar)` on desktop; phone popovers (`fixed inset-x-4`) top
+  `calc(var(--proto-bar) + 80px)` and max-height reduced by `--proto-bar`. Use a small
+  prototype class instead of the `top-20`/`md:top-12` utilities.
+- Phone vs desktop: re-render on `matchMedia('(max-width: 767px)')` change (104 does this);
+  the static parts (sidebar, chart) use the captured `desktop-only`/`mobile-only` markup.
+  Balance chart SVG is width-specific: take the 1078-px one from page-light-1440 and the
+  332-px one from page-light-390, show each with desktop-only/mobile-only.
+- On phones today's page has **no** page-header row; the "Filters" link sits in the app
+  bar's `#mobile-bar-actions`. Both versions remove it (a: toolbar row; b: in the card).
+  PageHeader phone row classes (no `left`, not stacked): `sticky top-14 md:top-0 z-20 -mt-4
+  md:-mt-7 -mx-4 md:-mx-8 px-4 md:px-8 py-3 md:py-4 mb-5 md:mb-6 bg-bg border-b border-line
+  flex items-center justify-between gap-3`, right div `flex items-center gap-2 flex-wrap
+  w-full shrink-0 justify-end [&>*]:shrink-0`.
+- Account rows keep the Account-detail look (category emoji + label), not Transactions'
+  CategoryTag dot. Desktop row and phone ListRow markup are verbatim in page-light-1440 /
+  page-light-390 (14 rows each). Avatar initials: `color-mix(in srgb, var(--c-*) 16%,
+  transparent)` with `color: var(--c-*)` (the capture has resolved rgb; use the token).
+- Sample data: `/tmp/ledger-evidence-J4PXt4/txns.json` = all 330 rows of this account as
+  `[date, merchant, amount, group, sub, type, logo]` (2026-02-01 to 2026-10-10; 105
+  merchants, Walmart 23 … ; categories Groceries 91, Dining 73, Personal Supplies 23,
+  Fuel 19, Hobby 16, Loan Auto 11, Credit Card Payment 9 (transfer, amount -350 shows
+  "+$350.00" muted), 8 rows "Groceries +1" are splits: filter them as Groceries).
+  Logos: `logos/vendor-N.webp` (34 files, 720 KB) matching the `/uploads/vendor-N.webp`
+  paths: inline as data URIs. `cats.json` = 57 categories `[id, group, sub, type]` in 16
+  groups (incl. Income, Transfers) for the panel's Categories tab. Plan: embed all 330 rows
+  and filter them for real in the prototype (date presets relative to 2026-10-11, so
+  "Last month" = Sep 2026); flag a few rows deterministically as needs-review for Other.
+  Pick the `filtered` state's two categories so the count lands under 14 and the
+  `many-matches` amount filter so it lands over 14; compute, don't hand-write, counts.
+- Category emoji: own entry, else group's, else 🏷️ (RAW map in `lib/categoryMeta.ts`
+  lines 45–78; colour always the group's token, unknown groups via `fallbackToken` hash
+  over the 9 `c-*` tokens).
+- Ported recipes, all read: FilterPopover header (Filters | search "Search
+  categories…" | "N filters selected"), nav, checklist with Select all + group rows, Amount
+  (Greater than/Less than/Equal to/Between + Type Debits only/Credits only), Merchants with
+  counts, Other "Needs review only" + its help line, right-hand selected summary with
+  per-section Clear and remove buttons, footer Clear | Cancel Apply. DateRangePopover:
+  trigger `border-2` primary when open/active, "Date Range" title, presets All time, This
+  month, Last month, This quarter, Last quarter, This year, Last year, Year to date (click
+  applies and closes), Start/End date fields MM/DD/YYYY, footer Clear | Cancel Apply.
+  Date trigger label: "Date" when all time, else the preset label or "Sep 1 – Sep 30".
+  Filters button: outline sm (`buttonClasses`), active = `border-primary`, badge
+  `min-w-5 h-5 px-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold`.
+  Desktop search: icon button, opens a field `w-[clamp(9rem,10vw,15rem)]` with close ×,
+  Escape clears. Phone toolbar: 44-px search field "Search transactions" with clear × and
+  filter icon (badge `min-w-4 h-4 text-[10px]`), then a row with Date chip and Clear.
+  Clear text button: `h-10 px-2.5 text-primary font-semibold text-sm`, shown whenever
+  search, date or filters are active. Popover: click-away backdrop, Escape closes, focus
+  moves in and returns to the trigger, only one open at a time.
+- Loading state plan: spinner (`Spinner` ring, `border-line border-t-primary`) replaces the
+  rows, count line hidden, controls stay usable. Error: "Couldn't load transactions." +
+  secondary "Try again" in the list area.
+- Build approach: a Python script outside the repo (e.g. `/tmp/design-231-build/build.py`)
+  that assembles `versions/a.html` and `versions/b.html` from the captured stylesheet,
+  the adapted shell, inlined logos and data, and one shared prototype script with a
+  `VERSION` constant. Don't commit the script.
+
 ## Next step
 Step 4: build the versions (plan unchanged):
 - a: controls in the page header (desktop: Clear, search icon, Date, Filters with count badge,
@@ -65,6 +135,10 @@ Step 4: build the versions (plan unchanged):
 - States: default, filters-open, date-open, filtered, many-matches, no-match, search-no-match,
   no-transactions, long-names, loading, error. Themes light, dark.
 Then step 5 (critique) and step 6 (show Robert in Open Design).
+Still nothing is waiting on Robert. One wording point to raise with him at step 6: the
+confirmed count "9 of 9 matching" when every match fits could read as just "9 matching".
+`/tmp/ledger-evidence-J4PXt4` must still exist; if it's gone, step 3's capture has to be
+re-run (commands in brief.md).
 
 ## Next session
 Claude Opus 5.5, medium thinking (`node /git/maestro/routing/route.ts role design-feature`).
