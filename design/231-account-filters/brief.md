@@ -49,7 +49,7 @@ Walmart, Target, Whole Foods, Costco, Publix, Chipotle). Synthetic demo-seed dat
 | many-matches | Amount filter matching more than 14 | 14 rows; "14 of 37 matching" | Link opens Transactions with the same filters |
 | no-match | Filters match nothing | "No transactions match these filters" + Clear | Clear restores the default list |
 | search-no-match | Search typed, nothing found | `Nothing matches “{search}”` (long search text truncates) | Clear restores the default list |
-| no-transactions | Account with no transactions | "No transactions for this account." No search/date/filter controls | — |
+| no-transactions | Account with no transactions | "No transactions for this account." No search/date/filter controls | "View all in Transactions" stays, as today (Robert, 2026-10-11) |
 | long-names | Long merchant and category names | 40+ character merchant, long category | Truncate with ellipsis, amounts never wrap |
 | loading | List reloading after Apply | Existing spinner treatment in the list area | Controls stay usable |
 | error | List failed to load | "Couldn't load transactions." + "Try again" | Retry reloads |

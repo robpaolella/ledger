@@ -42,8 +42,26 @@ state × theme × width evidence: [manifest](screenshots/approved/manifest.json)
 Record actual counts, inspected image paths, offline proof and any capture limitations.
 
 ## Independent critique
-Maker and other-company reviewer, exact launch command, evidence path, verdict and date.
-Numbered findings, fixes and the single fixes-only re-check. Retain the final verdict.
+- Maker: claude-bridge/claude-opus-5-5 (Anthropic). Reviewer: GPT-5.6 Terra (OpenAI),
+  medium thinking, routed with `node /git/maestro/routing/route.ts role checker --maker
+  claude-bridge/claude-opus-5-5`.
+- Command: `node /git/maestro/scripts/read-only-run.ts "$PWD" review
+  /git/maestro/skills/design-feature/reviewer-prompt.md "Design: <folder>. Images and
+  manifest: /tmp/design-review-GbpdIg/versions. Maker: claude-bridge/claude-opus-5-5." --
+  --model openai/gpt-5.6-terra --thinking medium` (exit 0, folder unchanged).
+- Evidence: 88 of 88 images (2 versions × 11 states × 2 themes × 390/1440), all opened by
+  the reviewer and by the maker.
+- Verdict 2026-10-11: FIXES, one finding.
+  1. The no-transactions state keeps "View all in Transactions", while the brief's state
+     table lists its actions as "—". The live page shows the link in every state today,
+     and #213 does not ask to remove it, so the prototypes kept it. Taken to Robert before
+     showing the designs. Resolved 2026-10-11: Robert agreed to keep the link as today
+     ("1. Agreed."); brief.md's state table now says so, and hiding it on empty accounts
+     went to backlog.md as a separate change. No version changed, so no re-check needed.
+- Not findings: the reviewer chose neither version, noted B's summary line costs vertical
+  space on phone and A's controls sit apart from the list on desktop (both are decision
+  1–2 trade-offs), and that behaviour (focus, Escape, URL state, retry) needs browser
+  verification in the build.
 
 ## Comments and changes
 | ID / source | Version / element | Original note | Agreed change and verification | Resolved |
