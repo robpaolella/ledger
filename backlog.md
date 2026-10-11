@@ -28,3 +28,4 @@
 - Recurring phone calendar: the "Today" button only changes the month, so it does not re-select today after another day is tapped (found in #258, not in the approved design).
 - Keyboard focus rings never show on `ListRow` and the desktop transaction rows: `outline-none` cancels `focus-visible:outline-2` under Tailwind 4 (add `focus-visible:outline-solid`); #261 fixed it only for the phone Transactions rows (found in #261).
 - On phones the merchant picker's list is cramped inside a short bottom sheet (Bulk edit, about two rows show above the footer); consider letting the sheet grow while it's open (found in #261).
+- Desktop Transactions: pressing Escape while the bulk Edit transactions panel is open leaves bulk mode but keeps the panel open with 0 selected; Escape should close the panel first (found in #261).
