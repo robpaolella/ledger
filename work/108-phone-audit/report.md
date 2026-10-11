@@ -101,7 +101,7 @@ Admin and member passes were light only. Dark was checked for the owner.
 
 Dark theme: no finding is dark-only. Colours, contrast and surfaces hold up in every dark
 capture. In the tables, "both" means the issue was seen in a light and a dark capture;
-"light" means it was seen in light only, and since the layout code is the same in both
+"light" or "dark" means it was seen in that theme only, and since the layout code is the same in both
 themes, none of those is expected to differ in dark.
 
 ## Findings
@@ -119,7 +119,7 @@ Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 and F15 ha
 | F09 | Review → row detail | owner | both | Right drawer about 365px wide with a 25px sliver of scrim; same drawer-vs-sheet issue as F07 | 4 | Annoying | `owner-light-reviews-detail.png` |
 | F10 | Recurring → item detail | owner | light | Full-width right drawer | 4 | Polish | `owner-light-rec-detail.png` |
 | F11 | Review → Approve all confirm | owner | light | Centred pop-up with 40px buttons; the checklist wants a sheet | 4 | Polish | `owner-light-reviews-approveall.png` |
-| F12 | Transactions, Reports → Filters and Date popovers | owner | light | Fit the screen, but the tab strip ("Categories / Merchants / Accounts / Amou…") and the date presets ("This month / Last month / Th…") are clipped with no cue that they scroll; filter rows are 36px, presets 43px | 1, 3 | Annoying | `owner-light-tx-filters.png`, `owner-light-tx-date.png` |
+| F12 | Transactions, Reports → Filters and Date popovers | owner | light | Fit the screen, but the tab strip ("Categories / Merchants / Accounts / Amou…") and the date presets ("This month / Last month / Th…") are clipped with no cue that they scroll; filter rows are 36px, presets 43px | 1, 3 | Annoying | `owner-light-tx-filters.png`, `owner-dark-tx-filters.png`, `owner-light-tx-date.png` |
 | F13 | Transactions → Sort menu | owner | light | Menu touches the left screen edge and its corner is cut off; rows 40px | 1, 4 | Polish | `owner-light-tx-sort.png` |
 | F14 | Add transaction → Account dropdown | owner | light | The open list is wider than its field and is cut off at the right edge ("Jane's Emergency Savin…"); long account names are also cut in the field itself | 3, 4 | Annoying | `owner-light-tx-add-category.png` |
 
@@ -158,7 +158,7 @@ Screenshots are in `screenshots/` (light unless noted). IDs F01–F06 and F15 ha
 | F32 | Settings → Merchants → Edit merchant | owner | light | Three footer buttons fill the width; "Save changes" touches the right screen edge | 6 | Polish | `owner-light-set-merch-edit.png` |
 | F33 | Import → CSV → step 2 Map columns | owner | light | "Next" is top right of the card and scrolls away; sign-convention options wrap and clip. Steps 1–3 labels wrap | 2, 6 | Annoying | `owner-light-import-csv-map.png` |
 | F34 | Import → CSV → step 1 | owner | light | "Drop your CSV file here" is desktop wording (no drag and drop on a phone); reads "1 transactions" on step 3 (see F03) | – | Polish | `owner-light-import-csv.png` |
-| F35 | Transactions → bulk edit | all | dark | There is no way to select several rows on a phone, so bulk edit can't be reached. Desktop has an "Edit multiple" button; the phone toolbar has no equivalent. The checklist says heavy tasks may be simpler, not missing | – | Annoying | `owner-light-transactions.png` (phone), `owner-dark-tx-1440.png` (desktop) |
+| F35 | Transactions → bulk edit | all | both | There is no way to select several rows on a phone, so bulk edit can't be reached. Desktop has an "Edit multiple" button; the phone toolbar has no equivalent. The checklist says heavy tasks may be simpler, not missing | – | Annoying | `owner-light-transactions.png` (phone), `owner-dark-tx-1440.png` (desktop) |
 
 ### Area 5. Rows, truncation and numbers (checklist 3 and 7)
 
@@ -195,7 +195,7 @@ Files in `screenshots/` that show pages and states that pass (the other files ba
 `owner-light-set-user-member.png`, `admin-light-set-user-john.png`,
 `admin-light-set-user-member.png`, `owner-light-nav-drawer.png`,
 `owner-dark-nav-drawer.png`, `owner-light-notifications.png`,
-`owner-dark-notifications.png`, `owner-dark-tx-add.png`, `owner-dark-tx-filters.png`,
+`owner-dark-notifications.png`, `owner-dark-tx-add.png`,
 `owner-dark-tx-split.png` (shows F01 in dark), `owner-dark-budget-future-month.png`,
 `owner-light-inv-accounts.png`.
 
@@ -233,7 +233,8 @@ Each area can be designed or built on its own. Suggested order is by how much ea
 - Not reachable on sample data: first-run Setup, the sign-in two-step code step.
 - Not captured: dark CSV import (the browser's file picker would not accept the upload in
   the second capture session; the F03 overlap does not depend on theme), the dark rule
-  prompt, dark two-step setup, CSV duplicate and transfer flags (they need a second
+  prompt, the dark Manual import sheet (the same sheet component as the dark Add transaction
+  sheet that was captured), dark two-step setup, CSV duplicate and transfer flags (they need a second
   upload of the same file), and the Settings panel load-failure state (offline mode).
   Each is the same layout as a state shown in the other theme or in the same area.
 - Sizes below 44px are measured from the page; app-bar icon buttons (40px) are allowed
