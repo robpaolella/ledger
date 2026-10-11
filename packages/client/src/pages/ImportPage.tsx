@@ -344,7 +344,7 @@ export default function ImportPage() {
           })),
         }),
       });
-      addToast(`Import complete — ${valid.length} transactions imported`);
+      addToast(`Import complete — ${valid.length} ${valid.length === 1 ? 'transaction' : 'transactions'} imported`);
       navigate('/transactions');
     } catch (err) {
       // Show the server's own message (a refusal names the row) rather than a generic failure.
@@ -432,7 +432,7 @@ export default function ImportPage() {
           holdingsUpdates: [],
         }),
       });
-      addToast(`Imported ${res.data.transactionsImported} transactions`);
+      addToast(`Imported ${res.data.transactionsImported} ${res.data.transactionsImported === 1 ? 'transaction' : 'transactions'}`);
       const r = fetchedRange;
       navigate(r ? `/transactions?startDate=${r.startDate}&endDate=${r.endDate}` : '/transactions');
     } catch {
@@ -492,7 +492,7 @@ export default function ImportPage() {
           {csvStep === 2 && parseResult && (
             <CsvMap
               fileName={file?.name ?? 'Uploaded file'}
-              metaLine={`${accounts.find((a) => a.id === csvAccountId)?.name ?? ''} · ${allRows.length.toLocaleString()} transactions · Format: ${parseResult.detectedFormat}`}
+              metaLine={`${accounts.find((a) => a.id === csvAccountId)?.name ?? ''} · ${allRows.length.toLocaleString()} ${allRows.length === 1 ? 'transaction' : 'transactions'} · Format: ${parseResult.detectedFormat}`}
               headers={parseResult.headers}
               mapping={mapping}
               onMappingChange={(field, idx) => setMapping((m) => ({ ...m, [field]: idx }))}
