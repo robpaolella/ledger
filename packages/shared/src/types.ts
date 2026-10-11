@@ -365,6 +365,8 @@ export interface RecurringItemWithMeta extends RecurringItem {
   merchantLogoUrl: string | null;
   accountName: string | null;
   accountLastFour: string | null;
+  accountLogoUrl: string | null;
+  accountColor: string | null;
 }
 
 // One dated occurrence of a recurring item within a month.
@@ -382,6 +384,8 @@ export interface RecurringOccurrence {
   categoryType: CategoryType;
   accountName: string | null;
   accountLastFour: string | null;
+  accountLogoUrl: string | null;
+  accountColor: string | null;
   frequency: RecurrenceKind;
   status: 'paid' | 'due' | 'upcoming';
 }
