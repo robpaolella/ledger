@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
-import { formatMoney } from '@ledger/shared';
+import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
 import { Money } from '../components/Money';
+import UncategorizedNotice from '../components/UncategorizedNotice';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
@@ -17,7 +18,7 @@ import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/
 interface Bucket { label: string; start: string; end: string }
 interface PeriodCat { categoryId: number; groupName: string; subName: string; type: string; sortOrder: number; total: number; buckets: number[] }
 interface PeriodKpis { income: number; expenses: number; net: number; savingsRate: number; incomeSourceCount: number }
-interface PeriodData { range: { start: string; end: string; months: number }; buckets: Bucket[]; categories: PeriodCat[]; kpis: PeriodKpis }
+interface PeriodData { range: { start: string; end: string; months: number }; buckets: Bucket[]; categories: PeriodCat[]; kpis: PeriodKpis; uncategorized: UncategorizedBucketed }
 interface Txn {
   id: number; date: string; description: string | null; amount: number;
   merchant: { id: number; name: string; logoUrl?: string | null } | null;
@@ -98,10 +99,13 @@ function reportFilterParams(f: FilterDraft): URLSearchParams {
 
 // ── Derived group/section model from the flat per-category list ──
 interface GroupAgg { groupName: string; type: string; total: number; buckets: number[]; subs: PeriodCat[] }
-interface Section { key: string; label: string; total: number; groups: GroupAgg[] }
+interface Section { key: string; label: string; total: number; groups: GroupAgg[]; unc: number[] }
 
-function buildSections(cats: PeriodCat[], nBuckets: number): Record<string, Section> {
+// Uncategorized money counts toward its side's total (money out under Expenses, money in
+// under Income) but has no group, so it rides along as per-bucket amounts in `unc`.
+function buildSections(cats: PeriodCat[], nBuckets: number, unc: UncategorizedBucketed): Record<string, Section> {
   const mk = (key: string, label: string, type: string): Section => {
+    const uncBuckets = Array.from({ length: nBuckets }, (_, i) => (type === 'income' ? unc.buckets[i]?.moneyIn : unc.buckets[i]?.moneyOut) ?? 0);
     const groupMap = new Map<string, GroupAgg>();
     for (const c of cats.filter((x) => x.type === type)) {
       let g = groupMap.get(c.groupName);
@@ -112,7 +116,7 @@ function buildSections(cats: PeriodCat[], nBuckets: number): Record<string, Sect
     }
     const groups = Array.from(groupMap.values()).sort((a, b) => b.total - a.total);
     groups.forEach((g) => g.subs.sort((a, b) => b.total - a.total));
-    return { key, label, type, total: groups.reduce((s, g) => s + g.total, 0), groups } as Section;
+    return { key, label, type, total: groups.reduce((s, g) => s + g.total, 0) + uncBuckets.reduce((a, b) => a + b, 0), groups, unc: uncBuckets } as Section;
   };
   return { income: mk('income', 'Income', 'income'), expenses: mk('expenses', 'Expenses', 'expense') };
 }
@@ -147,6 +151,7 @@ export default function ReportsPage() {
   const [hoverLine, setHoverLine] = useState<string | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [flowHover, setFlowHover] = useState<number | null>(null);
+  const [showUnc, setShowUnc] = useState(true); // Trends: the Uncategorized chip shows/hides its line
 
   // Measure the flow-bar so segments can take integer-pixel widths — fixed gap
   // + fractional widths otherwise anti-aliases each gap to a different device px.
@@ -243,7 +248,7 @@ export default function ReportsPage() {
 
   const buckets = report?.buckets ?? [];
   const nB = buckets.length;
-  const sections = useMemo(() => (report ? buildSections(report.categories, nB) : null), [report, nB]);
+  const sections = useMemo(() => (report ? buildSections(report.categories, nB, report.uncategorized) : null), [report, nB]);
 
   // Focused group object (drill target).
   const focusObj = (() => {
@@ -282,7 +287,7 @@ export default function ReportsPage() {
 
   // ── FLOW BAR (where the period's income went: Saved, top expense groups, Other) ──
   const expGroups = sections.expenses.groups;
-  const flowSegs: { name: string; color: string; emoji: string; amount: number; pct: number; drill: string | null }[] = [];
+  const flowSegs: { name: string; color: string; emoji: string; amount: number; pct: number; drill: string | null; striped?: boolean }[] = [];
   // Focused: shares of the group total. Unfocused: where the period's income went —
   // Saved (the Net card's figure) first, then the expense groups. With nothing saved
   // (rounded Net not above $0) there is no Saved segment and the bar is expenses only,
@@ -300,6 +305,7 @@ export default function ReportsPage() {
       top.forEach((g) => flowSegs.push({ name: g.groupName, color: groupColorVar('expense', g.groupName), emoji: getCategoryEmoji(g.groupName), amount: g.total, pct: g.total / flowDenom, drill: g.groupName }));
       const otherAmt = expGroups.slice(6).reduce((s, g) => s + g.total, 0);
       if (otherAmt > 0) flowSegs.push({ name: 'Other', color: 'var(--text-3)', emoji: '📦', amount: otherAmt, pct: otherAmt / flowDenom, drill: null });
+      if (report.uncategorized.moneyOut > 0) flowSegs.push({ name: 'Uncategorized', color: 'var(--text-3)', emoji: '', amount: report.uncategorized.moneyOut, pct: report.uncategorized.moneyOut / flowDenom, drill: null, striped: true });
     }
   }
   const flowDenomLabel = focusObj ? focusObj.group.groupName : savedAmt > 0 ? `Income ${dollars(k.income)}` : `Spent ${dollars(k.expenses)}`;
@@ -329,8 +335,14 @@ export default function ReportsPage() {
   const isCum = chartMode === 'cumulative';
   const seriesOf = (arr: number[]) => (isCum ? cum(arr) : arr);
   const withTotal = trendGroups.map((g) => ({ ...g, total: g.buckets.reduce((a, b) => a + b, 0), vals: seriesOf(g.buckets) })).sort((a, b) => b.total - a.total);
-  const totalRaw = buckets.map((_, i) => trendGroups.reduce((s, g) => s + (g.buckets[i] || 0), 0));
+  // Uncategorized money on the side being charted (not while drilled into a group).
+  const uncRaw = focusObj ? [] : sections[trendType === 'income' ? 'income' : 'expenses'].unc;
+  const uncTotal = uncRaw.reduce((a, b) => a + b, 0);
+  const hasUnc = uncTotal > 0;
+  const totalRaw = buckets.map((_, i) => trendGroups.reduce((s, g) => s + (g.buckets[i] || 0), 0) + (uncRaw[i] || 0));
   const totalVals = seriesOf(totalRaw);
+  const uncVals = seriesOf(uncRaw);
+  const uncShown = hasUnc && showUnc;
   const grandTotal = totalRaw.reduce((a, b) => a + b, 0);
   const TOPN = 4;
   const rest = focusObj ? [] : withTotal.slice(TOPN);
@@ -394,12 +406,14 @@ export default function ReportsPage() {
   interface TLSub { key: string; name: string; emoji: string; cells: number[]; peak: number; total: number }
   interface TLRowIn { key: string; gkey: string; name: string; emoji: string; color: string; leaf: boolean; buckets: number[]; total: number; drill: string | null; subs: TLSub[] }
   interface TLRow { key: string; gkey: string; name: string; emoji: string; color: string; leaf: boolean; cells: number[]; peak: number; total: number; drill: string | null; subs: TLSub[] }
-  interface TLSec { label: string; total: number; collapsed: boolean; toggle: () => void; subtotals: number[]; rows: TLRow[] }
-  const buildTL = (label: string, total: number, rows: TLRowIn[]): TLSec => {
+  interface TLSec { label: string; total: number; collapsed: boolean; toggle: () => void; subtotals: number[]; rows: TLRow[]; unc: { cells: number[]; peak: number; total: number } | null }
+  const buildTL = (label: string, total: number, rows: TLRowIn[], unc: number[] = []): TLSec => {
     const meta = secMeta(label);
     const subtotals = new Array(nB).fill(0);
     rows.forEach((r) => r.buckets.forEach((v, i) => { subtotals[i] += v; }));
-    return { label, total, ...meta, subtotals, rows: rows.map((r) => ({ key: r.key, gkey: r.gkey, name: r.name, emoji: r.emoji, color: r.color, leaf: r.leaf, cells: r.buckets, peak: Math.max(...r.buckets, 0), total: r.total, drill: r.drill, subs: r.subs })) };
+    unc.forEach((v, i) => { subtotals[i] += v; });
+    const uncSum = unc.reduce((a, b) => a + b, 0);
+    return { label, total, ...meta, subtotals, unc: uncSum > 0 ? { cells: unc, peak: Math.max(...unc, 0), total: uncSum } : null, rows: rows.map((r) => ({ key: r.key, gkey: r.gkey, name: r.name, emoji: r.emoji, color: r.color, leaf: r.leaf, cells: r.buckets, peak: Math.max(...r.buckets, 0), total: r.total, drill: r.drill, subs: r.subs })) };
   };
   let timelineSecs: TLSec[];
   if (focusObj) {
@@ -412,7 +426,7 @@ export default function ReportsPage() {
         key: g.groupName, gkey: gkeyOf(sec.label, g.groupName), name: g.groupName, emoji: getCategoryEmoji(g.groupName), color: groupColorVar(typeOfSection(sk), g.groupName), leaf: false, buckets: g.buckets, total: g.total,
         drill: g.subs.length > 0 ? g.groupName : null,
         subs: g.subs.length > 0 ? g.subs.map((s) => ({ key: `s${s.categoryId}`, name: s.subName, emoji: getCategoryEmoji(s.subName, g.groupName), cells: s.buckets, peak: Math.max(...s.buckets, 0), total: s.total })) : [],
-      })));
+      })), sec.unc);
     });
   }
   const trendColMin = nB > 8 ? 62 : 78;
@@ -536,6 +550,8 @@ export default function ReportsPage() {
         ))}
       </div>
 
+      <UncategorizedNotice totals={report.uncategorized} from={range.start} to={range.end} className="mb-[22px]" />
+
       {/* REPORT AREA */}
       <div className="border border-line rounded-card bg-surface shadow-sm mb-[22px]" style={{ padding: '20px 26px 22px' }}>
         <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
@@ -562,11 +578,11 @@ export default function ReportsPage() {
                 renders at an identical device-pixel width — no anti-alias unevenness. */}
             <div ref={flowBarRef} className="relative flex mb-4" style={{ height: 22, columnGap: flowGapCss }}>
               {flowSegs.map((s, i) => (
-                <div key={i} onClick={() => s.drill && drillTo(s.drill)} onMouseEnter={() => setFlowHover(i)} onMouseLeave={() => setFlowHover((h) => (h === i ? null : h))} className="relative"
-                  style={{ ...(flowWidthsCss.length ? { width: flowWidthsCss[i], flex: 'none' } : { flexGrow: Math.max(0, s.pct), flexBasis: 0, minWidth: 0 }), background: s.color, borderRadius: i === 0 ? '6px 0 0 6px' : i === flowSegs.length - 1 ? '0 6px 6px 0' : '0', cursor: s.drill ? 'pointer' : 'default', filter: flowHover === i ? 'brightness(1.12)' : 'none', transform: flowHover === i ? 'scaleY(1.28)' : 'scaleY(1)', zIndex: flowHover === i ? 3 : 1, transition: 'transform .12s ease, filter .12s ease' }}>
+                <div key={i} onClick={() => s.drill && drillTo(s.drill)} onMouseEnter={() => setFlowHover(i)} onMouseLeave={() => setFlowHover((h) => (h === i ? null : h))} className={`relative${s.striped ? ' uncategorized-hatch-bar' : ''}`}
+                  style={{ ...(flowWidthsCss.length ? { width: flowWidthsCss[i], flex: 'none' } : { flexGrow: Math.max(0, s.pct), flexBasis: 0, minWidth: 0 }), ...(s.striped ? {} : { background: s.color }), borderRadius: i === 0 ? '6px 0 0 6px' : i === flowSegs.length - 1 ? '0 6px 6px 0' : '0', cursor: s.drill ? 'pointer' : 'default', filter: flowHover === i ? 'brightness(1.12)' : 'none', transform: flowHover === i ? 'scaleY(1.28)' : 'scaleY(1)', zIndex: flowHover === i ? 3 : 1, transition: 'transform .12s ease, filter .12s ease' }}>
                   {flowHover === i && (
                     <div className="absolute whitespace-nowrap bg-elevated border border-line-strong rounded-[10px] shadow-md" style={{ bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%) scaleY(0.781)', transformOrigin: 'bottom center', pointerEvents: 'none', padding: '8px 11px', zIndex: 10 }}>
-                      <div className="flex items-center gap-2 text-[13px] font-bold mb-0.5"><span className="text-sm leading-none">{s.emoji}</span>{s.name}</div>
+                      <div className="flex items-center gap-2 text-[13px] font-bold mb-0.5">{s.striped ? <span className="uncategorized-hatch w-3.5 h-3.5 rounded-[4px] border border-line-strong" aria-hidden="true" /> : <span className="text-sm leading-none">{s.emoji}</span>}{s.name}</div>
                       <div className="text-[13px] text-content-2 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</div>
                     </div>
                   )}
@@ -576,7 +592,7 @@ export default function ReportsPage() {
             <div className="flex flex-wrap gap-x-[22px] gap-y-3.5">
               {flowSegs.map((s, i) => (
                 <div key={i} onClick={() => s.drill && drillTo(s.drill)} className="flex items-center gap-2 text-[13px]" style={{ cursor: s.drill ? 'pointer' : 'default' }}>
-                  <span className="text-sm leading-none">{s.emoji}</span>
+                  {s.striped ? <span className="uncategorized-hatch shrink-0 w-3.5 h-3.5 rounded-[4px] border border-line-strong" aria-hidden="true" /> : <span className="text-sm leading-none">{s.emoji}</span>}
                   <span className="font-semibold">{s.name}</span>
                   <span className="text-content-3 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</span>
                 </div>
@@ -597,9 +613,10 @@ export default function ReportsPage() {
                     <polyline points={ptsOf(c.vals)} onClick={() => (focusObj ? isoToggle(c.key, false)() : drillTo(c.name))} onMouseEnter={() => setHoverLine(c.key)} onMouseLeave={() => setHoverLine(null)} fill="none" stroke="transparent" strokeWidth="16" style={{ cursor: 'pointer' }} />
                   </g>
                 ); })}
+                {uncShown && <polyline points={ptsOf(uncVals)} fill="none" stroke="var(--text-3)" strokeWidth="2.5" strokeDasharray="7 6" opacity={emph ? 0.1 : 1} strokeLinecap="round" strokeLinejoin="round" />}
                 <polyline points={ptsOf(totalVals)} fill="none" stroke="var(--text)" strokeWidth="3.5" opacity={emph && emph !== '__total' ? 0.25 : 1} strokeLinecap="round" strokeLinejoin="round" />
                 <polyline points={ptsOf(totalVals)} onClick={() => setIsolate(null)} onMouseEnter={() => setHoverLine('__total')} onMouseLeave={() => setHoverLine(null)} fill="none" stroke="transparent" strokeWidth="16" style={{ cursor: 'pointer' }} />
-                {hovering && [{ y: yOf(totalVals[hoverIdx!]), color: 'var(--text)' }, ...visible.filter((c) => !(emph && emph !== c.key)).map((c) => ({ y: yOf(c.vals[hoverIdx!]), color: c.color }))].map((d, i) => (
+                {hovering && [{ y: yOf(totalVals[hoverIdx!]), color: 'var(--text)' }, ...visible.filter((c) => !(emph && emph !== c.key)).map((c) => ({ y: yOf(c.vals[hoverIdx!]), color: c.color })), ...(uncShown && !emph ? [{ y: yOf(uncVals[hoverIdx!]), color: 'var(--text-3)' }] : [])].map((d, i) => (
                   <circle key={i} cx={hoverX} cy={d.y.toFixed(1)} r="4" fill={d.color} stroke="var(--surface)" strokeWidth="2" />
                 ))}
                 {/* A polyline with a single point draws nothing — mark each series with a dot. */}
@@ -615,9 +632,9 @@ export default function ReportsPage() {
               {hovering && (
                 <div className="absolute bg-elevated border border-line-strong rounded-[11px] shadow-md" style={{ top: 6, left: `${(xOf(hoverIdx!) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', padding: '11px 13px', minWidth: 168, zIndex: 5 }}>
                   <div className="text-[12px] font-bold text-content-2 mb-2">{buckets[hoverIdx!].label}</div>
-                  {[{ name: totalName, color: 'var(--text)', value: totalVals[hoverIdx!], weight: 700 }, ...visible.filter((c) => !(emph && emph !== c.key)).map((c) => ({ name: c.name, color: c.color, value: c.vals[hoverIdx!], weight: 500 }))].map((r, i) => (
+                  {[{ name: totalName, color: 'var(--text)', value: totalVals[hoverIdx!], weight: 700 }, ...visible.filter((c) => !(emph && emph !== c.key)).map((c) => ({ name: c.name, color: c.color, value: c.vals[hoverIdx!], weight: 500 })), ...(uncShown && !emph ? [{ name: 'Uncategorized', color: '', value: uncVals[hoverIdx!], weight: 500 }] : [])].map((r, i) => (
                     <div key={i} className="flex items-center gap-2.5 py-0.5 text-[13px]">
-                      <span className="w-2.5 h-2.5 shrink-0 rounded-[2px]" style={{ background: r.color }} />
+                      <span className={`w-2.5 h-2.5 shrink-0 rounded-[2px]${r.color ? '' : ' uncategorized-hatch'}`} style={r.color ? { background: r.color } : undefined} />
                       <span className="flex-1 text-content-2 truncate" style={{ fontWeight: r.weight }}>{r.name}</span>
                       <span className="font-bold tabular-nums">{dollars(r.value)}</span>
                     </div>
@@ -634,6 +651,13 @@ export default function ReportsPage() {
                   <span className="text-[13px] font-bold text-content-3 tabular-nums">{l.total}</span>
                 </div>
               ))}
+              {hasUnc && (
+                <button type="button" aria-pressed={showUnc} onClick={() => setShowUnc((v) => !v)} className="inline-flex items-center gap-2 h-[34px] px-3 rounded-full cursor-pointer" style={{ border: '1px dashed var(--line-strong)', background: 'var(--surface-2)', opacity: showUnc && !(emph) ? 1 : 0.4 }}>
+                  <span className="uncategorized-hatch w-2.5 h-2.5 shrink-0 rounded-[3px] border border-line-strong" aria-hidden="true" />
+                  <span className="text-[13px] font-semibold">Uncategorized</span>
+                  <span className="text-[13px] font-bold text-content-3 tabular-nums">{dollars(uncTotal)}</span>
+                </button>
+              )}
               {rest.length > 0 && (
                 <button onClick={() => { if (showAll) setIsolate(null); setShowAll((s) => !s); }} className="inline-flex items-center gap-1.5 h-[34px] px-3.5 rounded-full text-[13px] font-bold text-primary" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)' }}>
                   {showAll ? 'Show fewer' : `+${rest.length} more`}
@@ -756,6 +780,17 @@ export default function ReportsPage() {
                     </div>
                     );
                   })}
+                  {!sec.collapsed && sec.unc && (
+                    <div className="flex items-center border-b border-line" style={{ padding: '13px 26px' }}>
+                      <span className="w-[214px] shrink-0 flex items-center gap-2 min-w-0">
+                        <span className="shrink-0 w-5 -ml-0.5" />
+                        <span className="uncategorized-hatch shrink-0 w-3.5 h-3.5 rounded-[4px] border border-line-strong" aria-hidden="true" />
+                        <span className="font-semibold text-sm text-content-2 truncate">Uncategorized</span>
+                      </span>
+                      {sec.unc.cells.map((v, i) => <span key={i} className="text-right text-sm tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === sec.unc!.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === sec.unc!.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
+                      <span className="w-[104px] shrink-0 text-right font-bold text-sm tabular-nums">{dollars(sec.unc.total)}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
