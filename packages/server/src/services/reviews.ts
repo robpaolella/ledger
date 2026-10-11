@@ -110,12 +110,29 @@ export function flagReview(
   }
 }
 
-/** Resolve an open review (mark reviewed / unflag) + set needs_review=0. No-op if none open. */
+/** True if the transaction is uncategorized (see `isUncategorizedSql`). */
+export function isUncategorized(sqlite: Database.Database, txnId: number): boolean {
+  return !!sqlite.prepare(`SELECT 1 FROM transactions t WHERE t.id = ? AND ${isUncategorizedSql('t')}`).get(txnId);
+}
+
+/**
+ * Resolve an open review (mark reviewed / unflag) + set needs_review=0. No-op if none open.
+ * Never closes the item of an uncategorized transaction: it stays open (needs_review
+ * re-synced to the row) and this returns false, so Review always lists them.
+ */
 export function resolveReview(
   sqlite: Database.Database,
   opts: { txnId: number; resolvedBy?: number | null },
-): void {
+): boolean {
   const { txnId, resolvedBy = null } = opts;
+  if (isUncategorized(sqlite, txnId)) {
+    sqlite.prepare(`
+      UPDATE transactions SET needs_review = EXISTS (
+        SELECT 1 FROM transaction_reviews WHERE transaction_id = ? AND status = 'open'
+      ) WHERE id = ?
+    `).run(txnId, txnId);
+    return false;
+  }
   const prior = sqlite.prepare(
     'SELECT assignee_id FROM transaction_reviews WHERE transaction_id = ? AND status = \'open\'',
   ).get(txnId) as { assignee_id: number | null } | undefined;
@@ -131,6 +148,7 @@ export function resolveReview(
   if (res.changes > 0 && prior?.assignee_id != null) {
     syncReviewNotification(sqlite, prior.assignee_id, { ping: false });
   }
+  return true;
 }
 
 /** Reopen a resolved review (status back to open) + needs_review=1. */
