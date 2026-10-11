@@ -189,7 +189,7 @@ Money colours follow the money rules in `PRODUCT.md`: show transaction amounts w
 
 ### Categorical colours
 
-Nine hues with shared chroma, brighter in dark mode so they stay readable: `--c-teal`, `--c-green`, `--c-blue`, `--c-indigo`, `--c-violet`, `--c-fuchsia`, `--c-rose`, `--c-orange`, `--c-amber`. They colour charts, avatars, tags and other category-like marks. Colour a category through `getCategoryColor()` / `getCategoryColorHex()`, never a hard-coded value. Never rely on colour alone to tell categories apart; the name or label is always visible too.
+Nine hues with shared chroma, brighter in dark mode so they stay readable: `--c-teal`, `--c-green`, `--c-blue`, `--c-indigo`, `--c-violet`, `--c-fuchsia`, `--c-rose`, `--c-orange`, `--c-amber`. They colour charts, avatars, tags and other category-like marks. Colour a category through `getCategoryColorVar()` / `getCategoryColorHex()` (`lib/categoryMeta.ts`), never a hard-coded value. Never rely on colour alone to tell categories apart; the name or label is always visible too.
 
 ### Owner tags
 
@@ -197,9 +197,9 @@ Numbered tokens `--owner-1` to `--owner-6` tint the account-owner tags, plus `--
 
 ### Older token names
 
-Existing components still use older names (`--bg-card`, `--text-primary`, `--color-positive`, `--btn-primary-bg`, `--badge-*`, `--bg-inline-*`, `--toggle-*`, and so on). `index.css` points almost all of them at a core token above, so they follow the theme automatically. In new work, use the core tokens. Tinted badges and inline messages are built by mixing a core token into the surface (`color-mix`), which is why they work in both themes without separate values.
+Some components still use a few older names: `--bg-hover`, `--text-primary`, `--text-body`, `--text-secondary`, `--text-muted`, `--color-positive`, `--color-negative`, `--color-warning` and `--btn-ghost-text`. `index.css` points each of them at a core token above, so they follow the theme automatically. In new work, use the core tokens. Tinted fills such as badges and inline messages are built by mixing a core token into the surface (`color-mix`), which is why they work in both themes without separate values.
 
-A few tokens keep fixed values that do not swap with the core set: `--bg-modal` (the one scrim for every modal, sheet and panel), `--bg-zebra`, and the dark navigation and hero values (`--nav-*`, `--hero-gradient-*`). Use `var(--bg-modal)` for any scrim; do not invent another.
+One token keeps fixed values that do not swap with the core set: `--bg-modal`, the one scrim for every modal, sheet and panel. Use `var(--bg-modal)` for any scrim; do not invent another.
 
 ## Typography
 

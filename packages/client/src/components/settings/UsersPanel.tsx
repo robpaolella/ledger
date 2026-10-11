@@ -141,7 +141,6 @@ interface DeletePreview {
   soleOwnedAccounts: { id: number; name: string; lastFour: string | null; type: string; classification: string }[];
   coOwnedAccounts: { id: number; name: string; lastFour: string | null; remainingOwners: string[] }[];
   personalConnections: number;
-  payCyclesOwned: number;
   availableOwners: { id: number; displayName: string }[];
 }
 

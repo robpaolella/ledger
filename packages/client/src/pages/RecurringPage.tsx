@@ -35,7 +35,7 @@ interface ROcc {
 }
 interface Flow { total: number; paid: number; remaining: number }
 interface MonthView { month: string; occurrences: ROcc[]; income: Flow; expense: Flow; net: number }
-interface Cat { id: number; group_name: string; sub_name: string; type: string; recurring_budget_mode?: string | null }
+interface Cat { id: number; group_name: string; sub_name: string; type: string }
 interface Acct { id: number; name: string; last_four: string | null; owner: string; owners?: { displayName: string }[]; isShared?: boolean }
 
 const DAY_MS = 86_400_000;

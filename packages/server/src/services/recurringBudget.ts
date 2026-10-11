@@ -44,9 +44,9 @@ function cadenceOf(freq_kind: string, interval: number | null, months_json: stri
 
 /**
  * Per-category recurring total for `month` ('YYYY-MM') — the sum of each active
- * recurring item's per-occurrence amount × its occurrences in the month. Used to
- * overlay the budget (floor in 'set' mode, added in 'add' mode). Single source of
- * truth shared by /recurring/budget-floors and /budgets/summary.
+ * recurring item's per-occurrence amount × its occurrences in the month. Used as
+ * the budget's floor. Single source of truth shared by /recurring/budget-floors
+ * and /budgets/summary.
  */
 export function getRecurringFloors(month: string): Map<number, RecurringFloor> {
   const [year, mon] = month.split('-').map(Number);

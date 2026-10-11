@@ -201,8 +201,9 @@ router.delete('/connections/:id', requirePermission('simplefin.manage'), (req: R
   }
 });
 
-// GET /api/simplefin/connections/:id/accounts
-router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
+// POST /api/simplefin/connections/:id/accounts — lists the connection's accounts.
+// POST, not GET, because it also removes links to inactive accounts.
+router.post('/connections/:id/accounts', async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const userId = req.user!.userId;
@@ -255,7 +256,7 @@ router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
 
     res.json({ data });
   } catch (err: unknown) {
-    console.error('GET /simplefin/connections/:id/accounts error:', err);
+    console.error('POST /simplefin/connections/:id/accounts error:', err);
     res.status(500).json({ error: (err instanceof Error ? err.message : 'Failed to fetch SimpleFIN accounts') });
   }
 });
