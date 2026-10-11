@@ -168,13 +168,15 @@ export default function RecurringPage() {
   const groups = useMemo(() => {
     const occ = monthView?.occurrences ?? [];
     const of = (s: ROcc['status']) => occ.filter((o) => o.status === s);
-    const netOf = (list: ROcc[]) => list.reduce((sum, o) => sum + (o.type === 'income' ? o.amount : -o.amount), 0);
+    // Money in and bills are totalled separately, never netted against each other.
+    const sumOf = (list: ROcc[], t: ROcc['type']) => list.filter((o) => o.type === t).reduce((sum, o) => sum + flow(o.amount, o.type), 0);
+    const has = (list: ROcc[], t: ROcc['type']) => list.some((o) => o.type === t);
     return [
       { key: 'due', title: 'Due soon', dot: 'var(--warning)', list: of('due') },
       { key: 'upcoming', title: 'Upcoming', dot: 'var(--primary)', list: of('upcoming') },
       // 'paid' only means the due date has passed; nothing checks a transaction.
       { key: 'paid', title: 'Due date passed', dot: 'var(--text-3)', list: of('paid') },
-    ].filter((g) => g.list.length > 0).map((g) => ({ ...g, net: netOf(g.list) }));
+    ].filter((g) => g.list.length > 0).map((g) => ({ ...g, hasIncome: has(g.list, 'income'), hasBills: has(g.list, 'expense'), income: sumOf(g.list, 'income'), bills: sumOf(g.list, 'expense') }));
   }, [monthView]);
 
   const annual = useMemo(() => {
@@ -284,13 +286,17 @@ export default function RecurringPage() {
               <div className="flex flex-col gap-4">
                 {groups.map((g) => (
                   <div key={g.key} className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-line">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 md:px-5 py-3 border-b border-line">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full" style={{ background: g.dot }} />
                         <span className="font-bold text-sm">{g.title}</span>
                         <span className="text-[12px] text-content-3">{g.list.length} item{g.list.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <Money amount={-g.net} className="font-bold text-sm" />
+                      <div className="flex items-baseline gap-1.5 text-sm whitespace-nowrap">
+                        {g.hasIncome && <><Money amount={g.income} showZero className="font-bold" /><span className="text-[12px] text-content-3">in</span></>}
+                        {g.hasIncome && g.hasBills && <span className="text-content-3">·</span>}
+                        {g.hasBills && <><Money amount={g.bills} showZero className="font-bold" /><span className="text-[12px] text-content-3">bills</span></>}
+                      </div>
                     </div>
                     {g.list.map(occRow)}
                   </div>
