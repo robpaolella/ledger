@@ -6,7 +6,7 @@ import { sanitize, sanitizeString } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 import { findOrCreateMerchant } from '../db/merchants.js';
-import { resolveReview, openReviewAssignees, syncReviewNotification } from '../services/reviews.js';
+import { resolveReview, openReviewAssignees, syncReviewNotification, ensureUncategorizedReviews } from '../services/reviews.js';
 import { checkBudgetExceededForMonths } from '../services/budgetAlerts.js';
 import { recordCategoryFeedback } from '../services/feedback.js';
 import { validateSplits, saveSplits, resolveLegMerchantId } from '../services/splits.js';
@@ -758,16 +758,19 @@ router.post('/:id/transfer-link', requirePermission('transactions.edit'), (req: 
 
     sqlite.transaction(() => {
       // Free either leg from an existing link first — a row belongs to one transfer.
-      sqlite.prepare(`
+      const freed = sqlite.prepare(`
         UPDATE transfer_links SET status = 'rejected', unlinked_at = datetime('now')
         WHERE status = 'linked' AND (from_transaction_id IN (?, ?) OR to_transaction_id IN (?, ?))
-      `).run(out.id, inc.id, out.id, inc.id);
+        RETURNING from_transaction_id AS f, to_transaction_id AS t
+      `).all(out.id, inc.id, out.id, inc.id) as { f: number; t: number }[];
       sqlite.prepare(`
         INSERT INTO transfer_links (from_transaction_id, to_transaction_id, amount, confidence, linked_by, status)
         VALUES (?, ?, ?, 1.0, 'manual', 'linked')
         ON CONFLICT(from_transaction_id, to_transaction_id) DO UPDATE SET
           status = 'linked', linked_by = 'manual', confidence = 1.0, unlinked_at = NULL
       `).run(out.id, inc.id, Math.abs(out.amount));
+      // A former partner left on its own and uncategorized goes back to Review.
+      ensureUncategorizedReviews(sqlite, freed.flatMap((l) => [l.f, l.t]));
     })();
     res.status(201).json({ data: { fromTransactionId: out.id, toTransactionId: inc.id } });
   } catch (err) {
@@ -781,12 +784,18 @@ router.post('/:id/transfer-link', requirePermission('transactions.edit'), (req: 
 router.delete('/:id/transfer-link', requirePermission('transactions.edit'), (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const out = sqlite.prepare(`
-      UPDATE transfer_links SET status = 'rejected', unlinked_at = datetime('now')
-      WHERE status = 'linked' AND (from_transaction_id = ? OR to_transaction_id = ?)
-    `).run(id, id);
-    if (out.changes === 0) return res.status(404).json({ error: 'No transfer link on this transaction' });
-    res.json({ data: { unlinked: out.changes } });
+    const freed = sqlite.transaction(() => {
+      const legs = sqlite.prepare(`
+        UPDATE transfer_links SET status = 'rejected', unlinked_at = datetime('now')
+        WHERE status = 'linked' AND (from_transaction_id = ? OR to_transaction_id = ?)
+        RETURNING from_transaction_id AS f, to_transaction_id AS t
+      `).all(id, id) as { f: number; t: number }[];
+      // Either leg left uncategorized goes back to Review.
+      ensureUncategorizedReviews(sqlite, legs.flatMap((l) => [l.f, l.t]));
+      return legs.length;
+    })();
+    if (freed === 0) return res.status(404).json({ error: 'No transfer link on this transaction' });
+    res.json({ data: { unlinked: freed } });
   } catch (err) {
     console.error('DELETE /transactions/:id/transfer-link error:', err);
     res.status(500).json({ error: 'Failed to unlink transfer' });
