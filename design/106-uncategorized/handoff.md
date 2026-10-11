@@ -1,35 +1,53 @@
-# Handoff: design session for #106 (covers #107), second handoff
+# Handoff: design session for #106 (covers #107), third handoff
 
 Temporary working note; delete it before the design PR.
 
 Next session: Claude Opus 5.5, medium thinking (`route.ts role design-feature`).
 Start command (new labelled tab in Ledger's herdr workspace):
 `cd /git/ledger-worktrees/docs-106-design-uncategorized && pi --model claude-bridge/claude-opus-5-5 --thinking medium`
-Prompt: "Read design/106-uncategorized/handoff.md, then continue /git/maestro/skills/design-feature/SKILL.md for #106 (covers #107) with Robert in this tab, from step 4's re-check and step 5's critique. Base: feature/platform-retheme. Do every remaining step yourself in this tab."
+Prompt: "Read design/106-uncategorized/handoff.md, then continue /git/maestro/skills/design-feature/SKILL.md for #106 (covers #107) with Robert in this tab, at step 6 (waiting on Robert's four decisions and Open Design comments). Base: feature/platform-retheme. Do every remaining step yourself in this tab."
 
-## Done
-- Step 1: branch `docs/106-design-uncategorized` from `origin/feature/platform-retheme`, worktree above, `## Dispatch` on #106, #106 `status:in-progress`. #107 already needs-design and blocked by #106.
-- Step 2: interview finished; Robert confirmed the brief ("Go ahead.", 2026-10-10). All decisions 1–8 are in `brief.md` (Confirmed decisions). Robert's words: 1 "for #1 A is fine"; 2 "A"; 3 "A"; 4 "Let's see both versions, yes."; 5 "A"; 6 "I thik Uncategorized still makes the most sense."; 7 "Agreed with A, but also put diagonal lines through it so that it's clear this is different."; 8 "Agreed, A."
-- Step 3: hosts captured on fresh sample data (launch 2026-10-10, owner John, source commit ef3032a), site cleaned (`cleanup` PASS), offline proof done (16 images, no network requests). Files (untracked, ~3.4 MB each): `host-budget.html`, `host-reports.html`, `host-trends.html` (Reports with Trends + Timeline open), `host-dashboard.html`. Reports captures were trimmed to the first 3 transaction days (else 9 MB). Launch command: `LEDGER_LOGODEV_TOKEN_FILE=/nonexistent node .pi/skills/verify-ledger/run.mjs launch "$EVIDENCE"`; captures `snapshot.mjs capture` × {budget, reports, trends, dashboard} × {light,dark} × {390,1440}; theme set with the sidebar `button[title="Dark mode"]`. Evidence: `/tmp/ledger-evidence-iibXYs` (may be gone; not needed again). Fill brief.md "Host snapshot and offline proof" from this.
-- Step 4: `versions/a.html` (row at end of each section) and `versions/b.html` (InlineNotification-style warning notice above the lists), `design.json` (9 states × light/dark). Untracked, ~1 MB each. They are built, not hand-edited: sources live outside git in `/git/ledger-worktrees/docs-106-design-uncategorized-build/` (`proto.js` behaviour, `proto.css`, `build.py`, captured page bodies). Rebuild with `cd …-build && python3 build.py /git/ledger-worktrees/docs-106-design-uncategorized/design/106-uncategorized/versions`.
-- First full shots: `node /git/maestro/scripts/design.ts shots <folder> --out /tmp/design-review-fmaqBD/v1` (72 images, all inspected for budget/reports/trends/dashboard). Looked right: totals, rail, striped slice and legend, dashed Trends line with rescaled axis, timeline row, Dashboard note.
+## Done (steps 1–5, step 6 started)
+- Steps 1–3: see brief.md (Confirmed decisions; Host snapshot and offline proof, now filled).
+- Step 4: versions `a` (row at end of each section) and `b` (InlineNotification-style notice
+  above the lists), untracked, in `versions/`. design.json now has 10 states (added
+  `reports-trends-large`). Built, never hand-edited: sources outside git in
+  `/git/ledger-worktrees/docs-106-design-uncategorized-build/` (`proto.js`, `proto.css`,
+  `build.py`, captured bodies). Rebuild:
+  `cd /git/ledger-worktrees/docs-106-design-uncategorized-build && python3 build.py /git/ledger-worktrees/docs-106-design-uncategorized/design/106-uncategorized/versions`
+- Offline proof for versions: `node /tmp/offline106/check.mjs <versions dir>` (headless Chrome,
+  network offline; checks markers, keyboard switcher, URL sync, phone tap heights, row focus).
+  Last run: zero non-local requests, taps ≥44px, 2px focus ring. Script is in /tmp (may vanish;
+  results are recorded in brief.md).
+- Step 5: critique done and recorded in decisions.md ("Independent critique"). Same-company
+  (Sonnet 5.5 high) under Robert's standing approval of 2026-10-08, openai out until Tue
+  2026-10-13 21:33 PDT — disclose in the PR (and a `## Robert's answers` comment per the route
+  note). Verdict FIXES (7); all fixed; one fixes-only re-check: 5 PASS, 2 were records-only
+  (questions not in open lists) plus a 43.5px nit; both fixed after the re-check, not re-run;
+  Robert was told. Evidence: `/tmp/design-review-2oC2Sh/{versions,fixes}`, reviews in
+  `critique.txt`, `recheck.txt` there.
+- backlog.md: added the pre-existing phone Reports amount cut-off line (uncommitted).
+- Step 6: `design.ts open` done; link given to Robert:
+  http://192.168.50.10:7456/projects/b8c674f3-b6b2-4b2e-9098-8747aca706f7/conversations/758d8b09-eda7-4bb2-941a-a0f0f975b3f2
+  Comment reminder already given once (don't repeat). Robert asked for and got a numbered
+  review checklist (A desktop → A phone → B → dark → comments → answer decisions).
+  The Open Design copy was synced by `open` before the final `.unc-note` min-height rebuild;
+  run `design.ts sync` before/with the next change.
 
-## Fixed after those shots, NOT yet re-checked (do this first)
-1. Phone Budget A card: dropped the "—" planned cell so "$412 · 6 transactions" no longer truncates.
-2. Dashboard Budget card "earned/spent" and "remaining" now also include the uncategorized money (selector rewritten in `updateEarnedSpent`). Verify the Budget page rail still updates too.
-3. Notice (B) on phones: the "Review them" link moves to its own line (`.unc-notice-action`).
-4. Sidebar now spans the full page height (`#root { position: relative }`).
-Re-run shots to a fresh folder and inspect: a-budget-*-390, a-dashboard-*, b-budget-*-1440, b-reports-*-390, a-budget-light-1440.
-
-## Notes for Robert / the critique
-- Version A on desktop Budget puts the expense Uncategorized row at the very bottom of a long list, which is far from view; B's notice sits at the top. That's the real trade-off to show him.
-- At typical size the striped slice in the Breakdown bar is a sliver (0.7%); it's obvious in `reports-large`.
-- Pre-existing, not this design: on a 390 px phone the Reports Category breakdown rows cut off their amounts (only % shows). Add to backlog.md as a follow-up; don't fix here.
-- The Dashboard Spending chart line isn't redrawn to include the extra money (prototype limitation; headline and note are right). Say so in decisions.md.
-- The notice reuses `InlineNotification` (warning). Update brief.md's "New kinds of element" line: only the striped grey is new.
-- PRODUCT.md should gain the sign rule for Uncategorized (decision 2); that's for #107/#114, note it in decisions.md Open items.
+## Waiting on Robert (also in brief.md "Open decisions" and decisions.md "Open items")
+1. Row (A) or notice (B) — recommended B.
+2. Uncategorized spend lowers section Remaining and fills bars — built yes, recommended yes.
+3. Trends chip show/hide its line or link to Review — built show/hide, recommended.
+4. Link colour `--warning` or `--primary` — recommended `--primary` for A rows and the
+   Dashboard note; B's notice keeps its warning tone.
 
 ## Next steps
-1. Re-check the four fixes (above), then fill brief.md's host section and `decisions.md` (copied template, still blank; maker `claude-bridge/claude-opus-5-5`, medium).
-2. Step 5 critique: `evidence=$(mktemp -d /tmp/design-review-XXXXXX)`; shots to `$evidence/versions`; `node /git/maestro/routing/route.ts role checker --maker claude-bridge/claude-opus-5-5`; `node /git/maestro/scripts/read-only-run.ts "$PWD" review /git/maestro/skills/design-feature/reviewer-prompt.md "Design: <folder>. Images and manifest: $evidence/versions. Maker: claude-bridge/claude-opus-5-5." -- <pi args from route>`. Run it blocking.
-3. Step 6: `design.ts open`, give Robert the link, ask decision by decision (here only one: row vs notice, plus anything the critique raises).
+1. When Robert answers or says "check": `node /git/maestro/scripts/design.ts comments "$folder"`,
+   record each in decisions.md (Comments and changes), edit `proto.js`/`proto.css`, rebuild,
+   reshoot affected states at both widths, `sync`, `resolve` addressed IDs.
+2. Record his pick per decision in decisions.md's table. If decision 4 changes link colour,
+   update proto.css `.unc-link` (and the A row chevron colour in `reportsSummary`).
+3. Before dropping a version, name what only it had and get his yes (step 6/8 rules).
+4. On "approved": step 8 (all-version shots → screenshots/all, index.html, approved shots,
+   delete host-*.html and this handoff, ship). Branch has diverged (2 own commits; base has 6 new) from
+   origin/feature/platform-retheme: run sync-branch before the PR.
