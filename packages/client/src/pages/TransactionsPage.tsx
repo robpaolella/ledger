@@ -2268,7 +2268,7 @@ export default function TransactionsPage() {
                       </div>
                     )}
 
-                    {canEdit && (
+                    {hasPermission('transactions.delete') && (
                       <ConfirmDeleteButton variant="block" onConfirm={deleteFromDetail}
                         label="Delete transaction" confirmLabel="Delete permanently?" />
                     )}
