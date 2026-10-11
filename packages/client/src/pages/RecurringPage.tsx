@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
 import { formatMoney } from '@ledger/shared';
-import { Money, Change } from '../components/Money';
+import { Money } from '../components/Money';
 import { getCategoryEmoji, getCategoryColorHex, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -154,7 +154,6 @@ export default function RecurringPage() {
   // ----- summary strip -----
   const inc = monthView?.income ?? { total: 0, paid: 0, remaining: 0 };
   const exp = monthView?.expense ?? { total: 0, paid: 0, remaining: 0 };
-  const net = monthView?.net ?? 0;
 
   const occByDay = useMemo(() => {
     const map = new Map<number, ROcc[]>();
@@ -173,7 +172,8 @@ export default function RecurringPage() {
     return [
       { key: 'due', title: 'Due soon', dot: 'var(--warning)', list: of('due') },
       { key: 'upcoming', title: 'Upcoming', dot: 'var(--primary)', list: of('upcoming') },
-      { key: 'paid', title: 'Paid', dot: 'var(--positive)', list: of('paid') },
+      // 'paid' only means the due date has passed; nothing checks a transaction.
+      { key: 'paid', title: 'Due date passed', dot: 'var(--text-3)', list: of('paid') },
     ].filter((g) => g.list.length > 0).map((g) => ({ ...g, net: netOf(g.list) }));
   }, [monthView]);
 
@@ -187,6 +187,7 @@ export default function RecurringPage() {
   // ---------- render helpers ----------
   const occRow = (o: ROcc) => {
     const color = getCategoryColorHex(o.groupName);
+    const dateColor = o.status === 'paid' ? 'var(--text)' : 'var(--warning)';
     return (
       <button key={`${o.itemId}-${o.date}`} onClick={() => { const it = items.find((i) => i.id === o.itemId); if (it) setPanel(it); }}
         className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-5 min-h-16 md:min-h-0 md:h-[58px] py-2 md:py-0 border-b border-line text-left hover:bg-surface-2/40 active:bg-surface-2">
@@ -199,7 +200,7 @@ export default function RecurringPage() {
           </div>
         </div>
         <div className="hidden md:block w-[92px] shrink-0">
-          <div className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</div>
+          <div className="text-[13px] font-semibold tabular-nums" style={{ color: dateColor }}>{dateChip(o.date)}</div>
           <div className="text-[11px] text-content-3">{relativeLabel(o.date, today)}</div>
         </div>
         <div className="flex-1 min-w-0 text-[13px] text-content-3 truncate hidden md:block">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</div>
@@ -209,7 +210,7 @@ export default function RecurringPage() {
         </div>
         <div className="md:w-[110px] shrink-0 text-right">
           <div className="font-bold text-[15px]"><Money amount={flow(o.amount, o.type)} /></div>
-          <div className="md:hidden text-[11.5px] tabular-nums mt-0.5"><span className="font-semibold" style={{ color: 'var(--warning)' }}>{dateChip(o.date)}</span><span className="text-content-3"> · {relativeLabel(o.date, today)}</span></div>
+          <div className="md:hidden text-[11.5px] tabular-nums mt-0.5"><span className="font-semibold" style={{ color: dateColor }}>{dateChip(o.date)}</span><span className="text-content-3"> · {relativeLabel(o.date, today)}</span></div>
         </div>
       </button>
     );
@@ -260,21 +261,16 @@ export default function RecurringPage() {
                   options={[{ value: 'list', label: 'List' }, { value: 'calendar', label: 'Calendar' }]} />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-line">
+            <div className="grid grid-cols-1 sm:grid-cols-2 border-t border-line">
               <div className="px-4 md:px-6 py-4 sm:border-r border-line">
                 <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} className="text-[15px] font-extrabold" /></div>
                 {bar(inc.paid, inc.total, 'var(--positive)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.paid)} received</span><span>{plain(inc.remaining)} remaining</span></div>
               </div>
-              <div className="px-4 md:px-6 py-4 sm:border-r border-line border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Expenses</span><Money amount={exp.total} className="text-[15px] font-extrabold" /></div>
+              <div className="px-4 md:px-6 py-4 border-line border-t sm:border-t-0">
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Bills</span><Money amount={exp.total} className="text-[15px] font-extrabold" /></div>
                 {bar(exp.paid, exp.total, 'var(--primary)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{plain(exp.paid)} paid</span><span>{plain(exp.remaining)} remaining</span></div>
-              </div>
-              <div className="px-4 md:px-6 py-4 border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Net</span><Change value={net} className="text-[15px] font-extrabold" /></div>
-                {bar(net >= 0 ? net : 0, Math.max(inc.total, 1), 'var(--positive)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.total)} in</span><span>{plain(exp.total)} out</span></div>
               </div>
             </div>
           </div>
