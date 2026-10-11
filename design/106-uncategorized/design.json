@@ -1,9 +1,11 @@
 {
-  "design_issue": 106,
+  "design_issue": 238,
   "covers": [
-    107
+    107,
+    234,
+    235
   ],
-  "revision": 1,
+  "revision": 2,
   "versions": {
     "approved": "index.html"
   },

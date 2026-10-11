@@ -1,8 +1,8 @@
 # Design: Uncategorized in totals
 
-- Design issue: #106
-- Revision: 1
-- Replaces: none
+- Design issue: #238 (original design issue #106)
+- Revision: 2
+- Replaces: revision 1 (design issue #106)
 - Source plan: retheme plan agreed 2026-10-08; build issue #107
 
 ## Job and audience
@@ -22,6 +22,9 @@ be picked, budgeted or edited.
 | Build issue | Part of this feature | Out of scope |
 | --- | --- | --- |
 | #107 | Server totals include uncategorized amounts exactly once (Budget summary, Reports period, Dashboard spending series). Every total that sums actual money includes it: Budget section Actual and Remaining and the side rail (earned/spent, remaining, bars), the Dashboard Budget card, Reports KPI cards (Income, Expenses, Net, Savings rate), the Breakdown bar and Trends total line, and the Dashboard Spending headline and this-month line; the line on Budget, Reports and the Spending card; every uncategorized transaction has an open Review item; Review opens filtered to the clicked period | Changing how transactions get categorized; renaming "Uncategorized" elsewhere in the app; the Budget Year view (it shows plans only, so the line doesn't apply) |
+| #233 | Review period link: Review opens filtered to the clicked period. Existing page, no design coverage needed | |
+| #234 | Budget screen, the Dashboard Budget card and the Dashboard Spending note, as in `index.html` | Reports; the Budget Year view |
+| #235 | Reports screen: KPI cards, Breakdown bar, Trends line and chip, the notice and its filters (Q18: an account filter counts only that account's uncategorized; a category filter leaves uncategorized out) | Budget; Dashboard |
 
 ## Boundaries and visual authority
 - PRODUCT.md: Money rules (Storage, Display, Budget, Uncategorized; transfers stay out of
