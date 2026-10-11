@@ -137,7 +137,7 @@ export default function InvestmentsPage() {
   return (
     <div className="pb-16">
       {/* top bar */}
-      <PageHeader stackRight={false} title="Investments" left={<span className="text-sm font-semibold text-primary border-b-2 border-primary pb-0.5">Holdings</span>} right={accounts.length > 0 && (
+      <PageHeader stackRight={false} title="Investments" right={accounts.length > 0 && (
           <div className="relative">
             <button onClick={() => setFilterOpen((o) => !o)}
               className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface-2 border text-sm font-semibold text-content"
@@ -177,7 +177,7 @@ export default function InvestmentsPage() {
           <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden mb-6">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-[26px] pt-4 md:pt-[22px] pb-4 md:pb-[18px]">
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-[19px] font-extrabold tracking-tight">{tab === 'market' ? 'Backtested performance' : 'Portfolio allocation'}</span>
+                <span className="text-[19px] font-extrabold tracking-tight">{tab === 'market' ? 'Performance vs. the market' : 'Portfolio allocation'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 16v-4M12 8h.01" /></svg>
               </div>
               <div className="flex items-center gap-3.5">
