@@ -352,3 +352,15 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 .sidebar-card:hover {
   background: rgba(255,255,255,0.12);
 }
+
+/* Uncategorized: the striped grey that marks money with no category yet. */
+.uncategorized-hatch {
+  background:
+    repeating-linear-gradient(135deg, var(--text-3) 0 2px, transparent 2px 5px),
+    color-mix(in srgb, var(--text-3) 14%, var(--surface));
+}
+.uncategorized-hatch-bar {
+  background:
+    repeating-linear-gradient(135deg, var(--text-3) 0 3px, transparent 3px 7px),
+    color-mix(in srgb, var(--text-3) 30%, var(--surface));
+}
