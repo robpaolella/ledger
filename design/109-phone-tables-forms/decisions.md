@@ -39,7 +39,9 @@ Images and manifest: /tmp/design-review-2Wblzo/versions. Maker: claude-bridge/cl
 states × 2 themes × 2 widths), all opened by the reviewer. Verdict 2026-10-11: **FIXES**.
 
 1. The five maker-drafted wordings (listed below) need Robert's decision before he picks a
-   version. Fix: asked Robert as one numbered question; answer recorded under Comments and changes.
+   version. Fix: asked Robert (decisions 14–18); he agreed with every recommendation, so four
+   stay and the required-setup subtitle reverts to today's app wording. Recorded under
+   Comments and changes.
 2. The prototype's six-box code input lacked `TotpCodeInput`'s paste, Backspace and arrow-key
    behaviour (DESIGN.md "Six-box code input"). Fix: ported the same contract (auto-advance,
    multi-digit fill, paste from box 1, Backspace clears or moves back, Left/Right arrows,
@@ -65,7 +67,11 @@ Notes for the reviewer:
 ## Comments and changes
 | ID / source | Version / element | Original note | Agreed change and verification | Resolved |
 | --- | --- | --- | --- | --- |
-| <Open Design ID or herdr reference> | <target> | <note> | <result> | <date/status> |
+| herdr, decision 14 | All / bulk-delete sheet (phone) | "The 3 selected transactions ($142.50) will be removed from Ledger. You can't undo this." | Robert: "I agree with all of your wording" (2026-10-11). Kept. | 2026-10-11 |
+| herdr, decision 15 | All / twofa-required subtitle | Draft "Your household requires a second sign-in step for admins. Set it up to continue." | Robert agreed to use today's app wording: "Your administrator requires a second sign-in step for your account." Changed in all versions. | 2026-10-11 |
+| herdr, decision 16 | All / import-upload (phone) | "Choose your CSV file / Download it from your bank's website first." | Robert agreed. Kept. | 2026-10-11 |
+| herdr, decision 17 | All / merchant-edit merge row (phone) | "Move its 93 transactions to another merchant, then delete Larkspindle Finance." | Robert agreed. Kept. | 2026-10-11 |
+| herdr, decision 18 | All / Security two-factor card | "Scan a QR code…" becomes "Add Ledger to an authenticator app…" | Robert agreed. Kept. | 2026-10-11 |
 
 ## Experiment
 None, or Robert's permission, question, branch/preview, chosen behaviour, rejected
