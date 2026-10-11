@@ -136,7 +136,8 @@ export default function AccountsPage() {
   const groupTotals = useMemo(() => {
     const t: Record<string, number> = { liquid: 0, investment: 0, liability: 0 };
     for (const a of visibleAccounts) {
-      if (a.classification === 'liability') t.liability += Math.abs(a.balance);
+      // Amount owed: stored owed balances are negative, so a card in credit reduces it.
+      if (a.classification === 'liability') t.liability -= a.balance;
       else t[a.classification] = (t[a.classification] ?? 0) + a.balance;
     }
     return t;
@@ -338,7 +339,7 @@ export default function AccountsPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-bold text-[15px] tabular-nums">{balance(a.classification === 'liability' ? -Math.abs(a.balance) : a.balance)}</div>
+                      <div className="font-bold text-[15px] tabular-nums">{balance(a.balance)}</div>
                       {a.lastUpdated && <div className="text-[12px] text-content-3">{timeAgo(a.lastUpdated)}</div>}
                     </div>
                   </div>
