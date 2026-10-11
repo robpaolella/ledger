@@ -74,6 +74,11 @@ beforeAll(async () => {
   txn(acctA, '2026-06-08', -30);
   txn(acctA, '2026-07-09', 45);
 
+  // September: categorized spending and both directions of uncategorized on one day.
+  txn(acctA, '2026-09-14', 20, food);
+  txn(acctA, '2026-09-14', 7);
+  txn(acctB, '2026-09-14', -3);
+
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => { req.user = { userId: alex, username: 'alex', displayName: 'Alex', role: 'owner' }; next(); });
@@ -162,6 +167,21 @@ describe('Reports period', () => {
       { count: 1, moneyOut: 0, moneyIn: 30 },
       { count: 1, moneyOut: 45, moneyIn: 0 },
     ]);
+  });
+});
+
+describe('one day holding categorized spending and uncategorized money both ways', () => {
+  it('keeps money out and money in apart on every endpoint', async () => {
+    const sep = { count: 2, moneyOut: 7, moneyIn: 3 };
+    const budget = await get<Summary>('/budgets/summary?month=2026-09');
+    expect(budget.uncategorized).toEqual(sep);
+    expect(budget.totals).toMatchObject({ actualExpenses: 27, actualIncome: 3 });
+    const report = await get<Period>('/reports/period?start=2026-09-01&end=2026-09-30');
+    expect(report.uncategorized.buckets[1]).toEqual(sep);
+    expect(report.kpis).toMatchObject({ income: 3, expenses: 27 });
+    const series = await get<Series>('/dashboard/spending-series?month=2026-09');
+    expect(series.days.find((x) => x.day === 14)!.cumulative).toBe(27);
+    expect(series.uncategorized).toEqual(sep);
   });
 });
 
