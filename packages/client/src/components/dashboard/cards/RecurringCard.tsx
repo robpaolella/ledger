@@ -61,7 +61,7 @@ export default function RecurringCard({ dragHandleProps }: DashboardCardProps) {
   return (
     <DashboardCard
       title="Recurring"
-      subtitle={remaining != null ? <span className="text-[15px] font-semibold text-content-3 tabular-nums">{remaining > 0 ? `${formatMoney(remaining, { kind: 'balance', showZero: true }).text} left to pay` : 'Nothing due'}</span> : undefined}
+      subtitle={remaining != null ? <span className="text-[15px] font-semibold text-content-3 tabular-nums">{remaining > 0 ? `${formatMoney(remaining, { kind: 'balance' }).text} left to pay` : 'Nothing due'}</span> : undefined}
       headerRight={<CardHeaderControl small>This month</CardHeaderControl>}
       hideRightOnPhone
       dragHandleProps={dragHandleProps}

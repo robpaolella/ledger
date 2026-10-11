@@ -41,4 +41,11 @@ describe('over-budget alert wording', () => {
     expect(row.title).toBe('Over budget: Food: Groceries');
     expect(row.body).toBe("You've exceeded your Food: Groceries budget for May 2026 by $25.50.");
   });
+
+  it('keeps the month when a later overage refreshes the text', () => {
+    sqlite.prepare("UPDATE transactions SET amount = 150 WHERE description = 'Sample spend'").run();
+    mod.checkBudgetExceeded(sqlite, { month: '2026-05' });
+    const row = sqlite.prepare('SELECT body FROM notifications WHERE user_id = 1').get() as { body: string };
+    expect(row.body).toBe("You've exceeded your Food: Groceries budget for May 2026 by $50.00.");
+  });
 });
