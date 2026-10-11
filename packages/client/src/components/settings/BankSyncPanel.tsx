@@ -4,6 +4,7 @@ import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import ManualImportModal from '../ManualImportModal';
 import SimpleFinCard from './SimpleFinCard';
+import DailySyncCard from './banksync/DailySyncCard';
 import type { useSimpleFin } from './useSimpleFin';
 import type { Account, AccountOwner } from './AccountForm';
 import { PanelHeader, ICON } from './ui';
@@ -20,9 +21,9 @@ export default function BankSyncPanel({ sf, accounts, users, onAccountsChanged, 
   const [daily, setDaily] = useState<DailySyncInfo | null>(null);
   const [syncOpen, setSyncOpen] = useState(false);
 
-  // Only read to know whether daily sync is off (Paused wording); if it can't load, connections read as on.
+  // Feeds the Paused wording and the Daily sync card; if it can't load, connections read as on and the card is hidden.
   const loadDaily = useCallback(async () => {
-    try { setDaily((await apiFetch<{ data: DailySyncInfo }>('/simplefin/daily-sync')).data); } catch { setDaily(null); }
+    try { setDaily((await apiFetch<{ data: DailySyncInfo }>('/simplefin/daily-sync')).data); } catch { /* keep what's on screen; before the first load it stays null */ }
   }, []);
   useEffect(() => { loadDaily(); }, [loadDaily]);
 
@@ -47,6 +48,9 @@ export default function BankSyncPanel({ sf, accounts, users, onAccountsChanged, 
         onOpenAccount={onOpenAccount}
         onSyncNow={() => setSyncOpen(true)}
       />
+      {!sf.loading && !sf.loadFailed && (
+        <DailySyncCard daily={daily} hasConnections={sf.connections.length > 0} canManage={hasPermission('simplefin.manage')} onReload={async () => { await Promise.all([sf.reload({ quiet: true }), loadDaily()]); }} />
+      )}
       {syncOpen && <ManualImportModal onClose={() => setSyncOpen(false)} onImported={() => { onAccountsChanged(); sf.reload(); }} />}
     </div>
   );
