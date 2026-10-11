@@ -1,8 +1,8 @@
-# Design decisions: <feature>
+# Design decisions: Account detail transaction filters
 
-- Design issue: #<number>; covered build issues: <numbers or unsplit plan>
+- Design issue: #231; covered build issues: #213
 - Revision: 1; replaces: none (or merged folder/revision)
-- Maker: <provider/model and thinking level>
+- Maker: claude-bridge/claude-opus-5-5 (Anthropic), medium thinking
 
 ## Choice and approval
 Chosen version and why. When versions differed on more than one independent decision,
@@ -11,7 +11,18 @@ them, even if no single version had all of them:
 
 | # | Decision | Options (version) | Robert's pick and why |
 | --- | --- | --- | --- |
-| 1 | <e.g. how names show> | <a: ...; b: ...> | <pick, reference/date> |
+| 1 | Where the search, date and filter controls sit | a: page header (phone: sticky toolbar under the app bar, above the balance chart); b: Transactions card header (phone: inside the card, next to the list) | Pending (step 6) |
+| 2 | How active filters show | a: Filters badge, Date label and count line only; b: the same plus a summary line under the card header ("Dining/Eating Out, Fuel · Last month") with Clear | Pending (step 6) |
+| 3 | Count wording when every match fits | "11 of 11 matching" (both versions today) or "11 matching" | Pending (step 6) |
+
+Build details shared by both versions (not choices): the filter panel is Transactions'
+`FilterPopover` without the Accounts tab; the date control is `DateRangePopover`; on phones
+both popovers are fixed below the app bar as on Transactions. In version b the card clips
+its contents and is about 690 px wide, so on desktop its popovers anchor to the card's
+left edge and render outside the card, rather than right-anchored (an 820 px panel would
+run over the sidebar). Apply shows the existing spinner in the list area while the list
+reloads. No new kind of element: b's summary line reuses the card's row, text and
+text-button styles; Robert is asked about it as decision 2.
 
 Robert's exact confirmation and date/reference authorizing the
 PR. Design PR: use the linked PR on the design issue once created; the session adds

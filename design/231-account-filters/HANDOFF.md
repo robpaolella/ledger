@@ -170,3 +170,25 @@ Base: feature/platform-retheme (already recorded on #231)."
   vs "11 matching").
 - Previous tab w2V:tQ was closed (old session file
   `/home/agent/.pi/agent/sessions/--git-ledger-worktrees-docs-231-design-account-filters--/2026-10-11T07-28-43-850Z_01a129dd-2f49-762c-aeeb-36b6ebabd968.jsonl`).
+
+## Session 6 (checking by eye; read this first)
+- Fixed: sidebar rendered 155 px instead of 236 px (duplicate `style` attribute on the
+  captured aside). Fix is in `/tmp/design-231-build/build.py`; versions rebuilt.
+- Interactions verified in both versions at 1440 and 390 with `/tmp/design-231-build/itest.js`
+  (`CHROME_DEVTOOLS_AXI_SESSION=d231s6 npx -y chrome-devtools-axi eval "$(cat itest.js)"`):
+  panel opens with focus inside, Escape closes and returns focus to Filters; Apply shows the
+  spinner then "14 of 19 matching" + badge 1 + page Clear; date preset applies and returns
+  focus; two MM/DD/YYYY fields; View all toast lists the carried filters; Clear resets; search
+  filters live; no-match search message renders. No console errors.
+- design.json filled (231, covers [213], 11 states, light/dark). decisions.md: header, maker
+  and the three pending decisions + shared build details filled; rest awaits steps 5–6.
+- Full capture: `/tmp/design-review-tyv5Zv/versions` (88 images + manifest, from
+  `design.ts shots`), contact sheets in `/tmp/design-review-tyv5Zv/sheets` (`p-<state>.png` =
+  four phone shots; `d-<v>-<state>.png` = light+dark desktop). Inspected and fine: all 11 phone
+  sheets, desktop date-open (a, b) and filters-open (b). Not yet inspected: the other 19
+  desktop sheets.
+- One fix to make: in B's summary line, a long search loses its closing quote when it
+  truncates (`“Blue Bottle Coffee Roasters, Oakland …` with no `”`). Use the same
+  shrink-0 quote / truncating middle structure as the empty-state message. Then rebuild,
+  re-run `design.ts shots` into a fresh evidence folder (old one is stale), re-inspect the
+  affected states, then step 5 critique.

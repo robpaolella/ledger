@@ -1,11 +1,11 @@
 {
-  "design_issue": 1,
-  "covers": [],
+  "design_issue": 231,
+  "covers": [213],
   "revision": 1,
   "versions": {
     "a": "versions/a.html",
     "b": "versions/b.html"
   },
-  "states": ["normal", "empty", "loading", "error", "locked", "no-permission"],
-  "themes": ["default"]
+  "states": ["default", "filters-open", "date-open", "filtered", "many-matches", "no-match", "search-no-match", "no-transactions", "long-names", "loading", "error"],
+  "themes": ["light", "dark"]
 }
