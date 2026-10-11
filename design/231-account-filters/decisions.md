@@ -32,7 +32,8 @@ chat approval, a critique PASS and a closed/unmerged PR do not.
 ## Alternatives
 | Version | What differs / why rejected or chosen | Only this version had (lost) | Robert's OK to drop | Evidence |
 | --- | --- | --- | --- | --- |
-| a | <reason> | <features no kept version has, or none> | <his words, date/reference> | [All-version manifest](screenshots/all/manifest.json) and named images |
+| a | Controls in the page header; no summary line. Not chosen: Robert picked b on decisions 2 and 3 | Controls in the page header (on phones a toolbar pinned under the app bar while scrolling); a card with no summary row, so the list starts slightly higher | "5. Okay to drop A." (2026-10-11) | [All-version manifest](screenshots/all/manifest.json), `a-*` images |
+| b | Chosen: controls on the Transactions card, summary line under its header, "11 matching" | — | — | [All-version manifest](screenshots/all/manifest.json), `b-*` images |
 
 A version is removed, replaced or left out at freeze only after Robert confirms what it
 alone had can go.
