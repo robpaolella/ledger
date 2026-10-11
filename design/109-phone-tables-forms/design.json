@@ -1,0 +1,11 @@
+{
+  "design_issue": 1,
+  "covers": [],
+  "revision": 1,
+  "versions": {
+    "a": "versions/a.html",
+    "b": "versions/b.html"
+  },
+  "states": ["normal", "empty", "loading", "error", "locked", "no-permission"],
+  "themes": ["default"]
+}
