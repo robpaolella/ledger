@@ -637,7 +637,7 @@ function filterPopover(pos) {
     list += '</div>';
   }
   if (tab === 'Other') {
-    list += `<div class="py-2">${checkRow(d.needsReview, 'review', 'flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]', '<span class="flex-1">Needs review only</span>')}
+    list += `<div class="py-2">${checkRow(d.needsReview, 'review', 'flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]', '<span class="flex-1">To review only</span>')}
       <p class="px-1 pt-1 text-[13px] text-content-3 leading-snug">Transactions auto-categorized with low confidence, or left uncategorized on import.</p></div>`;
   }
   const section = (title, clearAct, rows) => `<div><div class="flex items-center justify-between mb-1.5"><span class="text-[13px] font-semibold text-content-3">${title}</span><button data-act="${clearAct}" class="text-[13px] font-semibold text-primary">Clear</button></div>${rows}</div>`;
@@ -650,7 +650,7 @@ function filterPopover(pos) {
     if (d.merchant.length) parts.push(section('Merchants', 'clr:merchant', d.merchant.map((m) => row(`<span class="flex-1 truncate">${esc(m)}</span>`, `mer:${m}`)).join('')));
     if (d.op) parts.push(section('Amount', 'clr:op', row(`<span class="flex-1 truncate">${esc(d.op === 'gt' ? `Greater than $${d.val || '0'}` : d.op === 'lt' ? `Less than $${d.val || '0'}` : d.op === 'eq' ? `Equal to $${d.val || '0'}` : `$${d.min || '0'} – $${d.max || '0'}`)}</span>`, 'clr:op')));
     if (d.type !== 'All') parts.push(section('Type', 'clr:type', row(`<span class="flex-1 truncate">${d.type === 'Expense' ? 'Debits only' : 'Credits only'}</span>`, 'clr:type')));
-    if (d.needsReview) parts.push(section('Review', 'clr:review', row('<span class="flex-1 truncate">Needs review only</span>', 'clr:review')));
+    if (d.needsReview) parts.push(section('Review', 'clr:review', row('<span class="flex-1 truncate">To review only</span>', 'clr:review')));
     summary = `<div class="flex flex-col gap-4">${parts.join('')}</div>`;
   }
   const empty = (msg) => `<div class="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">${msg}</div>`;
@@ -735,7 +735,7 @@ function activeSummary() {
   if (names.length) parts.push(names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more` : names.join(', '));
   if (d.op) parts.push(d.op === 'gt' ? `Over $${d.val || 0}` : d.op === 'lt' ? `Under $${d.val || 0}` : d.op === 'eq' ? `Exactly $${d.val || 0}` : `$${d.min || 0}–$${d.max || 0}`);
   if (d.type !== 'All') parts.push(d.type === 'Expense' ? 'Debits only' : 'Credits only');
-  if (d.needsReview) parts.push('Needs review');
+  if (d.needsReview) parts.push('To review');
   if (ui.date.preset !== 'all') parts.push(dateLabel(ui.date));
   if (ui.search.trim()) parts.push({ search: ui.search.trim() });
   return parts;

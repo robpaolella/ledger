@@ -81,6 +81,7 @@ byte-identical to the approved images. Limitation: in a prototype opened from `f
 | ID / source | Version / element | Original note | Agreed change and verification | Resolved |
 | --- | --- | --- | --- | --- |
 | — | — | No Open Design comments were left (checked after every sync, last 2026-10-11). Robert's choices came in herdr and are recorded above | — | — |
+| Base sync (#236) | Filter panel, Other tab; summary line | While syncing with `feature/platform-retheme` at freeze: #236 renamed the reused panel's "Needs review only" to "To review only" | Wording updated to match (panel row and selected list "To review only"; summary line "To review"), rebuilt from the builder; only those three strings changed. Not shown in any captured state: a re-shoot of all 44 matched the approved images byte for byte except loading spinner frames. Checked offline in the browser | 2026-10-11, done; to tell Robert in the PR |
 
 ## Experiment
 None. No real-site experiment was needed; no experiment code exists to reuse.
