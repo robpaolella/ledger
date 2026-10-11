@@ -31,7 +31,23 @@ state × theme × width evidence: [manifest](screenshots/approved/manifest.json)
 Record actual counts, inspected image paths, offline proof and any capture limitations.
 
 ## Independent critique
-Pending (step 5).
+Maker: claude-bridge/claude-opus-5-5 (Anthropic). Reviewer: openai/gpt-5.6-terra, medium
+thinking (`route.ts role checker`). Command: `node /git/maestro/scripts/read-only-run.ts
+<worktree> review /git/maestro/skills/design-feature/reviewer-prompt.md "Design: <folder>.
+Images and manifest: /tmp/design-review-2Wblzo/versions. Maker: claude-bridge/claude-opus-5-5."
+-- --model openai/gpt-5.6-terra --thinking medium`. Evidence: 312 images (3 versions × 26
+states × 2 themes × 2 widths), all opened by the reviewer. Verdict 2026-10-11: **FIXES**.
+
+1. The five maker-drafted wordings (listed below) need Robert's decision before he picks a
+   version. Fix: asked Robert as one numbered question; answer recorded under Comments and changes.
+2. The prototype's six-box code input lacked `TotpCodeInput`'s paste, Backspace and arrow-key
+   behaviour (DESIGN.md "Six-box code input"). Fix: ported the same contract (auto-advance,
+   multi-digit fill, paste from box 1, Backspace clears or moves back, Left/Right arrows,
+   select on focus; Verify enables only with six digits). Proof, offline file pages in headless
+   Chrome: every version × twofa-key 390, twofa-error 1440, twofa-required 390, all checks
+   passed, no page errors; full 312-page smoke and class checks re-run clean.
+
+Re-check (fixes only): pending.
 
 Notes for the reviewer:
 - The versions differ on one decision only: the 12-month pattern on phones for Budget Year
