@@ -1,7 +1,7 @@
 # Design decisions: Uncategorized in totals
 
-- Design issue: #106; covered build issues: #107
-- Revision: 1; replaces: none
+- Design issue: #238 (original design issue #106); covered build issues: #107, #234, #235
+- Revision: 2; replaces: revision 1 (design issue #106)
 - Maker: claude-bridge/claude-opus-5-5, medium thinking (two sessions; the second took over
   from step 4's re-check)
 
@@ -114,3 +114,15 @@ design). See Open items for what the prototype fakes.
 Merged folder/revision is the feature authority; DESIGN.md/live site govern site-wide
 look. Reconcile issues and paused branches in prep before marking ready. Without a
 conductor, the design session owns that follow-up. Later revisions use new issues/PRs.
+
+## Revision 2 (2026-10-11, design issue #238)
+Coverage only. #107 was split, so #234 (Budget and Dashboard) and #235 (Reports) now sit
+under this same approved design; #233 (Review period link) needs none. No visual or wording
+change: `index.html`, the states, themes and every screenshot are unchanged. Robert chose
+this route, Q21 "A" (2026-10-11, recorded on #234 and #235). His answers on #107
+(`## Robert's answers`, 2026-10-11) that apply to the covered screens:
+- **Q18 Reports filters** (account filter counts only that account's uncategorized;
+  category filter leaves uncategorized out): "Got it. I agree with your suggestion here."
+- **Q19 Budget Year view** (no notice; it shows plans only): "Fine by me."
+- **Q20 Mark reviewed on an uncategorized transaction** (the item stays open and asks the
+  person to pick a category first): "Agreed, go with A."
