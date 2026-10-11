@@ -189,7 +189,7 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
             )}
             {hasRows && (
               <button onClick={clearAll} className="bg-transparent border-none p-0 text-[13px] font-semibold text-content-3 hover:text-negative cursor-pointer transition-colors">
-                Clear All
+                Clear all
               </button>
             )}
           </div>
