@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/permissions.js';
 import { getRecurringFloors, effectiveBudgetedAmount } from '../services/recurringBudget.js';
 import { getStoredPlans, saveBudgetPlan } from '../services/budgetPlan.js';
 import { isValidMonth, toFinite, toId } from '../utils/validate.js';
+import { uncategorizedTotals } from '../services/reviews.js';
 
 const router = Router();
 
@@ -193,6 +194,9 @@ router.get('/summary', (req: Request, res: Response) => {
     `).all(...params) as { category_id: number; total: number }[];
     const actualMap = new Map(actuals.map((a) => [a.category_id, a.total]));
 
+    // Uncategorized money, by direction (positive stored = money out).
+    const uncategorized = uncategorizedTotals(sqlite, { start: startDate, end: endDate, owner: owner !== 'all' ? owner : undefined });
+
     // Build income summary (group_name = "Income")
     const incomeCategories = allCategories.filter((c) => c.type === 'income');
     const incomeRows = incomeCategories.map((c) => {
@@ -245,14 +249,15 @@ router.get('/summary', (req: Request, res: Response) => {
 
     // Totals
     const totalBudgetedIncome = incomeRows.reduce((s, r) => s + r.budgeted, 0);
-    const totalActualIncome = incomeRows.reduce((s, r) => s + r.actual, 0);
+    const totalActualIncome = incomeRows.reduce((s, r) => s + r.actual, 0) + uncategorized.moneyIn;
     const totalBudgetedExpenses = expenseGroups.reduce(
       (s, g) => s + g.subs.reduce((s2, sub) => s2 + sub.budgeted, 0), 0
     );
     const totalActualExpenses = expenseGroups.reduce(
       (s, g) => s + g.subs.reduce((s2, sub) => s2 + sub.actual, 0), 0
-    );
-    // Left to budget: planned income not yet allocated to expenses.
+    ) + uncategorized.moneyOut;
+    // Left to budget: planned income not yet allocated to expenses (plans only,
+    // so uncategorized money never changes it).
     const leftToBudget = totalBudgetedIncome - totalBudgetedExpenses;
 
     res.json({
@@ -266,6 +271,7 @@ router.get('/summary', (req: Request, res: Response) => {
           actualExpenses: totalActualExpenses,
           leftToBudget,
         },
+        uncategorized,
       },
     });
   } catch (err) {
