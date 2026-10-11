@@ -334,7 +334,7 @@ export default function AccountDetailPage() {
           <div className="flex flex-col gap-4 p-1">
             <div>
               <label className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
-              <CurrencyInput value={balanceInput} onChange={setBalanceInput} autoFocus allowNegative />
+              <CurrencyInput value={balanceInput} onChange={setBalanceInput} autoFocus allowNegative className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
               <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number. Enter a negative amount if the card is in credit.</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">
