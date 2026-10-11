@@ -145,6 +145,7 @@ export default function BudgetPage() {
   const [annualYear, setAnnualYear] = useState<number | null>(null); // year annualData was loaded for
   const [annualError, setAnnualError] = useState(false);
   const annualReq = useRef(0); // latest request wins when the year changes quickly
+  const shownYear = useRef<number | null>(null); // same as annualYear, readable inside loadAnnual
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [showUnbudgeted, setShowUnbudgeted] = useState<Record<string, boolean>>({});
@@ -173,10 +174,12 @@ export default function BudgetPage() {
       if (req !== annualReq.current) return;
       setAnnualData(res.data);
       setAnnualYear(selectedYear);
+      shownYear.current = selectedYear;
     } catch (e) {
       if (req !== annualReq.current) return;
       setAnnualError(true);
-      addToast(e instanceof Error ? e.message : 'Failed to load annual budget', 'error');
+      // With no table to show, the page's own "Try again" card says it; otherwise a toast does.
+      if (shownYear.current === selectedYear) addToast(e instanceof Error ? e.message : 'Failed to load annual budget', 'error');
     }
   }, [selectedYear, addToast]);
 
