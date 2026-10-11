@@ -2,6 +2,9 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { ImpCheckbox, VendorCell, CategoryCell, ConfidenceLabel, AmountText, DuplicateIcon, UnreadableAmount, type ImpCategory } from './cells';
 import type { ImpCsvRow } from './types';
+import { ListRow } from '../ListRow';
+import { Money } from '../Money';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function CsvReview({
   rows, setRows, selected, setSelected, categories, vendorOptions, merchantLogos, onBack, onImport, importing,
@@ -17,6 +20,7 @@ export default function CsvReview({
   onImport: () => void;
   importing: boolean;
 }) {
+  const isMobile = useIsMobile();
   const selectedCount = selected.size;
   const importable = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.amount != null).length;
   const dupCount = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.amount != null && r.duplicateStatus !== 'none').length;
@@ -56,6 +60,14 @@ export default function CsvReview({
           <div className="font-bold text-base text-content">New transactions <span className="text-content-3 font-semibold">· {selectedCount} of {rows.length} selected</span></div>
         </div>
 
+        {isMobile ? (
+          <div className="flex items-center gap-1 pl-1 pr-4 border-b border-line">
+            <span className="w-11 h-11 flex-none inline-flex items-center justify-center cursor-pointer" onClick={toggleAll}>
+              <ImpCheckbox checked={allOn} indeterminate={someOn} onClick={(e) => { e.stopPropagation(); toggleAll(); }} title="Select all" />
+            </span>
+            <span className="font-mono text-[10.5px] tracking-[0.06em] uppercase text-content-3">Select all</span>
+          </div>
+        ) : (
         <div className="flex items-center gap-4 px-5 py-2.5 border-b border-line font-mono text-[10.5px] tracking-[0.06em] uppercase text-content-3">
           <ImpCheckbox checked={allOn} indeterminate={someOn} onClick={toggleAll} title="Select all" />
           <span className="w-[74px] flex-none">Date</span>
@@ -63,9 +75,29 @@ export default function CsvReview({
           <span className="w-[300px] flex-none">Category</span>
           <span className="w-[110px] flex-none text-right">Amount</span>
         </div>
+        )}
 
         {rows.map((r, i) => {
           const on = selected.has(i);
+          if (isMobile) {
+            const unreadable = r.amount == null;
+            return (
+              <ListRow
+                key={i}
+                className={on ? '' : '!bg-[color-mix(in_srgb,var(--bg)_40%,transparent)]'}
+                leading={
+                  <span className={`w-11 h-11 -ml-3 flex-none inline-flex items-center justify-center ${unreadable ? 'cursor-not-allowed' : 'cursor-pointer'}`} onClick={() => toggle(i)}>
+                    <ImpCheckbox checked={on} disabled={unreadable} title={unreadable ? 'Amount unreadable. Fix it in the file and import again.' : undefined} onClick={(e) => { e.stopPropagation(); toggle(i); }} />
+                  </span>
+                }
+                title={r.description}
+                titleExtra={r.duplicateStatus !== 'none' ? <DuplicateIcon status={r.duplicateStatus} /> : undefined}
+                subtitle={<CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />}
+                amount={unreadable ? <UnreadableAmount className="" /> : <Money amount={r.amount!} showZero />}
+                meta={r.date}
+              />
+            );
+          }
           return (
             <div key={i} className="flex items-center gap-4 px-5 py-3.5 border-b border-line" style={{ background: on ? 'transparent' : 'color-mix(in srgb, var(--bg) 40%, transparent)' }}>
               <ImpCheckbox checked={on} disabled={r.amount == null} title={r.amount == null ? 'Amount unreadable. Fix it in the file and import again.' : undefined} onClick={() => toggle(i)} />
@@ -88,14 +120,14 @@ export default function CsvReview({
         {rows.length === 0 && <div className="px-5 py-10 text-center text-content-3 text-sm">No transactions to review.</div>}
       </div>
 
-      <div className="flex items-center justify-between gap-4 mt-5 px-5 py-4 border border-line rounded-[16px] bg-surface shadow-sm sticky bottom-4">
-        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} transactions</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.{unreadableCount > 0 ? ` ${unreadableCount} ${unreadableCount === 1 ? 'row' : 'rows'} skipped: amount unreadable.` : ''}</div>
-        <div className="flex gap-2.5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 mt-5 px-5 py-4 border border-line rounded-[16px] bg-surface shadow-sm sticky bottom-4">
+        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} {importable === 1 ? 'transaction' : 'transactions'}</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.{unreadableCount > 0 ? ` ${unreadableCount} ${unreadableCount === 1 ? 'row' : 'rows'} skipped: amount unreadable.` : ''}</div>
+        <div className="flex gap-2.5 [&>button:last-child]:flex-1 md:[&>button:last-child]:flex-none">
           <button onClick={onBack} className="h-12 px-5 border border-line-strong rounded-[11px] bg-surface-2 text-content font-sans font-semibold text-sm cursor-pointer">Back</button>
           <button onClick={onImport} disabled={importable === 0 || importing}
             className={`h-12 px-[26px] border-none rounded-[11px] ${importable === 0 ? 'text-content-3' : 'text-on-primary'} font-sans font-bold text-sm shadow-sm`}
             style={{ background: importable === 0 ? 'var(--surface-2)' : 'var(--primary)', cursor: importable === 0 ? 'not-allowed' : 'pointer', opacity: importable === 0 ? 0.6 : importing ? 0.7 : 1 }}>
-            {importing ? 'Importing…' : importable === 0 ? 'Nothing selected' : `Import ${importable} transactions`}
+            {importing ? 'Importing…' : importable === 0 ? 'Nothing selected' : `Import ${importable} ${importable === 1 ? 'transaction' : 'transactions'}`}
           </button>
         </div>
       </div>
