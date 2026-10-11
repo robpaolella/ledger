@@ -22,7 +22,7 @@ import { ListRow, CategoryTag, GroupHeader } from '../components/ListRow';
 import SplitEditor from '../components/SplitEditor';
 import type { SplitRow } from '../components/SplitEditor';
 import FilterPopover from '../components/FilterPopover';
-import type { FilterDraft } from '../components/filterModel';
+import { filtersFromParams, hasUrlFilters, type FilterDraft } from '../components/filterModel';
 import DateRangePopover from '../components/DateRangePopover';
 import ManualImportModal from '../components/ManualImportModal';
 import MerchantPicker from '../components/MerchantPicker';
@@ -737,6 +737,8 @@ export default function TransactionsPage() {
   // Modal
   const [editing, setEditing] = useState<Transaction | null | 'new'>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Set when ids came from the URL; the effect below drops any that don't exist once the lists load.
+  const pruneUrlIds = useRef(false);
 
   // Open add form from FAB (via URL param or custom event), deep-link a merchant
   // filter (/transactions?merchantId=12) or account filter (?accountId=5), or open
@@ -753,12 +755,6 @@ export default function TransactionsPage() {
       setSearchParams({}, { replace: true });
       return;
     }
-    const aid = searchParams.get('accountId');
-    if (aid) {
-      setFilterAccount([aid]);
-      setSearchParams({}, { replace: true });
-      return;
-    }
     const rev = searchParams.get('review');
     if (rev) {
       const id = parseInt(rev, 10);
@@ -766,18 +762,35 @@ export default function TransactionsPage() {
       apiFetch<{ data: Transaction }>(`/transactions/${id}`).then((r) => openDetail(r.data)).catch(() => {});
       return;
     }
-    // Import lands here with the range it just pulled (?startDate&endDate).
-    const sd = searchParams.get('startDate');
-    const ed = searchParams.get('endDate');
-    if (sd || ed) {
-      setDatePreset('custom');
-      setCustomStart(sd ?? '');
-      setCustomEnd(ed ?? '');
-      setSearchParams({}, { replace: true });
-    }
+    // Account detail's "View all" (and Import's date range) arrive with an account, a date range,
+    // a search and filters together. Bad values are dropped; unknown ids are pruned once the lists load.
+    const aid = searchParams.get('accountId');
+    const url = filtersFromParams(searchParams);
+    const hasAccount = !!aid && /^\d+$/.test(aid);
+    if (!hasAccount && !hasUrlFilters(url)) return;
+    if (hasAccount) setFilterAccount([aid]);
+    if (url.date) { setDatePreset(url.date.preset); setCustomStart(url.date.start); setCustomEnd(url.date.end); }
+    if (url.search) { setSearch(url.search); setSearchOpen(true); }
+    const f = url.filter;
+    setFilterType(f.type); setFilterCategory(f.category); setFilterMerchant(f.merchant);
+    setAmountOp(f.op); setAmountValue(f.val); setAmountMin(f.min); setAmountMax(f.max);
+    setFilterNeedsReview(!!f.needsReview);
+    pruneUrlIds.current = true;
+    setSearchParams({}, { replace: true });
     // openDetail is intentionally omitted (stable enough; guarded one-shot via param clear)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!pruneUrlIds.current || (!accounts.length && !categories.length)) return;
+    pruneUrlIds.current = false;
+    const subIds = new Set(categories.map((c) => `sub:${c.id}`));
+    const merchantIds = new Set(merchants.map((m) => String(m.id)));
+    const accountIds = new Set(accounts.map((a) => String(a.id)));
+    setFilterCategory((v) => v.filter((c) => subIds.has(c)));
+    setFilterMerchant((v) => v.filter((m) => merchantIds.has(m)));
+    setFilterAccount((v) => v.filter((a) => accountIds.has(a)));
+  }, [accounts, categories, merchants]);
 
   useEffect(() => {
     const handler = () => setEditing('new');
