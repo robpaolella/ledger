@@ -34,7 +34,7 @@ interface Category { id: number; group_name: string; sub_name: string; display_n
 type DateFilter = 'all' | '7' | '30' | 'month' | 'older';
 
 const DATE_DEFS: [DateFilter, string][] = [['all', 'All dates'], ['7', 'Last 7 days'], ['30', 'Last 30 days'], ['month', 'This month'], ['older', 'Older than 30 days']];
-const REASON_LABEL: Record<string, string> = { auto_uncategorized: 'Uncategorized merchant', auto_low_confidence: 'Low-confidence category', manual: 'Flagged for review' };
+const REASON_LABEL: Record<string, string> = { auto_uncategorized: 'Uncategorized merchant', auto_low_confidence: 'Low-confidence category', manual: 'Marked to review' };
 const AV_COLOR: Record<string, string> = {
   A: '--c-orange', J: '--c-violet', M: '--c-amber', C: '--c-blue', H: '--c-amber', D: '--c-violet',
   N: '--c-teal', L: '--c-teal', S: '--c-amber', W: '--c-blue', V: '--c-blue', B: '--c-violet',
@@ -242,7 +242,7 @@ export default function ReviewsPage() {
       <PageHeader className="!mb-0" title="Review" left={!isMobile && (
           <span className="inline-flex items-center gap-1.5 h-[26px] px-[11px] rounded-full text-[12px] font-bold" style={{ background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
-            {openTotal} flagged
+            {openTotal} to review
           </span>
         )} right={<>
           {searchOpen ? (
@@ -334,8 +334,8 @@ export default function ReviewsPage() {
         <div className="border border-line rounded-[18px] bg-surface shadow-sm" style={{ overflow: 'visible' }}>
           <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px]">
             <div className="flex items-baseline gap-2.5">
-              <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} need review</span>
-              {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Reset filters</span>}
+              <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} to review</span>
+              {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Clear</span>}
               {refreshing && <span className="text-[12px] text-content-3 animate-pulse">Refreshing…</span>}
             </div>
             <span className="font-mono text-[13px] text-content-2 tabular-nums">{formatMoney(shownTotal, { kind: 'balance', showZero: true }).text} pending</span>
@@ -349,7 +349,7 @@ export default function ReviewsPage() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>
               </div>
               <div className="text-[18px] font-extrabold tracking-tight">{anyFilter ? 'No matches' : "You're all caught up"}</div>
-              <div className="text-sm text-content-3 max-w-[320px]">{anyFilter ? 'No transactions match the current filters.' : 'Every flagged transaction has been reviewed. Nice work.'}</div>
+              <div className="text-sm text-content-3 max-w-[320px]">{q !== '' ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : anyFilter ? 'No transactions match the current filters.' : 'Every transaction has been reviewed. Nice work.'}</div>
               {anyFilter && <button onClick={resetFilters} className="mt-1 h-10 px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Clear filters</button>}
             </div>
           ) : (
@@ -362,7 +362,7 @@ export default function ReviewsPage() {
                 {g.rows.map((r) => {
                   const t = r.transaction;
                   const mLabel = t.merchant?.name || t.description;
-                  const reasonText = REASON_LABEL[r.reason] || 'Flagged for review';
+                  const reasonText = REASON_LABEL[r.reason] || 'Marked to review';
                   const noteText = r.note?.trim() || '';
                   const amt = <Money amount={t.amount} transfer={t.category?.type === 'transfer'} />;
                   if (isMobile) {
@@ -409,7 +409,7 @@ export default function ReviewsPage() {
                                   <span className="ml-auto text-xs text-content-3 truncate">{c.group_name}</span>
                                 </button>
                               ))}
-                              {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">No matches</div>}
+                              {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">{catSearch.trim() ? <span className="block truncate">Nothing matches “{catSearch.trim()}”</span> : 'No matches'}</div>}
                             </div>
                           </div>
                         )}
@@ -526,7 +526,7 @@ export default function ReviewsPage() {
                       {canEdit && (
                         <div className="rounded-[12px] border p-3 mb-5" style={{ borderColor: d.needsReview ? 'color-mix(in srgb, var(--warning) 45%, var(--line))' : 'var(--line)', background: d.needsReview ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : 'transparent' }}>
                           <div className="flex items-center justify-between gap-2 mb-3">
-                            <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Flagged for review') : 'Not flagged'}</span>
+                            <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Marked to review') : 'No review needed'}</span>
                             {d.needsReview && <button onClick={() => resolve([d.id])} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>}
                           </div>
                           {d.needsReview && (
