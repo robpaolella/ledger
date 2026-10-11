@@ -1802,11 +1802,11 @@ export default function TransactionsPage() {
       {/* Learn-a-rule prompt after recategorizing a merchant */}
       {ruleSuggest && (
         <div className={isMobile
-          ? 'fixed inset-x-3 bottom-3 z-[100] flex flex-col gap-3 rounded-[14px] bg-elevated p-4 shadow-md'
+          ? 'fixed inset-x-3 bottom-3 z-[100] flex flex-col gap-3 rounded-[12px] bg-elevated p-4 shadow-md'
           : 'fixed left-1/2 bottom-7 z-[100] flex items-center gap-3 rounded-full bg-elevated px-4 py-2.5 shadow-md'}
           style={{ ...(isMobile ? { paddingBottom: 'max(16px, env(safe-area-inset-bottom))' } : { transform: 'translateX(-50%)', maxWidth: 'calc(100vw - 48px)' }), border: '2px solid var(--primary)' }}>
           <span className="text-sm text-content">Always categorize <span className="font-bold">{ruleSuggest.merchantName}</span> as <span className="font-bold">{ruleSuggest.categoryName}</span>?</span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 md:gap-3">
             <button onClick={applyMerchantRule} className="h-11 flex-1 md:flex-none md:h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
             <button onClick={() => setRuleSuggest(null)} className="h-11 flex-1 md:flex-none md:h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
             <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
