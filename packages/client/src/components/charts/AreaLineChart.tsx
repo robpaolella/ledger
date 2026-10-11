@@ -27,8 +27,9 @@ const defaultDate = (d: string) => {
   return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' }).text;
-/** One decimal ($24.5k), for when axis labels collide and for the default hover value. */
-const compact = (n: number) => formatMoney(n, { kind: 'balance', precision: 'compact', showZero: true }).text;
+/** One decimal ($24.5k, but $8k not $8.0k), for when axis labels collide and for the default hover value. */
+const compact = (n: number) =>
+  formatMoney(n, { kind: 'balance', precision: 'compact', showZero: true }).text.replace(/\.0(?=[kMB]$)/, '');
 
 /**
  * Reusable inline-SVG area+line chart with gridlines, axis labels, and a hover

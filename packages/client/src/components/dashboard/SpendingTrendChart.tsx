@@ -116,7 +116,7 @@ export default function SpendingTrendChart({ thisMonth, lastMonth, height = 240 
 
             {/* Day-N x labels */}
             {xLabels.map((d) => (
-              <text key={d} x={xFor(d)} y={height - 6} textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--text-3)">
+              <text key={d} x={xFor(d)} y={height - 6} textAnchor={d === dayCount ? 'end' : 'middle'} fontSize="11" fontWeight="500" fill="var(--text-3)">
                 Day {d}
               </text>
             ))}

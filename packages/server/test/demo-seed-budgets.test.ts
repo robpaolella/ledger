@@ -112,7 +112,7 @@ describe('demo budgets, recurring items, and notifications', () => {
       expect(db.prepare(`
         SELECT n.id FROM notifications n JOIN budget_alerts a ON n.dedupe_key = 'budget_exceeded:' || a.category_id || ':' || a.month
         WHERE n.severity != 'warning' OR n.action_label != 'View budget' OR n.action_target != '/budget'
-          OR n.title NOT LIKE 'Over budget: %' OR n.body NOT LIKE 'You''ve exceeded your % budget by $%.%'
+          OR n.title NOT LIKE 'Over budget: %' OR n.body NOT LIKE 'You''ve exceeded your % budget for % by $%.%'
       `).all()).toEqual([]);
       expect(db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE is_read = 1').get()).toMatchObject({ n: expect.any(Number) });
       expect((db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE is_read = 1').get() as { n: number }).n).toBeGreaterThan(0);
@@ -152,8 +152,10 @@ describe('demo budgets, recurring items, and notifications', () => {
       expect(first.db.prepare(recurring).all()).toEqual(second.db.prepare(recurring).all());
       expect(first.db.prepare('SELECT category_id FROM budget_alerts ORDER BY rowid').all())
         .toEqual(second.db.prepare('SELECT category_id FROM budget_alerts ORDER BY rowid').all());
-      expect(first.db.prepare('SELECT user_id, type, severity, title, body, action_label, action_target, is_read FROM notifications ORDER BY id').all())
-        .toEqual(second.db.prepare('SELECT user_id, type, severity, title, body, action_label, action_target, is_read FROM notifications ORDER BY id').all());
+      // Alert bodies name their month, which rolls with the launch month; everything else must match.
+      const notifications = (db: InstanceType<typeof Database>) => (db.prepare('SELECT user_id, type, severity, title, body, action_label, action_target, is_read FROM notifications ORDER BY id').all() as { body: string }[])
+        .map((n) => ({ ...n, body: n.body.replace(/ for [A-Za-z]+ \d{4} by /, ' by ') }));
+      expect(notifications(first.db)).toEqual(notifications(second.db));
       expect(first.db.prepare('SELECT month FROM budget_alerts ORDER BY rowid').all())
         .not.toEqual(second.db.prepare('SELECT month FROM budget_alerts ORDER BY rowid').all());
     } finally { first.db.close(); second.db.close(); }
