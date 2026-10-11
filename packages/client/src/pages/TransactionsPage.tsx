@@ -1370,6 +1370,17 @@ export default function TransactionsPage() {
   };
   const openBulkEdit = () => { if (selectedIds.size > 0) setBulkEditOpen(true); };
 
+  // A search or filter change can hide selected rows. Keep the selection to rows on
+  // screen, so Edit and Delete never touch transactions the person can't see.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const shown = new Set(transactions.map((t) => t.id));
+      const next = new Set([...prev].filter((id) => shown.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [transactions]);
+
   // Net of the selected rows, in the list's sign convention (positive = money
   // out). Only loaded transactions count — a stale id from a since-changed filter
   // contributes nothing rather than a wrong figure.
