@@ -163,6 +163,7 @@ Data stays untouched; these are never rebuilt.
 ### Uncategorized
 
 - Transactions with no category appear in totals as an "Uncategorized" line that links to Review.
+- Its side comes from direction: money out counts under Expenses, money in under Income.
 
 ### Recurring
 

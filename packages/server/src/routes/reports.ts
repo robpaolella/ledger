@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { db, sqlite } from '../db/index.js';
 import { transactions, categories } from '../db/schema.js';
 import { sql } from 'drizzle-orm';
+import { isUncategorizedSql } from '../services/reviews.js';
+import type { UncategorizedBucketed } from '@ledger/shared/src/types.js';
 
 const router = Router();
 
@@ -71,7 +73,12 @@ router.get('/period', (req: Request, res: Response) => {
     // Sign convention: positive stored = money out (debit), negative = money in (credit).
     if (txnType === 'debits') conditions.push('l.amount > 0');
     else if (txnType === 'credits') conditions.push('l.amount < 0');
-    if (catType === 'income' || catType === 'expense') { conditions.push('c.type = ?'); params.push(catType); }
+    // Uncategorized legs (category_id NULL) take their side from direction, and
+    // drop out under any category filter above (NULL never matches IN).
+    if (catType === 'income' || catType === 'expense') {
+      conditions.push(`(c.type = ? OR (l.category_id IS NULL AND l.amount ${catType === 'income' ? '<' : '>'} 0))`);
+      params.push(catType);
+    }
     // Categories flagged "hidden from budget" are excluded from every Reports
     // rollup (KPIs, flow, breakdown, timeline). A group whose categories are all
     // hidden then has no rows and won't render. Only the Transactions page shows
@@ -88,13 +95,18 @@ router.get('/period', (req: Request, res: Response) => {
         FROM transaction_splits ts
         JOIN transactions t ON ts.transaction_id = t.id
         WHERE t.category_id IS NULL
+        UNION ALL
+        SELECT NULL AS category_id, t.merchant_id AS merchant_id, t.account_id AS account_id, t.date AS date, t.amount AS amount
+        FROM transactions t
+        WHERE ${isUncategorizedSql('t')}
       )
-      SELECT l.category_id, l.date, coalesce(sum(l.amount), 0) as total
+      SELECT l.category_id, l.date, coalesce(sum(l.amount), 0) as total, count(*) as n,
+             CASE WHEN l.category_id IS NULL THEN l.amount > 0 END AS out
       FROM legs l
-      JOIN categories c ON c.id = l.category_id
+      LEFT JOIN categories c ON c.id = l.category_id
       WHERE ${conditions.join(' AND ')}
-      GROUP BY l.category_id, l.date
-    `).all(...params) as { category_id: number; date: string; total: number }[];
+      GROUP BY l.category_id, l.date, out
+    `).all(...params) as { category_id: number | null; date: string; total: number; n: number; out: number | null }[];
 
     // Category metadata.
     const cats = db.select().from(categories).all();
@@ -139,7 +151,21 @@ router.get('/period', (req: Request, res: Response) => {
     // ---- roll rows into per-category bucketed series ----
     type CatAgg = { categoryId: number; groupName: string; subName: string; type: string; sortOrder: number; buckets: number[]; total: number };
     const aggMap = new Map<number, CatAgg>();
+    // Uncategorized: positive magnitudes by direction, per bucket and in total.
+    const uncategorized: UncategorizedBucketed = {
+      count: 0, moneyOut: 0, moneyIn: 0,
+      buckets: buckets.map(() => ({ count: 0, moneyOut: 0, moneyIn: 0 })),
+    };
     for (const r of rows) {
+      if (r.category_id == null) {
+        const bi = bucketOf(r.date);
+        if (bi < 0) continue;
+        const b = uncategorized.buckets[bi];
+        b.count += r.n; uncategorized.count += r.n;
+        if (r.out) { b.moneyOut += r.total; uncategorized.moneyOut += r.total; }
+        else { b.moneyIn -= r.total; uncategorized.moneyIn -= r.total; }
+        continue;
+      }
       const meta = catMeta.get(r.category_id);
       if (!meta) continue;
       let a = aggMap.get(r.category_id);
@@ -161,8 +187,8 @@ router.get('/period', (req: Request, res: Response) => {
 
     // ---- KPIs ----
     const sumType = (t: string) => categoriesOut.filter((c) => c.type === t).reduce((x, c) => x + c.total, 0);
-    const income = sumType('income');
-    const expenses = sumType('expense');
+    const income = sumType('income') + uncategorized.moneyIn;
+    const expenses = sumType('expense') + uncategorized.moneyOut;
     const net = income - expenses;
     // What you kept: income you did not spend. Money moved into a savings account
     // is a transfer and is excluded from both terms, so it simply stays in `net`.
@@ -178,6 +204,7 @@ router.get('/period', (req: Request, res: Response) => {
         buckets,
         categories: categoriesOut,
         kpis: { income, expenses, net, savingsRate, incomeSourceCount },
+        uncategorized,
       },
     });
   } catch (err) {
