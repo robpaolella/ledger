@@ -1801,12 +1801,17 @@ export default function TransactionsPage() {
     <div>
       {/* Learn-a-rule prompt after recategorizing a merchant */}
       {ruleSuggest && (
-        <div className="fixed left-1/2 bottom-7 z-[100] flex items-center gap-3 rounded-full bg-elevated px-4 py-2.5 shadow-md" style={{ transform: 'translateX(-50%)', border: '2px solid var(--primary)', maxWidth: 'calc(100vw - 48px)' }}>
+        <div className={isMobile
+          ? 'fixed inset-x-3 bottom-3 z-[100] flex flex-col gap-3 rounded-[12px] bg-elevated p-4 shadow-md'
+          : 'fixed left-1/2 bottom-7 z-[100] flex items-center gap-3 rounded-full bg-elevated px-4 py-2.5 shadow-md'}
+          style={{ ...(isMobile ? { paddingBottom: 'max(16px, env(safe-area-inset-bottom))' } : { transform: 'translateX(-50%)', maxWidth: 'calc(100vw - 48px)' }), border: '2px solid var(--primary)' }}>
           <span className="text-sm text-content">Always categorize <span className="font-bold">{ruleSuggest.merchantName}</span> as <span className="font-bold">{ruleSuggest.categoryName}</span>?</span>
-          <button onClick={applyMerchantRule} className="h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
-          <button onClick={() => setRuleSuggest(null)} className="h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
-          <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
-            className="h-9 px-3 rounded-[10px] text-content-3 font-semibold text-sm hover:bg-surface-2 shrink-0">Never</button>
+          <div className="flex items-center gap-2 md:gap-3">
+            <button onClick={applyMerchantRule} className="h-11 flex-1 md:flex-none md:h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
+            <button onClick={() => setRuleSuggest(null)} className="h-11 flex-1 md:flex-none md:h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
+            <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
+              className="h-11 flex-1 md:flex-none md:h-9 px-3 rounded-[10px] text-content-3 font-semibold text-sm hover:bg-surface-2 shrink-0">Never</button>
+          </div>
         </div>
       )}
       {/* Header + consolidated top-right controls */}
@@ -2009,7 +2014,8 @@ export default function TransactionsPage() {
                 </div>
               );
             })()}
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            {/* On phones the rule prompt sits over the bottom edge: extra room lets the actions scroll clear of it. */}
+            <div className={`flex-1 overflow-y-auto px-6 py-6 ${ruleSuggest && isMobile ? 'pb-40' : ''}`}>
               {(() => {
                 const isTransfer = (detail.category?.type ?? detail.splits?.[0]?.type) === 'transfer';
                 const isSplit = !!(detail.splits && detail.splits.length > 0);
@@ -2297,7 +2303,7 @@ export default function TransactionsPage() {
                 <div className="text-[19px] font-extrabold tracking-tight">Split transaction</div>
                 <div className="text-[13px] text-content-3 mt-0.5">Splitting creates individual transactions you can categorize and manage separately.</div>
               </div>
-              <button onClick={() => setSplitOpen(false)} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+              <button onClick={() => setSplitOpen(false)} className="w-11 h-11 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -2333,11 +2339,11 @@ export default function TransactionsPage() {
 
               <datalist id="split-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
               {splitDraft.map((r, i) => (
-                <div key={r.id ?? `new-${i}`} className="flex items-center gap-2 mb-2.5">
-                  {/* Merchant */}
+                <div key={r.id ?? `new-${i}`} className={`grid ${splitDraft.length > 2 ? 'grid-cols-[minmax(0,1fr)_104px_44px]' : 'grid-cols-[minmax(0,1fr)_104px]'} gap-2 mb-4 md:flex md:items-center md:mb-2.5`}>
+                  {/* Merchant: own line on phones, category and amount below */}
                   <input value={r.merchant} onChange={(e) => setRow(i, { merchant: e.target.value })}
                     list="split-merchant-list" placeholder="Merchant"
-                    className="w-[150px] shrink-0 h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-medium outline-none" />
+                    className="col-span-full w-full md:w-[150px] shrink-0 h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-medium outline-none" />
                   {/* Category */}
                   <div className="relative flex-1 min-w-0">
                     <select value={r.categoryId} onChange={(e) => setRow(i, { categoryId: e.target.value ? parseInt(e.target.value) : '' })}
@@ -2348,7 +2354,7 @@ export default function TransactionsPage() {
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-2.5 top-3 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
                   </div>
                   {/* Amount ($ or %) */}
-                  <div className="relative w-[104px] shrink-0">
+                  <div className="relative w-full md:w-[104px] shrink-0">
                     {splitMode === '$' ? (
                       <>
                         <span className="absolute left-3 top-3 text-[14px] text-content-3 font-semibold">$</span>
@@ -2366,13 +2372,13 @@ export default function TransactionsPage() {
                     )}
                   </div>
                   {splitDraft.length > 2 ? (
-                    <button onClick={() => setSplitDraft((d) => d.filter((_, j) => j !== i))} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-[10px] text-content-3 hover:bg-surface-2 hover:text-negative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
-                  ) : <span className="w-9 shrink-0" />}
+                    <button onClick={() => setSplitDraft((d) => d.filter((_, j) => j !== i))} aria-label="Remove split" className="w-11 h-11 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-[10px] text-content-3 hover:bg-surface-2 hover:text-negative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+                  ) : <span className="hidden md:block md:w-9 shrink-0" />}
                 </div>
               ))}
               {/* Add-a-split pill + LEFT TO SPLIT indicator */}
               <div className="flex items-center justify-between mt-2">
-                <button onClick={() => setSplitDraft((d) => [...d, { categoryId: '', amount: '', merchant: detail.merchant?.name ?? '' }])} className="inline-flex items-center gap-2 h-10 px-3.5 rounded-[11px] border border-dashed border-line-strong text-primary text-sm font-bold">
+                <button onClick={() => setSplitDraft((d) => [...d, { categoryId: '', amount: '', merchant: detail.merchant?.name ?? '' }])} className="inline-flex items-center gap-2 h-11 md:h-10 px-3.5 rounded-[11px] border border-dashed border-line-strong text-primary text-sm font-bold">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>Add a split
                 </button>
                 <div className="flex items-center gap-2">
@@ -2389,11 +2395,11 @@ export default function TransactionsPage() {
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-3.5 border-t border-line">
               {isExistingSplit && canEdit ? (
-                <button onClick={removeSplitFromDetail} className="h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
+                <button onClick={removeSplitFromDetail} className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
               ) : <span />}
               <div className="flex items-center gap-2.5">
-                <button onClick={() => setSplitOpen(false)} className="h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-                <button onClick={saveSplit} disabled={!splitValid} className="h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
+                <button onClick={() => setSplitOpen(false)} className="h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+                <button onClick={saveSplit} disabled={!splitValid} className="h-11 md:h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
               </div>
             </div>
           </div>
