@@ -17,5 +17,8 @@
 - Daily sync times mix server and browser clocks (RUNS vs NEXT SYNC/"Trying again at"); show one clock, same for the gave-up line in `banksync/status.ts`.
 - Client has no test runner; `dayTime`, `lastSyncText`, `nextSyncText` in `DailySyncCard.tsx` are untested.
 - Categories: two same-named categories with different stored emoji still collide, because stored emoji are looked up by name alone.
+- CSV review on phones can't rename a merchant or show match confidence (desktop only); needs a row detail sheet, so ask Robert first (#206).
+- Bank Sync review (`SyncReview.tsx`) still uses the wide table on phones; give it the same card rows as CSV review (#206).
 - Dashboard net worth values physical assets at the current moment (`dashboard.ts` calls `calculateCurrentValue` without `asOf`), while Accounts uses today's date, so the two differ by a dollar or two; pass the same `asOf`.
 - Account detail page header Filters link is icon-only on phones with no accessible name (found in #215, out of scope).
+- `migrate-savings-retire.ts` deletes budget, template, recurring and alert rows for savings categories, against "Data stays untouched" in PRODUCT.md; a v1.0.2 upgrade can't reach it, but needs its own risk:high issue (found in #111 review).

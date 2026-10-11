@@ -21,4 +21,6 @@ The script (needs network and the `v1.0.2` tag fetched):
 Tables, columns and row counts reproduce exactly. Bytes do not: password hashes use a random
 salt and `created_at` columns hold the build time. `v102-fixture.test.ts` checks the schema.
 
+`v102-upgrade.test.ts` snapshots every row of this database, runs the startup migrations on a copy, and fails if any table or row is dropped or changed (intended changes are listed in that test).
+
 `*.db` is git-ignored, so after a rebuild add it with `git add -f`.
