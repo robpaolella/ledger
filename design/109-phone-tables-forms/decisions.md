@@ -1,8 +1,13 @@
 # Design decisions: phone tables and forms
 
-- Design issue: #109; covered build issues: #110, #207, #227
-- Revision: 1; replaces: none
+- Design issue: #262; covered build issues: #110, #207, #227, #257, #258, #259, #260, #261
+- Revision: 2; replaces: revision 1
 - Maker: claude-bridge/claude-opus-5-5 (Anthropic), medium thinking
+
+## Revision 2 (2026-10-11, design issue #262)
+Revision 2 changes coverage only, following the #110 and #227 build splits. No visual
+or wording changes; versions, states, themes and screenshots are unchanged. This revision
+extends the approved design coverage to #257–#261.
 
 ## Choice and approval
 **Chosen: version A** (one month at a time, with a year or range total column). The versions

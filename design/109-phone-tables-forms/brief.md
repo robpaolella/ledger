@@ -1,8 +1,8 @@
 # Design: Phone, part 1 (wide tables and forms)
 
-- Design issue: #109
-- Revision: 1
-- Replaces: none
+- Design issue: #262
+- Revision: 2
+- Replaces: revision 1
 - Source plan: retheme plan agreed 2026-10-08; phone audit `work/108-phone-audit/report.md` (#108)
 
 ## Job and audience
@@ -19,11 +19,16 @@ Success: every number is readable without sideways scrolling or overlap, and eve
 desktop offers can be completed on a phone.
 
 ## Covers
-| Build issue | Part of this design | Out of scope |
-| --- | --- | --- |
-| #110 | Wide tables (audit Area 1 for design: F04, F17, F18, F19): Budget Year, Reports Timeline, Investments holdings, Recurring calendar | F03 Import review (#206, merged), F16 All recurring (#219) |
-| #207 | Budget Year on phones (F04); built in or with #110 as the conductor records | Budget Month tap targets (#226) |
-| #227 | Forms (audit Area 4: F30–F35): two-step setup key first, Ollama/SimpleFIN keyboards, Edit merchant footer, Import steps 1–2, bulk edit on phones | F06 (#209, merged #223), F29 Recurring sheet (#214) |
+| Build issue | Part of this design | States | Out of scope |
+| --- | --- | --- | --- |
+| #110 | Wide tables (audit Area 1 for design: F04, F17, F18, F19): Budget Year, Reports Timeline, Investments holdings, Recurring calendar | `budget-year*`, `timeline*`, `holdings*`, `calendar-*`, `loading`, `error` | F03 Import review (#206, merged), F16 All recurring (#219) |
+| #207 | Budget Year on phones (F04); built in or with #110 as the conductor records | `budget-year*`, `loading`, `error` | Budget Month tap targets (#226) |
+| #257 | Investments holdings on phones | `holdings*` | — |
+| #258 | Recurring calendar on phones | `calendar-*` | — |
+| #227 | Forms (audit Area 4: F30–F35): two-step setup key first, Ollama/SimpleFIN keyboards, Edit merchant footer, Import steps 1–2, bulk edit on phones | `twofa-*`, `merchant-edit`, `import-*`, `bulk-*` | F06 (#209, merged #223), F29 Recurring sheet (#214) |
+| #259 | Phone keyboards and Edit merchant | `merchant-edit` | — |
+| #260 | Import steps 1–2 | `import-upload`, `import-map` | — |
+| #261 | Phone bulk select | `bulk-*` | — |
 
 ## Boundaries and visual authority
 - PRODUCT.md (roles, money rules), DESIGN.md (tokens, Phone checklist, "Wide tables become card
