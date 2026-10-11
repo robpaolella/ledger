@@ -1954,13 +1954,14 @@ export default function TransactionsPage() {
                 const catName = split ? split.subName : t.category?.subName;
                 const catGroup = split ? split.groupName : t.category?.groupName;
                 const checked = selectedIds.has(t.id);
-                return (
-                  <ListRow key={split ? `${t.id}-split-${split.id}` : t.id}
+                const key = split ? `${t.id}-split-${split.id}` : t.id;
+                const row = (
+                  <ListRow key={bulkMode ? undefined : key}
                     rowId={split ? `${t.id}-split-${split.id}` : String(t.id)}
-                    onClick={bulkMode ? () => toggleSelect(t.id) : hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
+                    onClick={!bulkMode && hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
                     // ListRow's outline-none hides its focus ring under Tailwind 4; outline-solid brings it back.
-                    className={`focus-visible:outline-solid ${bulkMode && checked ? 'bg-primary/8' : ''}`}
-                    leading={bulkMode ? <>{tick(checked)}<span className="sr-only">{checked ? 'Selected: ' : 'Not selected: '}</span></> : undefined}
+                    className="focus-visible:outline-solid"
+                    leading={bulkMode ? tick(checked) : undefined}
                     avatar={{ name: label, src: t.merchant?.logoUrl, color: catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)' }}
                     title={label}
                     titleExtra={<>
@@ -1971,6 +1972,16 @@ export default function TransactionsPage() {
                     amount={<Money amount={split ? split.amount : t.amount} transfer={isTransfer} />}
                     meta={<span className="font-mono">{accountLabel(t.account)}</span>}
                   />
+                );
+                if (!bulkMode) return row;
+                // Select mode: the whole row is one checkbox, so screen readers hear its state.
+                return (
+                  <div key={key} role="checkbox" aria-checked={checked} tabIndex={0}
+                    onClick={() => toggleSelect(t.id)}
+                    onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSelect(t.id); } }}
+                    className={`border-t border-line first:border-t-0 cursor-pointer outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${checked ? 'bg-primary/8' : ''}`}>
+                    {row}
+                  </div>
                 );
               })}
             </div>
