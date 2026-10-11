@@ -45,7 +45,7 @@ export function useSimpleFin() {
     setAccountsLoading(true);
     const results = await Promise.all(conns.map(async (c) => {
       try {
-        const res = await apiFetch<{ data: RawSfAccount[] }>(`/simplefin/connections/${c.id}/accounts`);
+        const res = await apiFetch<{ data: RawSfAccount[] }>(`/simplefin/connections/${c.id}/accounts`, { method: 'POST' });
         return { ok: true as const, c, accounts: res.data };
       } catch (err) {
         return { ok: false as const, c, error: err instanceof Error ? err.message : 'Failed to reach SimpleFIN' };
