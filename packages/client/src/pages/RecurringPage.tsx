@@ -46,7 +46,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 // Recurring amounts are positive magnitudes plus a type. Shown in stored sign so the
 // money rule applies: income is money in (green "+$X"), an expense is money out ("$X").
 const flow = (amount: number, type: 'income' | 'expense') => (type === 'income' ? -Math.abs(amount) : Math.abs(amount));
-const plain = (n: number) => formatMoney(n, { kind: 'balance' }).text;
+const plain = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
 function ymOfOffset(offset: number): string {
   const n = new Date();
   const d = new Date(n.getFullYear(), n.getMonth() + offset, 1);
@@ -263,12 +263,12 @@ export default function RecurringPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 border-t border-line">
               <div className="px-4 md:px-6 py-4 sm:border-r border-line">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} className="text-[15px] font-extrabold" /></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} showZero className="text-[15px] font-extrabold" /></div>
                 {bar(inc.paid, inc.total, 'var(--positive)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.paid)} due date passed</span><span>{plain(inc.remaining)} remaining</span></div>
               </div>
               <div className="px-4 md:px-6 py-4 border-line border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Bills</span><Money amount={exp.total} className="text-[15px] font-extrabold" /></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Bills</span><Money amount={exp.total} showZero className="text-[15px] font-extrabold" /></div>
                 {bar(exp.paid, exp.total, 'var(--primary)')}
                 <div className="flex justify-between text-[12px] text-content-3"><span>{plain(exp.paid)} due date passed</span><span>{plain(exp.remaining)} remaining</span></div>
               </div>
