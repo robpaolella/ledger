@@ -29,3 +29,5 @@
 - Keyboard focus rings never show on `ListRow` and the desktop transaction rows: `outline-none` cancels `focus-visible:outline-2` under Tailwind 4 (add `focus-visible:outline-solid`); #261 fixed it only for the phone Transactions rows (found in #261).
 - On phones the merchant picker's list is cramped inside a short bottom sheet (Bulk edit, about two rows show above the footer); consider letting the sheet grow while it's open (found in #261).
 - Desktop Transactions: pressing Escape while the bulk Edit transactions panel is open leaves bulk mode but keeps the panel open with 0 selected; Escape should close the panel first (found in #261).
+- Phone Transactions Select mode: rows are announced as buttons with a hidden "Selected:" prefix, not as checkboxes; let `ListRow` take `role="checkbox"` and `aria-checked` (found in #261's critique).
+- Bulk edit/delete failures say only "Bulk operation failed"; say what failed and what to do, e.g. "Couldn't delete 3 transactions. Check your connection and try again." (found in #261's critique).
