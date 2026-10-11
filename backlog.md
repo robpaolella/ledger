@@ -18,3 +18,4 @@
 - Client has no test runner; `dayTime`, `lastSyncText`, `nextSyncText` in `DailySyncCard.tsx` are untested.
 - Categories: two same-named categories with different stored emoji still collide, because stored emoji are looked up by name alone.
 - Dashboard net worth values physical assets at the current moment (`dashboard.ts` calls `calculateCurrentValue` without `asOf`), while Accounts uses today's date, so the two differ by a dollar or two; pass the same `asOf`.
+- Account detail page header Filters link is icon-only on phones with no accessible name (found in #215, out of scope).

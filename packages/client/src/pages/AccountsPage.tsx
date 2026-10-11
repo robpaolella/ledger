@@ -235,7 +235,7 @@ export default function AccountsPage() {
   const headerControls = (<>
           {/* Filters */}
           <div className="relative">
-            <button onClick={openFilter} aria-label="Filters" aria-haspopup="dialog" aria-expanded={filterOpen}
+            <button onClick={openFilter} aria-label={filterActive ? `Filters, ${filterCount} active` : 'Filters'} aria-haspopup="dialog" aria-expanded={filterOpen}
               className="relative flex items-center gap-2 h-10 px-2.5 md:px-4 rounded-[11px] bg-surface-2 border-2 text-sm font-semibold text-content"
               style={{ borderColor: filterOpen || filterActive ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
@@ -419,7 +419,7 @@ export default function AccountsPage() {
               <div className="md:hidden text-[11px] font-semibold" style={{ color: 'var(--c-amber)' }}>{a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}</div>
             </div>
             {canEdit && (
-              <button onClick={() => openAsset(a)} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0">
+              <button onClick={() => openAsset(a)} aria-label={`Edit ${a.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
               </button>
             )}

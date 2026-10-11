@@ -223,7 +223,7 @@ export default function AccountDetailPage() {
           <VendorAvatar name={meta.institution || meta.name} src={meta.logoUrl || undefined} color={meta.institutionColor || 'var(--c-blue)'} size={26} />
           <span className="text-[20px] font-extrabold tracking-tight truncate">{meta.name}{meta.lastFour ? ` (…${meta.lastFour})` : ''}</span>
         </>,
-        <Link to={`/transactions?accountId=${meta.accountId}`} aria-label="Filters"
+        <Link to={`/transactions?accountId=${meta.accountId}`}
           className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border border-line-strong text-sm font-semibold text-content shrink-0 hover:bg-surface-2">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
           <span className="hidden md:inline">Filters</span>
@@ -306,7 +306,7 @@ export default function AccountDetailPage() {
               );
             })
           )}
-          <Link to={`/transactions?accountId=${meta.accountId}`} aria-label="Filters"
+          <Link to={`/transactions?accountId=${meta.accountId}`}
             className="flex items-center justify-center p-4 text-[13px] text-content-3 hover:text-content-2 border-t border-line">
             View all in Transactions
           </Link>
