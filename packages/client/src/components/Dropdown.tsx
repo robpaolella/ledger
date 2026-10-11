@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface DropdownOption { key: string; label: string; /** Non-selectable group heading. */ heading?: boolean }
 
@@ -24,9 +24,21 @@ export default function Dropdown({ value, options, onChange, minWidth = 130, ful
   const [up, setUp] = useState(false);
   const [room, setRoom] = useState(MENU_MAX);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const current = options.find((o) => !o.heading && o.key === value)?.label ?? (value || placeholder || '');
+  const current = options.find((o) => !o.heading && o.key === value)?.label ?? (fullWidth ? (placeholder ?? '') : value);
+  // Escape closes just the menu, not a modal behind it (capture phase, like Popover).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [open]);
   const toggle = () => {
-    if (!open && btnRef.current) {
+    if (!open && fullWidth && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const limit = scrollParent(btnRef.current)?.getBoundingClientRect();
       const bottom = Math.min(window.innerHeight, limit?.bottom ?? window.innerHeight);

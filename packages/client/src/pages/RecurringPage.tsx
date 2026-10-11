@@ -662,7 +662,7 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
           </div>
           <div>
             <div className={labelCls}>Account (optional)</div>
-            <Dropdown fullWidth minWidth={0} value={String(accountId)} options={accountDropdownOptions}
+            <Dropdown fullWidth minWidth={0} value={String(accountId)} placeholder="None" options={accountDropdownOptions}
               onChange={(k) => setAccountId(k ? Number(k) : '')} />
           </div>
         </div>
