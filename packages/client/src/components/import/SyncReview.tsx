@@ -83,13 +83,13 @@ export default function SyncReview({
 
       {/* footer */}
       <div className="flex items-center justify-between gap-4 mt-5 px-5 py-4 border border-line rounded-[16px] bg-surface shadow-sm sticky bottom-4">
-        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} transactions</strong> will be added to your ledger.</div>
+        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} {importable === 1 ? 'transaction' : 'transactions'}</strong> will be added to your ledger.</div>
         <div className="flex gap-2.5">
           <button onClick={onBack} className="h-12 px-5 border border-line-strong rounded-[11px] bg-surface-2 text-content font-sans font-semibold text-sm cursor-pointer">Back</button>
           <button onClick={onImport} disabled={importable === 0 || importing}
             className={`h-12 px-[26px] border-none rounded-[11px] ${importable === 0 ? 'text-content-3' : 'text-on-primary'} font-sans font-bold text-sm shadow-sm`}
             style={{ background: importable === 0 ? 'var(--surface-2)' : 'var(--primary)', cursor: importable === 0 ? 'not-allowed' : 'pointer', opacity: importable === 0 ? 0.6 : importing ? 0.7 : 1 }}>
-            {importing ? 'Importing…' : importable === 0 ? 'Nothing selected' : `Import ${importable} transactions`}
+            {importing ? 'Importing…' : importable === 0 ? 'Nothing selected' : `Import ${importable} ${importable === 1 ? 'transaction' : 'transactions'}`}
           </button>
         </div>
       </div>
