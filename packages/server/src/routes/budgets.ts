@@ -150,10 +150,9 @@ router.get('/summary', (req: Request, res: Response) => {
     // This month's plans, carried forward from the latest earlier row
     const budgetMap = getStoredPlans(sqlite, month);
 
-    // Recurring overlay: each category's recurring total for the month folds into
-    // its budget — 'set' = floor (max of manual & recurring), 'add' = manual +
-    // recurring. `manual` is the raw stored amount (for editing); `budgeted` is the
-    // effective amount used for display + all totals.
+    // Recurring overlay: each category's recurring total for the month is the floor
+    // of its budget (max of manual & recurring). `manual` is the raw stored amount
+    // (for editing); `budgeted` is the effective amount used for display + all totals.
     const floors = getRecurringFloors(month);
     type RecMeta = { amount: number; itemCount: number; items: { label: string; cadence: string }[] };
     // Floor-only model: recurring is the minimum. override bypasses it for one month.
