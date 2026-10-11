@@ -80,14 +80,12 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
    Retheme v2 — Wave 0 token layer
    ---------------------------------------------------------------------
    1. NEW semantic tokens are declared on :root (light) and .dark (dark).
-   2. An ALIAS LAYER keeps every OLD token name working by repointing it at
-      the nearest new token (via var() so it resolves per-mode; via color-mix
-      for the tinted badge / inline-notification groups). This reskins the whole
-      app with light/dark parity and zero component edits. Migrate components off
-      the old names per-area in later waves, then retire each alias.
-   3. Tokens deliberately kept LITERAL (not aliased): --nav-*, --hero-gradient-*
-      — the sidebar stays dark until the Wave 2 shell redesign moves it to the
-      white/surface spec (and reworks the net-worth hero).
+   2. An ALIAS LAYER keeps the OLD token names still in use working by
+      repointing each at the nearest new token (via var(), so it resolves
+      per-mode). Migrate components off the old names per-area, then retire
+      each alias once nothing references it.
+   3. --bg-modal is kept LITERAL (not aliased): the one scrim for every modal,
+      sheet and panel.
    4. Raw hex lives ONLY in these :root / .dark blocks. Never hard-code a color
       elsewhere — always use a token.
    ===================================================================== */
@@ -151,125 +149,24 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
      =================================================================== */
 
   /* Backgrounds */
-  --bg-main:        var(--bg);
-  --bg-card:        var(--surface);
-  --bg-card-border: var(--line);
-  --bg-card-shadow: var(--shadow-sm);
   --bg-hover:       var(--surface-2);
-  --bg-input:       var(--surface-2);
-  --bg-input-border:var(--line);
-  --bg-needs-attention: color-mix(in srgb, var(--warning) 12%, var(--surface));
-  --bg-inline-success:        color-mix(in srgb, var(--positive) 12%, var(--surface));
-  --bg-inline-success-border: color-mix(in srgb, var(--positive) 35%, transparent);
-  --bg-inline-error:          color-mix(in srgb, var(--negative) 12%, var(--surface));
-  --bg-inline-error-border:   color-mix(in srgb, var(--negative) 35%, transparent);
-  --bg-inline-warning:        color-mix(in srgb, var(--warning) 12%, var(--surface));
-  --bg-inline-warning-border: color-mix(in srgb, var(--warning) 35%, transparent);
-  --bg-inline-info:           color-mix(in srgb, var(--primary) 12%, var(--surface));
-  --bg-inline-info-border:    color-mix(in srgb, var(--primary) 35%, transparent);
 
   /* Text */
   --text-primary:    var(--text);
   --text-body:       var(--text-2);
   --text-secondary:  var(--text-2);
   --text-muted:      var(--text-3);
-  --text-very-muted: var(--text-3);
-  --text-inline-success: var(--positive);
-  --text-inline-error:   var(--negative);
-  --text-inline-warning: var(--warning);
-  --text-inline-info:    var(--primary);
 
   /* Semantic colors (old names) */
   --color-positive: var(--positive);
   --color-negative: var(--negative);
-  --color-accent:   var(--primary);
   --color-warning:  var(--warning);
-  --color-orange:   var(--c-orange);
 
   /* Buttons */
-  --btn-primary-bg:            var(--primary);
-  --btn-primary-text:          var(--on-primary);
-  --btn-primary-hover:         var(--primary-hover);
-  --btn-secondary-bg:          var(--surface-2);
-  --btn-secondary-text:        var(--text);
-  --btn-secondary-hover:       color-mix(in srgb, var(--text) 8%, var(--surface-2));
-  --btn-destructive-bg:        var(--negative);
-  --btn-destructive-text:      #ffffff;
-  --btn-destructive-hover:     color-mix(in srgb, var(--negative) 85%, #000);
-  --btn-destructive-light-bg:  color-mix(in srgb, var(--negative) 10%, transparent);
-  --btn-destructive-light-text:var(--negative);
-  --btn-destructive-light-hover: color-mix(in srgb, var(--negative) 18%, transparent);
-  --btn-success-hover:         color-mix(in srgb, var(--positive) 85%, #000);
-  --btn-ghost-text:            var(--text-2);
+  --btn-ghost-text: var(--text-2);
 
-  /* Cards (hover) */
-  --card-hover-border: var(--line-strong);
-  --card-hover-shadow: var(--shadow-md);
-
-  /* Badges — tinted pill (bg = color-mix, text = solid token) */
-  --badge-account-bg:   var(--surface-2);
-  --badge-account-text: var(--text-2);
-  --badge-category-bg:   color-mix(in srgb, var(--primary) 12%, transparent);
-  --badge-category-text: var(--primary);
-  --badge-owner-1-bg:   color-mix(in srgb, var(--owner-1) 14%, transparent);
-  --badge-owner-1-text: var(--owner-1);
-  --badge-owner-2-bg:   color-mix(in srgb, var(--owner-2) 14%, transparent);
-  --badge-owner-2-text: var(--owner-2);
-  --badge-owner-3-bg:   color-mix(in srgb, var(--owner-3) 14%, transparent);
-  --badge-owner-3-text: var(--owner-3);
-  --badge-owner-4-bg:   color-mix(in srgb, var(--owner-4) 14%, transparent);
-  --badge-owner-4-text: var(--owner-4);
-  --badge-owner-5-bg:   color-mix(in srgb, var(--owner-5) 14%, transparent);
-  --badge-owner-5-text: var(--owner-5);
-  --badge-owner-6-bg:   color-mix(in srgb, var(--owner-6) 14%, transparent);
-  --badge-owner-6-text: var(--owner-6);
-  --badge-shared-bg:    color-mix(in srgb, var(--owner-shared) 14%, transparent);
-  --badge-shared-text:  var(--owner-shared);
-  --badge-liquid-bg:    color-mix(in srgb, var(--positive) 14%, transparent);
-  --badge-liquid-text:  var(--positive);
-  --badge-investment-bg:   color-mix(in srgb, var(--c-violet) 14%, transparent);
-  --badge-investment-text: var(--c-violet);
-  --badge-liability-bg:   color-mix(in srgb, var(--negative) 12%, transparent);
-  --badge-liability-text: var(--negative);
-  --badge-negative-bg:   color-mix(in srgb, var(--negative) 12%, transparent);
-  --badge-negative-text: var(--negative);
-  --badge-duplicate-exact-bg:   color-mix(in srgb, var(--negative) 12%, transparent);
-  --badge-duplicate-exact-text: var(--negative);
-  --badge-duplicate-possible-bg:   color-mix(in srgb, var(--warning) 14%, transparent);
-  --badge-duplicate-possible-text: var(--warning);
-  --badge-transfer-bg:   color-mix(in srgb, var(--c-orange) 14%, transparent);
-  --badge-transfer-text: var(--c-orange);
-  --badge-connected-bg:   color-mix(in srgb, var(--positive) 14%, transparent);
-  --badge-connected-text: var(--positive);
-  --badge-admin-bg:   color-mix(in srgb, var(--positive) 14%, transparent);
-  --badge-admin-text: var(--positive);
-  --badge-member-bg:   color-mix(in srgb, var(--c-blue) 14%, transparent);
-  --badge-member-text: var(--c-blue);
-  --badge-owner-bg:   color-mix(in srgb, var(--warning) 14%, transparent);
-  --badge-owner-text: var(--warning);
-
-  /* Table */
-  --table-border:     var(--line);
-  --table-row-border: var(--line);
-
-  /* Toggle / Filter */
-  --toggle-container-bg: var(--surface-2);
-  --toggle-active-bg:    var(--elevated);
-  --toggle-active-shadow:var(--shadow-sm);
-  --toggle-active-text:  var(--text);
-  --toggle-inactive-text:var(--text-2);
-
-  /* Progress bar */
-  --progress-track: var(--surface-2);
-
-  /* ---- Kept LITERAL until Wave 2 shell redesign ---- */
-  --bg-zebra:   rgba(0,0,0,0.02);
+  /* ---- Kept LITERAL (repeated in .dark) ---- */
   --bg-modal:   rgba(6,8,12,0.55);   /* the ONE modal / sheet / panel scrim */
-  --nav-active-bg:    rgba(59,130,246,0.15);
-  --nav-active-text:  #93c5fd;
-  --nav-inactive-text:#94a3b8;
-  --hero-gradient-from: #0f172a;
-  --hero-gradient-to:   #1e293b;
 }
 
 .dark {
@@ -315,15 +212,9 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
   --shadow-md: 0 6px 22px rgba(0,0,0,.4);
 
-  /* ---- Literal-valued old tokens (dark overrides only; var() aliases above
+  /* ---- Literal-valued old token (dark override only; var() aliases above
           inherit and resolve against the dark tokens automatically) ---- */
-  --bg-zebra:   rgba(255,255,255,0.03);
   --bg-modal:   rgba(0,0,0,0.7);
-  --nav-active-bg:    rgba(59,130,246,0.25);
-  --nav-active-text:  #93c5fd;
-  --nav-inactive-text:#94a3b8;
-  --hero-gradient-from: #060a13;
-  --hero-gradient-to:   #0f172a;
 }
 
 /* ---------------------------------------------------------------------
@@ -356,14 +247,6 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   --color-c-rose:    var(--c-rose);
   --color-c-orange:  var(--c-orange);
   --color-c-amber:   var(--c-amber);
-
-  --color-owner-1:      var(--owner-1);
-  --color-owner-2:      var(--owner-2);
-  --color-owner-3:      var(--owner-3);
-  --color-owner-4:      var(--owner-4);
-  --color-owner-5:      var(--owner-5);
-  --color-owner-6:      var(--owner-6);
-  --color-owner-shared: var(--owner-shared);
 
   /* Named text utilities (bg-* names read oddly for text) */
   --color-content:   var(--text);

@@ -88,9 +88,6 @@ export const categories = sqliteTable('categories', {
   type: text('type').notNull(), // income, expense, transfer
   is_deductible: integer('is_deductible').default(0),
   sort_order: integer('sort_order').default(0),
-  // How recurring items on this category fold into its monthly budget:
-  // 'set' = recurring is the floor (max(manual, recurring)); 'add' = manual + recurring.
-  recurring_budget_mode: text('recurring_budget_mode').default('set'),
   // Per-leaf emoji (null = fall back to lib/categoryMeta group map).
   emoji: text('emoji'),
   // When 1, the category is skipped in budget planning + report rollups.
