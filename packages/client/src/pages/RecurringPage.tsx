@@ -13,6 +13,9 @@ import ResponsiveModal from '../components/ResponsiveModal';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import PageHeader from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
+import Dropdown from '../components/Dropdown';
+import Calendar from '../components/Calendar';
+import Popover from '../components/Popover';
 import MerchantPicker, { type MerchantOption } from '../components/MerchantPicker';
 
 type Kind = 'monthly' | 'semi_monthly' | 'biweekly' | 'weekly' | 'every_n_months' | 'custom_months';
@@ -504,6 +507,7 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
   const [startDate, setStartDate] = useState<string>(item?.start_date ?? todayYmd());
   const [status, setStatus] = useState<'active' | 'paused'>(item?.status ?? 'active');
   const [saving, setSaving] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   const catOptions = useMemo(() => {
     const wanted = type === 'income' ? ['income'] : ['expense'];
@@ -532,13 +536,14 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
     && (freqKind !== 'semi_monthly' || day1 !== day2)
     && (freqKind !== 'every_n_months' || interval >= 1);
 
+  const dayOptions = [...Array.from({ length: 31 }, (_, i) => ({ key: String(i + 1), label: String(i + 1) })), { key: '0', label: 'Last day' }];
+  const categoryDropdownOptions = [{ key: '', label: 'Select…' }, ...catOptions.flatMap(([g, list]) => [{ key: `g-${g}`, label: g, heading: true }, ...list.map((c) => ({ key: String(c.id), label: c.sub_name }))])];
+  const accountDropdownOptions = [{ key: '', label: 'None' }, ...acctGroups.flatMap(([g, list]) => [{ key: `g-${g}`, label: g, heading: true }, ...list.map((a) => ({ key: String(a.id), label: `${a.name}${a.last_four ? ` (…${a.last_four})` : ''}` }))])];
+
   const dayField = (val: number, set: (n: number) => void, label2: string) => (
     <div>
       <div className="text-[12px] font-semibold text-content-2 mb-1.5">{label2}</div>
-      <select value={val} onChange={(e) => set(Number(e.target.value))} className="w-full h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none">
-        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-        <option value={0}>Last day</option>
-      </select>
+      <Dropdown fullWidth value={String(val)} onChange={(k) => set(Number(k))} minWidth={0} options={dayOptions} />
     </div>
   );
 
@@ -571,11 +576,17 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
   const labelCls = 'text-[12px] font-semibold uppercase tracking-[0.04em] text-content-2 mb-1.5';
 
   return (
-    <ResponsiveModal isOpen onClose={onClose} title={editing ? 'Edit recurring' : 'Add recurring'} maxWidth="540px">
+    <ResponsiveModal isOpen onClose={onClose} title={editing ? 'Edit recurring' : 'Add recurring'} maxWidth="540px"
+      footer={(
+      <div className="flex items-center justify-end gap-2.5">
+        <button onClick={onClose} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+        <button onClick={save} disabled={!valid || saving} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">{editing ? 'Save' : 'Add recurring'}</button>
+      </div>
+      )}>
       <div className="flex flex-col gap-4">
         <div>
           <div className={labelCls}>Type</div>
-          <SegmentedControl value={type} onChange={(v) => onTypeChange(v as 'income' | 'expense')} className="w-full"
+          <SegmentedControl value={type} onChange={(v) => onTypeChange(v as 'income' | 'expense')} className="w-full [&>button]:flex-1"
             options={[{ value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }]} />
         </div>
         <div>
@@ -595,10 +606,8 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
           </div>
           <div>
             <div className={labelCls}>Category</div>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')} className={fieldCls}>
-              <option value="">Select…</option>
-              {catOptions.map(([g, list]) => <optgroup key={g} label={g}>{list.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>)}
-            </select>
+            <Dropdown fullWidth minWidth={0} value={String(categoryId)} placeholder="Select…" options={categoryDropdownOptions}
+              onChange={(k) => setCategoryId(k ? Number(k) : '')} />
           </div>
         </div>
 
@@ -638,26 +647,31 @@ function RecurringModal({ item, cats, accts, merchants, onClose, onSaved }: {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <div className={labelCls}>Start date</div>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`${fieldCls} font-mono`} />
+            <div className="relative">
+              <button type="button" onClick={() => setDateOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={dateOpen}
+                className={`${fieldCls} flex items-center justify-between gap-2 text-left cursor-pointer`}>
+                <span className={`truncate ${startDate ? 'text-content' : 'text-content-3'}`}>{startDate ? new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose date…'}</span>
+                <svg className="shrink-0" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+              </button>
+              {dateOpen && (
+                <Popover onClose={() => setDateOpen(false)} label="Choose date" className="absolute bottom-12 left-0 z-50 w-[320px] max-w-[calc(100vw-48px)] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                  <Calendar value={startDate} onChange={(d) => { setStartDate(d); setDateOpen(false); }} />
+                </Popover>
+              )}
+            </div>
           </div>
           <div>
             <div className={labelCls}>Account (optional)</div>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : '')} className={fieldCls}>
-              <option value="">None</option>
-              {acctGroups.map(([g, list]) => <optgroup key={g} label={g}>{list.map((a) => <option key={a.id} value={a.id}>{a.name}{a.last_four ? ` (…${a.last_four})` : ''}</option>)}</optgroup>)}
-            </select>
+            <Dropdown fullWidth minWidth={0} value={String(accountId)} placeholder="None" options={accountDropdownOptions}
+              onChange={(k) => setAccountId(k ? Number(k) : '')} />
           </div>
         </div>
         <div>
           <div className={labelCls}>Status</div>
-          <SegmentedControl value={status} onChange={(v) => setStatus(v as 'active' | 'paused')} className="w-full"
+          <SegmentedControl value={status} onChange={(v) => setStatus(v as 'active' | 'paused')} className="w-full [&>button]:flex-1"
             options={[{ value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }]} />
         </div>
 
-        <div className="flex items-center justify-end gap-2.5 pt-2">
-          <button onClick={onClose} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-          <button onClick={save} disabled={!valid || saving} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">{editing ? 'Save' : 'Add recurring'}</button>
-        </div>
       </div>
     </ResponsiveModal>
   );
