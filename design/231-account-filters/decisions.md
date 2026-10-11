@@ -1,7 +1,7 @@
 # Design decisions: Account detail transaction filters
 
 - Design issue: #231; covered build issues: #213
-- Revision: 1; replaces: none (or merged folder/revision)
+- Revision: 1; replaces: none
 - Maker: claude-bridge/claude-opus-5-5 (Anthropic), medium thinking
 
 ## Choice and approval
@@ -38,9 +38,22 @@ chat approval, a critique PASS and a closed/unmerged PR do not.
 A version is removed, replaced or left out at freeze only after Robert confirms what it
 alone had can go.
 
-All-version captures were completed and inspected before pruning versions/. Approved
-state × theme × width evidence: [manifest](screenshots/approved/manifest.json).
-Record actual counts, inspected image paths, offline proof and any capture limitations.
+All-version captures (88 images: 2 versions × 11 states × 2 themes × 390/1440) were
+completed and inspected before `versions/` was removed; they are in `screenshots/all/`.
+
+Approved evidence: [manifest](screenshots/approved/manifest.json), 44 of 44 images
+(`index.html` × 11 states × 2 themes × 390/1440), all opened and inspected. 41 are
+byte-identical to the inspected `b-*` captures; the three that differ are loading-state
+frames, where the spinner is caught mid-turn.
+
+Offline proof of `index.html` (2026-10-11): opened from `file://` in a fresh named browser
+with network emulated Offline (confirmed: a page served by an owned local server failed
+with `ERR_INTERNET_DISCONNECTED`). Only the file itself and `data:` fonts/images loaded.
+The interaction script (filters open/Escape/focus return, pick and apply with spinner,
+date preset and custom inputs, View all, Clear, search and no-match) passed at 390 and
+1440. Offline captures of default, filtered and error, both themes and widths (12), are
+byte-identical to the approved images. Limitation: in a prototype opened from `file://`,
+`history.replaceState` logs a harmless console warning; `data-state` still updates.
 
 ## Independent critique
 - Maker: claude-bridge/claude-opus-5-5 (Anthropic). Reviewer: GPT-5.6 Terra (OpenAI),
@@ -67,15 +80,15 @@ Record actual counts, inspected image paths, offline proof and any capture limit
 ## Comments and changes
 | ID / source | Version / element | Original note | Agreed change and verification | Resolved |
 | --- | --- | --- | --- | --- |
-| <Open Design ID or herdr reference> | <target> | <note> | <result> | <date/status> |
+| — | — | No Open Design comments were left (checked after every sync, last 2026-10-11). Robert's choices came in herdr and are recorded above | — | — |
 
 ## Experiment
-None, or Robert's permission, question, branch/preview, chosen behaviour, rejected
-attempts, static-version updates and unmerged/closed experiment PR. Code reuse: forbidden
-unless specific parts are explicitly authorized here. Keep the branch as a primary source.
+None. No real-site experiment was needed; no experiment code exists to reuse.
 
 ## Open items
-None affecting the approved scope. Preserve any deferred, out-of-scope questions explicitly.
+None affecting the approved scope. Deferred, out of scope: hiding "View all in
+Transactions" on accounts with no transactions (critique finding 1; kept as today by
+Robert, logged in backlog.md as a separate change).
 
 ## Build handoff
 Merged folder/revision is the feature authority; DESIGN.md/live site govern site-wide

@@ -76,7 +76,8 @@ button that opened it.
   Offline; screenshots saved at both widths and themes; no resources loaded over the network.
   Compared with the live captures: both phone images are byte-identical; desktop differs by
   2 (light) and 75 (dark) anti-aliased pixels, with no visible difference. Saved as
-  `host.html` in this folder.
+  `host.html`, the base of both versions; removed at freeze as redundant, since `index.html`
+  carries it and has its own offline proof (decisions.md).
 - Evidence (outside git): `/tmp/ledger-evidence-J4PXt4`.
 
 ## Confirmed decisions
