@@ -189,7 +189,7 @@ Money colours follow the money rules in `PRODUCT.md`: show transaction amounts w
 
 ### Categorical colours
 
-Nine hues with shared chroma, brighter in dark mode so they stay readable: `--c-teal`, `--c-green`, `--c-blue`, `--c-indigo`, `--c-violet`, `--c-fuchsia`, `--c-rose`, `--c-orange`, `--c-amber`. They colour charts, avatars, tags and other category-like marks. Colour a category through `getCategoryColor()` / `getCategoryColorHex()`, never a hard-coded value. Never rely on colour alone to tell categories apart; the name or label is always visible too.
+Nine hues with shared chroma, brighter in dark mode so they stay readable: `--c-teal`, `--c-green`, `--c-blue`, `--c-indigo`, `--c-violet`, `--c-fuchsia`, `--c-rose`, `--c-orange`, `--c-amber`. They colour charts, avatars, tags and other category-like marks. Colour a category through `getCategoryColorVar()` / `getCategoryColorHex()` (`lib/categoryMeta.ts`), never a hard-coded value. Never rely on colour alone to tell categories apart; the name or label is always visible too.
 
 ### Owner tags
 
