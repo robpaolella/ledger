@@ -68,7 +68,7 @@ export default function FilterPopover({
     const all = ids.length > 0 && ids.every((id) => d.account.includes(id));
     return { ...d, account: all ? d.account.filter((id) => !ids.includes(id)) : [...new Set([...d.account, ...ids])] };
   });
-  const q = search.toLowerCase();
+  const q = search.trim().toLowerCase();
   const count = filterDraftCount(draft);
 
   // "Select all" bulk toggles for the multi-select checklists.
