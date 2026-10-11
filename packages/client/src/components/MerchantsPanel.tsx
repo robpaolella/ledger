@@ -299,7 +299,7 @@ export default function MerchantsPanel() {
               </Field>
             )}
             {isMobile && (
-              <button type="button" onClick={startMerge} className="flex items-center gap-3 mt-1 px-3.5 py-3 min-h-11 rounded-[12px] border border-negative/35 text-negative text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              <button type="button" onClick={startMerge} className="flex items-center gap-3 mt-1 px-3.5 py-3 min-h-11 rounded-[12px] text-negative text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                 <svg className="shrink-0" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 6 6h6M15 12l3 3-3 3M6 21v-6" /></svg>
                 <span className="flex-1 min-w-0">
                   <span className="block text-[14px] font-bold">Merge &amp; delete</span>
