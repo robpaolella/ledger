@@ -69,7 +69,8 @@ router.get('/summary', (req: Request, res: Response) => {
     let liabilityTotal = 0;
     for (const { balance, classification } of latestByAccount.values()) {
       if (classification === 'liability') {
-        liabilityTotal += Math.abs(balance);
+        // Amount owed: stored owed balances are negative, credits positive.
+        liabilityTotal -= balance;
       } else {
         totalBalances += balance;
       }
