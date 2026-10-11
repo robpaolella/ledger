@@ -119,6 +119,8 @@ export default function RecurringPage() {
 
   const [panel, setPanel] = useState<RItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  // Item the modal edits when Edit comes from the catalogue, so the detail panel stays closed.
+  const [editTarget, setEditTarget] = useState<RItem | null>(null);
 
   const loadItems = useCallback(async () => {
     try { const r = await apiFetch<{ data: RItem[] }>('/recurring'); setItems(r.data); }
@@ -311,7 +313,8 @@ export default function RecurringPage() {
           )}
         </>
       ) : (
-        <AllRecurring items={items} annual={annual} onOpen={setPanel} />
+        <AllRecurring items={items} annual={annual} canEdit={canEdit} onOpen={setPanel}
+          onEdit={(it) => { setEditTarget(it); setModalOpen(true); }} />
       )}
 
       {panel && (
@@ -321,9 +324,9 @@ export default function RecurringPage() {
       )}
 
       {modalOpen && (
-        <RecurringModal item={panel} cats={cats} accts={accts} merchants={merchants}
-          onClose={() => setModalOpen(false)}
-          onSaved={async () => { setModalOpen(false); setPanel(null); await refresh(); }} />
+        <RecurringModal item={editTarget ?? panel} cats={cats} accts={accts} merchants={merchants}
+          onClose={() => { setModalOpen(false); setEditTarget(null); }}
+          onSaved={async () => { setModalOpen(false); setEditTarget(null); setPanel(null); await refresh(); }} />
       )}
     </div>
   );
@@ -378,9 +381,12 @@ function CalendarGrid({ month, today, occByDay, onOcc }: {
 }
 
 // ============================ All recurring ============================
-function AllRecurring({ items, annual, onOpen }: {
-  items: RItem[]; annual: { income: number; expense: number; count: number }; onOpen: (i: RItem) => void;
+function AllRecurring({ items, annual, canEdit, onOpen, onEdit }: {
+  items: RItem[]; annual: { income: number; expense: number; count: number }; canEdit: boolean;
+  onOpen: (i: RItem) => void; onEdit: (i: RItem) => void;
 }) {
+  // Same columns for header and rows so they stay aligned; the Edit column exists only when it has a button.
+  const cols = canEdit ? 'md:grid-cols-[1.6fr_1.3fr_0.9fr_1fr_64px]' : 'md:grid-cols-[1.6fr_1.3fr_0.9fr_1fr]';
   const sorted = [...items].sort((a, b) => a.label.localeCompare(b.label));
   const annualIncome = formatMoney(-annual.income);
   return (
@@ -391,31 +397,39 @@ function AllRecurring({ items, annual, onOpen }: {
         <KPICard label="Active recurring items" value={String(annual.count)} />
       </div>
       <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
-        <div className="hidden md:grid grid-cols-[1.6fr_1.3fr_0.9fr_1fr] px-5 py-3 border-b border-line text-[11px] font-semibold uppercase tracking-[0.05em] text-content-3">
-          <span>Label</span><span>Category</span><span className="text-right">Amount</span><span>Cadence</span>
+        <div className={`hidden md:grid ${cols} gap-x-4 px-5 py-3 border-b border-line text-[11px] font-semibold uppercase tracking-[0.05em] text-content-3`}>
+          <span>Label</span><span>Category</span><span className="text-right">Amount</span><span>Cadence</span>{canEdit && <span className="text-right">Edit</span>}
         </div>
         {sorted.length === 0 && <div className="p-10 text-center text-content-3 text-sm">No recurring items yet.</div>}
         {sorted.map((it) => {
           const paused = it.status === 'paused';
           const months = (() => { try { return JSON.parse(it.months_json ?? '[]') as number[]; } catch { return []; } })();
           return (
-            <button key={it.id} onClick={() => onOpen(it)}
-              className={`w-full grid grid-cols-[1.6fr_1.3fr_0.9fr_1fr] items-center px-5 py-3 border-b border-line text-left hover:bg-surface-2/40 ${paused ? 'opacity-55' : ''}`}>
-              <div className="flex items-center gap-3 min-w-0">
+            <div key={it.id}
+              className={`relative flex md:grid ${cols} items-center gap-x-4 gap-3 px-4 md:px-5 min-h-16 md:min-h-0 py-2 md:py-3 border-b border-line text-left hover:bg-surface-2/40 active:bg-surface-2`}>
+              <div className={`flex items-center gap-3 min-w-0 flex-1 md:flex-none ${paused ? 'opacity-55' : ''}`}>
                 <VendorAvatar name={it.merchantName ?? it.label} src={it.merchantLogoUrl || undefined} size={30} color={getCategoryColorHex(it.groupName)} />
                 <div className="min-w-0">
-                  <div className="font-semibold text-[14px] truncate">{it.label}</div>
+                  {/* The label is the row's keyboard target; its ::after stretches over the row so the whole row opens the panel. */}
+                  <button onClick={() => onOpen(it)} className="block max-w-full text-left font-semibold text-[14px] truncate after:absolute after:inset-0 after:content-['']">{it.label}</button>
                   {paused && <div className="text-[11px] text-content-3">Paused</div>}
+                  <div className="md:hidden text-[12px] text-content-3 truncate">{it.subName} · {cadenceLabel(it)}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[13px] text-content-2 min-w-0"><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName, it.groupName)}</span><span className="truncate">{it.subName}</span></div>
-              <div className="text-right font-bold text-[14px]"><Money amount={flow(it.amount ?? 0, it.type)} /></div>
-              <div className="text-[13px] text-content-2">
+              <div className={`hidden md:flex items-center gap-1.5 text-[13px] text-content-2 min-w-0 ${paused ? 'opacity-55' : ''}`}><span className="text-[15px] leading-none">{getCategoryEmoji(it.subName, it.groupName)}</span><span className="truncate">{it.subName}</span></div>
+              <div className={`shrink-0 text-right font-bold text-[14px] ${paused ? 'opacity-55' : ''}`}><Money amount={flow(it.amount ?? 0, it.type)} /></div>
+              <div className={`hidden md:block text-[13px] text-content-2 ${paused ? 'opacity-55' : ''}`}>
                 {it.freq_kind === 'custom_months'
                   ? <div className="flex flex-wrap gap-1">{months.map((mo) => <span key={mo} className="px-1.5 py-0.5 rounded-md bg-surface-2 border border-line text-[11px] font-semibold">{MONTH_NAMES[mo - 1]}</span>)}</div>
                   : cadenceLabel(it)}
               </div>
-            </button>
+              {canEdit && (
+                <div className="hidden md:flex justify-end relative z-10">
+                  <button onClick={() => onEdit(it)} aria-label={`Edit ${it.label}`}
+                    className="h-8 px-3 rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Edit</button>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
