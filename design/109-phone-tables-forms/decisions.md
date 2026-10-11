@@ -49,7 +49,9 @@ states × 2 themes × 2 widths), all opened by the reviewer. Verdict 2026-10-11:
    Chrome: every version × twofa-key 390, twofa-error 1440, twofa-required 390, all checks
    passed, no page errors; full 312-page smoke and class checks re-run clean.
 
-Re-check (fixes only): pending.
+Re-check (fixes only), same reviewer and command, evidence /tmp/design-review-noMpfP/versions,
+2026-10-11: **PASS** on both fixes (12 twofa-required captures inspected; keyboard contract read
+from the HTML against `TotpCodeInput.tsx` plus the recorded offline proof).
 
 Notes for the reviewer:
 - The versions differ on one decision only: the 12-month pattern on phones for Budget Year
