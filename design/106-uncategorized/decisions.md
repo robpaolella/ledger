@@ -6,18 +6,29 @@
   from step 4's re-check)
 
 ## Choice and approval
-Pending Robert. The versions differ on one decision:
+Chosen: **b**. Robert, 2026-10-10, this herdr tab: "Approved to proceed." (after answering
+decisions 1–6 below). Dropping a confirmed: "5. Fine to drop." (see Alternatives).
+The versions differ on one decision (1); 2–4 and 6 were open questions on shared behaviour:
 
 | # | Decision | Options (version) | Robert's pick and why |
 | --- | --- | --- | --- |
-| 1 | How Uncategorized shows on Budget and Reports | a: a row at the end of each section (Income, Expenses), muted, striped icon, "N to review ›"; b: one warning notice above the lists, category list unchanged | Pending |
+| 1 | How Uncategorized shows on Budget and Reports | a: a row at the end of each section (Income, Expenses), muted, striped icon, "N to review ›"; b: one warning notice above the lists, category list unchanged | **b**. Robert, 2026-10-10: "I agree that B is better." |
+| 2 | Uncategorized spend lowers section Remaining and fills the Budget bars | yes (built) / no | **Yes**. Robert, 2026-10-10: "Yes." |
+| 3 | Trends Uncategorized chip | show/hide its line like the other chips (built) / link to Review | **Show/hide**. Robert, 2026-10-10: "That's fine." |
+| 4 | Link colour | `--warning` (built) / `--primary` | **`--warning` for B's notice**. Robert, 2026-10-10: "The yellow is good for B." |
+| 6 | Dashboard Spending note's "Review" link colour | `--warning` (built) / `--primary` (recommended: a hint, not a warning) | **`--primary`**. Robert, 2026-10-10: "That's fine to make it blue." Changed in `proto.js`, rebuilt; a/b-dashboard shots at both widths and themes show it blue |
 
 Shared by both versions (from the confirmed brief): striped grey slice and legend entry in
 the Breakdown bar, dashed grey line with striped swatch in Trends, the Timeline row, the
 Dashboard Spending note, and hiding everything when nothing is uncategorized.
 
 ## Alternatives
-Pending Robert's choice.
+- **a** (row at the end of each section), rejected. Screenshots: `screenshots/all/a-*`.
+  Lost (only in a): an Uncategorized row inside the Budget and Reports lists so the list adds
+  up on screen; separate per-side counts ("6 to review" / "1 to review"); its share on the
+  Reports Summary ("<1%") and its own Timeline row; the phone card with its own Review button;
+  Robert's comment cmt_9ca5986f idea (striped row at the top, folder emoji). Robert,
+  2026-10-10: "5. Fine to drop."
 
 ## Independent critique
 - Maker: claude-bridge/claude-opus-5-5 (medium). Reviewer: claude-bridge/claude-sonnet-5-5
@@ -61,15 +72,13 @@ Pending Robert's choice.
 | Maker self-check | a and b, Dashboard Budget card | earned/spent and remaining left out the uncategorized money | Included it; rechecked a-dashboard-light-1440 / dark-390 and the Budget page rail ($3,340 earned, $3,390 spent) | 2026-10-10 |
 | Maker self-check | b, notice on phones | "Review them" squeezed beside the text | Moved to its own line; rechecked b-reports-light-390 | 2026-10-10 |
 | Maker self-check | a and b, sidebar | stopped short on long pages | Spans full height; rechecked a/b-budget-light-1440 | 2026-10-10 |
+| cmt_9ca5986f (Open Design) | a, `div.unc-row` (Budget Income row) | "I'd like to see a version of this where the Uncategorized row is at the top of the section, the entire row itself has the diagonal gray lines (but not so high contrast…), and use a folder emoji (maybe even grayed out…). This version might be too easy to miss. … perhaps a 'Includes uncategorized expenses' next to the section header in yellow…" | Not built. Robert, 2026-10-10: "I added comments on version A but I suggest ignoring them and just using B." Superseded by choosing b; a dropped with Robert's yes | Resolve in Open Design after final sync |
 | Maker offline check | a and b, prototype bar | keyboard focus left the state picker after a change | Focus restored after re-render; offline check shows focus kept | 2026-10-10 |
 
 ## Experiment
 None.
 
 ## Open items
-- For Robert before approval (brief "Open decisions" 1–4): row or notice; whether
-  uncategorized spend reduces section Remaining and bars (built: yes); Trends chip toggles
-  its line or links to Review (built: toggles); link colour `--warning` or `--primary`.
 - PRODUCT.md should gain the side rule for Uncategorized (money out under Expenses, money in
   under Income; brief decision 2). Belongs to #107 (or its docs follow-up), not this design.
 - The prototype scales the Dashboard Spending this-month line by the uncategorized share; the
