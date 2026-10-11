@@ -74,7 +74,9 @@ button that opened it.
   open (`txfilter-*`) and date range open (`txdate-*`), for faithful reuse in the versions.
 - Offline: `page.html` opened from `file://` in a fresh named browser with network emulated
   Offline; screenshots saved at both widths and themes; no resources loaded over the network.
-  Side-by-side image comparison with the live captures still to do.
+  Compared with the live captures: both phone images are byte-identical; desktop differs by
+  2 (light) and 75 (dark) anti-aliased pixels, with no visible difference. Saved as
+  `host.html` in this folder.
 - Evidence (outside git): `/tmp/ledger-evidence-J4PXt4`.
 
 ## Confirmed decisions
