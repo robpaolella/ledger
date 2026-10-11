@@ -52,8 +52,8 @@ const isoOf = (d: Date) =>
 
 // Build the range series from raw snapshots: sort asc, clamp the window to
 // [rangeStart, today], carry the latest snapshot forward across ~90 sampled
-// dates, and negate the plotted values for liabilities.
-function buildSeries(snapshots: Snapshot[], rangeKey: string, negate: boolean): ChartPoint[] {
+// dates. Balances plot with their stored sign (a liability owed is negative).
+function buildSeries(snapshots: Snapshot[], rangeKey: string): ChartPoint[] {
   if (snapshots.length === 0) return [];
   const asc = [...snapshots].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id - b.id));
   const today = new Date();
@@ -76,7 +76,7 @@ function buildSeries(snapshots: Snapshot[], rangeKey: string, negate: boolean): 
     const dateStr = isoOf(new Date(t));
     while (k < asc.length && asc[k].date <= dateStr) { last = asc[k].balance; k++; }
     if (last == null) continue; // sampled date precedes the first snapshot
-    points.push({ date: dateStr, value: negate ? -Math.abs(last) : last });
+    points.push({ date: dateStr, value: last });
   }
   return points;
 }
@@ -141,10 +141,10 @@ export default function AccountDetailPage() {
   }, [loadMeta, loadHistory, loadTxns]);
 
   const isLiability = meta?.classification === 'liability';
-  const points = useMemo(() => buildSeries(snapshots, range, isLiability), [snapshots, range, isLiability]);
+  const points = useMemo(() => buildSeries(snapshots, range), [snapshots, range]);
 
-  // Range delta on the plotted series. Liabilities are plotted negated, so the
-  // sign already carries the inverted polarity (debt paid down → delta ≥ 0 → green).
+  // Range delta on the plotted series. Owed liabilities are stored negative, so
+  // the sign already carries the inverted polarity (debt paid down → delta ≥ 0 → green).
   const delta = points.length >= 2 ? points[points.length - 1].value - points[0].value : null;
   // No percentage when the range-start balance is 0 — dividing by it yields a bogus +0.0%.
   const deltaPct = delta != null && points[0].value !== 0 ? (delta / Math.abs(points[0].value)) * 100 : null;
@@ -167,8 +167,10 @@ export default function AccountDetailPage() {
 
   const saveBalance = async () => {
     if (!meta) return;
-    const balance = parseFloat(balanceInput);
-    if (isNaN(balance)) { addToast('Enter a valid balance', 'error'); return; }
+    const entered = parseFloat(balanceInput);
+    if (isNaN(entered)) { addToast('Enter a valid balance', 'error'); return; }
+    // Liabilities are typed as the amount owed and stored negative (owed lowers net worth).
+    const balance = isLiability && entered !== 0 ? -entered : entered;
     try {
       await apiFetch('/balances', { method: 'POST', body: JSON.stringify({ accountId: meta.accountId, date: todayYmd(), balance }) });
       setBalanceOpen(false); addToast('Balance updated');
@@ -205,7 +207,6 @@ export default function AccountDetailPage() {
     );
   }
 
-  const displayBalance = isLiability ? -Math.abs(meta.balance) : meta.balance;
   const canBalance = hasPermission('balances.update');
 
   const summaryRow = (label: string, value: React.ReactNode, last = false) => (
@@ -236,7 +237,7 @@ export default function AccountDetailPage() {
           <div className="min-w-0">
             <div className="font-mono text-[11px] uppercase tracking-[.1em] text-content-3 mb-2 md:mb-2.5">Current balance</div>
             <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{formatMoney(displayBalance, { kind: 'balance', showZero: true }).text}</span>
+              <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{formatMoney(meta.balance, { kind: 'balance', showZero: true }).text}</span>
               {change != null && (
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold tabular-nums"
                   style={{ color: up ? 'var(--positive)' : 'var(--negative)' }}>
@@ -319,7 +320,7 @@ export default function AccountDetailPage() {
           {summaryRow('Total transactions', txnTotal.toLocaleString())}
           {summaryRow('Last update', timeAgo(meta.lastUpdated) || '—', true)}
           {canBalance && (
-            <button onClick={() => { setBalanceInput(meta.balance ? String(meta.balance) : ''); setBalanceOpen(true); }}
+            <button onClick={() => { setBalanceInput(meta.balance ? String(isLiability ? -meta.balance : meta.balance) : ''); setBalanceOpen(true); }}
               className="w-full h-11 mt-1.5 mb-1.5 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm text-content hover:bg-elevated">
               Update balance
             </button>
@@ -334,7 +335,7 @@ export default function AccountDetailPage() {
             <div>
               <label className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
               <CurrencyInput value={balanceInput} onChange={setBalanceInput} autoFocus allowNegative />
-              <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number.</p>
+              <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number. Enter a negative amount if the card is in credit.</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setBalanceOpen(false)} className="h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
