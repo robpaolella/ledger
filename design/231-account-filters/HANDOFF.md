@@ -1,4 +1,4 @@
-# Handoff: design #231 (Account detail filters), 2026-10-11 (third handoff)
+# Handoff: design #231 (Account detail filters), 2026-10-11 (fourth handoff)
 
 Delete this file before the design PR.
 
@@ -121,24 +121,22 @@ notes instead of re-reading the components.
   the adapted shell, inlined logos and data, and one shared prototype script with a
   `VERSION` constant. Don't commit the script.
 
+## Session 4 (build started; read this first)
+Everything step 4 needs is now written down outside the repo, so don't re-read the components
+or the captures: **`/tmp/design-231-build/SPEC.md`** is the full build spec (data rules, all 11
+states with checked counts, interactions, verbatim class recipes, both versions). Done there:
+`extract.py` and `build.py` (assembles both versions; untested). Still to write: `proto.css`
+and `proto.js`, then run `python3 /tmp/design-231-build/build.py`. Counts verified: filtered
+(Dining/Eating Out + Fuel, Last month) = 11, many-matches (over $75) = 31, no-match (Fuel over
+$200) = 0. The "filtered" example in the brief said 9; the real sample data gives 11.
+
 ## Next step
-Step 4: build the versions (plan unchanged):
-- a: controls in the page header (desktop: Clear, search icon, Date, Filters with count badge,
-  replacing today's "Filters" link; phone: the Transactions phone toolbar, search field +
-  filter icon, then Date chip and Clear), active filters shown only by the badge and the count
-  line ("9 of 9 matching").
-- b: controls on the Transactions card header (title + count left; search, Date, Filters
-  right; phone: search field + filter icon and Date chip inside the card), plus a plain
-  summary line of the active filters under the card header with Clear.
-- Independent decisions to ask Robert separately: (1) where the controls sit, (2) how active
-  filters show.
-- States: default, filters-open, date-open, filtered, many-matches, no-match, search-no-match,
-  no-transactions, long-names, loading, error. Themes light, dark.
-Then step 5 (critique) and step 6 (show Robert in Open Design).
-Still nothing is waiting on Robert. One wording point to raise with him at step 6: the
-confirmed count "9 of 9 matching" when every match fits could read as just "9 matching".
-`/tmp/ledger-evidence-J4PXt4` must still exist; if it's gone, step 3's capture has to be
-re-run (commands in brief.md).
+Write proto.css + proto.js per SPEC.md, build, check both versions offline at both widths and
+themes, fill design.json/decisions.md, then step 5 (critique) and step 6 (show Robert).
+Start building immediately: three sessions have now spent their budget on research.
+Nothing is waiting on Robert.
+`/tmp/ledger-evidence-J4PXt4` and `/tmp/design-231-build` must still exist; if the evidence
+folder is gone, step 3's capture has to be re-run (commands in brief.md).
 
 ## Next session
 Claude Opus 5.5, medium thinking (`node /git/maestro/routing/route.ts role design-feature`).
