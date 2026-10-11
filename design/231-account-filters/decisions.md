@@ -24,8 +24,8 @@ run over the sidebar). Apply shows the existing spinner in the list area while t
 reloads. No new kind of element: b's summary line reuses the card's row, text and
 text-button styles; Robert is asked about it as decision 2.
 
-Robert's exact confirmation and date/reference authorizing the
-PR. Design PR: use the linked PR on the design issue once created; the session adds
+Chosen: version b. Robert: "6. Approved." (2026-10-11, herdr), authorizing the PR.
+Only his merge approves it for building. Design PR: use the linked PR on the design issue once created; the session adds
 that link there after opening it. Only Robert merging that PR approves it for building;
 chat approval, a critique PASS and a closed/unmerged PR do not.
 
