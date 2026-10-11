@@ -11,9 +11,9 @@ them, even if no single version had all of them:
 
 | # | Decision | Options (version) | Robert's pick and why |
 | --- | --- | --- | --- |
-| 1 | Where the search, date and filter controls sit | a: page header (phone: sticky toolbar under the app bar, above the balance chart); b: Transactions card header (phone: inside the card, next to the list) | Pending (step 6) |
-| 2 | How active filters show | a: Filters badge, Date label and count line only; b: the same plus a summary line under the card header ("Dining/Eating Out, Fuel · Last month") with Clear | Pending (step 6) |
-| 3 | Count wording when every match fits | "11 of 11 matching" (both versions today) or "11 matching" | Pending (step 6) |
+| 1 | Where the search, date and filter controls sit | a: page header (phone: sticky toolbar under the app bar, above the balance chart); b: Transactions card header (phone: inside the card, next to the list) | b. "2. Agreed, B." (2026-10-11): the controls sit beside the list they change |
+| 2 | How active filters show | a: Filters badge, Date label and count line only; b: the same plus a summary line under the card header ("Dining/Eating Out, Fuel · Last month") with Clear | b. "3. B." (2026-10-11): search folds to an icon on desktop, so the line shows why the list is shorter |
+| 3 | Count wording when every match fits | "11 of 11 matching" (both versions today) or "11 matching" | "11 matching"; "14 of 31 matching" only when matches exceed the 14 rows. "4. Agreed." (2026-10-11). Applied to both versions and re-inspected (b filtered, light 1440 and dark 390) |
 
 Build details shared by both versions (not choices): the filter panel is Transactions'
 `FilterPopover` without the Accounts tab; the date control is `DateRangePopover`; on phones

@@ -45,7 +45,7 @@ Walmart, Target, Whole Foods, Costco, Publix, Chipotle). Synthetic demo-seed dat
 | default | Any role, no filters | 14 rows; count "14 most recent" | Search, Date, Filters; "View all in Transactions" |
 | filters-open | Filter panel open on Categories | Tabs: Categories, Merchants, Amount, Other; "N filters selected" | Clear / Cancel / Apply |
 | date-open | Date range open | Same presets as Transactions | Apply / clear date |
-| filtered | Two categories + "Last month" applied | 9 rows; count "9 of 9 matching" (or "14 of 52 matching" when over 14) | Filters badge "2"; "Clear" shown; link carries filters |
+| filtered | Two categories + "Last month" applied | 11 rows; count "11 matching" (or "14 of 52 matching" when over 14; Robert, 2026-10-11) | Filters badge "2"; "Clear" shown; link carries filters |
 | many-matches | Amount filter matching more than 14 | 14 rows; "14 of 37 matching" | Link opens Transactions with the same filters |
 | no-match | Filters match nothing | "No transactions match these filters" + Clear | Clear restores the default list |
 | search-no-match | Search typed, nothing found | `Nothing matches “{search}”` (long search text truncates) | Clear restores the default list |
