@@ -277,6 +277,25 @@ export default function BudgetPage() {
   // Long names wrap at word boundaries and after "/", never mid-word.
   const wrapName = (name: string) => name.split('/').flatMap((part, i, a) => (i < a.length - 1 ? [part, '/', <wbr key={i} />] : [part]));
   const wrapCls = 'line-clamp-2 [overflow-wrap:break-word]';
+  // Year view loading and error cards (approved design: skeleton rows, "Try again").
+  const yearLoading = (
+    <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden" aria-busy="true" aria-label="Loading budget">
+      <div className="bg-surface-2 border-b border-line h-11" />
+      {[150, 110, 170, 90, 140, 120, 160, 100].map((w, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 px-4 md:px-6 py-3.5 border-b border-line">
+          <div className="bg-surface-2 rounded-lg h-4" style={{ width: w }} />
+          <div className="flex gap-3">{Array.from({ length: isMobile ? 2 : 8 }, (_, j) => <div key={j} className="bg-surface-2 rounded-lg h-4 w-14" />)}</div>
+        </div>
+      ))}
+    </div>
+  );
+  const yearError = (
+    <div className="bg-surface border border-line rounded-card shadow-sm p-6 md:p-10 flex flex-col items-center text-center gap-3">
+      <div className="text-[17px] font-extrabold text-content">Couldn’t load your budget</div>
+      <p className="text-sm text-content-3 m-0 max-w-[360px]">Check your connection, then try again. Nothing you planned was lost.</p>
+      <Button variant="secondary" onClick={loadAnnual}>Try again</Button>
+    </div>
+  );
 
   return (
     <div>
@@ -515,15 +534,7 @@ export default function BudgetPage() {
       </div>
       ) : isMobile ? (
       /* ===== YEAR VIEW · PHONE ===== one month at a time beside the year total */
-      annualError && !phoneYear ? (
-        <div className="bg-surface border border-line rounded-card shadow-sm p-6 flex flex-col items-center text-center gap-3">
-          <div className="text-[17px] font-extrabold text-content">Couldn’t load your budget</div>
-          <p className="text-sm text-content-3 m-0 max-w-[360px]">Check your connection, then try again. Nothing you planned was lost.</p>
-          <Button variant="secondary" onClick={loadAnnual}>Try again</Button>
-        </div>
-      ) : !phoneYear ? (
-        <div className="bg-surface rounded-card border border-line shadow-sm p-10 flex justify-center" aria-busy="true"><Spinner /></div>
-      ) : (
+      annualError && !phoneYear ? yearError : !phoneYear ? yearLoading : (
       <div>
         {yearEmpty && (
           <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
@@ -609,7 +620,7 @@ export default function BudgetPage() {
         </div>
       </div>
       )
-      ) : annualData ? (
+      ) : annualError && annualYear !== yr ? yearError : annualData ? (
       /* ===== YEAR VIEW ===== */
       <div className="bg-surface rounded-card border border-line shadow-sm overflow-x-auto">
         <div>
@@ -685,7 +696,7 @@ export default function BudgetPage() {
         </div>
       </div>
       ) : (
-      <div className="bg-surface rounded-card border border-line shadow-sm p-10 flex justify-center"><Spinner /></div>
+      yearLoading
       )}
 
       {/* ===== Edit budget popup ===== */}
