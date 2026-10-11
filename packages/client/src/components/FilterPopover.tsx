@@ -117,6 +117,9 @@ export default function FilterPopover({
             {tab === 'Merchants' && visibleMerchantIds.length > 0 && (
               <CheckRow on={merAllChecked} onToggle={toggleAllMerchants} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={merAllChecked} />Select all</CheckRow>
             )}
+            {tab === 'Categories' && q && !categoryGroups.some((g) => g.group.toLowerCase().includes(q) || g.subs.some((s) => `${s.sub} ${g.group}`.toLowerCase().includes(q))) && (
+              <div className="flex items-center justify-center h-full min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
+            )}
             {tab === 'Categories' && categoryGroups.map((g) => {
               const gChecked = g.subs.length > 0 && g.subs.every((s) => draft.category.includes(`sub:${s.id}`));
               const subs = q ? g.subs.filter((s) => `${s.sub} ${g.group}`.toLowerCase().includes(q)) : g.subs;
@@ -187,7 +190,9 @@ export default function FilterPopover({
               merchants.length === 0 ? (
                 <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No merchants yet</div>
               ) : (
-                merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => (
+                q && !merchants.some((m) => m.name.toLowerCase().includes(q)) ? (
+                  <div className="flex items-center justify-center h-full min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
+                ) : merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => (
                   <CheckRow key={m.id} on={draft.merchant.includes(m.id.toString())} onToggle={() => toggleMerchant(m.id.toString())} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
                     <Chk on={draft.merchant.includes(m.id.toString())} />
                     <VendorAvatar name={m.name} src={m.logo_url || undefined} color={'var(--c-blue)'} size={18} />

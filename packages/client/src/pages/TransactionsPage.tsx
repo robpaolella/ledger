@@ -1855,7 +1855,7 @@ export default function TransactionsPage() {
             </div>
           ))}
           {transactions.length === 0 && (
-            <p className="text-center py-10 text-content-3 text-sm m-0">No transactions found for this period</p>
+            <p className="text-center py-10 text-content-3 text-sm m-0 truncate px-4">{debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period'}</p>
           )}
         </div>
       ) : (
@@ -1925,7 +1925,7 @@ export default function TransactionsPage() {
             {g.rows.map((r) => renderRow(r.t, r.split))}
           </div>
         ))}
-        {transactions.length === 0 && <div className="text-center py-10 text-content-3 text-sm">No transactions found for this period</div>}
+        {transactions.length === 0 && <div className="text-center py-10 text-content-3 text-sm truncate px-4">{debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period'}</div>}
       </div>
       )}
       {(editCell || reviewPopId != null) && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); setReviewPopId(null); }} />}

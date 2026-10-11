@@ -349,7 +349,7 @@ export default function ReviewsPage() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>
               </div>
               <div className="text-[18px] font-extrabold tracking-tight">{anyFilter ? 'No matches' : "You're all caught up"}</div>
-              <div className="text-sm text-content-3 max-w-[320px]">{anyFilter ? 'No transactions match the current filters.' : 'Every transaction to review has been reviewed. Nice work.'}</div>
+              <div className="text-sm text-content-3 max-w-[320px]">{q !== '' ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : anyFilter ? 'No transactions match the current filters.' : 'Every transaction has been reviewed. Nice work.'}</div>
               {anyFilter && <button onClick={resetFilters} className="mt-1 h-10 px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Clear filters</button>}
             </div>
           ) : (
