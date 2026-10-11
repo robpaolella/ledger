@@ -5,8 +5,7 @@
   ],
   "revision": 1,
   "versions": {
-    "a": "versions/a.html",
-    "b": "versions/b.html"
+    "approved": "index.html"
   },
   "states": [
     "budget",

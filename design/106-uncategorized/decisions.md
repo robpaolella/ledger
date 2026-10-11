@@ -18,12 +18,21 @@ The versions differ on one decision (1); 2–4 and 6 were open questions on shar
 | 4 | Link colour | `--warning` (built) / `--primary` | **`--warning` for B's notice**. Robert, 2026-10-10: "The yellow is good for B." |
 | 6 | Dashboard Spending note's "Review" link colour | `--warning` (built) / `--primary` (recommended: a hint, not a warning) | **`--primary`**. Robert, 2026-10-10: "That's fine to make it blue." Changed in `proto.js`, rebuilt; a/b-dashboard shots at both widths and themes show it blue |
 
+Frozen 2026-10-10: `versions/b.html` became `index.html` (`design.json` `versions` is
+`{"approved":"index.html"}`). Approved evidence: `screenshots/approved/` (10 states × 2
+themes × 2 widths, 40 images plus manifest; byte-identical to the final `b-*` shots in
+`screenshots/all/`, all opened and checked). Picks 2–4 and 6 apply to the approved design
+as built; nothing was combined from different versions, so no new behaviour and no
+re-critique.
+
 Shared by both versions (from the confirmed brief): striped grey slice and legend entry in
 the Breakdown bar, dashed grey line with striped swatch in Trends, the Timeline row, the
 Dashboard Spending note, and hiding everything when nothing is uncategorized.
 
 ## Alternatives
-- **a** (row at the end of each section), rejected. Screenshots: `screenshots/all/a-*`.
+- **a** (row at the end of each section), rejected. Screenshots: `screenshots/all/a-*`
+  (final alternatives, captured after the decision 6 colour change: 2 versions × 10 states ×
+  2 themes × 2 widths, 80 images plus manifest, all opened and checked).
   Lost (only in a): an Uncategorized row inside the Budget and Reports lists so the list adds
   up on screen; separate per-side counts ("6 to review" / "1 to review"); its share on the
   Reports Summary ("<1%") and its own Timeline row; the phone card with its own Review button;
@@ -72,8 +81,15 @@ Dashboard Spending note, and hiding everything when nothing is uncategorized.
 | Maker self-check | a and b, Dashboard Budget card | earned/spent and remaining left out the uncategorized money | Included it; rechecked a-dashboard-light-1440 / dark-390 and the Budget page rail ($3,340 earned, $3,390 spent) | 2026-10-10 |
 | Maker self-check | b, notice on phones | "Review them" squeezed beside the text | Moved to its own line; rechecked b-reports-light-390 | 2026-10-10 |
 | Maker self-check | a and b, sidebar | stopped short on long pages | Spans full height; rechecked a/b-budget-light-1440 | 2026-10-10 |
-| cmt_9ca5986f (Open Design) | a, `div.unc-row` (Budget Income row) | "I'd like to see a version of this where the Uncategorized row is at the top of the section, the entire row itself has the diagonal gray lines (but not so high contrast…), and use a folder emoji (maybe even grayed out…). This version might be too easy to miss. … perhaps a 'Includes uncategorized expenses' next to the section header in yellow…" | Not built. Robert, 2026-10-10: "I added comments on version A but I suggest ignoring them and just using B." Superseded by choosing b; a dropped with Robert's yes | Resolve in Open Design after final sync |
+| cmt_9ca5986f (Open Design) | a, `div.unc-row` (Budget Income row) | "I'd like to see a version of this where the Uncategorized row is at the top of the section, the entire row itself has the diagonal gray lines (but not so high contrast…), and use a folder emoji (maybe even grayed out…). This version might be too easy to miss. … perhaps a 'Includes uncategorized expenses' next to the section header in yellow…" | Not built. Robert, 2026-10-10: "I added comments on version A but I suggest ignoring them and just using B." Superseded by choosing b; a dropped with Robert's yes. Resolved in Open Design after the final sync | 2026-10-10 |
 | Maker offline check | a and b, prototype bar | keyboard focus left the state picker after a change | Focus restored after re-render; offline check shows focus kept | 2026-10-10 |
+| Robert, herdr (decision 6) | a and b, Dashboard Spending note | "That's fine to make it blue." | Note's "Review" link uses `--primary`; B's notice link stays `--warning`; checked in a/b-dashboard shots, both themes and widths | 2026-10-10 |
+
+Final check of `index.html` (2026-10-10, headless Chrome, network emulated offline, 390 and
+1440): state/theme from the URL set `data-state`/`data-theme`, keyboard state change kept
+focus, theme picker and URL sync worked, 7 fonts loaded, no broken images, no external links,
+zero non-local requests; notice links and Dashboard note 44px tall on phones. Synced to Open
+Design; `design.ts comments` reports no open comments.
 
 ## Experiment
 None.
@@ -87,6 +103,14 @@ None.
   their amounts (only the % shows). Logged in backlog.md.
 
 ## Build handoff
+Build version b as `index.html` shows it, with the picks above: one `InlineNotification`
+(warning) above the Budget and Reports lists, category lists unchanged; uncategorized money
+in every actual total including section Remaining and the Budget bars; striped Breakdown
+slice and legend entry; dashed Trends line whose chip shows/hides it; Timeline row; Dashboard
+Spending note with a `--primary` "Review" link; all hidden when nothing is uncategorized.
+The only new kind of element is the grey diagonal-stripe fill (approved by merging this
+design). See Open items for what the prototype fakes.
+
 Merged folder/revision is the feature authority; DESIGN.md/live site govern site-wide
 look. Reconcile issues and paused branches in prep before marking ready. Without a
 conductor, the design session owns that follow-up. Later revisions use new issues/PRs.

@@ -32,8 +32,8 @@ be picked, budgeted or edited.
   and `InlineNotification`-style strip. Money through `formatMoney()` (plain $X for money
   out, green +$X for money in).
 - "Left to budget" is planned income minus planned expenses; the line never changes it.
-  Section Remaining (planned minus actual) does drop by the uncategorized money, as built;
-  awaiting Robert's confirmation (critique fix 6).
+  Section Remaining (planned minus actual) does drop by the uncategorized money (Robert,
+  2026-10-10, open decision 2).
 - **New kinds of element Robert is asked to approve:** only the grey diagonal-stripe fill that
   marks Uncategorized in charts and on its rows (Robert asked for it, decision 7). Version B's
   notice reuses the existing `InlineNotification` (warning) component, so it isn't new.
@@ -50,6 +50,7 @@ be picked, budgeted or edited.
    section, styled apart from real categories (muted, no emoji, no plan box); **B** one notice
    strip above the list ("6 transactions ($412) have no category yet. They're counted in your
    totals. Review them"), keeping the category list pure. Built wording: see "Draft wording".
+   Robert chose **B** (2026-10-10; see Open decisions).
 5. Nothing uncategorized: the line, notice and Dashboard note are hidden.
 6. Wording is "Uncategorized", matching the rest of the app.
 7. Reports charts include it as its own grey slice (Breakdown bar) and grey line (Trends),
@@ -58,9 +59,8 @@ be picked, budgeted or edited.
 8. Dashboard Spending card: a small line under the headline, "Includes $412 uncategorized · Review",
    only when there is some.
 - Assumed and not contradicted: everyone who can see these screens sees the line and can click
-  through to Review (View-only members can open Review but not change it); on phones it is a
-  card row at the end of the list (A) or a strip (B), same size as other rows; counts show in
-  full ("48 transactions").
+  through to Review (View-only members can open Review but not change it); on phones the
+  notice is a strip with "Review them" on its own line; counts show in full ("48 transactions").
 
 ## States, themes and content
 Themes `light`, `dark`. Widths 390×844 and 1440×900. Synthetic sample data only.
@@ -83,19 +83,17 @@ transfer from a friend). Large: $3,906.18 across 48 out; +$1,240.00 across 3 in.
 Not separate states: loading and error (each page's existing spinner/error is unchanged; the
 line arrives with the data); roles (identical for owner, admin and member; Review itself
 handles View-only); empty household (Ledger always has data for an invited person; zero
-uncategorized is `-none`). Keyboard: in the build the row, notice and note are real links (A's row a whole-row link) with the 2px `--ring` focus; the prototype's rows are focusable `role="link"` rows showing that ring.
+uncategorized is `-none`). Keyboard: in the build the notice's "Review them" and the Dashboard note's "Review" are real
+links with the 2px `--ring` focus.
 Phone touch targets ≥44px.
 
 ## Draft wording (as built in the versions)
-- A, Budget/Reports row: "Uncategorized" · "6 transactions" · "$412" · "6 to review ›"
-  (phone card: "$412 · 6 transactions" and a "Review" button).
-- B, notice: "**7 transactions have no category yet** ($412 out, +$85 in). They're counted
+- Notice on Budget and Reports: "**7 transactions have no category yet** ($412 out, +$85 in). They're counted
   in the totals below. Review them ›" (one side only drops the other part).
 - Dashboard Spending card: "Includes $412 uncategorized · Review".
 - Charts: the Breakdown legend entry and bar slice, and the Trends chip, are plain chart parts
-  like their neighbours (the Trends chip shows/hides its line like the other chips,
-  provisional: open decision 3); the
-  Review links are the row (A), the notice (B) and the Dashboard note.
+  like their neighbours (the Trends chip shows/hides its line like the other chips); the
+  Review links are the notice and the Dashboard note.
 - Clicking any of them in the prototype shows a note saying where Review would open.
 
 ## Host snapshot and offline proof
@@ -110,7 +108,8 @@ Phone touch targets ≥44px.
   (`host-budget.html`, `host-reports.html`, `host-trends.html`, `host-dashboard.html`) opened
   in an isolated browser with network disabled: 16 captures matched the running pages, fonts
   and images loaded, no network requests.
-- Versions (`versions/a.html`, `versions/b.html`) are built from those captures plus a local
+- Versions (`versions/a.html`, `versions/b.html`; b is now `index.html`, a is kept as
+  `screenshots/all/a-*`) were built from those captures plus a local
   prototype script; their Content-Security-Policy allows only inline script/style and `data:`
   fonts/images. Rechecked 2026-10-10 in headless Chrome with network emulated offline, both
   versions at 390 and 1440: `?state=&theme=` applied and set `data-state`/`data-theme`, the
@@ -118,6 +117,8 @@ Phone touch targets ≥44px.
   7 fonts loaded, no broken images, no external links, zero non-local requests. After the
   critique fixes, the same offline run measured the new phone tap targets (notice link and
   Dashboard note 44px, A's rows 47–72px) and Tab reached A's rows with a solid 2px focus ring.
+- Final `index.html` rechecked the same way on 2026-10-10 at 390 and 1440 (all checks pass,
+  zero non-local requests). The host snapshots were removed once that proof was recorded.
 - The Dashboard Spending chart's this-month line is scaled up by the uncategorized share
   (spread across the month) so it matches the headline; the build draws the real series.
 
@@ -125,10 +126,9 @@ Phone touch targets ≥44px.
 None.
 
 ## Open decisions
-Robert's choices, all shown as built (provisional until he answers):
-1. Row (A) or notice (B) on Budget and Reports.
-2. Should uncategorized spend reduce section Remaining and the Budget bars? Built: yes.
-3. Should the Trends Uncategorized chip show/hide its line like the other chips, or link to
-   Review? Built: show/hide.
-4. Link colour for "N to review" / "Review": `--warning` (built, signals it needs attention)
-   or `--primary` like other links (DESIGN.md).
+None. Robert answered all on 2026-10-10 (details in `decisions.md`):
+1. Notice (**B**) on Budget and Reports; A dropped.
+2. Uncategorized spend reduces section Remaining and fills the Budget bars: **yes**.
+3. Trends Uncategorized chip shows/hides its line like the other chips.
+4. B's notice link is yellow (`--warning`).
+6. The Dashboard Spending note's "Review" link is blue (`--primary`).
