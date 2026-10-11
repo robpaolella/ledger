@@ -29,11 +29,13 @@ interface RItem {
   effective_start: string | null; effective_end: string | null;
   groupName: string; subName: string; displayName: string; categoryType: string;
   merchantName: string | null; merchantLogoUrl: string | null; accountName: string | null; accountLastFour: string | null;
+  accountLogoUrl: string | null; accountColor: string | null;
 }
 interface ROcc {
   itemId: number; label: string; merchantName: string | null; merchantLogoUrl: string | null; date: string; amount: number;
   type: 'income' | 'expense'; categoryId: number; groupName: string; subName: string;
   categoryType: string; accountName: string | null; accountLastFour: string | null;
+  accountLogoUrl: string | null; accountColor: string | null;
   frequency: Kind; status: 'paid' | 'due' | 'upcoming';
 }
 interface Flow { total: number; paid: number; remaining: number }
@@ -192,6 +194,9 @@ export default function RecurringPage() {
   }, [items]);
 
   // ---------- render helpers ----------
+  const acctAvatar = (o: ROcc, size: number) => (
+    <VendorAvatar name={o.accountName ?? ''} src={o.accountLogoUrl || undefined} color={o.accountColor || 'var(--c-blue)'} size={size} />
+  );
   const occRow = (o: ROcc) => {
     const color = getCategoryColorHex(o.groupName);
     const dateColor = o.status === 'paid' ? 'var(--text)' : 'var(--warning)';
@@ -201,16 +206,19 @@ export default function RecurringPage() {
         <VendorAvatar name={o.merchantName ?? o.label} src={o.merchantLogoUrl || undefined} size={34} color={color} />
         <div className="min-w-0 flex-[1.3]">
           <div className="font-semibold text-[15px] truncate">{o.label}</div>
-          <div className="text-[12px] text-content-3 truncate">
-            {cadenceLabel(items.find((i) => i.id === o.itemId) ?? { freq_kind: o.frequency, interval: null, months_json: null })}
-            <span className="md:hidden">{o.accountName ? ` · ${o.accountName}` : ''}</span>
+          <div className="text-[12px] text-content-3 flex items-center gap-1 min-w-0">
+            <span className="shrink-0">{cadenceLabel(items.find((i) => i.id === o.itemId) ?? { freq_kind: o.frequency, interval: null, months_json: null })}</span>
+            {o.accountName && <span className="md:hidden flex items-center gap-1 min-w-0">· {acctAvatar(o, 16)}<span className="truncate">{o.accountName}</span></span>}
           </div>
         </div>
         <div className="hidden md:block w-[92px] shrink-0">
           <div className="text-[13px] font-semibold tabular-nums" style={{ color: dateColor }}>{dateChip(o.date)}</div>
           <div className="text-[11px] text-content-3">{relativeLabel(o.date, today)}</div>
         </div>
-        <div className="flex-1 min-w-0 text-[13px] text-content-3 truncate hidden md:block">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</div>
+        <div className="flex-1 min-w-0 text-[13px] text-content-3 hidden md:flex items-center gap-1.5">
+          {o.accountName && acctAvatar(o, 18)}
+          <span className="truncate">{o.accountName ?? '—'}{o.accountLastFour ? ` (…${o.accountLastFour})` : ''}</span>
+        </div>
         <div className="flex-1 min-w-0 hidden md:flex items-center gap-1.5 text-[13px] text-content-2">
           <span className="text-[15px] leading-none">{getCategoryEmoji(o.subName, o.groupName)}</span>
           <span className="truncate">{o.subName}</span>
@@ -265,7 +273,10 @@ export default function RecurringPage() {
                 </div>
                 <button onClick={() => setMonthOffset(0)} className="h-8 px-3 flex items-center rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Today</button>
                 <SegmentedControl value={view} onChange={(v) => setView(v as 'list' | 'calendar')}
-                  options={[{ value: 'list', label: 'List' }, { value: 'calendar', label: 'Calendar' }]} />
+                  options={[
+                    { value: 'list', label: <span className="inline-flex items-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>List</span> },
+                    { value: 'calendar', label: <span className="inline-flex items-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Calendar</span> },
+                  ]} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 border-t border-line">
