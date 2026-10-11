@@ -116,6 +116,7 @@ describe('upgrading a v1.0.2 database', () => {
     try {
       // Pay cycles have no table in a v1.0.2 database; budget templates (and their recurring
       // items) do, and are empty in the fixture, so this asserts they survive and stay untouched.
+      // Savings (also retired) needs no check: v1.0.2 had no savings category type, so that fold never runs here.
       const retired = ['budget_templates', 'budget_recurring'];
       for (const t of retired) {
         expect(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t), `${t} exists`).toBeTruthy();
