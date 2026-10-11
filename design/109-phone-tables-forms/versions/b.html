@@ -223,7 +223,7 @@ html.proto-locked #root { height: calc(100dvh - var(--proto-bar)); overflow: hid
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 .cap { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
-.wrap2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.wrap2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; }
 
 /* Budget amount buttons (same look as the year grid's cells). */
 .amt { min-width: 64px; text-align: right; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); font-weight: 600; cursor: pointer; }
@@ -277,6 +277,37 @@ button.mcell:hover { border-color: var(--primary); }
 #auth { min-height: calc(100dvh - var(--proto-bar)); }
 html.proto-auth #root { display: none; }
 html:not(.proto-auth) #auth { display: none; }
+
+/* Tailwind utilities the prototype uses that the app's build doesn't emit yet (same output Tailwind would generate). */
+@layer utilities {
+  .-mx-8 { margin-inline: calc(var(--spacing) * -8); }
+  .px-8 { padding-inline: calc(var(--spacing) * 8); }
+  .mb-0 { margin-bottom: calc(var(--spacing) * 0); }
+  .my-2\.5 { margin-block: calc(var(--spacing) * 2.5); }
+  .items-stretch { align-items: stretch; }
+  .min-h-full { min-height: 100%; }
+  .min-h-11 { min-height: calc(var(--spacing) * 11); }
+  .leading-\[1\.5\] { line-height: 1.5; }
+  .min-h-\[44px\] { min-height: 44px; }
+  .min-h-\[48px\] { min-height: 48px; }
+  .min-h-\[52px\] { min-height: 52px; }
+  .pl-\[52px\] { padding-left: 52px; }
+  .w-\[64px\] { width: 64px; }
+  .w-\[80px\] { width: 80px; }
+  .w-\[90px\] { width: 90px; }
+  .disabled\:opacity-30:disabled { opacity: .3; }
+  @media (min-width: 40rem) { .sm\:inline { display: inline; } }
+  @media (min-width: 48rem) {
+    .md\:justify-start { justify-content: flex-start; }
+    .md\:p-10 { padding: calc(var(--spacing) * 10); }
+    .md\:p-12 { padding: calc(var(--spacing) * 12); }
+    .md\:text-\[19px\] { font-size: 19px; }
+    .md\:text-\[28px\] { font-size: 28px; }
+  }
+}
+/* Version C: sideways swipes settle on a whole month, flush against the pinned column. */
+.hscroll { scroll-snap-type: x proximity; scroll-padding-inline-start: 164px; }
+.hscroll thead th:not(.pin) { scroll-snap-align: start; }
 
 </style>
 </head>
@@ -385,6 +416,7 @@ const X = Object.assign(I, {
 const nf2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const nf0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const cents = (n) => `$${nf2.format(Math.abs(n))}`;
+const nm = (s) => esc(s).replace(/\//g, '/<wbr>');
 const whole = (n) => (n ? `$${nf0.format(Math.round(Math.abs(n)))}` : '—');
 // A transaction-style amount: money in reads as +$X in green.
 const money = (n, cls = '') => n < 0 ? `<span class="num ${cls}" style="color:var(--positive)">+${cents(n)}</span>` : `<span class="num ${cls}">${cents(n)}</span>`;
@@ -587,16 +619,16 @@ function budgetA() {
   const m = ui.month;
   const mm = MON[m];
   const switcher = `<div class="flex items-center justify-between gap-2 px-2 py-2 border-b border-line"><button type="button" data-act="month:-1" aria-label="Previous month" ${m === 0 ? 'disabled' : ''} class="tap w-11 h-11 rounded-full flex items-center justify-center text-content-2 hover:bg-surface-2 disabled:opacity-30">${X.chevL}</button><div class="text-center" aria-live="polite"><div class="text-[16px] font-extrabold text-content">${MONTH_FULL[m]} ${ui.year}</div><div class="text-[12px] text-content-3">${lockedMonth(m) ? 'Past month · locked' : m === CUR && ui.year === 2026 ? 'This month' : 'Planned'}</div></div><button type="button" data-act="month:1" aria-label="Next month" ${m === 11 ? 'disabled' : ''} class="tap w-11 h-11 rounded-full flex items-center justify-center text-content-2 hover:bg-surface-2 disabled:opacity-30">${X.chevR18}</button></div>`;
-  const cols = (a, b) => `<div class="w-[84px] shrink-0 text-right">${a}</div><div class="w-[76px] shrink-0 text-right">${b}</div>`;
+  const cols = (a, b) => `<div class="w-[76px] shrink-0 text-right">${a}</div><div class="w-[60px] shrink-0 text-right">${b}</div>`;
   let h = `<div class="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-line"><div class="flex-1 cap">Category</div>${cols(`<span class="cap" style="color:var(--primary);font-weight:700">${mm}</span>`, '<span class="cap">Year</span>')}</div>`;
   BUDGET.forEach((s) => {
     const sv = sectionVals(s);
     h += `<div class="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-line"><div class="flex-1 text-xs font-bold uppercase tracking-wide text-content-2">${s.section}</div>${cols(`<span class="text-[15px] font-bold num text-content-2">${whole(sv[m])}</span>`, `<span class="text-[15px] font-bold num text-content-2">${whole(yearOf(sv))}</span>`)}</div>`;
     s.groups.forEach((g) => {
       const gv = groupVals(g); const open = ui.open.has(g.id);
-      h += `<div class="flex items-center gap-2 px-4 py-2.5 border-b border-line min-h-[52px]"><div class="flex-1 min-w-0 flex items-center gap-2.5">${chev(open, open ? `Collapse ${g.name}` : `Expand ${g.name}`, 'group:' + g.id)}${tile(g.tile, true)}<span class="font-bold text-[15px] text-content wrap2">${g.name}</span></div>${cols(`<span class="text-[15px] font-semibold num text-content">${whole(gv[m])}</span>`, `<span class="text-[15px] font-semibold num text-content-2">${whole(yearOf(gv))}</span>`)}</div>`;
+      h += `<div class="flex items-center gap-2 px-4 py-2.5 border-b border-line min-h-[52px]"><div class="flex-1 min-w-0 flex items-center gap-2">${chev(open, open ? `Collapse ${g.name}` : `Expand ${g.name}`, 'group:' + g.id)}${tile(g.tile, true)}<span class="font-bold text-[15px] text-content wrap2">${nm(g.name)}</span></div>${cols(`<span class="text-[15px] font-semibold num text-content">${whole(gv[m])}</span>`, `<span class="text-[15px] font-semibold num text-content-2">${whole(yearOf(gv))}</span>`)}</div>`;
       if (open) g.subRows.forEach((sub) => {
-        h += `<div class="flex items-center gap-2 pl-[52px] pr-4 py-1.5 border-b border-line min-h-[56px]"><div class="flex-1 min-w-0 flex items-center gap-2"><span class="shrink-0 text-[15px] leading-none" aria-hidden="true">${sub.emoji}</span><span class="text-[15px] text-content-2 wrap2">${sub.name}</span></div>${cols(cellBtn(sub, m), `<span class="text-[15px] num text-content-3">${whole(yearOf(vals(sub)))}</span>`)}</div>`;
+        h += `<div class="flex items-center gap-2 pl-[52px] pr-4 py-1.5 border-b border-line min-h-[56px]"><div class="flex-1 min-w-0 flex items-center gap-2"><span class="shrink-0 text-[15px] leading-none" aria-hidden="true">${sub.emoji}</span><span class="text-[15px] text-content-2 wrap2">${nm(sub.name)}</span></div>${cols(cellBtn(sub, m), `<span class="text-[15px] num text-content-3">${whole(yearOf(vals(sub)))}</span>`)}</div>`;
       });
     });
   });
@@ -621,10 +653,10 @@ function budgetB() {
     h += `<div class="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-line"><div class="flex-1 text-xs font-bold uppercase tracking-wide text-content-2">${s.section}</div><span class="text-[15px] font-bold num text-content-2 pr-7">${whole(yearOf(sv))}</span></div>`;
     s.groups.forEach((g) => {
       const gv = groupVals(g); const open = ui.open.has(g.id);
-      h += `<div class="flex items-center gap-2 px-4 py-2.5 border-b border-line min-h-[52px]"><div class="flex-1 min-w-0 flex items-center gap-2.5">${chev(open, open ? `Collapse ${g.name}` : `Expand ${g.name}`, 'group:' + g.id)}${tile(g.tile, true)}<span class="font-bold text-[15px] text-content wrap2">${g.name}</span></div><span class="text-[15px] font-semibold num text-content pr-7">${whole(yearOf(gv))}</span></div>`;
+      h += `<div class="flex items-center gap-2 px-4 py-2.5 border-b border-line min-h-[52px]"><div class="flex-1 min-w-0 flex items-center gap-2.5">${chev(open, open ? `Collapse ${g.name}` : `Expand ${g.name}`, 'group:' + g.id)}${tile(g.tile, true)}<span class="font-bold text-[15px] text-content wrap2">${nm(g.name)}</span></div><span class="text-[15px] font-semibold num text-content pr-7">${whole(yearOf(gv))}</span></div>`;
       if (open) g.subRows.forEach((sub) => {
         const mo = ui.months.has(sub.id);
-        h += `<div class="border-b border-line ${mo ? 'bg-surface-2/40' : ''}"><button type="button" class="row-btn flex items-center gap-2 pl-[52px] pr-4 py-2 min-h-[52px]" ${rowToggle(sub.id, mo, `${sub.name}, ${ui.year} total ${whole(yearOf(vals(sub)))}. ${mo ? 'Hide' : 'Show'} months`)}><span class="shrink-0 text-[15px] leading-none" aria-hidden="true">${sub.emoji}</span><span class="flex-1 min-w-0 text-[15px] text-content-2 wrap2">${sub.name}</span><span class="text-[15px] num text-content font-semibold">${whole(yearOf(vals(sub)))}</span>${bChev(mo)}</button>${mo ? monthsGrid(sub) : ''}</div>`;
+        h += `<div class="border-b border-line ${mo ? 'bg-surface-2/40' : ''}"><button type="button" class="row-btn flex items-center gap-2 pl-[52px] pr-4 py-2 min-h-[52px]" ${rowToggle(sub.id, mo, `${sub.name}, ${ui.year} total ${whole(yearOf(vals(sub)))}. ${mo ? 'Hide' : 'Show'} months`)}><span class="shrink-0 text-[15px] leading-none" aria-hidden="true">${sub.emoji}</span><span class="flex-1 min-w-0 text-[15px] text-content-2 wrap2">${nm(sub.name)}</span><span class="text-[15px] num text-content font-semibold">${whole(yearOf(vals(sub)))}</span>${bChev(mo)}</button>${mo ? monthsGrid(sub) : ''}</div>`;
       });
     });
   });
@@ -642,13 +674,13 @@ function budgetC() {
     rows += `<tr class="alt"><th scope="row" class="pin alt text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-content-2 border-b border-line">${s.section}</th>${sv.map((v, m) => `<td class="text-right px-3 py-2.5 text-[15px] font-bold num text-content-2 bg-surface-2 border-b border-line" style="${m === CUR && ui.year === 2026 ? curBg : ''}">${whole(v)}</td>`).join('')}</tr>`;
     s.groups.forEach((g) => {
       const gv = groupVals(g); const open = ui.open.has(g.id);
-      rows += `<tr><th scope="row" class="pin text-left px-3 py-2 border-b border-line font-normal"><div class="flex items-center gap-1.5">${chev(open, open ? `Collapse ${g.name}` : `Expand ${g.name}`, 'group:' + g.id)}<span class="font-bold text-[14px] text-content wrap2 leading-tight">${g.name}</span></div></th>${gv.map((v, m) => `<td class="text-right px-3 py-2 text-[15px] font-semibold num text-content border-b border-line" style="${m === CUR && ui.year === 2026 ? curBg : ''}">${whole(v)}</td>`).join('')}</tr>`;
+      rows += `<tr><th scope="row" class="pin text-left px-3 py-2 border-b border-line font-normal"><div class="flex items-center gap-1.5">${chev(open, open ? `Collapse ${g.name}` : `Expand ${g.name}`, 'group:' + g.id)}<span class="font-bold text-[14px] text-content wrap2 leading-tight">${nm(g.name)}</span></div></th>${gv.map((v, m) => `<td class="text-right px-3 py-2 text-[15px] font-semibold num text-content border-b border-line" style="${m === CUR && ui.year === 2026 ? curBg : ''}">${whole(v)}</td>`).join('')}</tr>`;
       if (open) g.subRows.forEach((sub) => {
-        rows += `<tr><th scope="row" class="pin text-left pl-4 pr-2 py-1.5 border-b border-line font-normal"><div class="flex items-center gap-1.5"><span class="shrink-0 text-[14px] leading-none" aria-hidden="true">${sub.emoji}</span><span class="text-[14px] text-content-2 wrap2 leading-tight">${sub.name}</span></div></th>${MON.map((_, m) => `<td class="text-right px-1.5 py-1.5 border-b border-line" style="${m === CUR && ui.year === 2026 ? curBg : ''}">${cellBtn(sub, m)}</td>`).join('')}</tr>`;
+        rows += `<tr><th scope="row" class="pin text-left pl-4 pr-2 py-1.5 border-b border-line font-normal"><div class="flex items-center gap-1.5"><span class="shrink-0 text-[14px] leading-none" aria-hidden="true">${sub.emoji}</span><span class="text-[14px] text-content-2 wrap2 leading-tight">${nm(sub.name)}</span></div></th>${MON.map((_, m) => `<td class="text-right px-1.5 py-1.5 border-b border-line" style="${m === CUR && ui.year === 2026 ? curBg : ''}">${cellBtn(sub, m)}</td>`).join('')}</tr>`;
       });
     });
   });
-  return `<div class="bg-surface border border-line rounded-[18px] shadow-sm overflow-hidden hwrap" data-hscroll="budget"><div class="hscroll" tabindex="0" aria-label="Budget ${ui.year}, months scroll sideways"><table class="w-full"><thead><tr class="bg-surface-2"><th scope="col" class="pin alt cap text-left px-4 py-3 border-b border-line" style="width:140px;min-width:140px;max-width:140px">Category</th>${th.replace(/<th /g, '<th class="border-b border-line" ').replace(/class="border-b border-line" scope="col" class="/g, 'scope="col" class="border-b border-line bg-surface-2 ')}</tr></thead><tbody>${rows}</tbody></table></div><div class="hfade" aria-hidden="true"></div></div><p class="text-[12px] text-content-3 mt-2 mb-0 text-center">Swipe sideways for other months</p>`;
+  return `<div class="bg-surface border border-line rounded-[18px] shadow-sm overflow-hidden hwrap" data-hscroll="budget"><div class="hscroll" tabindex="0" aria-label="Budget ${ui.year}, months scroll sideways"><table class="w-full"><thead><tr class="bg-surface-2"><th scope="col" class="pin alt cap text-left px-4 py-3 border-b border-line" style="width:164px;min-width:164px;max-width:164px">Category</th>${th.replace(/<th /g, '<th class="border-b border-line" ').replace(/class="border-b border-line" scope="col" class="/g, 'scope="col" class="border-b border-line bg-surface-2 ')}</tr></thead><tbody>${rows}</tbody></table></div><div class="hfade" aria-hidden="true"></div></div><p class="text-[12px] text-content-3 mt-2 mb-0 text-center">Swipe sideways for other months</p>`;
 }
 
 // Desktop: today's year grid, unchanged.
@@ -700,12 +732,12 @@ function tlA(sections, R) {
   const b = ui.bucket;
   const n = R.buckets.length;
   const switcher = `<div class="flex items-center justify-between gap-2 px-2 py-2 border-b border-line"><button type="button" data-act="bucket:-1" aria-label="Previous ${R.unit}" ${b === 0 ? 'disabled' : ''} class="tap w-11 h-11 rounded-full flex items-center justify-center text-content-2 hover:bg-surface-2 disabled:opacity-30">${X.chevL}</button><div class="text-center" aria-live="polite"><div class="text-[16px] font-extrabold text-content">${R.long[b]}</div><div class="text-[12px] text-content-3">${b + 1} of ${n} · ${R.label}</div></div><button type="button" data-act="bucket:1" aria-label="Next ${R.unit}" ${b === n - 1 ? 'disabled' : ''} class="tap w-11 h-11 rounded-full flex items-center justify-center text-content-2 hover:bg-surface-2 disabled:opacity-30">${X.chevR18}</button></div>`;
-  const cols = (a, c) => `<div class="w-[80px] shrink-0 text-right">${a}</div><div class="w-[84px] shrink-0 text-right">${c}</div>`;
+  const cols = (a, c) => `<div class="w-[64px] shrink-0 text-right">${a}</div><div class="w-[76px] shrink-0 text-right">${c}</div>`;
   const head = `<div class="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-line"><div class="flex-1 cap">Category</div>${cols(`<span class="cap" style="color:var(--primary);font-weight:700">${R.buckets[b]}</span>`, '<span class="cap">Total</span>')}</div>`;
   const rows = tlRowsFlat(sections, {
     section: (s) => { const v = s.groups.reduce((a, g) => a + g.vals[b], 0), t = s.groups.reduce((a, g) => a + tsum(g.vals), 0); return `<div class="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-line"><div class="flex-1 text-xs font-bold uppercase tracking-wide text-content-2">${s.section}</div>${cols(`<span class="text-[15px] font-bold num text-content-2">${tmoney(v)}</span>`, `<span class="text-[15px] font-bold num text-content-2">${tmoney(t)}</span>`)}</div>`; },
-    group: (g) => { const open = ui.open.has(g.id) || ui.allOpen; const isPeak = peakIdx(g.vals) === b; return `<div class="flex items-center gap-2 px-4 py-2 border-b border-line min-h-[52px]"><div class="flex-1 min-w-0 flex items-center gap-2.5">${g.subs.length ? chev(open, `${open ? 'Collapse' : 'Expand'} ${g.name}`, 'group:' + g.id) : ''}${sq(g.color)}${g.emoji ? `<span aria-hidden="true">${g.emoji}</span>` : ''}<button type="button" data-act="drill:${g.name}" class="text-left font-semibold text-[15px] text-content wrap2 hover:underline">${g.name}</button></div>${cols(`<span class="text-[15px] num ${isPeak ? 'font-bold text-content' : 'font-medium text-content-2'}">${tmoney(g.vals[b])}</span>`, `<span class="text-[15px] font-semibold num text-content">${tmoney(tsum(g.vals))}</span>`)}</div>`; },
-    sub: (r) => `<div class="flex items-center gap-2 pl-[52px] pr-4 py-2 border-b border-line bg-surface-2/40 min-h-[48px]"><div class="flex-1 min-w-0 flex items-center gap-2"><span aria-hidden="true">${r.emoji}</span><span class="text-[15px] text-content-2 wrap2">${r.name}</span></div>${cols(`<span class="text-[15px] num text-content-2">${tmoney(r.vals[b])}</span>`, `<span class="text-[15px] num text-content-3">${tmoney(tsum(r.vals))}</span>`)}</div>`,
+    group: (g) => { const open = ui.open.has(g.id) || ui.allOpen; const isPeak = peakIdx(g.vals) === b; return `<div class="flex items-center gap-2 px-4 py-2 border-b border-line min-h-[52px]"><div class="flex-1 min-w-0 flex items-center gap-2.5">${g.subs.length ? chev(open, `${open ? 'Collapse' : 'Expand'} ${g.name}`, 'group:' + g.id) : ''}${sq(g.color)}${g.emoji ? `<span aria-hidden="true">${g.emoji}</span>` : ''}<button type="button" data-act="drill:${g.name}" class="text-left font-semibold text-[15px] text-content wrap2 hover:underline">${nm(g.name)}</button></div>${cols(`<span class="text-[15px] num ${isPeak ? 'font-bold text-content' : 'font-medium text-content-2'}">${tmoney(g.vals[b])}</span>`, `<span class="text-[15px] font-semibold num text-content">${tmoney(tsum(g.vals))}</span>`)}</div>`; },
+    sub: (r) => `<div class="flex items-center gap-2 pl-[52px] pr-4 py-2 border-b border-line bg-surface-2/40 min-h-[48px]"><div class="flex-1 min-w-0 flex items-center gap-2"><span aria-hidden="true">${r.emoji}</span><span class="text-[15px] text-content-2 wrap2">${nm(r.name)}</span></div>${cols(`<span class="text-[15px] num text-content-2">${tmoney(r.vals[b])}</span>`, `<span class="text-[15px] num text-content-3">${tmoney(tsum(r.vals))}</span>`)}</div>`,
   });
   return switcher + head + rows;
 }
@@ -715,7 +747,7 @@ function tlGrid(r, R) {
 }
 function tlB(sections, R) {
   const head = `<div class="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-line"><div class="flex-1 cap">Category</div><div class="cap text-right pr-7">Total</div></div>`;
-  const rowBtn = (r, depth) => { const mo = ui.months.has(r.id); return `<div class="border-b border-line ${mo || depth ? 'bg-surface-2/40' : ''}"><div class="flex items-center gap-2 ${depth ? 'pl-[52px]' : 'pl-4'} pr-4 min-h-[52px]">${!depth && r.subs.length ? chev(ui.open.has(r.id) || ui.allOpen, `${ui.open.has(r.id) ? 'Collapse' : 'Expand'} ${r.name}`, 'group:' + r.id) : ''}<button type="button" class="row-btn flex-1 min-w-0 flex items-center gap-2.5 py-2 min-h-[48px]" style="background:transparent" ${rowToggle(r.id, mo, `${r.name}, total ${tmoney(tsum(r.vals))}. ${mo ? 'Hide' : 'Show'} ${R.unit}s`)}>${sq(r.color)}${r.emoji ? `<span aria-hidden="true">${r.emoji}</span>` : ''}<span class="flex-1 min-w-0 text-[15px] ${depth ? 'text-content-2' : 'font-semibold text-content'} wrap2">${r.name}</span><span class="text-[15px] num font-semibold text-content">${tmoney(tsum(r.vals))}</span>${bChev(mo)}</button></div>${mo ? tlGrid(r, R) : ''}</div>`; };
+  const rowBtn = (r, depth) => { const mo = ui.months.has(r.id); return `<div class="border-b border-line ${mo || depth ? 'bg-surface-2/40' : ''}"><div class="flex items-center gap-2 ${depth ? 'pl-[52px]' : 'pl-4'} pr-4 min-h-[52px]">${!depth && r.subs.length ? chev(ui.open.has(r.id) || ui.allOpen, `${ui.open.has(r.id) ? 'Collapse' : 'Expand'} ${r.name}`, 'group:' + r.id) : ''}<button type="button" class="row-btn flex-1 min-w-0 flex items-center gap-2.5 py-2 min-h-[48px]" style="background:transparent" ${rowToggle(r.id, mo, `${r.name}, total ${tmoney(tsum(r.vals))}. ${mo ? 'Hide' : 'Show'} ${R.unit}s`)}>${sq(r.color)}${r.emoji ? `<span aria-hidden="true">${r.emoji}</span>` : ''}<span class="flex-1 min-w-0 text-[15px] ${depth ? 'text-content-2' : 'font-semibold text-content'} wrap2">${nm(r.name)}</span><span class="text-[15px] num font-semibold text-content">${tmoney(tsum(r.vals))}</span>${bChev(mo)}</button></div>${mo ? tlGrid(r, R) : ''}</div>`; };
   const rows = tlRowsFlat(sections, {
     section: (s) => `<div class="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-line"><div class="flex-1 text-xs font-bold uppercase tracking-wide text-content-2">${s.section}</div><span class="text-[15px] font-bold num text-content-2 pr-7">${tmoney(s.groups.reduce((a, g) => a + tsum(g.vals), 0))}</span></div>`,
     group: (g) => rowBtn(g, 0),
@@ -729,10 +761,10 @@ function tlC(sections, R) {
   const cells = (v, cls) => { const pk = peakIdx(v); return v.map((x, i) => `<td class="text-right px-3 py-2.5 text-[15px] num border-b border-line ${cls} ${cls.includes('sub') ? '' : i === pk ? 'font-bold text-content' : 'font-medium text-content-2'}">${tmoney(x)}</td>`).join(''); };
   const rows = tlRowsFlat(sections, {
     section: (s) => { const v = R.buckets.map((_, i) => s.groups.reduce((a, g) => a + g.vals[i], 0)); return `<tr class="alt"><th scope="row" class="pin alt text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-content-2 border-b border-line">${s.section}</th>${v.map((x) => `<td class="text-right px-3 py-2.5 text-[15px] font-bold num text-content-2 bg-surface-2 border-b border-line">${tmoney(x)}</td>`).join('')}<td class="text-right px-4 py-2.5 text-[15px] font-bold num text-content-2 bg-surface-2 border-b border-line">${tmoney(tsum(v))}</td></tr>`; },
-    group: (g) => `<tr><th scope="row" class="pin text-left px-3 py-2 border-b border-line font-normal"><div class="flex items-center gap-1.5">${g.subs.length ? chev(ui.open.has(g.id) || ui.allOpen, `Expand ${g.name}`, 'group:' + g.id) : ''}${sq(g.color)}${g.emoji ? `<span aria-hidden="true">${g.emoji}</span>` : ''}<button type="button" data-act="drill:${g.name}" class="text-left font-semibold text-[14px] text-content wrap2 leading-tight hover:underline">${g.name}</button></div></th>${cells(g.vals, '')}<td class="text-right px-4 py-2.5 text-[15px] font-bold num text-content border-b border-line">${tmoney(tsum(g.vals))}</td></tr>`,
-    sub: (r) => `<tr><th scope="row" class="pin text-left pl-6 pr-2 py-2 border-b border-line font-normal"><div class="flex items-center gap-1.5"><span aria-hidden="true">${r.emoji}</span><span class="text-[14px] text-content-2 wrap2 leading-tight">${r.name}</span></div></th>${r.vals.map((x) => `<td class="text-right px-3 py-2 text-[15px] num text-content-2 border-b border-line">${tmoney(x)}</td>`).join('')}<td class="text-right px-4 py-2 text-[15px] num text-content-3 border-b border-line">${tmoney(tsum(r.vals))}</td></tr>`,
+    group: (g) => `<tr><th scope="row" class="pin text-left px-3 py-2 border-b border-line font-normal"><div class="flex items-center gap-1.5">${g.subs.length ? chev(ui.open.has(g.id) || ui.allOpen, `Expand ${g.name}`, 'group:' + g.id) : ''}${sq(g.color)}${g.emoji ? `<span aria-hidden="true">${g.emoji}</span>` : ''}<button type="button" data-act="drill:${g.name}" class="text-left font-semibold text-[14px] text-content wrap2 leading-tight hover:underline">${nm(g.name)}</button></div></th>${cells(g.vals, '')}<td class="text-right px-4 py-2.5 text-[15px] font-bold num text-content border-b border-line">${tmoney(tsum(g.vals))}</td></tr>`,
+    sub: (r) => `<tr><th scope="row" class="pin text-left pl-6 pr-2 py-2 border-b border-line font-normal"><div class="flex items-center gap-1.5"><span aria-hidden="true">${r.emoji}</span><span class="text-[14px] text-content-2 wrap2 leading-tight">${nm(r.name)}</span></div></th>${r.vals.map((x) => `<td class="text-right px-3 py-2 text-[15px] num text-content-2 border-b border-line">${tmoney(x)}</td>`).join('')}<td class="text-right px-4 py-2 text-[15px] num text-content-3 border-b border-line">${tmoney(tsum(r.vals))}</td></tr>`,
   });
-  return `<div class="hwrap" data-hscroll="tl"><div class="hscroll" tabindex="0" aria-label="Category breakdown, ${R.unit}s scroll sideways"><table class="w-full"><thead><tr><th scope="col" class="pin alt cap text-left px-4 py-3 border-b border-line" style="width:140px;min-width:140px;max-width:140px">Category</th>${th}<th scope="col" class="cap text-right px-4 py-3 border-b border-line bg-surface-2">Total</th></tr></thead><tbody>${rows}</tbody></table></div><div class="hfade" aria-hidden="true"></div></div><p class="text-[12px] text-content-3 my-2.5 text-center">Swipe sideways for other ${R.unit}s</p>`;
+  return `<div class="hwrap" data-hscroll="tl"><div class="hscroll" tabindex="0" aria-label="Category breakdown, ${R.unit}s scroll sideways"><table class="w-full"><thead><tr><th scope="col" class="pin alt cap text-left px-4 py-3 border-b border-line" style="width:164px;min-width:164px;max-width:164px">Category</th>${th}<th scope="col" class="cap text-right px-4 py-3 border-b border-line bg-surface-2">Total</th></tr></thead><tbody>${rows}</tbody></table></div><div class="hfade" aria-hidden="true"></div></div><p class="text-[12px] text-content-3 my-2.5 text-center">Swipe sideways for other ${R.unit}s</p>`;
 }
 function tlDesktop(sections, R) {
   const n = R.buckets.length;
@@ -767,7 +799,7 @@ function holdingsPage(phone) {
     HOLD.forEach((g) => {
       h += `<div class="flex items-center gap-2.5 px-4 py-2.5 bg-surface-2 border-b border-line"><span aria-hidden="true" class="w-[9px] h-[9px] rounded-full shrink-0" style="background:${g.color}"></span><span class="flex-1 text-[14px] font-semibold text-content">${g.cls}</span><span class="text-[15px] font-bold num text-content">${cents(gTotal(g))}</span></div>`;
       g.rows.forEach(([sym, name, price, q, value, chg]) => {
-        h += `<div class="flex items-start gap-3 px-4 py-3 border-b border-line"><div class="flex-1 min-w-0"><div class="text-[15px] font-bold text-content">${sym}</div><div class="text-[13px] text-content-3 mt-0.5 wrap2">${esc(name)} · <span class="num">${qty(q)} × ${cents(price)}</span></div></div><div class="text-right shrink-0"><div class="text-[15px] font-bold num text-content">${cents(value)}</div><div class="text-[12.5px] text-content-3 mt-0.5 num">${changeTxt(chg)} · ${pct(value / HOLD_TOTAL)} of portfolio</div></div></div>`;
+        h += `<div class="flex items-start gap-3 px-4 py-3 border-b border-line"><div class="flex-1 min-w-0"><div class="text-[15px] font-bold text-content">${sym}</div><div class="text-[13px] text-content-3 mt-0.5">${esc(name)} · <span class="num">${qty(q)} × ${cents(price)}</span></div></div><div class="text-right shrink-0"><div class="text-[15px] font-bold num text-content">${cents(value)}</div><div class="text-[12.5px] text-content-3 mt-0.5 num">${changeTxt(chg)} · ${pct(value / HOLD_TOTAL)} of portfolio</div></div></div>`;
       });
     });
     h += `<div class="flex items-center justify-between px-4 py-3.5 bg-surface-2"><span class="text-[16px] font-extrabold text-content">Total</span><span class="text-[16px] font-extrabold num text-content">${cents(HOLD_TOTAL)}</span></div>`;
@@ -841,7 +873,7 @@ function txPage(phone) {
   let cardHead;
   if (phone) {
     const all = n === TX_ALL.length;
-    cardHead = ui.select ? `<button type="button" role="checkbox" aria-checked="${all ? 'true' : n ? 'mixed' : 'false'}" data-act="tickall" class="row-btn flex items-center gap-3 px-4 min-h-[52px] border-b border-line"><span class="tick" data-on="${n > 0}">${all ? I.check : n ? minusIcon : ''}</span><span class="text-[15px] font-semibold text-content">Select all</span><span class="ml-auto font-mono text-[13px] text-content-3">${TX_ALL.length} shown</span></button>` : '';
+    cardHead = ui.select ? `<button type="button" role="checkbox" aria-checked="${all ? 'true' : n ? 'mixed' : 'false'}" data-act="tickall" class="row-btn flex items-center gap-3 px-4 min-h-[52px] border-b border-line"><span class="w-9 shrink-0 flex justify-center"><span class="tick" data-on="${n > 0}">${all ? I.check : n ? minusIcon : ''}</span></span><span class="text-[15px] font-semibold text-content">Select all</span><span class="ml-auto font-mono text-[13px] text-content-3">${TX_ALL.length} shown</span></button>` : '';
   } else if (!ui.select) {
     cardHead = `<div class="flex items-center justify-between gap-4 px-6 py-4 border-b border-line"><span class="text-[15px] font-bold num">1,260 transactions</span><div class="flex items-center gap-2.5">${canBulk() ? `<button type="button" data-act="select" class="tap flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line text-content font-semibold text-sm">${X.list}Edit multiple</button>` : ''}<button type="button" class="${btnTool}">${X.sort}Sort${I.chevD}</button></div></div>`;
   } else {
@@ -855,7 +887,7 @@ function txPage(phone) {
       const on = ui.ticked.has(t.id); const a = TX_ACCT[t.acct];
       const acct = `${a[0]} (${a[1]})`;
       if (phone) {
-        const inner = `${ui.select ? `<span class="tick" data-on="${on}">${on ? I.check : ''}</span>` : ''}${avatar(t.name, tone(t.name), 36)}<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-content truncate">${esc(t.name)}</span><span class="flex items-center gap-1.5 text-[12.5px] text-content-3 mt-0.5 min-w-0"><span aria-hidden="true">${t.emoji}</span><span class="truncate">${esc(t.cat)}</span></span></span><span class="text-right shrink-0 max-w-[52%]"><span class="block">${money(t.amount, 'text-[15px] font-bold')}</span><span class="block text-[11.5px] text-content-3 mt-0.5 truncate font-mono">${esc(acct)}</span></span>`;
+        const inner = `${ui.select ? `<span class="w-9 shrink-0 flex justify-center"><span class="tick" data-on="${on}">${on ? I.check : ''}</span></span>` : avatar(t.name, tone(t.name), 36)}<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-content truncate">${esc(t.name)}</span><span class="flex items-center gap-1.5 text-[12.5px] text-content-3 mt-0.5 min-w-0"><span aria-hidden="true">${t.emoji}</span><span class="truncate">${esc(t.cat)}</span></span></span><span class="text-right shrink-0 max-w-[52%]"><span class="block">${money(t.amount, 'text-[15px] font-bold')}</span><span class="block text-[11.5px] text-content-3 mt-0.5 truncate font-mono">${esc(acct)}</span></span>`;
         rows += ui.select ? `<button type="button" role="checkbox" aria-checked="${on}" data-act="tick:${t.id}" class="row-btn flex items-center gap-3 px-4 min-h-16 py-2.5 border-b border-line" style="${on ? 'background:color-mix(in srgb, var(--primary) 8%, transparent)' : ''}">${inner}</button>` : `<div class="flex items-center gap-3 px-4 min-h-16 py-2.5 border-b border-line">${inner}</div>`;
       } else {
         rows += `<div class="flex items-center gap-3.5 px-6 border-b border-line" style="height:44px;${on ? 'background:color-mix(in srgb, var(--primary) 8%, transparent)' : ''}">${ui.select ? `<button type="button" role="checkbox" aria-checked="${on}" aria-label="Select ${esc(t.name)}" data-act="tick:${t.id}" class="tick" data-on="${on}" style="width:22px;height:22px">${on ? I.check : ''}</button>` : ''}<div class="flex-[1.4] min-w-0 flex items-center gap-2.5">${avatar(t.name, tone(t.name), 26)}<span class="font-semibold text-[15px] truncate">${esc(t.name)}</span></div><div class="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-2"><span class="text-[15px] leading-none">${t.emoji}</span><span class="truncate">${esc(t.cat)}</span></div><div class="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-3">${avatar(a[0], a[2], 18)}<span class="truncate">${esc(acct)}</span></div>${money(t.amount, 'w-[128px] shrink-0 text-right font-bold text-[15px]')}<span class="text-content-3">${I.chevR}</span></div>`;
@@ -901,12 +933,12 @@ function fakeQr(size = 168) {
   }
   return `<span class="qr"><svg width="${size}" height="${size}" viewBox="0 0 ${N} ${N}" fill="black" role="img" aria-label="QR code for Ledger (sample)">${r}</svg></span>`;
 }
-const SETUP_KEY = 'JBSW Y3DP EHPK 3PXP K4ZQ';
+const SETUP_KEY = 'JBSW Y3DP EHPK 3PXP K4ZQ 7MNA 2RTC XW5D';
 function codeBoxes() {
   return `<div class="flex gap-2 justify-center md:justify-start" role="group" aria-label="6-digit code">${Array.from({ length: 6 }, (_, i) => `<input class="code-box ${ui.err ? 'err' : ''} text-center outline-none" inputmode="numeric" autocomplete="${i === 0 ? 'one-time-code' : 'off'}" maxlength="1" aria-label="Digit ${i + 1}" data-input="code" data-i="${i}" value="${ui.code[i] || ''}">`).join('')}</div>${ui.err ? `<div role="alert" class="text-[13px] font-semibold mt-2" style="color:var(--negative)">That code didn’t work. Try the newest one.</div>` : ''}`;
 }
 function keyBox() {
-  return `<div class="flex items-center gap-2"><code class="flex-1 min-w-0 h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line-strong flex items-center font-mono text-[14px] tracking-[0.06em] text-content overflow-x-auto whitespace-nowrap">${SETUP_KEY}</code><button type="button" data-act="copykey" class="${btnSecondarySm} tap shrink-0">${X.copy}Copy</button></div>`;
+  return `<div class="flex items-start gap-2"><code class="flex-1 min-w-0 min-h-11 px-3.5 py-2.5 rounded-[11px] bg-surface-2 border border-line-strong flex items-center font-mono text-[14px] leading-[1.5] tracking-[0.06em] text-content">${SETUP_KEY}</code><button type="button" data-act="copykey" class="${btnSecondarySm} tap shrink-0">${X.copy}Copy</button></div>`;
 }
 function twofaBody(phone, auth = false) {
   const step = (n, t) => `<div class="text-[13px] font-bold text-content mb-2.5">${n}. ${t}</div>`;
@@ -1036,8 +1068,10 @@ function setupHScroll() {
     const sc = w.querySelector('.hscroll');
     const upd = () => { w.dataset.end = String(sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 2); };
     if (ui.scrollInit && w.dataset.hscroll === 'budget' && ui.year === 2026) {
-      const th = sc.querySelectorAll('thead th')[CUR + 1];
-      if (th) sc.scrollLeft = th.offsetLeft - 140 - 84 * 2;
+      // Start with the current month as the last whole column, the first visible month flush against the pinned column.
+      const ths = [...sc.querySelectorAll('thead th')]; const pin = ths[0].offsetWidth; const cur = ths[CUR + 1];
+      const first = ths.slice(1).find((t) => cur.offsetLeft + cur.offsetWidth - t.offsetLeft <= sc.clientWidth - pin);
+      if (first) sc.scrollLeft = first.offsetLeft - pin;
     } else if (ui.scrollInit && w.dataset.hscroll === 'tl') sc.scrollLeft = sc.scrollWidth;
     if (ui.hs && ui.hs[w.dataset.hscroll] != null && !ui.scrollInit) sc.scrollLeft = ui.hs[w.dataset.hscroll];
     sc.onscroll = () => { ui.hs = ui.hs || {}; ui.hs[w.dataset.hscroll] = sc.scrollLeft; upd(); };
@@ -1152,7 +1186,7 @@ setTheme(THEMES.includes(params.get('theme')) ? params.get('theme') : 'light');
 reset(startState);
 renderBar();
 render();
-requestAnimationFrame(() => syncUrl());
+syncUrl();
 
 </script>
 </body>

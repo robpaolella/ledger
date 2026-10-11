@@ -1,11 +1,46 @@
 {
-  "design_issue": 1,
-  "covers": [],
+  "design_issue": 109,
+  "covers": [
+    110,
+    207,
+    227
+  ],
   "revision": 1,
   "versions": {
     "a": "versions/a.html",
-    "b": "versions/b.html"
+    "b": "versions/b.html",
+    "c": "versions/c.html"
   },
-  "states": ["normal", "empty", "loading", "error", "locked", "no-permission"],
-  "themes": ["default"]
+  "states": [
+    "budget-year",
+    "budget-year-member",
+    "budget-year-empty",
+    "timeline",
+    "timeline-drill",
+    "timeline-weekly",
+    "timeline-long",
+    "holdings",
+    "holdings-empty",
+    "calendar-today",
+    "calendar-busy",
+    "calendar-empty-day",
+    "bulk-select",
+    "bulk-selected",
+    "bulk-edit",
+    "bulk-delete",
+    "bulk-member",
+    "twofa-key",
+    "twofa-qr",
+    "twofa-error",
+    "twofa-required",
+    "import-upload",
+    "import-map",
+    "merchant-edit",
+    "loading",
+    "error"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
 }
