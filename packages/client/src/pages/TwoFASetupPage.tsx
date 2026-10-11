@@ -21,10 +21,12 @@ export default function TwoFASetupPage() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [codeError, setCodeError] = useState('');
+  const [failed, setFailed] = useState(false);
 
-  // Auto-submit when 6 digits entered
+  // Auto-submit when 6 digits entered. After a wrong code the boxes stay filled for editing, so
+  // retries go through the Verify button (editing one digit would otherwise submit a half-edited code).
   useEffect(() => {
-    if (verifyCode.length === 6 && step === 'scan' && !loading) handleVerify({ preventDefault: () => {} } as FormEvent);
+    if (verifyCode.length === 6 && step === 'scan' && !loading && !failed) handleVerify({ preventDefault: () => {} } as FormEvent);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifyCode]);
 
@@ -47,6 +49,7 @@ export default function TwoFASetupPage() {
       setBackupCodes(res.data.backupCodes); setStep('backup');
       await refreshUser();
     } catch (err) {
+      setFailed(true);
       if (isWrongCodeError(err)) setCodeError(WRONG_CODE_MESSAGE);
       else setError(err instanceof Error ? err.message : 'Verification failed');
     } finally { setLoading(false); }
@@ -83,7 +86,7 @@ export default function TwoFASetupPage() {
         <form onSubmit={handleVerify} className="flex flex-col gap-6">
           {error && <InlineNotification type="error" message={error} />}
           <TwoFAKeySetup qrCodeUrl={setupData.qrCodeUrl} secret={setupData.secret} otpauthUri={setupData.otpauthUri}
-            verifyCode={verifyCode} onCodeChange={(v) => { setVerifyCode(v); setCodeError(''); }} codeError={codeError} autoSubmitHint />
+            verifyCode={verifyCode} onCodeChange={(v) => { setVerifyCode(v); setCodeError(''); }} codeError={codeError} autoSubmitHint={!failed} />
           <button type="submit" disabled={loading || verifyCode.length !== 6} className={`${btnPrimary} w-full h-11`}>{loading ? 'Verifying…' : 'Verify and enable'}</button>
         </form>
       </AuthShell>
@@ -95,7 +98,7 @@ export default function TwoFASetupPage() {
       <div className="flex flex-col gap-5">
         {error && <InlineNotification type="error" message={error} />}
         <p className="text-sm text-content-2 m-0 leading-relaxed">
-          You'll need an authenticator app such as 1Password, Google Authenticator, or Authy. Ledger gives you a setup key and QR code to add it, then asks for the 6-digit code the app generates.
+          You'll need an authenticator app such as 1Password, Google Authenticator, or Authy. Ledger shows a QR code to scan, then asks for the 6-digit code the app generates.
         </p>
         <button type="button" onClick={handleStartSetup} disabled={loading} className={`${btnPrimary} w-full h-11`}>{loading ? 'Starting…' : 'Get started'}</button>
       </div>
