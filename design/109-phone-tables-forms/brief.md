@@ -42,6 +42,7 @@ desktop offers can be completed on a phone.
 - Server, permissions and data are unchanged.
 
 ## Confirmed decisions (Robert, 2026-10-10, this herdr tab)
+Brief confirmed by Robert on 2026-10-11 ("1. Confirmed.").
 1. Scope as above; desktop unchanged unless stated. F31 needs no visuals: the builder sets the
    Ollama address to `type="url"` / `inputMode="url"`, both Ollama fields and the SimpleFIN
    setup token/access URL to `autoCapitalize="off"`, `autoCorrect="off"`, `spellCheck={false}`,
@@ -67,7 +68,8 @@ desktop offers can be completed on a phone.
 7. Two-step setup on phones (Settings sheet and the required-setup page): "Add to
    authenticator app" (an `otpauth://` link) first, then "Or copy the setup key" with Copy, then
    "Show QR code (to scan from another device)"; code boxes and "Verify and enable" as today.
-   Desktop keeps the QR first.
+   Desktop keeps the QR first. Under the button, a fallback line: "No app opened? Copy the
+   setup key below instead." (added 2026-10-11, Robert: "Yes.")
 8. Import on phones: one-line step indicator "Step 2 of 3 · Map columns"; step 1 shows a
    "Choose CSV file" button (desktop keeps drag and drop); step 2 Back/Next in a pinned bottom
    bar; sign-convention choices full width with wrapping text; the 5-row preview as rows.
