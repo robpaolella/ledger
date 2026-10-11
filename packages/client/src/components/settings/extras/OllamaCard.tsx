@@ -63,10 +63,10 @@ export default function OllamaCard({ config }: { config: LlmConfig }) {
     >
       <div className="px-4 md:px-6 py-5 flex flex-col gap-4 max-w-[560px]">
         <Field label="Ollama address">
-          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://192.168.1.50:11434" className={`${inputCls} font-mono`} />
+          <input type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="http://192.168.1.50:11434" className={`${inputCls} font-mono`} />
         </Field>
         <Field label="Model" hint="Any chat model the Ollama server has downloaded.">
-          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen3:4b" className={`${inputCls} font-mono`} />
+          <input autoCapitalize="off" autoCorrect="off" spellCheck={false} value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen3:4b" className={`${inputCls} font-mono`} />
         </Field>
         <div className="flex items-center gap-3 flex-wrap">
           <button type="button" onClick={onSave} disabled={saving} className={btnPrimary}>{saving ? 'Saving…' : 'Save'}</button>

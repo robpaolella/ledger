@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import ImageCropModal from './ImageCropModal';
 import ResponsiveModal from './ResponsiveModal';
+import { useIsMobile } from '../hooks/useIsMobile';
 import Spinner from './Spinner';
 import Button from './Button';
 import { LoadError, PanelHeader, Field, SelectShell, CheckBox, inputCls, selectCls, ICON } from './settings/ui';
@@ -42,6 +43,7 @@ export default function MerchantsPanel() {
   const [edit, setEdit] = useState<Merchant | null>(null);
   const [editName, setEditName] = useState('');
   const [del, setDel] = useState<Merchant | null>(null);
+  const isMobile = useIsMobile();
   const [mergeInto, setMergeInto] = useState('');
   const [keepAlias, setKeepAlias] = useState(true);
   // Statement names routed to the merchant open in the edit modal.
@@ -151,6 +153,7 @@ export default function MerchantsPanel() {
     try { await apiFetch(`/merchants/${edit.id}/logo`, { method: 'DELETE' }); setEdit({ ...edit, logo_url: null }); await load(); }
     catch { addToast('Failed to remove logo', 'error'); }
   };
+  const startMerge = () => { setDel(edit); setMergeInto(''); setKeepAlias(true); };
   const doMerge = async () => {
     if (!del || !mergeInto || busy) return;
     setBusy(true);
@@ -226,10 +229,10 @@ export default function MerchantsPanel() {
         <ResponsiveModal isOpen onClose={() => setEdit(null)} title="Edit merchant" maxWidth="460px"
           footer={(
             <div className="flex items-center gap-2.5">
-              <Button variant="danger" onClick={() => { setDel(edit); setMergeInto(''); setKeepAlias(true); }}>Merge &amp; delete</Button>
-              <div className="ml-auto flex items-center gap-2.5">
-                <Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button>
-                <Button onClick={saveName} loading={busy}>{busy ? 'Saving…' : 'Save changes'}</Button>
+              {!isMobile && <Button variant="danger" onClick={startMerge}>Merge &amp; delete</Button>}
+              <div className={`ml-auto flex items-center gap-2.5 ${isMobile ? 'w-full' : ''}`}>
+                <Button variant="secondary" onClick={() => setEdit(null)} className={isMobile ? 'flex-1' : ''}>Cancel</Button>
+                <Button onClick={saveName} loading={busy} className={isMobile ? 'flex-1' : ''}>{busy ? 'Saving…' : 'Save changes'}</Button>
               </div>
             </div>
           )}>
@@ -294,6 +297,16 @@ export default function MerchantsPanel() {
                   ))}
                 </div>
               </Field>
+            )}
+            {isMobile && (
+              <button type="button" onClick={startMerge} className="flex items-center gap-3 mt-1 px-3.5 py-3 min-h-11 rounded-[12px] text-negative text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                <svg className="shrink-0" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 6 6h6M15 12l3 3-3 3M6 21v-6" /></svg>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-bold">Merge &amp; delete</span>
+                  <span className="block text-[12.5px] text-content-3 mt-0.5 leading-snug">Move its {edit.txn_count} transaction{edit.txn_count === 1 ? '' : 's'} to another merchant, then delete {edit.name}.</span>
+                </span>
+                <svg className="shrink-0 text-content-3" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+              </button>
             )}
           </div>
         </ResponsiveModal>
