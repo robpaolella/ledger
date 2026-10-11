@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
@@ -8,6 +8,10 @@ import ResponsiveModal from '../components/ResponsiveModal';
 import CurrencyInput from '../components/CurrencyInput';
 import Dropdown from '../components/Dropdown';
 import { VendorAvatar } from '../components/primitives';
+import Button from '../components/Button';
+import FilterPopover from '../components/FilterPopover';
+import DateRangePopover, { type DateRangeValue } from '../components/DateRangePopover';
+import { EMPTY_FILTER, filterDraftCount, type FilterDraft, type FilterSection } from '../components/filterModel';
 import AreaLineChart, { type ChartPoint } from '../components/charts/AreaLineChart';
 import { formatMoney } from '@ledger/shared';
 import { timeAgo, todayYmd } from '../lib/formatters';
@@ -92,7 +96,75 @@ function categoryOf(t: Txn): { label: string; subName: string | undefined; group
   return { label: 'Uncategorized', subName: undefined, groupName: undefined, type: 'expense' };
 }
 
+// ---- transaction list filters ----
+const LIMIT = 14;
+const SECTIONS: FilterSection[] = ['Categories', 'Merchants', 'Amount', 'Other']; // no Accounts: the list is pinned to this account
+const DATE_PRESETS = [
+  { value: 'all', label: 'All time' }, { value: 'this-month', label: 'This month' }, { value: 'last-month', label: 'Last month' },
+  { value: 'this-quarter', label: 'This quarter' }, { value: 'last-quarter', label: 'Last quarter' },
+  { value: 'this-year', label: 'This year' }, { value: 'last-year', label: 'Last year' }, { value: 'ytd', label: 'Year to date' },
+];
+const ALL_TIME: DateRangeValue = { preset: 'all', start: '', end: '' };
+const SECONDARY_BTN = 'h-10 px-[18px] rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm hover:bg-elevated';
+interface CategoryOpt { id: number; group_name: string; sub_name: string }
+interface MerchantOpt { id: number; name: string }
+
+// Same presets and boundaries as the Transactions page.
+function dateRangeOf({ preset, start, end }: DateRangeValue): { startDate?: string; endDate?: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const monthStart = (yr: number, mo: number) => `${yr}-${String(mo + 1).padStart(2, '0')}-01`;
+  const monthEnd = (yr: number, mo: number) => todayYmd(new Date(yr, mo + 1, 0));
+  const q = Math.floor(m / 3);
+  switch (preset) {
+    case 'this-month': return { startDate: monthStart(y, m), endDate: monthEnd(y, m) };
+    case 'last-month': { const d = new Date(y, m - 1, 1); return { startDate: monthStart(d.getFullYear(), d.getMonth()), endDate: monthEnd(d.getFullYear(), d.getMonth()) }; }
+    case 'this-quarter': return { startDate: monthStart(y, q * 3), endDate: monthEnd(y, q * 3 + 2) };
+    case 'last-quarter': { const pq = q === 0 ? 3 : q - 1; const py = q === 0 ? y - 1 : y; return { startDate: monthStart(py, pq * 3), endDate: monthEnd(py, pq * 3 + 2) }; }
+    case 'this-year': return { startDate: `${y}-01-01`, endDate: `${y}-12-31` };
+    case 'last-year': return { startDate: `${y - 1}-01-01`, endDate: `${y - 1}-12-31` };
+    case 'ytd': return { startDate: `${y}-01-01`, endDate: todayYmd(now) };
+    case 'custom': return { startDate: start || undefined, endDate: end || undefined };
+    default: return {};
+  }
+}
+
+const shortDate = (s: string) => (s ? new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
+const dateLabelOf = (d: DateRangeValue) => d.preset === 'all' ? 'Date'
+  : d.preset === 'custom'
+    ? (d.start && d.end ? `${shortDate(d.start)} – ${shortDate(d.end)}` : d.start ? `From ${shortDate(d.start)}` : d.end ? `Until ${shortDate(d.end)}` : 'Custom')
+    : (DATE_PRESETS.find((p) => p.value === d.preset)?.label ?? 'Date');
+
+// The /transactions query for this account's list; category groups send `groupNames` as the Transactions page does.
+function listQuery(accountId: number, search: string, date: DateRangeValue, f: FilterDraft): string {
+  const params = new URLSearchParams({ accountIds: String(accountId), limit: String(LIMIT) });
+  const { startDate, endDate } = dateRangeOf(date);
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  if (search) params.set('search', search);
+  if (f.type !== 'All') params.set('type', f.type.toLowerCase());
+  const groupNames = f.category.filter((v) => v.startsWith('group:')).map((v) => v.slice(6));
+  const catIds = f.category.filter((v) => v.startsWith('sub:')).map((v) => v.slice(4));
+  if (groupNames.length) params.set('groupNames', groupNames.join(','));
+  if (catIds.length) params.set('categoryIds', catIds.join(','));
+  if (f.merchant.length) params.set('merchantIds', f.merchant.join(','));
+  if (f.op) {
+    params.set('amountOp', f.op);
+    if (f.op === 'bt') { if (f.min) params.set('amountMin', f.min); if (f.max) params.set('amountMax', f.max); }
+    else if (f.val) params.set('amountValue', f.val);
+  }
+  if (f.needsReview) params.set('needsReview', '1');
+  return params.toString();
+}
+
 export default function AccountDetailPage() {
+  const { id } = useParams();
+  // Keyed by account so search, date and filters never carry over to another account.
+  return <AccountDetail key={id} />;
+}
+
+function AccountDetail() {
   const { id: idParam } = useParams();
   const id = parseInt(idParam ?? '', 10);
   const { addToast } = useToast();
@@ -102,7 +174,22 @@ export default function AccountDetailPage() {
   const [metaLoaded, setMetaLoaded] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [txns, setTxns] = useState<Txn[]>([]);
-  const [txnTotal, setTxnTotal] = useState(0);
+  const [matchTotal, setMatchTotal] = useState(0); // transactions matching the filters
+  const [txnTotal, setTxnTotal] = useState<number | null>(null); // the account's full count, whatever the filters
+  const [listState, setListState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [retryKey, setRetryKey] = useState(0);
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState(''); // search, debounced: the list loads on this
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [applied, setApplied] = useState<FilterDraft>(EMPTY_FILTER);
+  const [draft, setDraft] = useState<FilterDraft>(EMPTY_FILTER);
+  const [date, setDate] = useState<DateRangeValue>(ALL_TIME);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState('Categories');
+  const [filterSearch, setFilterSearch] = useState('');
+  const [categories, setCategories] = useState<CategoryOpt[]>([]);
+  const [merchants, setMerchants] = useState<MerchantOpt[]>([]);
+  const loadSeq = useRef(0);
   const [range, setRange] = useState('1m');
 
   // manual balance entry (moved from AccountsPage — rows there now navigate here)
@@ -126,19 +213,64 @@ export default function AccountDetailPage() {
       if (alive()) setSnapshots(res.data);
     } catch { if (alive()) setSnapshots([]); }
   }, [id]);
-  const loadTxns = useCallback(async (alive: () => boolean = () => true) => {
-    try {
-      const res = await apiFetch<{ data: Txn[]; total: number }>(`/transactions?accountIds=${id}&limit=14`);
-      if (alive()) { setTxns(res.data); setTxnTotal(res.total); }
-    } catch { if (alive()) { setTxns([]); setTxnTotal(0); } }
-  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
     const alive = () => !cancelled;
-    setMetaLoaded(false); loadMeta(alive); loadHistory(alive); loadTxns(alive);
+    setMetaLoaded(false); loadMeta(alive); loadHistory(alive);
     return () => { cancelled = true; };
-  }, [loadMeta, loadHistory, loadTxns]);
+  }, [loadMeta, loadHistory]);
+
+  // Summary's "Total transactions" and the filter panel's choices don't depend on the filters.
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ total: number }>(`/transactions?accountIds=${id}&limit=1`).then((r) => { if (!cancelled) setTxnTotal(r.total); }).catch(() => {});
+    apiFetch<{ data: CategoryOpt[] }>('/categories').then((r) => { if (!cancelled) setCategories(r.data); }).catch(() => {});
+    apiFetch<{ data: MerchantOpt[] }>('/merchants').then((r) => { if (!cancelled) setMerchants(r.data); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [id]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Only the newest request may write the list: a slow older response must not overwrite it.
+  useEffect(() => {
+    const seq = ++loadSeq.current;
+    setListState('loading');
+    apiFetch<{ data: Txn[]; total: number }>(`/transactions?${listQuery(id, query, date, applied)}`)
+      .then((res) => { if (seq === loadSeq.current) { setTxns(res.data); setMatchTotal(res.total); setListState('ready'); } })
+      .catch(() => { if (seq === loadSeq.current) setListState('error'); });
+  }, [id, query, date, applied, retryKey]);
+
+  const categoryGroups = useMemo(() => {
+    const groups = new Map<string, { id: number; sub: string }[]>();
+    for (const c of categories) groups.set(c.group_name, [...(groups.get(c.group_name) ?? []), { id: c.id, sub: c.sub_name }]);
+    return [...groups].map(([group, subs]) => ({ group, subs }));
+  }, [categories]);
+  const filterCount = filterDraftCount(applied);
+  const anyActive = query !== '' || date.preset !== 'all' || filterCount > 0;
+  const clearAll = () => { setSearch(''); setQuery(''); setSearchOpen(false); setDate(ALL_TIME); setApplied(EMPTY_FILTER); setDraft(EMPTY_FILTER); };
+  const openFilters = () => { setDraft(applied); setFilterTab('Categories'); setFilterSearch(''); if (!search) setSearchOpen(false); setFilterOpen(true); };
+  const applyFilters = () => { setApplied(draft); setFilterOpen(false); };
+  const clearFilters = () => { setDraft(EMPTY_FILTER); setApplied(EMPTY_FILTER); };
+
+  // What is applied, in words: "Dining/Eating Out, Fuel · Last month". The search term comes last, quoted.
+  const summaryText = (() => {
+    const parts: string[] = [];
+    const names = [
+      ...applied.category.map((c) => c.startsWith('group:') ? c.slice(6) : categories.find((x) => `sub:${x.id}` === c)?.sub_name),
+      ...applied.merchant.map((m) => merchants.find((x) => String(x.id) === m)?.name),
+    ].filter((n): n is string => !!n);
+    if (names.length) parts.push(names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more` : names.join(', '));
+    const usd = (v: string) => formatMoney(Number(v) || 0, { kind: 'balance', showZero: true }).text;
+    if (applied.op) parts.push(applied.op === 'gt' ? `Over ${usd(applied.val)}` : applied.op === 'lt' ? `Under ${usd(applied.val)}` : applied.op === 'eq' ? `Exactly ${usd(applied.val)}` : `${usd(applied.min)}–${usd(applied.max)}`);
+    if (applied.type !== 'All') parts.push(applied.type === 'Expense' ? 'Debits only' : 'Credits only');
+    if (applied.needsReview) parts.push('To review');
+    if (date.preset !== 'all') parts.push(dateLabelOf(date));
+    return parts.join(' · ');
+  })();
 
   const isLiability = meta?.classification === 'liability';
   const points = useMemo(() => buildSeries(snapshots, range), [snapshots, range]);
@@ -209,6 +341,23 @@ export default function AccountDetailPage() {
 
   const canBalance = hasPermission('balances.update');
 
+  // Without transactions there is nothing to search or filter, so the controls go.
+  const hasTxns = txnTotal !== 0;
+  const countText = listState !== 'ready' || txns.length === 0 ? ''
+    : !anyActive ? `${txns.length} most recent`
+    : matchTotal > LIMIT ? `${LIMIT} of ${matchTotal} matching` : `${matchTotal} matching`;
+  const dateEl = (
+    <DateRangePopover
+      presets={DATE_PRESETS}
+      value={date}
+      label={dateLabelOf(date)}
+      active={date.preset !== 'all'}
+      clearValue={ALL_TIME}
+      onOpen={() => { setFilterOpen(false); if (!search) setSearchOpen(false); }}
+      onApply={setDate}
+    />
+  );
+
   const summaryRow = (label: string, value: React.ReactNode, last = false) => (
     <div className={`flex items-center justify-between gap-3.5 py-3.5 ${last ? '' : 'border-b border-line'}`}>
       <span className="text-sm text-content-3">{label}</span>
@@ -223,11 +372,7 @@ export default function AccountDetailPage() {
           <VendorAvatar name={meta.institution || meta.name} src={meta.logoUrl || undefined} color={meta.institutionColor || 'var(--c-blue)'} size={26} />
           <span className="text-[20px] font-extrabold tracking-tight truncate">{meta.name}{meta.lastFour ? ` (…${meta.lastFour})` : ''}</span>
         </>,
-        <Link to={`/transactions?accountId=${meta.accountId}`}
-          className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border border-line-strong text-sm font-semibold text-content shrink-0 hover:bg-surface-2">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-          <span className="hidden md:inline">Filters</span>
-        </Link>,
+        undefined,
         `${meta.name}${meta.lastFour ? ` (…${meta.lastFour})` : ''}`
       )}
 
@@ -265,14 +410,90 @@ export default function AccountDetailPage() {
 
       {/* two-column: transactions + summary */}
       <div className="flex flex-wrap gap-[22px] items-start">
-        {/* transactions */}
-        <div className="flex-[2_1_460px] min-w-0 bg-surface border border-line rounded-card shadow-sm overflow-hidden">
+        {/* transactions. The panels open outside the card, from its left edge on desktop. */}
+        <div className="relative flex-[2_1_460px] min-w-0 md:[&_[role=dialog]]:top-[84px] md:[&_[role=dialog]]:left-0 md:[&_[role=dialog]]:right-auto">
+        <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
           <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px]">
-            <span className="text-[17px] font-extrabold tracking-tight">Transactions</span>
-            <span className="text-[13px] font-semibold text-content-3 tabular-nums">{txns.length} most recent</span>
+            <div className="flex items-baseline gap-3 min-w-0">
+              <span className="text-[17px] font-extrabold tracking-tight">Transactions</span>
+              {countText && <span className="text-[13px] font-semibold text-content-3 tabular-nums whitespace-nowrap">{countText}</span>}
+            </div>
+            {hasTxns && !isMobile && (
+              <div className="flex items-center gap-2">
+                {searchOpen || search ? (
+                  <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2 w-[clamp(9rem,10vw,15rem)]">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" autoCapitalize="off" aria-label="Search this account's transactions"
+                      onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
+                      className="flex-1 min-w-0 bg-transparent outline-none text-sm text-content" />
+                    <button onClick={() => { setSearch(''); setSearchOpen(false); }} aria-label="Close search" className="shrink-0 text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" iconOnly aria-label="Search" title="Search" onClick={() => setSearchOpen(true)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  </Button>
+                )}
+                {dateEl}
+                <Button variant="outline" size="sm" onClick={openFilters} active={filterOpen || filterCount > 0} aria-haspopup="dialog" aria-expanded={filterOpen}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                  Filters
+                  {filterCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center">{filterCount}</span>}
+                </Button>
+              </div>
+            )}
           </div>
-          {txns.length === 0 ? (
-            <div className="px-6 py-8 border-t border-line text-center text-sm text-content-3">No transactions for this account.</div>
+          {hasTxns && isMobile && (
+            <div className="px-4 pb-3 flex flex-col gap-2">
+              <div className="flex items-center h-11 rounded-[12px] bg-surface border border-line-strong pl-3 pr-1 gap-2">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" autoCapitalize="off" aria-label="Search this account's transactions"
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
+                {search && (
+                  <button onClick={() => setSearch('')} aria-label="Clear search" className="w-8 h-8 flex items-center justify-center text-content-3">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                  </button>
+                )}
+                <button onClick={openFilters} aria-label="Filters" aria-haspopup="dialog" aria-expanded={filterOpen} className={`relative w-9 h-9 rounded-[9px] flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                  {filterCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{filterCount}</span>}
+                </button>
+              </div>
+              <div className="flex">{dateEl}</div>
+            </div>
+          )}
+          {hasTxns && anyActive && (
+            <div className="flex items-center gap-3 px-4 md:px-6 py-2.5 border-t border-line bg-surface-2">
+              <span className="flex flex-1 min-w-0 text-sm text-content-2 whitespace-nowrap">
+                <span className="sr-only">Showing </span>
+                {summaryText && <span className="truncate">{summaryText}</span>}
+                {query && (
+                  <>
+                    {summaryText && <span className="shrink-0">&nbsp;·&nbsp;</span>}
+                    <span className="shrink-0">“</span><span className="truncate">{query}</span><span className="shrink-0">”</span>
+                  </>
+                )}
+              </span>
+              <button onClick={clearAll} className="shrink-0 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
+            </div>
+          )}
+          {listState === 'loading' ? (
+            <div className="border-t border-line"><Spinner /></div>
+          ) : listState === 'error' ? (
+            <div className="px-6 py-8 border-t border-line text-center text-sm text-content-3">
+              <div className="mb-3">Couldn't load transactions.</div>
+              <button onClick={() => setRetryKey((k) => k + 1)} className={SECONDARY_BTN}>Try again</button>
+            </div>
+          ) : txns.length === 0 ? (
+            <div className="px-6 py-8 border-t border-line text-center text-sm text-content-3">
+              {!hasTxns ? 'No transactions for this account.' : (
+                <>
+                  {query ? (
+                    <div className="flex items-center justify-center min-w-0 mb-3"><span className="shrink-0">Nothing matches “</span><span className="truncate">{query}</span><span className="shrink-0">”</span></div>
+                  ) : <div className="mb-3">No transactions match these filters</div>}
+                  <button onClick={clearAll} className={SECONDARY_BTN}>Clear</button>
+                </>
+              )}
+            </div>
           ) : (
             txns.map((t) => {
               const cat = categoryOf(t);
@@ -311,13 +532,23 @@ export default function AccountDetailPage() {
             View all in Transactions
           </Link>
         </div>
+        {filterOpen && (
+          <FilterPopover
+            draft={draft} setDraft={setDraft}
+            categoryGroups={categoryGroups} accounts={[]} merchants={merchants} categories={categories}
+            search={filterSearch} setSearch={setFilterSearch} tab={filterTab} setTab={setFilterTab}
+            onClear={clearFilters} onCancel={() => setFilterOpen(false)} onApply={applyFilters}
+            showNeedsReview sections={SECTIONS}
+          />
+        )}
+        </div>
 
         {/* summary (right, per the design pack) */}
         <div className="flex-[1_1_300px] min-w-[280px] md:sticky md:top-[88px] bg-surface border border-line rounded-card shadow-sm px-4 md:px-6 pt-4 md:pt-[22px] pb-4">
           <div className="text-[17px] font-extrabold tracking-tight mb-2">Summary</div>
           {summaryRow('Institution', meta.institution ?? '—')}
           {summaryRow('Account type', SUBTYPE[meta.type] ?? meta.type)}
-          {summaryRow('Total transactions', txnTotal.toLocaleString())}
+          {summaryRow('Total transactions', txnTotal == null ? '—' : txnTotal.toLocaleString())}
           {summaryRow('Last update', timeAgo(meta.lastUpdated) || '—', true)}
           {canBalance && (
             <button onClick={() => { setBalanceInput(meta.balance ? String(isLiability ? -meta.balance : meta.balance) : ''); setBalanceOpen(true); }}
