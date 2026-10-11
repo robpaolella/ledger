@@ -235,7 +235,7 @@ export default function AccountsPage() {
   const headerControls = (<>
           {/* Filters */}
           <div className="relative">
-            <button onClick={openFilter} aria-haspopup="dialog" aria-expanded={filterOpen}
+            <button onClick={openFilter} aria-label="Filters" aria-haspopup="dialog" aria-expanded={filterOpen}
               className="relative flex items-center gap-2 h-10 px-2.5 md:px-4 rounded-[11px] bg-surface-2 border-2 text-sm font-semibold text-content"
               style={{ borderColor: filterOpen || filterActive ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
@@ -253,7 +253,7 @@ export default function AccountsPage() {
             )}
           </div>
           {hasSimplefin && (
-            <button onClick={openRefresh} className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">
+            <button onClick={openRefresh} aria-label="Refresh all" className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
               <span className="hidden md:inline">Refresh all</span>
             </button>
@@ -446,12 +446,12 @@ export default function AccountsPage() {
                 </div>
                 <div>
                   <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Cost</label>
-                  <CurrencyInput value={af.cost} onChange={(v) => setAf({ ...af, cost: v })} />
+                  <CurrencyInput value={af.cost} onChange={(v) => setAf({ ...af, cost: v })} className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
                 </div>
               </div>
               <div>
                 <label className="block text-[13px] font-semibold text-content-2 mb-1.5">Salvage value</label>
-                <CurrencyInput value={af.salvageValue} onChange={(v) => setAf({ ...af, salvageValue: v })} />
+                <CurrencyInput value={af.salvageValue} onChange={(v) => setAf({ ...af, salvageValue: v })} className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
               </div>
               <div>
                 <label className="block text-[13px] font-semibold text-content-2 mb-2">Method</label>
@@ -476,7 +476,7 @@ export default function AccountsPage() {
               <div className="flex items-center gap-2.5 pt-1">
                 {assetModal !== 'new' && <button onClick={deleteAsset} className="h-11 px-4 rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', border: '1px solid color-mix(in srgb, var(--negative) 40%, var(--line))' }}>Delete</button>}
                 <button onClick={() => setAssetModal(null)} className="ml-auto h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
-                <button onClick={saveAsset} disabled={!af.name || !af.purchaseDate} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Save changes</button>
+                <button onClick={saveAsset} disabled={!af.name || !af.purchaseDate} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">{assetModal === 'new' ? 'Add asset' : 'Save changes'}</button>
               </div>
             </div>
           </ResponsiveModal>
