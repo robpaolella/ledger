@@ -1870,7 +1870,7 @@ export default function TransactionsPage() {
       <div className="text-[13px] font-semibold text-content-2 mb-2">Merchant</div>
       <MerchantPicker value={bulkMerchant} merchants={merchants} onSelect={setBulkMerchant} allowClear
         placeholder="Choose a merchant…"
-        triggerClassName="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
+        triggerClassName="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
     </div>
     {/* Category */}
     <div>
