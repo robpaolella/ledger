@@ -367,7 +367,7 @@ export const notifications = sqliteTable('notifications', {
   title: text('title').notNull(),
   body: text('body'),
   action_label: text('action_label'),  // e.g. 'Retry'
-  action_target: text('action_target'),// e.g. '/settings?tab=banksync' or an account id
+  action_target: text('action_target'),// e.g. '/settings?panel=bank' or an account id
   dedupe_key: text('dedupe_key'),       // collapse repeats (e.g. 'sync_failure:acct:12')
   is_read: integer('is_read').notNull().default(0),
   created_at: text('created_at').default('CURRENT_TIMESTAMP'),
