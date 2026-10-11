@@ -46,6 +46,12 @@ const colorVar = (s: string) => `var(${AV_COLOR[initialOf(s)] || '--c-blue'})`;
 const UNASSIGNED = 0;
 const tint = (v: string) => `color-mix(in srgb, ${v} 16%, transparent)`;
 const parseDate = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const isYmd = (v: string | null): v is string => {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y, m, d] = v.split('-').map(Number); const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
+const toPeriod = (from: string | null, to: string | null) => (isYmd(from) && isYmd(to) && from <= to ? { from, to } : null);
 const friendlyDate = (ymd: string) => parseDate(ymd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
 function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: string; size?: number; font?: number }) {
@@ -59,7 +65,7 @@ export default function ReviewsPage() {
   const canEdit = hasPermission('transactions.edit');
   const { addToast } = useToast();
   useCategoryEmojis(); // re-render when stored category emojis load/change
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [openTotal, setOpenTotal] = useState(0); // server-side open count (the list itself is capped)
@@ -69,6 +75,13 @@ export default function ReviewsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // ?from=YYYY-MM-DD&to=YYYY-MM-DD — an inclusive period from a link (Budget, Reports, Dashboard).
+  // Both must be real dates with from <= to; anything else is ignored and the usual view shows.
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
+  const period = toPeriod(fromParam, toParam);
+  const periodFrom = period?.from; const periodTo = period?.to;
+  const clearPeriod = () => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('from'); n.delete('to'); return n; }, { replace: true });
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   // ?assignee=<id> | me | unassigned — deep links from the dashboard card + notifications.
   const assigneeParam = searchParams.get('assignee');
@@ -105,11 +118,11 @@ export default function ReviewsPage() {
     if (!opts?.silent) setInitialLoading(true); else setRefreshing(true);
     const seq = ++loadSeqRef.current; // drop out-of-order responses so a stale list can't resurrect removed rows
     try {
-      const res = await apiFetch<{ data: ReviewRow[]; total: number }>('/reviews?status=open&limit=500');
+      const res = await apiFetch<{ data: ReviewRow[]; total: number }>(`/reviews?status=open&limit=500${periodFrom && periodTo ? `&from=${periodFrom}&to=${periodTo}` : ''}`);
       if (seq === loadSeqRef.current) { setRows(res.data); setOpenTotal(res.total ?? res.data.length); }
     } catch { addToast('Failed to load reviews', 'error'); }
     finally { setInitialLoading(false); setRefreshing(false); }
-  }, [addToast]);
+  }, [addToast, periodFrom, periodTo]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     apiFetch<{ data: { id: number; display_name: string }[] }>('/users').then((r) => { initOwnerSlots(r.data.map((u) => u.id)); setUsers(r.data.map((u) => ({ id: u.id, displayName: u.display_name }))); }).catch(() => {});
@@ -136,7 +149,7 @@ export default function ReviewsPage() {
   const passUser = (r: ReviewRow) => selUsers.size === 0 || (r.assignee ? selUsers.has(r.assignee.id) : selUsers.has(UNASSIGNED));
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
-  const anyFilter = dateFilter !== 'all' || selUsers.size > 0 || q !== '';
+  const anyFilter = period !== null || dateFilter !== 'all' || selUsers.size > 0 || q !== '';
   const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
@@ -226,8 +239,9 @@ export default function ReviewsPage() {
   };
   const openPanel = (id: number) => { setDetail({ id } as DetailTxn); refetchDetail(id); };
 
-  const resetFilters = () => { setDateFilter('all'); setSelUsers(new Set()); setSearch(''); setSearchOpen(false); };
-  const dateLabel = dateFilter === 'all' ? 'Date' : DATE_DEFS.find(([v]) => v === dateFilter)![1];
+  const resetFilters = () => { clearPeriod(); setDateFilter('all'); setSelUsers(new Set()); setSearch(''); setSearchOpen(false); };
+  const periodLabel = period ? `${parseDate(period.from).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${parseDate(period.to).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : '';
+  const dateLabel = period ? periodLabel : dateFilter === 'all' ? 'Date' : DATE_DEFS.find(([v]) => v === dateFilter)![1];
   const usersLabel = selUsers.size === 1
     ? (selUsers.has(UNASSIGNED) ? 'Unassigned' : (users.find((u) => selUsers.has(u.id))?.displayName ?? 'Users'))
     : 'Users';
@@ -259,15 +273,15 @@ export default function ReviewsPage() {
             <button onClick={() => toggleMenu('date')} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'date' ? 'var(--primary)' : 'var(--line-strong)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
               {dateLabel}
-              {dateFilter !== 'all' && <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--primary)' }} />}
+              {(period || dateFilter !== 'all') && <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--primary)' }} />}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {menu === 'date' && (
               <div className="absolute top-[46px] right-0 z-40 w-[220px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
                 {DATE_DEFS.map(([v, label]) => {
-                  const on = dateFilter === v;
+                  const on = !period && dateFilter === v;
                   return (
-                    <div key={v} onClick={() => { setDateFilter(v); setMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-[9px] text-sm font-medium cursor-pointer" style={{ color: on ? 'var(--text)' : 'var(--text-2)', background: on ? 'var(--surface-2)' : 'transparent' }}>
+                    <div key={v} onClick={() => { clearPeriod(); setDateFilter(v); setMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-[9px] text-sm font-medium cursor-pointer" style={{ color: on ? 'var(--text)' : 'var(--text-2)', background: on ? 'var(--surface-2)' : 'transparent' }}>
                       <span className="w-4 flex-none flex items-center justify-center">{on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}</span>
                       {label}
                     </div>
