@@ -4,19 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
-import TotpCodeInput from '../TotpCodeInput';
-import Tooltip from '../Tooltip';
+import TwoFAKeySetup, { WRONG_CODE_MESSAGE, copyText, isWrongCodeError } from '../TwoFAKeySetup';
 import { Card, CardHeader, Field, PanelHeader, Pill, inputCls, btnPrimary, btnSecondary, btnDanger } from './ui';
-
-async function copyText(text: string) {
-  try { await navigator.clipboard.writeText(text); }
-  catch {
-    // Clipboard API can be blocked inside modals — fall back to a hidden textarea.
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-  }
-}
 
 type Step = 'idle' | 'scan' | 'backup' | 'disable' | 'regenerate';
 
@@ -35,15 +24,14 @@ export default function SecurityPanel() {
   // 2FA
   const [twofaEnabled, setTwofaEnabled] = useState(!!user?.twofaEnabled);
   const [step, setStep] = useState<Step>('idle');
-  const [setupData, setSetupData] = useState<{ qrCodeUrl: string; secret: string } | null>(null);
+  const [setupData, setSetupData] = useState<{ qrCodeUrl: string; secret: string; otpauthUri: string } | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [secretCopied, setSecretCopied] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
+  const [codeError, setCodeError] = useState('');
 
   const changePassword = async () => {
     setPwError('');
@@ -60,12 +48,12 @@ export default function SecurityPanel() {
   };
   const pwReady = currentPassword && newPassword && confirmPassword;
 
-  const closeModal = () => { setStep('idle'); setSetupData(null); setVerifyCode(''); setShowSecret(false); setSecretCopied(false); setPassword(''); setError(''); };
+  const closeModal = () => { setStep('idle'); setSetupData(null); setVerifyCode(''); setCodeError(''); setPassword(''); setError(''); };
 
   const startSetup = async () => {
     setError(''); setBusy(true);
     try {
-      const res = await apiFetch<{ data: { qrCodeUrl: string; secret: string } }>('/auth/2fa/setup', { method: 'POST' });
+      const res = await apiFetch<{ data: { qrCodeUrl: string; secret: string; otpauthUri: string } }>('/auth/2fa/setup', { method: 'POST' });
       setSetupData(res.data); setStep('scan');
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Failed to start setup', 'error');
@@ -74,14 +62,15 @@ export default function SecurityPanel() {
 
   const confirmSetup = async () => {
     if (!setupData) return;
-    setError(''); setBusy(true);
+    setError(''); setCodeError(''); setBusy(true);
     try {
       const res = await apiFetch<{ data: { backupCodes: string[] } }>('/auth/2fa/confirm', { method: 'POST', body: JSON.stringify({ token: verifyCode, secret: setupData.secret }) });
       setBackupCodes(res.data.backupCodes); setTwofaEnabled(true); setStep('backup'); setVerifyCode('');
       await refreshUser();
       addToast('Two-factor authentication enabled');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      if (isWrongCodeError(err)) setCodeError(WRONG_CODE_MESSAGE);
+      else setError(err instanceof Error ? err.message : 'Verification failed');
     } finally { setBusy(false); }
   };
 
@@ -112,8 +101,8 @@ export default function SecurityPanel() {
   const modalFooter =
     step === 'scan' ? (
       <div className="flex justify-end gap-2.5">
-        <button type="button" onClick={closeModal} className={btnSecondary}>Cancel</button>
-        <button type="button" onClick={confirmSetup} disabled={busy || verifyCode.length !== 6} className={btnPrimary}>{busy ? 'Verifying…' : 'Verify and enable'}</button>
+        <button type="button" onClick={closeModal} className={`${btnSecondary} max-md:flex-1 max-md:h-11!`}>Cancel</button>
+        <button type="button" onClick={confirmSetup} disabled={busy || verifyCode.length !== 6} className={`${btnPrimary} max-md:flex-1 max-md:h-11!`}>{busy ? 'Verifying…' : 'Verify and enable'}</button>
       </div>
     ) : step === 'backup' ? (
       <div className="flex justify-end gap-2.5">
@@ -167,7 +156,7 @@ export default function SecurityPanel() {
             <div className="text-[12.5px] text-content-3 mt-0.5 leading-snug">
               {twofaEnabled
                 ? 'Use your authenticator app, or one of your single-use backup codes if you lose the device.'
-                : 'Scan a QR code with an authenticator app (1Password, Google Authenticator, Authy…) and enter the 6-digit code it shows.'}
+                : 'Add Ledger to an authenticator app (1Password, Google Authenticator, Authy…) and enter the 6-digit code it shows.'}
             </div>
           </div>
           {twofaEnabled ? (
@@ -181,30 +170,12 @@ export default function SecurityPanel() {
         </div>
       </Card>
 
-      <ResponsiveModal isOpen={step !== 'idle'} onClose={closeModal} title={modalTitle[step]} maxWidth="440px" footer={modalFooter}>
+      <ResponsiveModal isOpen={step !== 'idle'} onClose={closeModal} title={modalTitle[step]} maxWidth={step === 'scan' ? '560px' : '440px'} footer={modalFooter}>
         {error && <InlineNotification type="error" message={error} dismissible onDismiss={() => setError('')} className="mb-4" />}
 
         {step === 'scan' && setupData && (
-          <div className="flex flex-col gap-4">
-            <p className="text-sm text-content-2 m-0 leading-snug">Scan this QR code with your authenticator app, then enter the 6-digit code it shows.</p>
-            <div className="flex justify-center">
-              <div className="bg-white p-3 rounded-[12px]"><img src={setupData.qrCodeUrl} alt="Two-factor QR code" className="w-40 h-40 block" /></div>
-            </div>
-            <button type="button" onClick={() => setShowSecret((v) => !v)} className="text-[13px] font-semibold text-primary w-full text-center">
-              {showSecret ? 'Hide secret key' : "Can't scan? Enter the key manually"}
-            </button>
-            {showSecret && (
-              <div className="flex justify-center">
-                <Tooltip content={secretCopied ? 'Copied to clipboard' : 'Click to copy'}>
-                  <button type="button" onClick={async () => { await copyText(setupData.secret); setSecretCopied(true); setTimeout(() => setSecretCopied(false), 2000); }}
-                    className="bg-surface-2 border border-line-strong rounded-[11px] px-4 py-2.5 hover:border-primary transition-colors">
-                    <code className="font-mono text-[12px] text-content break-all">{setupData.secret}</code>
-                  </button>
-                </Tooltip>
-              </div>
-            )}
-            <TotpCodeInput value={verifyCode} onChange={setVerifyCode} autoFocus />
-          </div>
+          <TwoFAKeySetup qrCodeUrl={setupData.qrCodeUrl} secret={setupData.secret} otpauthUri={setupData.otpauthUri}
+            verifyCode={verifyCode} onCodeChange={(v) => { setVerifyCode(v); setCodeError(''); }} codeError={codeError} />
         )}
 
         {step === 'backup' && (
