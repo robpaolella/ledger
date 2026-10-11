@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { formatMoney } from '@ledger/shared';
+import { formatMoney, monthPeriod, type UncategorizedTotals } from '@ledger/shared';
 import { Change } from '../components/Money';
 import Spinner from '../components/Spinner';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
@@ -11,6 +11,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import PageHeader from '../components/PageHeader';
 import ResponsiveModal from '../components/ResponsiveModal';
 import Button from '../components/Button';
+import UncategorizedNotice from '../components/UncategorizedNotice';
 import BudgetHistory from '../components/budget/BudgetHistory';
 import { useToast } from '../context/ToastContext';
 
@@ -56,6 +57,7 @@ interface BudgetSummary {
   income: IncomeRow[];
   expenseGroups: ExpenseGroup[];
   totals: Totals;
+  uncategorized: UncategorizedTotals;
 }
 
 interface AnnualRow {
@@ -211,7 +213,7 @@ export default function BudgetPage() {
     return <Spinner />;
   }
 
-  const { income, expenseGroups, totals } = data;
+  const { income, expenseGroups, totals, uncategorized } = data;
 
   const isMonth = view === 'month';
   const now = new Date();
@@ -272,6 +274,9 @@ export default function BudgetPage() {
           <SegmentedControl value={view} onChange={setView}
             options={[{ value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} />
         </>} />
+
+      {/* Money with no category is already inside the totals; this says so. Year view shows plans only. */}
+      {isMonth && <UncategorizedNotice totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} className="mb-5" />}
 
       {/* ===== MONTH VIEW ===== */}
       {isMonth && isMobile ? (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 import { todayYmd } from '../lib/formatters';
 import { formatMoney } from '@ledger/shared';
 import { Money } from '../components/Money';
@@ -1097,7 +1097,10 @@ export default function TransactionsPage() {
       loadTransactions();
       loadReviewCount();
       window.dispatchEvent(new CustomEvent('reviews-changed'));
-    } catch { addToast('Failed to mark reviewed', 'error'); }
+    } catch (err) {
+      // A 400 carries the server's plain-English reason (e.g. choose a category first).
+      addToast(err instanceof ApiError && err.status === 400 ? err.message : 'Failed to mark reviewed', 'error');
+    }
   };
   const markReviewed = async () => {
     if (!detail) return;
