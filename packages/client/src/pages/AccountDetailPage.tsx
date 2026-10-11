@@ -335,7 +335,7 @@ export default function AccountDetailPage() {
             <div>
               <label className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
               <CurrencyInput value={balanceInput} onChange={setBalanceInput} autoFocus allowNegative />
-              <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number.</p>
+              <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number. Enter a negative amount if the card is in credit.</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setBalanceOpen(false)} className="h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
