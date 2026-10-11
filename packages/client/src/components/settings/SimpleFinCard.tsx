@@ -83,8 +83,8 @@ function ConnectionModal({ connection, onSave, onClose }: {
           hint={connection ? 'Paste a new token or URL only if the bank connection needs re-authorizing.' : undefined}
         >
           {mode === 'token'
-            ? <textarea value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your SimpleFIN setup token…" rows={3} className={`${textareaCls} font-mono text-[13px]`} />
-            : <input value={accessUrl} onChange={(e) => setAccessUrl(e.target.value)} placeholder="https://…" className={`${inputCls} font-mono text-[13px]`} />}
+            ? <textarea autoCapitalize="off" autoCorrect="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your SimpleFIN setup token…" rows={3} className={`${textareaCls} font-mono text-[13px]`} />
+            : <input inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} value={accessUrl} onChange={(e) => setAccessUrl(e.target.value)} placeholder="https://…" className={`${inputCls} font-mono text-[13px]`} />}
         </Field>
       </div>
     </ResponsiveModal>
