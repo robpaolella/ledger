@@ -13,6 +13,7 @@ import MonthSwitcher from '../components/MonthSwitcher';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { thinLabelIndices } from '../lib/chartLabels';
 import FilterPopover from '../components/FilterPopover';
 import DateRangePopover from '../components/DateRangePopover';
 import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/filterModel';
@@ -373,11 +374,12 @@ export default function ReportsPage() {
   const visible = (focusObj || showAll) ? withTotal : withTotal.slice(0, TOPN);
 
   // chart geometry (viewBox 1200x380)
-  const PX0 = 110, PX1 = 1180, PY0 = 24, PY1 = 336, PW = PX1 - PX0, PH = PY1 - PY0;
+  const PX0 = isMobile ? 170 : 110, PX1 = isMobile ? 1140 : 1180, PY0 = 24, PY1 = 336, PW = PX1 - PX0, PH = PY1 - PY0;
   const nP = Math.max(1, nB);
   const xOf = (i: number) => (nP === 1 ? (PX0 + PW / 2) : PX0 + PW * i / (nP - 1));
   const vmax = Math.max(1, ...totalVals) * 1.06;
   const yOf = (v: number) => PY1 - (v / vmax) * PH;
+  const phoneLabelIdx = new Set(thinLabelIndices(nB, 5)); // phones: thinned month labels, newest always shown
   const ptsOf = (vals: number[]) => vals.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
   const emph = hoverLine || isolate;
   const chartTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => { const v = vmax * f; const y = yOf(v); return { label: axis(v), y: y.toFixed(1), topPct: `${(y / 380 * 100).toFixed(2)}%` }; });
@@ -655,9 +657,9 @@ export default function ReportsPage() {
         ) : (
           <div>
             <div className="relative">
-              <svg viewBox="0 0 1200 380" onMouseMove={onChartMove} onMouseLeave={() => setHoverIdx(null)} style={{ width: '100%', height: 'auto', display: 'block', cursor: 'crosshair' }}>
-                {chartTicks.map((g, i) => <line key={i} x1="120" y1={g.y} x2="1188" y2={g.y} stroke="var(--line)" strokeWidth="1" />)}
-                <line x1="120" y1="24" x2="120" y2="330" stroke="var(--line-strong)" strokeWidth="1" />
+              <svg viewBox="0 0 1200 380" preserveAspectRatio={isMobile ? 'none' : undefined} className={isMobile ? '[&_polyline]:[vector-effect:non-scaling-stroke] [&_line]:[vector-effect:non-scaling-stroke]' : undefined} onMouseMove={onChartMove} onMouseLeave={() => setHoverIdx(null)} style={{ width: '100%', height: isMobile ? 220 : 'auto', display: 'block', cursor: 'crosshair' }}>
+                {chartTicks.map((g, i) => <line key={i} x1={PX0 + 10} y1={g.y} x2={PX1 + 8} y2={g.y} stroke="var(--line)" strokeWidth="1" />)}
+                <line x1={PX0 + 10} y1="24" x2={PX0 + 10} y2="330" stroke="var(--line-strong)" strokeWidth="1" />
                 {hovering && <line x1={hoverX} y1="24" x2={hoverX} y2="330" stroke="var(--line-strong)" strokeWidth="1.5" strokeDasharray="5 4" />}
                 {visible.map((c) => { const dim = !!emph && emph !== c.key; return (
                   <g key={c.key}>
@@ -679,8 +681,8 @@ export default function ReportsPage() {
                   </>
                 )}
               </svg>
-              {chartTicks.map((g, i) => <div key={i} className="absolute text-[13px] font-semibold text-content-2 tabular-nums text-right" style={{ left: 0, top: g.topPct, transform: 'translateY(-50%)', width: '8.2%', pointerEvents: 'none' }}>{g.label}</div>)}
-              {buckets.map((b, i) => <div key={i} className="absolute text-[13px] font-semibold text-content-2" style={{ top: '90%', left: `${(xOf(i) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>{b.label}</div>)}
+              {chartTicks.map((g, i) => <div key={i} className={`absolute font-semibold text-content-2 tabular-nums text-right ${isMobile ? 'text-[11px]' : 'text-[13px]'}`} style={{ left: 0, top: g.topPct, transform: 'translateY(-50%)', width: isMobile ? '13%' : '8.2%', pointerEvents: 'none' }}>{g.label}</div>)}
+              {buckets.map((b, i) => (isMobile && !phoneLabelIdx.has(i)) ? null : <div key={i} className={`absolute font-semibold text-content-2 ${isMobile ? 'text-[11px]' : 'text-[13px]'}`} style={{ top: '90%', left: `${(xOf(i) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>{b.label}</div>)}
               {hovering && (
                 <div className="absolute bg-elevated border border-line-strong rounded-[11px] shadow-md" style={{ top: 6, left: `${(xOf(hoverIdx!) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', padding: '11px 13px', minWidth: 168, zIndex: 5 }}>
                   <div className="text-[12px] font-bold text-content-2 mb-2">{buckets[hoverIdx!].label}</div>

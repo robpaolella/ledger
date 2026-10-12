@@ -73,7 +73,7 @@ export function GroupHeader({ label, right, rightClass = 'text-content-3', class
   return (
     <div className={`flex items-center justify-between gap-3 px-4 md:px-6 py-2 md:py-2.5 bg-surface-2 border-t border-b border-line ${className}`}>
       <span className="text-[13px] font-semibold text-content-2 truncate">{label}</span>
-      {right != null && <span className={`font-mono text-xs tabular-nums shrink-0 ${rightClass}`}>{right}</span>}
+      {right != null && <span className={`font-mono text-[13px] tabular-nums shrink-0 ${rightClass}`}>{right}</span>}
     </div>
   );
 }

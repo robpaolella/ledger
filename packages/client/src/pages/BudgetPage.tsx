@@ -390,10 +390,10 @@ export default function BudgetPage() {
                           <button type="button" onClick={() => drillSub(r.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium"><span className="block truncate">{r.subName}</span></button>
                           <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden, sec.key === 'income'); }}
                             disabled={!canEditBudgets}
-                            className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
+                            className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[15px] font-semibold tabular-nums text-content disabled:cursor-default">
                             {whole(r.budgeted)}
                           </button>
-                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(isOver(rem))}
+                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[15px] font-bold tabular-nums" style={pillTint(isOver(rem))}
                             title={r.recurring ? `Recurring (minimum): ${r.recurring.items.map((i) => i.label).join(', ')}` : undefined}>
                             {r.recurring && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>}
                             {sec.key === 'income' && isOver(rem) ? `+${whole(-rem)}` : formatMoney(rem, { kind: 'total', precision: 'whole' }).text}
