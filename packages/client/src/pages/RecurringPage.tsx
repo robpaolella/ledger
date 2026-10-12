@@ -10,6 +10,7 @@ import { VendorAvatar, SegmentedControl } from '../components/primitives';
 import KPICard from '../components/KPICard';
 import CurrencyInput from '../components/CurrencyInput';
 import ResponsiveModal from '../components/ResponsiveModal';
+import BottomSheet from '../components/BottomSheet';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import PageHeader from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -510,6 +511,7 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
   onClose: () => void; onEdit: () => void; onDeleted: () => void;
 }) {
   const { addToast } = useToast();
+  const isMobile = useIsMobile();
   const color = getCategoryColorHex(item.groupName);
   // Only the genuinely-upcoming occurrence this month counts as "Next" — never a
   // past one (which would render "Next: … · N days ago").
@@ -521,6 +523,36 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
   const row = (label: string, val: React.ReactNode) => (
     <div className="flex items-center justify-between py-3 border-b border-line"><span className="text-[13px] text-content-3">{label}</span><span className="text-[14px] font-semibold text-content text-right">{val}</span></div>
   );
+  const body = (
+    <>
+      <div className="flex items-center gap-3 mb-5">
+        <VendorAvatar name={item.merchantName ?? item.label} src={item.merchantLogoUrl || undefined} size={48} color={color} />
+        <div className="min-w-0">
+          <div className="text-lg font-extrabold truncate">{item.label}</div>
+          <div className="text-[13px] text-content-3 truncate">
+            {item.merchantName && item.merchantName !== item.label ? `${item.merchantName} · ` : ''}{cadenceLabel(item)}
+          </div>
+        </div>
+      </div>
+      <div className="text-[30px] font-extrabold tracking-tight mb-1"><Money amount={flow(item.amount ?? 0, item.type)} /></div>
+      {next && <div className="text-[13px] text-content-3 mb-6">Next: {dateChip(next.date)} · {relativeLabel(next.date, today)}</div>}
+      {row('Vendor', item.merchantName ?? '—')}
+      {row('Account', item.accountName ? `${item.accountName}${item.accountLastFour ? ` (…${item.accountLastFour})` : ''}` : '—')}
+      {row('Category', <span className="inline-flex items-center gap-1.5">{getCategoryEmoji(item.subName, item.groupName)} {item.subName}</span>)}
+      {row('Frequency', cadenceLabel(item))}
+      {row('Status', <span className={item.status === 'active' ? 'text-positive' : 'text-content-3'}>{item.status === 'active' ? 'Active' : 'Paused'}</span>)}
+    </>
+  );
+  const actions = canEdit && (
+    <div className="flex flex-col gap-2.5">
+      <button onClick={onEdit} className="w-full h-11 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm">Edit recurring</button>
+      <ConfirmDeleteButton onConfirm={del} variant="block" />
+    </div>
+  );
+
+  if (isMobile) {
+    return <BottomSheet isOpen onClose={onClose} title="Recurring item" footer={actions || undefined}>{body}</BottomSheet>;
+  }
   return (
     <>
       <div onClick={onClose} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
@@ -530,28 +562,8 @@ function DetailPanel({ item, monthOcc, today, canEdit, onClose, onEdit, onDelete
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="flex items-center gap-3 mb-5">
-            <VendorAvatar name={item.merchantName ?? item.label} src={item.merchantLogoUrl || undefined} size={48} color={color} />
-            <div className="min-w-0">
-              <div className="text-lg font-extrabold truncate">{item.label}</div>
-              <div className="text-[13px] text-content-3 truncate">
-                {item.merchantName && item.merchantName !== item.label ? `${item.merchantName} · ` : ''}{cadenceLabel(item)}
-              </div>
-            </div>
-          </div>
-          <div className="text-[30px] font-extrabold tracking-tight mb-1"><Money amount={flow(item.amount ?? 0, item.type)} /></div>
-          {next && <div className="text-[13px] text-content-3 mb-6">Next: {dateChip(next.date)} · {relativeLabel(next.date, today)}</div>}
-          {row('Vendor', item.merchantName ?? '—')}
-          {row('Account', item.accountName ? `${item.accountName}${item.accountLastFour ? ` (…${item.accountLastFour})` : ''}` : '—')}
-          {row('Category', <span className="inline-flex items-center gap-1.5">{getCategoryEmoji(item.subName, item.groupName)} {item.subName}</span>)}
-          {row('Frequency', cadenceLabel(item))}
-          {row('Status', <span className={item.status === 'active' ? 'text-positive' : 'text-content-3'}>{item.status === 'active' ? 'Active' : 'Paused'}</span>)}
-          {canEdit && (
-            <div className="mt-6 flex flex-col gap-2.5">
-              <button onClick={onEdit} className="w-full h-11 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm">Edit recurring</button>
-              <ConfirmDeleteButton onConfirm={del} variant="block" />
-            </div>
-          )}
+          {body}
+          {actions && <div className="mt-6">{actions}</div>}
         </div>
       </div>
     </>
