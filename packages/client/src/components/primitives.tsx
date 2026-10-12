@@ -80,7 +80,7 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={`inline-flex items-center gap-1 bg-surface-2 border border-line rounded-[12px] p-1 ${className}`}>
+    <div className={`inline-flex items-center max-md:items-stretch max-md:min-h-11 gap-1 bg-surface-2 border border-line rounded-[12px] p-1 ${className}`}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -89,7 +89,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`px-4 py-1.5 rounded-[9px] text-sm font-semibold transition-colors ${
+            className={`relative max-md:inline-flex max-md:items-center max-md:justify-center max-md:after:content-[''] max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-[5px] px-4 py-1.5 rounded-[9px] text-sm font-semibold transition-colors ${
               active ? 'bg-elevated shadow-sm text-content' : 'text-content-2 hover:text-content'
             }`}
           >
@@ -102,7 +102,8 @@ export function SegmentedControl<T extends string>({
 }
 
 /* ------ Switch ------
- * 44×26 pill toggle (design system): `--primary` on, `--line-strong` off. */
+ * 44×26 pill toggle (design system): `--primary` on, `--line-strong` off. On phones an
+ * invisible 44×44 tap area (`tap-area`, index.css) surrounds it. */
 export function Switch({
   checked, onChange, disabled = false, title, className = '',
 }: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean; title?: string; className?: string }) {
@@ -115,7 +116,7 @@ export function Switch({
       title={title}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative w-11 h-[26px] rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ${className}`}
+      className={`tap-area relative w-11 h-[26px] rounded-full border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ${className}`}
       style={{ background: checked ? 'var(--primary)' : 'var(--line-strong)' }}
     >
       <span className="absolute top-[3px] w-5 h-5 rounded-full bg-white shadow-sm transition-all" style={{ left: checked ? 21 : 3 }} />

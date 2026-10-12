@@ -4,7 +4,7 @@ import MobileNavDrawer from './MobileNavDrawer';
 import NotificationBell, { useUnreadNotifications } from './NotificationBell';
 import { MOBILE_BAR_SLOTS } from './PageHeader';
 
-const ICON_BTN = 'relative w-10 h-10 rounded-[10px] flex items-center justify-center text-content-2 active:bg-surface-2';
+const ICON_BTN = 'relative w-11 h-11 rounded-[10px] flex items-center justify-center text-content-2 active:bg-surface-2';
 
 /**
  * Phone app bar: [menu][bell] · page title · contextual actions. Pages fill the
@@ -38,11 +38,11 @@ export default function MobileHeader() {
           </div>
         </div>
 
-        {/* actions slot: pages drop their contextual buttons here; they render as bare 40px icon
+        {/* actions slot: pages drop their contextual buttons here; they render as bare 44px icon
             buttons. Only direct children (or one wrapper deep, e.g. PermissionGate / popover anchors)
             are restyled, so popovers opened from here keep their own chrome. */}
         <div id={MOBILE_BAR_SLOTS.actions}
-          className="flex items-center justify-end gap-0.5 shrink-0 min-w-[84px] [&>button]:!h-10 [&>button]:!w-10 [&>button]:!min-w-0 [&>button]:!px-0 [&>button]:!border-0 [&>button]:!bg-transparent [&>button]:!text-content-2 [&>button]:!shadow-none [&>button]:!rounded-[10px] [&>button]:justify-center [&>*>button]:!h-10 [&>*>button]:!w-10 [&>*>button]:!min-w-0 [&>*>button]:!px-0 [&>*>button]:!border-0 [&>*>button]:!bg-transparent [&>*>button]:!text-content-2 [&>*>button]:!shadow-none [&>*>button]:!rounded-[10px] [&>*>button]:justify-center [&>a]:!h-10 [&>a]:!w-10 [&>a]:!px-0 [&>a]:!border-0 [&>a]:!bg-transparent [&>a]:!text-content-2 [&>a]:justify-center" />
+          className="flex items-center justify-end gap-0.5 shrink-0 min-w-[88px] [&>button]:!h-11 [&>button]:!w-11 [&>button]:!min-w-0 [&>button]:!px-0 [&>button]:!border-0 [&>button]:!bg-transparent [&>button]:!text-content-2 [&>button]:!shadow-none [&>button]:!rounded-[10px] [&>button]:justify-center [&>*>button]:!h-11 [&>*>button]:!w-11 [&>*>button]:!min-w-0 [&>*>button]:!px-0 [&>*>button]:!border-0 [&>*>button]:!bg-transparent [&>*>button]:!text-content-2 [&>*>button]:!shadow-none [&>*>button]:!rounded-[10px] [&>*>button]:justify-center [&>a]:!h-11 [&>a]:!w-11 [&>a]:!px-0 [&>a]:!border-0 [&>a]:!bg-transparent [&>a]:!text-content-2 [&>a]:justify-center" />
       </div>
       <MobileNavDrawer open={navOpen} onClose={closeNav} />
     </>
