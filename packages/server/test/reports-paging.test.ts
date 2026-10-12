@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { TXN_PAGE, hasMoreTxns, pageQuery, pagingHint, sortQuery } from '../../client/src/lib/reportsPaging';
+import { TXN_PAGE, fetchAllPages, hasMoreTxns, pageQuery, pagingHint, sortQuery } from '../../client/src/lib/reportsPaging';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-reports-paging-'));
 process.env.DATABASE_PATH = path.join(scratch, 'test.db');
@@ -74,6 +74,35 @@ describe('Reports paging helpers', () => {
     expect(sortQuery('date_asc')).toEqual({ sortBy: 'date', sortOrder: 'asc' });
     expect(sortQuery('amt_desc')).toMatchObject({ sortOrder: 'desc', thenBy: 'absAmount', thenOrder: 'desc' });
     expect(sortQuery('amt_asc')).toMatchObject({ sortOrder: 'desc', thenBy: 'absAmount', thenOrder: 'asc' });
+  });
+});
+
+describe('fetchAllPages (Export CSV)', () => {
+  const source = (n: number) => async (offset: number, size: number) => ({ rows: Array.from({ length: Math.max(0, Math.min(size, n - offset)) }, (_, i) => offset + i), total: n });
+
+  it('pages until every row is in, in order', async () => {
+    const calls: number[][] = [];
+    const src = source(2500);
+    const all = await fetchAllPages(async (o, s) => { calls.push([o, s]); return src(o, s); });
+    expect(all).toHaveLength(2500);
+    expect(all[0]).toBe(0);
+    expect(all[2499]).toBe(2499);
+    expect(calls).toEqual([[0, 1000], [1000, 1000], [2000, 1000]]);
+  });
+
+  it('takes one call for a short or exact-size range, none extra for an empty one', async () => {
+    expect(await fetchAllPages(source(30))).toHaveLength(30);
+    expect(await fetchAllPages(source(1000))).toHaveLength(1000);
+    expect(await fetchAllPages(source(0))).toEqual([]);
+  });
+
+  it('stops on an empty page even if the total says more', async () => {
+    const all = await fetchAllPages(async (o) => ({ rows: o === 0 ? [1, 2] : [], total: 99 }));
+    expect(all).toEqual([1, 2]);
+  });
+
+  it('passes errors on to the caller', async () => {
+    await expect(fetchAllPages(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
   });
 });
 

@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
-import { pageQuery, pagingHint, hasMoreTxns, type ReportsSort } from '../lib/reportsPaging';
+import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
 import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
 import { Money } from '../components/Money';
 import UncategorizedNotice from '../components/UncategorizedNotice';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
+import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
 import MonthSwitcher from '../components/MonthSwitcher';
@@ -182,6 +183,7 @@ export default function ReportsPage() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [groupMeta, setGroupMeta] = useState<{ name: string; type: string; color: string | null }[]>([]);
 
+  const { addToast } = useToast();
   const [loadingMore, setLoadingMore] = useState(false);
   const txnReq = useRef(0); // latest request wins; older responses are dropped
   const appliedKey = useMemo(() => JSON.stringify(filters), [filters]);
@@ -221,10 +223,10 @@ export default function ReportsPage() {
   }, [range.start, range.end, appliedKey, filters]);
 
   // Load transactions for the bottom card (range + applied filters + focus + sort), a page at a time.
-  const fetchTxnPage = useCallback((loaded: number) => {
+  const fetchTxnPage = useCallback((loaded: number, size?: number) => {
     const p = new URLSearchParams();
     p.set('startDate', range.start); p.set('endDate', range.end);
-    for (const [k, v] of Object.entries(pageQuery(txnSort, loaded))) p.set(k, v);
+    for (const [k, v] of Object.entries(pageQuery(txnSort, loaded, size))) p.set(k, v);
     let scope: CatScope = {};
     if (focusGroup) { p.set('groupName', focusGroup); scope = { groupNames: [focusGroup] }; }
     else {
@@ -509,11 +511,14 @@ export default function ReportsPage() {
   ];
 
   // CSV export of the current (filtered) transactions.
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    // The list only holds the pages loaded so far; export the whole range, in list order.
+    let all: Txn[];
+    try { all = await fetchAllPages((offset, size) => fetchTxnPage(offset, size)); } catch { addToast('Could not export your transactions. Please try again.', 'error'); return; }
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const header = ['Date', 'Merchant', 'Category', 'Account', 'Amount'];
     const lines = [header.join(',')];
-    for (const t of txns) {
+    for (const t of all) {
       lines.push([t.date, esc(t.merchant?.name || t.description || ''), esc(t.category?.displayName || ''), esc(t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : ''), t.amount.toFixed(2)].join(','));
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });

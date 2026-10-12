@@ -14,8 +14,22 @@ export function sortQuery(sort: ReportsSort): Record<string, string> {
 }
 
 /** Query params for one page: the first page starts at 0, each "Show 50 more" at what is loaded. */
-export function pageQuery(sort: ReportsSort, loaded: number): Record<string, string> {
-  return { ...sortQuery(sort), limit: String(TXN_PAGE), offset: String(loaded) };
+export function pageQuery(sort: ReportsSort, loaded: number, size = TXN_PAGE): Record<string, string> {
+  return { ...sortQuery(sort), limit: String(size), offset: String(loaded) };
+}
+
+/** Largest page the server returns. */
+export const EXPORT_PAGE = 1000;
+
+/** Every row of the range, in list order: pages through the server until `total` rows are in.
+ *  Stops early on an empty page so a shrinking range cannot loop forever. */
+export async function fetchAllPages<T>(fetchPage: (offset: number, size: number) => Promise<{ rows: T[]; total: number }>, size = EXPORT_PAGE): Promise<T[]> {
+  const all: T[] = [];
+  for (;;) {
+    const { rows, total } = await fetchPage(all.length, size);
+    all.push(...rows);
+    if (rows.length === 0 || all.length >= total) return all;
+  }
 }
 
 export const hasMoreTxns = (loaded: number, total: number) => loaded < total;
