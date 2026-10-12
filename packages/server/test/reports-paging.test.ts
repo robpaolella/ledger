@@ -33,6 +33,15 @@ beforeAll(async () => {
   const acct = Number(sqlite.prepare("INSERT INTO accounts (name, type, classification, owner) VALUES ('Checking', 'checking', 'liquid', 'owner')").run().lastInsertRowid);
   const ins = sqlite.prepare("INSERT INTO transactions (account_id, date, description, amount) VALUES (?, ?, 'T', ?)");
   for (const [d, a] of ROWS) ins.run(acct, d, a);
+  // A $100 split parent whose Food leg is only $1, and a plain $50 Food purchase, on one day.
+  const cat = sqlite.prepare("INSERT INTO categories (group_name, sub_name, display_name, type) VALUES (?, ?, ?, 'expense')");
+  const food = Number(cat.run('Food', 'Groceries', 'Food: Groceries').lastInsertRowid);
+  const other = Number(cat.run('Home', 'Repairs', 'Home: Repairs').lastInsertRowid);
+  const insCat = sqlite.prepare("INSERT INTO transactions (account_id, date, description, amount, category_id) VALUES (?, '2026-06-01', 'S', ?, ?)");
+  const split = Number(insCat.run(acct, 100, null).lastInsertRowid);
+  insCat.run(acct, 50, food);
+  const leg = sqlite.prepare('INSERT INTO transaction_splits (transaction_id, category_id, amount) VALUES (?, ?, ?)');
+  leg.run(split, food, 1); leg.run(split, other, 99);
   const app = express();
   app.use((req, _res, next) => { req.user = { userId: 1, username: 'o', displayName: 'o', role: 'owner' }; next(); });
   app.use('/transactions', (await import('../src/routes/transactions.js')).default);
@@ -86,6 +95,18 @@ describe('GET /transactions as Reports pages it', () => {
     expect(hi).toEqual(['2026-05-03:-40', '2026-05-03:20', '2026-05-03:5', '2026-05-02:-9', '2026-05-02:7', '2026-05-02:1', '2026-05-01:30', '2026-05-01:3', '2026-05-01:-2']);
     const lo = (await load({ ...sortQuery('amt_asc'), limit: '50' })).rows;
     expect(lo.slice(0, 3)).toEqual(['2026-05-03:5', '2026-05-03:20', '2026-05-03:-40']);
+  });
+
+  it('under a category focus, orders split parents by their matching legs (what the list shows)', async () => {
+    const q = { startDate: '2026-06-01', endDate: '2026-06-30', groupName: 'Food', limit: '50' };
+    const hi = await load({ ...q, ...sortQuery('amt_desc') });
+    const lo = await load({ ...q, ...sortQuery('amt_asc') });
+    expect(hi.total).toBe(2);
+    expect(hi.rows).toEqual(['2026-06-01:50', '2026-06-01:100']); // the split's $1 leg shows as $1, so it sorts last
+    expect(lo.rows).toEqual(['2026-06-01:100', '2026-06-01:50']);
+    // Unscoped, the full $100 parent is the largest.
+    const all = await load({ startDate: '2026-06-01', endDate: '2026-06-30', ...sortQuery('amt_desc'), limit: '50' });
+    expect(all.rows).toEqual(['2026-06-01:100', '2026-06-01:50']);
   });
 
   it('Oldest lists the earliest day first', async () => {
