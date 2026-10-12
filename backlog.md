@@ -34,3 +34,4 @@
 - The shared `Calendar` month arrows and month/year selects are 40px, under the 44px phone tap minimum, wherever it opens on phones (Add/Edit transaction, transaction detail, bulk Edit sheet); found in #261 review.
 - Liabilities group change figure on Accounts still shows red, and other places that print a liability balance (Dashboard, reports) weren't checked for the amount-owed display (found in #274).
 - Reports' own Sort menu (four choices) and Review's small Date menu are still pop-ups on phones; give them bottom sheets like Transactions Sort and the shared Filters/Date pickers (found in #288; they were not in the approved design).
+- Phone Budget names that are one long word (e.g. "Entertainment" in a group header) break mid-word at 390px under the two-line wrap from #314; prefer wrapping only at spaces and "/" (found in #309).
