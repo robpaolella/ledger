@@ -30,6 +30,7 @@ Pending.
   1. The unbudgeted-rows rule is unresolved and its meaning unstated. Fix: meaning written into `brief.md` and above (whole selected year, count fixed as the month changes); the decision itself goes to Robert in step 6.
   2. The 1440 images show the framed phone page, so they can't prove desktop is unchanged. Fix: `brief.md` marks them presentation only, names `hosts/*.html` at 1440 as the unchanged desktop reference, and asks the build for before/after desktop captures.
 - Re-check of fixes 1–2 (same reviewer and command, fixes only): PASS.
+- Round 2 critique (new two-line composition): same reviewer, route and command, evidence `/tmp/design-review-QcgQMO/r2` (128 images: 4 versions × 8 states × 2 themes × 2 widths). Verdict: PASS. Noted trade-offs: two-line trades side-by-side comparison for room for long names and makes the year longer; header cap is easiest to scan at group level; divider is quietest.
 
 ## Comments and changes
 None yet.
