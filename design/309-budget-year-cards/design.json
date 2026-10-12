@@ -5,10 +5,7 @@
   ],
   "revision": 1,
   "versions": {
-    "stripe": "versions/stripe.html",
-    "divider": "versions/divider.html",
-    "twoline": "versions/twoline.html",
-    "header": "versions/header.html"
+    "approved": "index.html"
   },
   "states": [
     "month-notice",
