@@ -126,7 +126,7 @@ export default function RulesPanel() {
                     <span className="text-content-2 font-semibold">{getCategoryEmoji(r.subName, r.groupName)} {r.subName}</span> · {r.groupName}
                   </div>
                 </div>
-                <div className="ml-auto"><ConfirmDeleteButton onConfirm={() => deleteRule(r.id)} /></div>
+                <div className="ml-auto"><ConfirmDeleteButton className="max-md:h-11" onConfirm={() => deleteRule(r.id)} /></div>
               </div>
             ))}
             {short && (

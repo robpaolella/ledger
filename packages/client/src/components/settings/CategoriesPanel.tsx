@@ -51,7 +51,7 @@ function SortableRow({ cat, canEdit, onEdit }: { cat: Category; canEdit: boolean
       className={`group/row flex items-center gap-3.5 px-5 h-[52px] border-b border-line ${canEdit ? 'cursor-pointer hover:bg-elevated' : ''} ${isDragging ? 'bg-elevated shadow-md' : ''}`}>
       {canEdit && (
         <span {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} title="Drag to reorder"
-          className="flex-none text-content-3 cursor-grab opacity-0 group-hover/row:opacity-60 transition-opacity touch-none">
+          className="tap-area flex-none text-content-3 cursor-grab opacity-0 group-hover/row:opacity-60 transition-opacity touch-none">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
         </span>
       )}
@@ -323,7 +323,7 @@ export default function CategoriesPanel({ categories, groups, onChanged }: {
           <div className="flex items-center justify-between mb-3">
             <span className="text-[18px] font-extrabold tracking-tight">{SECTION_LABEL[t]}</span>
             {t !== 'transfer' && hasPermission('categories.create') && (
-              <button type="button" onClick={() => setGroupModal({ mode: 'new', type: t })} className="text-sm font-bold text-primary">Create group</button>
+              <button type="button" onClick={() => setGroupModal({ mode: 'new', type: t })} className="tap-area text-sm font-bold text-primary">Create group</button>
             )}
           </div>
           <div className="flex flex-col gap-3.5">
@@ -335,7 +335,7 @@ export default function CategoriesPanel({ categories, groups, onChanged }: {
                     <span className="w-3.5 h-3.5 shrink-0 rounded-[4px]" style={{ background: g.color ? `var(--${g.color})` : getCategoryColorVar(g.name) }} />
                     <span className="text-[15px] font-bold text-content">{g.name}</span>
                     {hasPermission('categories.edit') && (
-                      <button type="button" onClick={() => setGroupModal({ mode: 'edit', type: g.type, id: g.id, name: g.name, color: g.color, count: cats.length })} className="text-[13px] font-semibold text-content-3 hover:text-primary">Edit</button>
+                      <button type="button" onClick={() => setGroupModal({ mode: 'edit', type: g.type, id: g.id, name: g.name, color: g.color, count: cats.length })} className="tap-area text-[13px] font-semibold text-content-3 hover:text-primary">Edit</button>
                     )}
                     <span className="ml-auto font-mono text-[12px] text-content-3">{cats.length} {cats.length === 1 ? 'category' : 'categories'}</span>
                   </div>
