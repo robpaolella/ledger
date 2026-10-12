@@ -1,0 +1,24 @@
+{
+  "design_issue": 319,
+  "covers": [
+    318
+  ],
+  "revision": 1,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "normal",
+    "one",
+    "large",
+    "none",
+    "filtered",
+    "search",
+    "select",
+    "member"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}
