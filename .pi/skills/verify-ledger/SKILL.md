@@ -179,6 +179,16 @@ npx -y chrome-devtools-axi stop
 node .pi/skills/verify-ledger/run.mjs cleanup "$EVIDENCE"
 ```
 
+Clean only the evidence folders your own session launched; never loop over
+`/tmp/ledger-evidence-*`. Launch records the checkout it was started from (the git
+top-level) in `run.json`. Cleanup from a different checkout, or of a preview with no
+recorded owner, is refused with a message naming the owner, and stops nothing. Only when
+you are certain the preview is safe to stop (for example the conductor, after the owner's
+folder is gone), add the per-call flag `--override-owner`:
+`node .pi/skills/verify-ledger/run.mjs cleanup "$EVIDENCE" --override-owner`.
+Launch fails outside a git checkout. Repeating cleanup of an already-cleaned folder
+passes from anywhere.
+
 Stop only your named browser session. Cleanup authenticates to the supervisor,
 terminates and waits for its exact child (escalating after five seconds), removes
 its entire in-memory scratch directory, and stops the supervisor. It never reads

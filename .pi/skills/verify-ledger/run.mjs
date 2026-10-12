@@ -14,11 +14,22 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 // Pure string guard: deliberately NO stat, realpath, readdir or database open.
 // No caller-supplied database is ever accepted, including symlink aliases.
-export function refuseDatabase(env = process.env, extra = []) {
-  if (Object.hasOwn(env, 'DATABASE_PATH') || extra.length) {
+// The one accepted extra argument is the per-call owner override on `cleanup`.
+export const OVERRIDE_FLAG = '--override-owner';
+export function refuseDatabase(env = process.env, extra = [], action = '') {
+  const overrideOnly = action === 'cleanup' && extra.length === 1 && extra[0] === OVERRIDE_FLAG;
+  if (Object.hasOwn(env, 'DATABASE_PATH') || (extra.length && !overrideOnly)) {
     throw new Error('Refused: no supplied database path or extra arguments are accepted. Only a new launcher-created /tmp folder is allowed.');
   }
 }
+
+// Real git top-level of the current folder, or null outside a checkout.
+export function currentCheckout(cwd = process.cwd()) {
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' });
+  if (result.error || result.status !== 0 || !result.stdout.trim()) return null;
+  return realpathSync(result.stdout.trim());
+}
+const NOT_GIT = 'Run this from inside a git checkout: the preview records which checkout started it, so only that checkout can stop it.';
 
 // The app is intentionally reachable on the LAN; never advertise container or virtual links.
 export function selectLanIPv4(interfaces) {
@@ -52,6 +63,8 @@ function runNode(file, env, cwd, log) {
 
 async function serve(evidence) {
   // These values stay in memory. Cleanup NEVER takes a deletion path from run.json.
+  const owner = currentCheckout();
+  if (!owner) throw new Error(NOT_GIT);
   const log = openSync(resolve(evidence, 'server.log'), 'ax', 0o600);
   const scratch = mkdtempSync('/tmp/ledger-verify-');
   const database = resolve(scratch, 'ledger.db');
@@ -143,7 +156,7 @@ async function serve(evidence) {
       } catch (error) { res.writeHead(500).end(JSON.stringify({ error: error.message })); }
     });
     await new Promise((done) => control.listen(0, '127.0.0.1', done));
-    json(resolve(evidence, 'run.json'), { url, lanUrl, database, scratch, childPid: child.pid, supervisorPid: process.pid, control: `http://127.0.0.1:${control.address().port}`, token });
+    json(resolve(evidence, 'run.json'), { url, lanUrl, owner, database, scratch, childPid: child.pid, supervisorPid: process.pid, control: `http://127.0.0.1:${control.address().port}`, token });
     child.once('exit', () => { if (!stopping) void cleanup().catch((error) => { console.error(error.message); process.exitCode = 1; }); });
   } catch (error) {
     await cleanup();
@@ -152,7 +165,7 @@ async function serve(evidence) {
 }
 
 export async function main(action, evidenceArg, extra = []) {
-  refuseDatabase(process.env, extra); // before ANY filesystem access, build, or spawn
+  refuseDatabase(process.env, extra, action); // before ANY filesystem access, build, or spawn
   if (!['launch', 'doctor', 'cleanup', '_serve'].includes(action) || !evidenceArg) throw new Error('Usage: node .pi/skills/verify-ledger/run.mjs launch|doctor|cleanup /absolute/evidence-folder');
   const candidate = resolve(evidenceArg);
   if (!evidenceArg.startsWith('/') || candidate.split('/').includes('data')) throw new Error('Use an absolute evidence folder outside data folders');
@@ -161,6 +174,7 @@ export async function main(action, evidenceArg, extra = []) {
   if (action === '_serve') return serve(evidence);
   const file = resolve(evidence, 'run.json');
   if (action === 'launch') {
+    if (!currentCheckout()) throw new Error(`Launch refused: ${NOT_GIT}`);
     // Exclusive claim: cannot overwrite another run or its ownership record.
     const claim = openSync(resolve(evidence, 'launch.lock'), 'wx', 0o600); closeSync(claim);
     const build = spawnSync('npm', ['run', 'build'], { cwd: repo, stdio: 'inherit' });
@@ -184,6 +198,13 @@ export async function main(action, evidenceArg, extra = []) {
     console.log('Cleanup PASS (already cleaned); evidence retained'); return;
   }
   const state = JSON.parse(readFileSync(file, 'utf8'));
+  if (action === 'cleanup' && !extra.includes(OVERRIDE_FLAG)) {
+    // Owner is only compared, never used as a path or PID.
+    const caller = currentCheckout();
+    if (!caller || caller !== state.owner) {
+      throw new Error(`Cleanup refused: this preview ${state.owner ? `was started from ${state.owner}` : 'has no recorded owner'}${caller ? `, and you are in ${caller}` : ', and you are not in a git checkout'}. Nothing was stopped. Only clean previews your own session launched. If you are certain it is safe to stop (for example its checkout is gone), add ${OVERRIDE_FLAG}.`);
+    }
+  }
   if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(state.control)) throw new Error('Invalid local control address');
   const result = await request(`${state.control}/${action}`, { method: action === 'cleanup' ? 'POST' : 'GET', headers: { Authorization: `Bearer ${state.token}` } });
   console.log(JSON.stringify(result, null, 2));

@@ -49,6 +49,13 @@ test('no database override is accepted via extra arguments', () => {
   assert.doesNotThrow(() => refuseDatabase({}));
   assert.throws(() => refuseDatabase({}, ['--database', '/tmp/foo']), /Refused/);
 });
+test('only cleanup accepts exactly the owner override flag', () => {
+  assert.doesNotThrow(() => refuseDatabase({}, ['--override-owner'], 'cleanup'));
+  for (const [extra, action] of [[['--override-owner'], 'launch'], [['--override-owner'], 'doctor'], [['--override-owner', 'x'], 'cleanup'], [['--override-owner', '--override-owner'], 'cleanup'], [['--other'], 'cleanup']]) {
+    assert.throws(() => refuseDatabase({}, extra, action), /Refused/);
+  }
+  assert.throws(() => refuseDatabase({ DATABASE_PATH: '/x' }, ['--override-owner'], 'cleanup'), /Refused/);
+});
 test('a supplied existing file and symlink remain untouched', () => {
   const dir = mkdtempSync('/tmp/ledger-guard-test-');
   try {
