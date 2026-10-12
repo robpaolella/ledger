@@ -78,6 +78,7 @@ export default function FilterPopover({
       const t = e.target as Node;
       if (!menuRef.current?.contains(t) && !triggerRef.current?.contains(t)) setMenuOpen(false);
     };
+    menuRef.current?.querySelector<HTMLElement>('[aria-selected=true]')?.focus();
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPress, true);
     return () => { document.removeEventListener('keydown', onKey, true); document.removeEventListener('pointerdown', onPress, true); };
@@ -339,7 +340,7 @@ export default function FilterPopover({
           <>
             <div className="px-5 py-3 border-b border-line">
               <button
-                ref={triggerRef} type="button" aria-haspopup="listbox" aria-expanded={menuOpen} aria-label={`Filter by: ${tab}`}
+                ref={triggerRef} type="button" aria-haspopup="listbox" aria-expanded={menuOpen} aria-label={`Filter by: ${tab}${filterSectionCount(tab as FilterSection, draft) ? `, ${filterSectionCount(tab as FilterSection, draft)} selected` : ''}`}
                 onClick={() => setMenuOpen((o) => !o)}
                 className={`flex items-center gap-2 w-full h-11 pl-3.5 pr-3 rounded-[11px] border bg-surface text-content text-[15px] font-semibold text-left ${FOCUS}`}
                 style={{ borderColor: menuOpen ? 'var(--primary)' : 'var(--line-strong)' }}
@@ -365,7 +366,6 @@ export default function FilterPopover({
                 {NAV.map((n) => (
                   <button
                     key={n} type="button" role="option" aria-selected={n === tab} onClick={() => chooseSection(n)}
-                    ref={n === tab ? (el) => el?.focus() : undefined}
                     className={`flex items-center gap-2.5 w-full h-11 px-3 rounded-[9px] text-[15px] text-left hover:bg-surface-2 ${FOCUS} ${n === tab ? 'text-primary font-semibold' : 'text-content'}`}
                   >
                     {n}
