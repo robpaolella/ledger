@@ -1886,11 +1886,12 @@ export default function TransactionsPage() {
           )}
         </div>
       )}
-      {showClearAll(anyActive, bulkMode) && (
-        <div className="flex justify-end">
-          <button onClick={clearAll} className="tap-area text-primary hover:text-primary-hover font-semibold text-sm">Clear all</button>
-        </div>
-      )}
+    </div>
+  );
+  // Below the pinned toolbar, not in it: it scrolls away with the page.
+  const clearAllLine = isMobile && showClearAll(anyActive, bulkMode) && (
+    <div className="flex justify-end -mt-3 mb-2">
+      <button onClick={clearAll} className="tap-area text-primary hover:text-primary-hover font-semibold text-sm">Clear all</button>
     </div>
   );
   // Selection tick on phone rows: replaces the avatar in Select mode.
@@ -1973,6 +1974,7 @@ export default function TransactionsPage() {
         mobileTitle={bulkMode ? 'Select' : undefined}
         mobileActions={bulkMode ? undefined : <>{importEl}{addEl}</>}
         right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{importEl}{addEl}</>} />
+      {clearAllLine}
 
       {isMobile ? (
         /* Phones: the same day groups as the desktop list, on two-line rows */
