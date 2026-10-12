@@ -26,11 +26,12 @@ import type { SplitRow } from '../components/SplitEditor';
 import FilterPopover from '../components/FilterPopover';
 import { filtersFromParams, hasUrlFilters, isActiveSort, sortButtonLabel, SORT_OPTIONS, type FilterDraft } from '../components/filterModel';
 import DateRangePopover from '../components/DateRangePopover';
+import NoticeStrip, { NoticeChevron } from '../components/NoticeStrip';
 import ManualImportModal from '../components/ManualImportModal';
 import MerchantPicker from '../components/MerchantPicker';
 import { chevronIcon, btnPrimary, btnSecondary } from '../components/settings/ui';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { phoneToolbarMode, reviewChipLabel, showClearAll } from '../lib/toolbar';
+import { filtersButtonLabel, phoneToolbarMode, reviewStripText, showClearAll, showReviewStrip } from '../lib/toolbar';
 
 interface DuplicateMatch {
   id: number;
@@ -1751,6 +1752,7 @@ export default function TransactionsPage() {
             value={{ preset: datePreset, start: customStart, end: customEnd }}
             label={dateLabel}
             active={datePreset !== 'all'}
+            iconOnly={isMobile}
             clearValue={{ preset: 'all', start: '', end: '' }}
             onOpen={() => { setSortOpen(false); setFilterOpen(false); setSearchOpen(false); }}
             onApply={(v) => { setDatePreset(v.preset); setCustomStart(v.start); setCustomEnd(v.end); }}
@@ -1844,6 +1846,12 @@ export default function TransactionsPage() {
     </div>
   );
   const toolbarMode = phoneToolbarMode(bulkMode, searchOpen);
+  // Last line of the pinned toolbar (above its divider), so it stays in view while scrolling.
+  const clearAllLine = showClearAll(anyActive, bulkMode) && (
+    <div className="flex justify-end -mt-0.5">
+      <button onClick={clearAll} className="tap-area text-primary hover:text-primary-hover font-semibold text-sm">Clear all</button>
+    </div>
+  );
   const phoneToolbar = (
     <div className="w-full flex flex-col gap-2">
       {toolbarMode === 'select' && (<>
@@ -1853,47 +1861,47 @@ export default function TransactionsPage() {
           <Button variant="outline" size="sm" onClick={exitBulkMode} className={HIT_44}>Cancel</Button>
         </div>
       </>)}
-      {toolbarMode === 'search' && (
+      {toolbarMode === 'search' && (<>
         <div className="flex items-center gap-2">
           {phoneSearchField(true)}
           <Button variant="ghost" size="sm" iconOnly aria-label="Close search" onClick={() => { setSearch(''); setSearchOpen(false); }}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </Button>
         </div>
-      )}
-      {toolbarMode === 'row' && (
+        {clearAllLine}
+      </>)}
+      {toolbarMode === 'row' && (<>
         <div className="flex items-center flex-nowrap gap-2">
-          <Button variant="outline" size="sm" iconOnly aria-label="Search transactions" title="Search" onClick={() => { setSortOpen(false); setSearchOpen(true); }} active={!!search || filterCount > 0}>
+          <Button variant="outline" size="sm" iconOnly aria-label="Search transactions" title="Search" onClick={() => { setSortOpen(false); setSearchOpen(true); }} active={!!search}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           </Button>
-          {/* Date and Sort drop their leading icons here to make room; a long Date label truncates. */}
-          <div className="min-w-0 [&_button]:max-w-full [&_button]:max-md:px-3 [&_button>svg:first-child]:hidden">{dateRangeEl}</div>
+          <div className="relative shrink-0">
+            <Button variant="outline" size="sm" iconOnly aria-label={filtersButtonLabel(filterCount)} title="Filters" onClick={openFilterPopover} active={filterOpen || filterCount > 0}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={filterCount > 0 ? 'var(--primary)' : 'var(--text-2)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+            </Button>
+            {filterCount > 0 && <span aria-hidden className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center pointer-events-none">{filterCount}</span>}
+            {filterPopoverEl}
+          </div>
+          <div className="shrink-0">{dateRangeEl}</div>
           <div className="shrink-0 [&_button]:max-md:px-3 [&_button>svg:first-child]:hidden">{sortEl}</div>
           <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
             <Button variant="outline" size="sm" onClick={() => setBulkMode(true)} className="max-md:px-3 shrink-0">Select</Button>
           </PermissionGate>
-          {reviewCount > 0 && (
-            <Link
-              to="/reviews"
-              aria-label={reviewChipLabel(reviewCount)}
-              title={reviewChipLabel(reviewCount)}
-              className="ml-auto min-w-0 flex items-center gap-1 h-11 px-2.5 rounded-[11px] font-semibold text-sm"
-              style={{ background: 'color-mix(in srgb, var(--warning) 16%, transparent)', color: 'var(--warning)' }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
-              <span className="truncate">{reviewCount.toLocaleString('en-US')}</span>
-            </Link>
-          )}
         </div>
-      )}
+        {clearAllLine}
+      </>)}
     </div>
   );
-  // Below the pinned toolbar, not in it: it scrolls away with the page.
-  const clearAllLine = isMobile && showClearAll(anyActive, bulkMode) && (
-    <div className="flex justify-end -mt-3 mb-2">
-      <button onClick={clearAll} className="tap-area text-primary hover:text-primary-hover font-semibold text-sm">Clear all</button>
-    </div>
-  );
+  // Under the pinned toolbar and touching its divider; scrolls away with the page.
+  const reviewStrip = isMobile && showReviewStrip(reviewCount, bulkMode) && (() => {
+    const t = reviewStripText(reviewCount);
+    return (
+      <NoticeStrip to="/reviews" label={t.label} className="items-center min-h-[44px] mb-4">
+        <span className="flex-1 min-w-0 truncate"><b>{t.lead}</b>{t.rest}</span>
+        <span className="inline-flex items-center gap-1 font-bold whitespace-nowrap">Review <NoticeChevron /></span>
+      </NoticeStrip>
+    );
+  })();
   // Selection tick on phone rows: replaces the avatar in Select mode.
   const tick = (state: boolean | 'mixed') => (
     <span className="w-9 shrink-0 flex justify-center" aria-hidden>
@@ -1974,7 +1982,7 @@ export default function TransactionsPage() {
         mobileTitle={bulkMode ? 'Select' : undefined}
         mobileActions={bulkMode ? undefined : <>{importEl}{addEl}</>}
         right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{importEl}{addEl}</>} />
-      {clearAllLine}
+      {reviewStrip}
 
       {isMobile ? (
         /* Phones: the same day groups as the desktop list, on two-line rows */
