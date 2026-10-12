@@ -1,8 +1,8 @@
 # Design: Phone, part 1 (wide tables and forms)
 
-- Design issue: #262
-- Revision: 2
-- Replaces: revision 1
+- Design issue: #279
+- Revision: 3
+- Replaces: revision 2
 - Source plan: retheme plan agreed 2026-10-08; phone audit `work/108-phone-audit/report.md` (#108)
 
 ## Job and audience
@@ -29,6 +29,7 @@ desktop offers can be completed on a phone.
 | #259 | Phone keyboards and Edit merchant | `merchant-edit` | — |
 | #260 | Import steps 1–2 | `import-upload`, `import-map` | — |
 | #261 | Phone bulk select | `bulk-*` | — |
+| #271 | Budget Year desktop view-only and empty-year notes | `budget-year-member`, `budget-year-empty` at 1440 | — |
 
 ## Boundaries and visual authority
 - PRODUCT.md (roles, money rules), DESIGN.md (tokens, Phone checklist, "Wide tables become card
