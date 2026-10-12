@@ -124,6 +124,10 @@ function txnCount(n: number): string {
   return `${n.toLocaleString()} ${n === 1 ? 'transaction' : 'transactions'}`;
 }
 
+/** Stretches a 40px toolbar button's tap area to 44px without changing how it looks. */
+const HIT_44 = 'relative after:absolute after:inset-x-0 after:-inset-y-0.5';
+const listIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>;
+
 const PANEL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
@@ -811,6 +815,9 @@ export default function TransactionsPage() {
   const [bulkCalOpen, setBulkCalOpen] = useState(false);
   const [bulkCategoryId, setBulkCategoryId] = useState<number | ''>('');
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false);
+  // Phones confirm a bulk delete in a sheet instead of desktop's 3-second button.
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Monotonic request counter: a slow response for an older filter set must not
   // overwrite the list rendered for the current one.
@@ -1262,6 +1269,7 @@ export default function TransactionsPage() {
       if (e.key === 'Escape') {
         if (editCell) { setEditCell(null); setCellSearch(''); }
         else if (panelOpen) { if (!aboveModal) closeDetail(); }
+        else if (bulkDeleteOpen || (isMobile && bulkEditOpen)) { /* the sheet closes itself */ }
         else if (bulkMode) { setBulkMode(false); setSelectedIds(new Set()); }
         return;
       }
@@ -1280,7 +1288,7 @@ export default function TransactionsPage() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [editCell, bulkMode, panelOpen, splitOpen, bulkEditOpen, editing]);
+  }, [editCell, bulkMode, panelOpen, splitOpen, bulkEditOpen, bulkDeleteOpen, isMobile, editing]);
 
   const handleSave = async (data: Record<string, unknown>) => {
     try {
@@ -1358,8 +1366,20 @@ export default function TransactionsPage() {
     selectionAnchor.current = null;
     setBulkEditOpen(false);
     setBulkConfirmDelete(false);
+    setBulkDeleteOpen(false);
   };
   const openBulkEdit = () => { if (selectedIds.size > 0) setBulkEditOpen(true); };
+
+  // A search or filter change can hide selected rows. Keep the selection to rows on
+  // screen, so Edit and Delete never touch transactions the person can't see.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const shown = new Set(transactions.map((t) => t.id));
+      const next = new Set([...prev].filter((id) => shown.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [transactions]);
 
   // Net of the selected rows, in the list's sign convention (positive = money
   // out). Only loaded transactions count — a stale id from a since-changed filter
@@ -1380,6 +1400,7 @@ export default function TransactionsPage() {
       addToast(`Updated ${txnCount(ids.length)}`);
       setBulkMerchant(''); setBulkCategoryId(''); setBulkDate(''); setBulkCalOpen(false);
       setBulkEditOpen(false);
+      if (isMobile) exitBulkMode(); // phones return to the list once the edit lands
       if (updates.merchant) loadMerchants(); // a new merchant may have been created
       loadTransactions();
     } catch (_err) {
@@ -1390,17 +1411,22 @@ export default function TransactionsPage() {
   const deleteSelected = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!bulkConfirmDelete) { setBulkConfirmDelete(true); setTimeout(() => setBulkConfirmDelete(false), 3000); return; }
+    // Phones already confirmed in the Delete sheet.
+    if (!isMobile && !bulkConfirmDelete) { setBulkConfirmDelete(true); setTimeout(() => setBulkConfirmDelete(false), 3000); return; }
+    setBulkDeleting(true);
     try {
       await apiFetch('/transactions/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
-      setBulkConfirmDelete(false);
+      setBulkConfirmDelete(false); setBulkDeleteOpen(false);
       addToast(`Deleted ${txnCount(ids.length)}`);
       setSelectedIds(new Set()); setBulkMode(false); setBulkEditOpen(false);
       loadTransactions();
     } catch (_err) {
       addToast('Bulk operation failed', 'error');
+    } finally {
+      setBulkDeleting(false);
     }
   };
+  const selectedMoney = formatMoney(selectedTotal, { showZero: true });
 
   const hasMore = transactions.length < total;
 
@@ -1807,11 +1833,76 @@ export default function TransactionsPage() {
         </button>
         {filterPopoverEl}
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        {dateRangeEl}{sortEl}{nudgeEl}{clearEl}
-      </div>
+      {bulkMode ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[15px] font-bold text-content">Select transactions</span>
+          <Button variant="outline" size="sm" onClick={exitBulkMode} className={HIT_44}>Cancel</Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          {dateRangeEl}{sortEl}
+          <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)} className={HIT_44}>
+              {listIcon}
+              Select
+            </Button>
+          </PermissionGate>
+          {nudgeEl}{clearEl}
+        </div>
+      )}
     </div>
   );
+  // Selection tick on phone rows: replaces the avatar in Select mode.
+  const tick = (state: boolean | 'mixed') => (
+    <span className="w-9 shrink-0 flex justify-center" aria-hidden>
+      <span className="w-6 h-6 rounded-[7px] flex items-center justify-center border-[1.5px]"
+        style={state ? { borderColor: 'var(--primary)', background: 'var(--primary)', color: 'var(--on-primary)' } : { borderColor: 'var(--line-strong)', background: 'var(--surface)' }}>
+        {state === 'mixed'
+          ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14"/></svg>
+          : state && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}
+      </span>
+    </span>
+  );
+  // Merchant / Category / Date, shared by the desktop side panel and the phone sheet.
+  const bulkEditFields = (<>
+    {/* Merchant */}
+    <div>
+      <div className="text-[13px] font-semibold text-content-2 mb-2">Merchant</div>
+      <MerchantPicker value={bulkMerchant} merchants={merchants} onSelect={setBulkMerchant} allowClear
+        placeholder="Choose a merchant…"
+        triggerClassName="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
+    </div>
+    {/* Category */}
+    <div>
+      <div className="text-[13px] font-semibold text-content-2 mb-2">Category</div>
+      <div className="relative">
+        <select value={bulkCategoryId} onChange={(e) => setBulkCategoryId(e.target.value ? parseInt(e.target.value) : '')} className="w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer">
+          <option value="">Choose category…</option>
+          {groupedAll.map(([group, subs]) => <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>)}
+        </select>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-3.5 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+    {/* Date */}
+    <div>
+      <div className="text-[13px] font-semibold text-content-2 mb-2">Date</div>
+      <div className="relative">
+        <button type="button" onClick={() => setBulkCalOpen((o) => !o)} className="w-full flex items-center justify-between h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-sm"
+          style={{ borderColor: bulkCalOpen ? 'var(--primary)' : 'var(--line)' }}>
+          <span className={bulkDate ? 'text-content tabular-nums' : 'text-content-3'}>{bulkDate ? new Date(bulkDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Choose date…'}</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        </button>
+        {bulkCalOpen && (
+          // Phones: in the sheet's flow, so its scrolling body never clips the calendar.
+          <div className={`${isMobile ? 'mt-2' : 'absolute top-12 left-0 z-[60] w-[320px] shadow-md'} bg-elevated border border-line-strong rounded-[14px] p-3`}>
+            <Calendar value={bulkDate} onChange={(d) => { setBulkDate(d); setBulkCalOpen(false); }} />
+          </div>
+        )}
+      </div>
+    </div>
+  </>);
+  const allSelected = transactions.length > 0 && transactions.every((t) => selectedIds.has(t.id));
+  const bulkCount = selectedIds.size;
 
   return (
     <div>
@@ -1838,12 +1929,22 @@ export default function TransactionsPage() {
             <Link to="/recurring" className="text-content-3 hover:text-content pb-0.5">Recurring</Link>
           </div>
         )}
-        mobileActions={<>{importEl}{addEl}</>}
+        mobileTitle={bulkMode ? 'Select' : undefined}
+        mobileActions={bulkMode ? undefined : <>{importEl}{addEl}</>}
         right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{importEl}{addEl}</>} />
 
       {isMobile ? (
         /* Phones: the same day groups as the desktop list, on two-line rows */
+        <>
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
+          {bulkMode && transactions.length > 0 && (
+            <button type="button" role="checkbox" aria-checked={allSelected ? true : bulkCount > 0 ? 'mixed' : false} onClick={toggleSelectAll}
+              className="w-full flex items-center gap-3 px-4 min-h-[52px] text-left outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+              {tick(allSelected ? true : bulkCount > 0 ? 'mixed' : false)}
+              <span className="text-[15px] font-semibold text-content">Select all</span>
+              <span className="ml-auto font-mono text-[13px] text-content-3">{transactions.length.toLocaleString()} shown</span>
+            </button>
+          )}
           {dateGroups.map((g) => (
             <div key={g.date}>
               <GroupHeader label={formatDateHeader(g.date)} right={<Money amount={g.net} />} className="first:border-t-0" />
@@ -1852,10 +1953,15 @@ export default function TransactionsPage() {
                 const label = split ? splitVendorLabel(t, split) : vendorLabel(t);
                 const catName = split ? split.subName : t.category?.subName;
                 const catGroup = split ? split.groupName : t.category?.groupName;
-                return (
-                  <ListRow key={split ? `${t.id}-split-${split.id}` : t.id}
+                const checked = selectedIds.has(t.id);
+                const key = split ? `${t.id}-split-${split.id}` : t.id;
+                const row = (
+                  <ListRow key={bulkMode ? undefined : key}
                     rowId={split ? `${t.id}-split-${split.id}` : String(t.id)}
-                    onClick={hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
+                    onClick={!bulkMode && hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
+                    // ListRow's outline-none hides its focus ring under Tailwind 4; outline-solid brings it back.
+                    className="focus-visible:outline-solid"
+                    leading={bulkMode ? tick(checked) : undefined}
                     avatar={{ name: label, src: t.merchant?.logoUrl, color: catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)' }}
                     title={label}
                     titleExtra={<>
@@ -1867,6 +1973,16 @@ export default function TransactionsPage() {
                     meta={<span className="font-mono">{accountLabel(t.account)}</span>}
                   />
                 );
+                if (!bulkMode) return row;
+                // Select mode: the whole row is one checkbox, so screen readers hear its state.
+                return (
+                  <div key={key} role="checkbox" aria-checked={checked} tabIndex={0}
+                    onClick={() => toggleSelect(t.id)}
+                    onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSelect(t.id); } }}
+                    className={`border-t border-line first:border-t-0 cursor-pointer outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${checked ? 'bg-primary/8' : ''}`}>
+                    {row}
+                  </div>
+                );
               })}
             </div>
           ))}
@@ -1874,6 +1990,30 @@ export default function TransactionsPage() {
             <p className="text-center py-10 text-content-3 text-sm m-0 truncate px-4">{debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period'}</p>
           )}
         </div>
+        {bulkMode && (
+          <>
+            {/* Keeps the last rows clear of the pinned selection bar */}
+            <div className="h-24" aria-hidden />
+            <div className="fixed inset-x-0 bottom-0 z-[45] bg-surface border-t border-line shadow-md px-4 pt-3" style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="flex-1 min-w-0" aria-live="polite">
+                  <div className="text-[15px] font-bold text-content">{bulkCount} selected</div>
+                  <div className="text-[13px] text-content-3 tabular-nums">
+                    {bulkCount > 0
+                      ? <span className={selectedMoney.tone === 'positive' ? 'text-positive' : undefined}>{selectedMoney.text}</span>
+                      : 'Tick the ones to change'}
+                  </div>
+                </div>
+                <Button size="sm" onClick={openBulkEdit} disabled={bulkCount === 0} className={HIT_44}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  Edit
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setBulkDeleteOpen(true)} disabled={bulkCount === 0} className={HIT_44}>Delete</Button>
+              </div>
+            </div>
+          </>
+        )}
+        </>
       ) : (
       <div className="bg-surface rounded-card border border-line shadow-sm">
         {/* 1px sentinel: drives the sticky toolbar's separator (see the observer above) */}
@@ -1947,7 +2087,7 @@ export default function TransactionsPage() {
       {(editCell || reviewPopId != null) && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); setReviewPopId(null); }} />}
 
       {/* ===== Bulk-edit sidebar (multi-select) ===== */}
-      {bulkEditOpen && (
+      {bulkEditOpen && !isMobile && (
         <>
           <div onClick={() => setBulkEditOpen(false)} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
           <div className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col">
@@ -1960,40 +2100,7 @@ export default function TransactionsPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
               <p className="text-[13px] text-content-3 -mt-2">Set any of the fields below. Changes apply to {selectedIds.size === 1 ? 'the selected transaction' : `all ${selectedIds.size} selected transactions`}.</p>
-              {/* Merchant */}
-              <div>
-                <div className="text-[13px] font-semibold text-content-2 mb-2">Merchant</div>
-                <MerchantPicker value={bulkMerchant} merchants={merchants} onSelect={setBulkMerchant} allowClear
-                  placeholder="Choose a merchant…"
-                  triggerClassName="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
-              </div>
-              {/* Category */}
-              <div>
-                <div className="text-[13px] font-semibold text-content-2 mb-2">Category</div>
-                <div className="relative">
-                  <select value={bulkCategoryId} onChange={(e) => setBulkCategoryId(e.target.value ? parseInt(e.target.value) : '')} className="w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer">
-                    <option value="">Choose category…</option>
-                    {groupedAll.map(([group, subs]) => <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>)}
-                  </select>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-3.5 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-              </div>
-              {/* Date */}
-              <div>
-                <div className="text-[13px] font-semibold text-content-2 mb-2">Date</div>
-                <div className="relative">
-                  <button type="button" onClick={() => setBulkCalOpen((o) => !o)} className="w-full flex items-center justify-between h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-sm"
-                    style={{ borderColor: bulkCalOpen ? 'var(--primary)' : 'var(--line)' }}>
-                    <span className={bulkDate ? 'text-content tabular-nums' : 'text-content-3'}>{bulkDate ? new Date(bulkDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Choose date…'}</span>
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
-                  </button>
-                  {bulkCalOpen && (
-                    <div className="absolute top-12 left-0 z-[60] w-[320px] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
-                      <Calendar value={bulkDate} onChange={(d) => { setBulkDate(d); setBulkCalOpen(false); }} />
-                    </div>
-                  )}
-                </div>
-              </div>
+              {bulkEditFields}
             </div>
             <div className="flex items-center gap-2.5 px-6 py-4 border-t border-line">
               <button onClick={() => setBulkEditOpen(false)} className="flex-1 h-11 rounded-[11px] bg-surface-2 border border-line-strong text-content font-semibold text-sm">Cancel</button>
@@ -2002,6 +2109,33 @@ export default function TransactionsPage() {
           </div>
         </>
       )}
+
+      {/* ===== Phones: bulk edit and delete as bottom sheets ===== */}
+      {isMobile && (
+        <ResponsiveModal isOpen={bulkEditOpen} onClose={() => setBulkEditOpen(false)} title={`Edit ${txnCount(bulkCount)}`}
+          footer={(
+            <div className="flex items-center gap-2.5">
+              <Button variant="secondary" onClick={() => setBulkEditOpen(false)} className={`flex-1 ${HIT_44}`}>Cancel</Button>
+              <Button onClick={applyBulkEdit} disabled={!(bulkMerchant.trim() || bulkCategoryId || bulkDate)} className={`flex-1 ${HIT_44}`}>Apply changes</Button>
+            </div>
+          )}>
+          <div className="flex flex-col gap-5">
+            <p className="text-[13px] text-content-3 m-0">Set any of the fields below. Changes apply to {bulkCount === 1 ? 'the selected transaction' : `all ${bulkCount} selected transactions`}.</p>
+            {bulkEditFields}
+          </div>
+        </ResponsiveModal>
+      )}
+      <ResponsiveModal isOpen={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title={`Delete ${txnCount(bulkCount)}?`}
+        footer={(
+          <div className="flex items-center gap-2.5">
+            <Button variant="secondary" onClick={() => setBulkDeleteOpen(false)} className={`flex-1 ${HIT_44}`}>Cancel</Button>
+            <Button onClick={deleteSelected} loading={bulkDeleting} className={`flex-1 ${HIT_44}`} style={{ background: 'var(--negative)' }}>{bulkDeleting ? 'Deleting…' : 'Delete'}</Button>
+          </div>
+        )}>
+        <p className="text-sm text-content-2 m-0 leading-relaxed">
+          {bulkCount === 1 ? 'The selected transaction' : `The ${bulkCount} selected transactions`} (<span className={`tabular-nums ${selectedMoney.tone === 'positive' ? 'text-positive' : ''}`}>{selectedMoney.text}</span>) will be removed from Ledger. You can’t undo this.
+        </p>
+      </ResponsiveModal>
 
       {/* ===== Detail side panel ===== */}
       {detail && (

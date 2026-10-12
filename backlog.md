@@ -26,3 +26,8 @@
 - Reports Category breakdown on a 390px phone cuts off each row's amount (only the % shows); found during the #106 design.
 - Search-empty text in Settings (Merchants, Rules, SimpleFIN accounts, institutions) and the Bank Sync account picker still uses its own wording; move to "Nothing matches “{search}”" (left out of #101, found there).
 - Recurring phone calendar: the "Today" button only changes the month, so it does not re-select today after another day is tapped (found in #258, not in the approved design).
+- Keyboard focus rings never show on `ListRow` and the desktop transaction rows: `outline-none` cancels `focus-visible:outline-2` under Tailwind 4 (add `focus-visible:outline-solid`); #261 fixed it only for the phone Transactions rows (found in #261).
+- On phones the merchant picker's list is cramped inside a short bottom sheet (Bulk edit, about two rows show above the footer); consider letting the sheet grow while it's open (found in #261).
+- Desktop Transactions: pressing Escape while the bulk Edit transactions panel is open leaves bulk mode but keeps the panel open with 0 selected; Escape should close the panel first (found in #261).
+- Bulk edit/delete failures say only "Bulk operation failed"; say what failed and what to do, e.g. "Couldn't delete 3 transactions. Check your connection and try again." (found in #261's critique).
+- The shared `Calendar` month arrows and month/year selects are 40px, under the 44px phone tap minimum, wherever it opens on phones (Add/Edit transaction, transaction detail, bulk Edit sheet); found in #261 review.
