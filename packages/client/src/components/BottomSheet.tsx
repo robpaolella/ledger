@@ -7,7 +7,10 @@ interface BottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
-  description?: string;
+  /** Text, or a node (e.g. with an account logo); a node needs `descriptionTitle` for its tooltip. */
+  description?: ReactNode;
+  /** Tooltip for a truncated description; defaults to the description when it is text. */
+  descriptionTitle?: string;
   /** Optional emoji or glyph, shown in a tile to the left of the title. */
   icon?: ReactNode;
   /** Keep a long description to one line (the full text stays in its tooltip). */
@@ -24,7 +27,7 @@ let scrollLocks = 0;
 let unlockedOverflow = '';
 
 /** Phone counterpart of ResponsiveModal — same header · body · footer anatomy. */
-export default function BottomSheet({ isOpen, onClose, title, description, icon, truncateDescription, footer, pinned, children }: BottomSheetProps) {
+export default function BottomSheet({ isOpen, onClose, title, description, descriptionTitle, icon, truncateDescription, footer, pinned, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -147,7 +150,13 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
                 : <span className="shrink-0 flex">{icon}</span>)}
               <div className="min-w-0">
                 <div className="text-[18px] font-extrabold tracking-tight text-content leading-tight break-words">{title}</div>
-                {description && <div id={descriptionId} title={truncateDescription ? description : undefined} className={`text-[13px] text-content-3 mt-1 leading-snug ${truncateDescription ? 'truncate' : ''}`}>{description}</div>}
+                {description && (
+                  <div
+                    id={descriptionId}
+                    title={truncateDescription ? descriptionTitle ?? (typeof description === 'string' ? description : undefined) : undefined}
+                    className={`text-[13px] text-content-3 mt-1 leading-snug ${typeof description === 'string' ? (truncateDescription ? 'truncate' : '') : `flex items-center gap-1.5 min-w-0 ${truncateDescription ? 'whitespace-nowrap' : ''}`}`}
+                  >{description}</div>
+                )}
               </div>
             </div>
             <button
