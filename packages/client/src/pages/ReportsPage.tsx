@@ -7,6 +7,7 @@ import UncategorizedNotice from '../components/UncategorizedNotice';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
 import Spinner from '../components/Spinner';
 import { VendorAvatar } from '../components/primitives';
+import MonthSwitcher from '../components/MonthSwitcher';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -246,6 +247,8 @@ export default function ReportsPage() {
     return () => { cancelled = true; };
   }, [range.start, range.end, appliedKey, filters, focusGroup]);
 
+  const [tlPick, setTlPick] = useState<number | null>(null);
+  useEffect(() => { setTlPick(null); }, [report]);
   const buckets = report?.buckets ?? [];
   const nB = buckets.length;
   const sections = useMemo(() => (report ? buildSections(report.categories, nB, report.uncategorized) : null), [report, nB]);
@@ -430,6 +433,34 @@ export default function ReportsPage() {
     });
   }
   const trendColMin = nB > 8 ? 62 : 78;
+
+  // Phone Timeline: one month/week at a time beside the range total (same pattern as Budget Year).
+  const tlToday = (() => { const t = ymd(new Date()); const i = buckets.findIndex((b) => t >= b.start && t <= b.end); return i < 0 ? nB - 1 : i; })();
+  const tlIdx = Math.max(0, Math.min(nB - 1, tlPick ?? tlToday));
+  const tlWeekly = nB > 0 && buckets[0].label.startsWith('Wk');
+  const tlTitle = (() => {
+    const b = buckets[tlIdx];
+    if (!b) return '';
+    const [sy, sm, sd] = b.start.split('-').map(Number);
+    const [, em, ed] = b.end.split('-').map(Number);
+    const mon = (m: number) => MFULL[m - 1].slice(0, 3);
+    if (tlWeekly) return `${b.label} · ${mon(sm)} ${sd}–${em === sm ? '' : `${mon(em)} `}${ed}`;
+    return b.label.includes("'") ? b.label : `${b.label} ${sy}`;
+  })();
+  const tlRangeLabel = preset === 'custom'
+    ? [range.start, range.end].map((d) => { const [y, m] = d.split('-').map(Number); return `${MFULL[m - 1].slice(0, 3)} ${y}`; }).join(' – ')
+    : range.label;
+  const tlShown = <T,>(a: T[]): T[] => (isMobile ? a.slice(tlIdx, tlIdx + 1) : a);
+  const tlNameCol = isMobile ? 'flex-1 min-w-0' : 'w-[214px] shrink-0';
+  const tlCellCls = isMobile ? 'w-[80px] shrink-0 text-right' : 'text-right';
+  const tlCellStyle = isMobile ? undefined : { flex: '1 1 0', minWidth: trendColMin };
+  const tlTotCls = isMobile ? 'w-[88px] shrink-0 text-right' : 'w-[104px] shrink-0 text-right';
+  const tlPad = isMobile ? '11px 16px' : '11px 26px';
+  const tlRowPad = isMobile ? '12px 16px' : '13px 26px';
+  const tlMd = isMobile ? 'text-[15px]' : 'text-sm';
+  const tlSm = isMobile ? 'text-[15px]' : 'text-[13px]';
+  const tlNameCls = isMobile ? 'line-clamp-2 [overflow-wrap:break-word]' : 'truncate';
+  const tlName = (name: string) => (isMobile ? name.split('/').flatMap((part, i, a) => (i < a.length - 1 ? [part, '/', <wbr key={i} />] : [part])) : name);
 
   // Per-group inline expand + expand-all/collapse-all (only meaningful when not focused).
   const toggleGroup = (gkey: string) => setExpandedGroups((s) => ({ ...s, [gkey]: !s[gkey] }));
@@ -730,30 +761,36 @@ export default function ReportsPage() {
             ))}
           </div>
         ) : (
-          <div className="border-t border-line overflow-x-auto">
-            <div style={{ minWidth: 'max-content' }}>
-              <div className="flex items-center bg-surface-2 border-b border-line font-mono text-[11px] uppercase text-content-3" style={{ padding: '11px 26px', letterSpacing: '.06em' }}>
-                <span className="w-[214px] shrink-0">Category</span>
-                {buckets.map((b, i) => <span key={i} className="text-right" style={{ flex: '1 1 0', minWidth: trendColMin }}>{b.label}</span>)}
-                <span className="w-[104px] shrink-0 text-right text-content-2">Total</span>
+          <div className={isMobile ? 'border-t border-line' : 'border-t border-line overflow-x-auto'}>
+            {isMobile && nB > 0 && (
+              <MonthSwitcher title={tlTitle} subtitle={`${tlIdx + 1} of ${nB} · ${tlRangeLabel}`}
+                prevLabel={tlWeekly ? 'Previous week' : 'Previous month'} nextLabel={tlWeekly ? 'Next week' : 'Next month'}
+                onPrev={() => setTlPick(tlIdx - 1)} onNext={() => setTlPick(tlIdx + 1)}
+                prevDisabled={tlIdx === 0} nextDisabled={tlIdx === nB - 1} />
+            )}
+            <div style={isMobile ? undefined : { minWidth: 'max-content' }}>
+              <div className="flex items-center bg-surface-2 border-b border-line font-mono text-[11px] uppercase text-content-3" style={{ padding: tlPad, letterSpacing: '.06em' }}>
+                <span className={tlNameCol}>Category</span>
+                {tlShown(buckets).map((b, i) => <span key={i} className={isMobile ? `${tlCellCls} font-bold` : 'text-right'} style={isMobile ? { color: 'var(--primary)' } : tlCellStyle}>{b.label}</span>)}
+                <span className={`${tlTotCls} text-content-2`}>Total</span>
               </div>
               {timelineSecs.map((sec) => (
                 <div key={sec.label}>
-                  <div onClick={sec.toggle} className="flex items-center bg-surface-2 border-b border-line cursor-pointer" style={{ padding: '11px 26px' }}>
-                    <span className="w-[214px] shrink-0 flex items-center gap-2.5">
+                  <div onClick={sec.toggle} className="flex items-center bg-surface-2 border-b border-line cursor-pointer" style={{ padding: isMobile ? '11px 16px' : '11px 26px' }}>
+                    <span className={`${tlNameCol} flex items-center gap-2.5`}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sec.collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
                       <span className="text-xs font-bold uppercase text-content-2" style={{ letterSpacing: '.05em' }}>{sec.label}</span>
                     </span>
-                    {sec.subtotals.map((t, i) => <span key={i} className="text-right text-[13px] font-bold text-content-2 tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin }}>{dollars(t)}</span>)}
-                    <span className="w-[104px] shrink-0 text-right text-[13px] font-extrabold tabular-nums">{dollars(sec.total)}</span>
+                    {tlShown(sec.subtotals).map((t, i) => <span key={i} className={`${tlCellCls} ${tlSm} font-bold text-content-2 tabular-nums`} style={tlCellStyle}>{dollars(t)}</span>)}
+                    <span className={`${tlTotCls} ${tlSm} font-extrabold tabular-nums`}>{dollars(sec.total)}</span>
                   </div>
                   {!sec.collapsed && sec.rows.map((r) => {
                     const canExpand = r.subs.length > 0;
                     const open = canExpand && !!expandedGroups[r.gkey];
                     return (
                     <div key={r.key}>
-                      <div onClick={() => r.drill && drillTo(r.drill)} className="flex items-center border-b border-line" style={{ padding: '13px 26px', cursor: r.drill ? 'pointer' : 'default' }}>
-                        <span className="w-[214px] shrink-0 flex items-center gap-2 min-w-0">
+                      <div onClick={() => r.drill && drillTo(r.drill)} className="flex items-center border-b border-line" style={{ padding: tlRowPad, cursor: r.drill ? 'pointer' : 'default' }}>
+                        <span className={`${tlNameCol} flex items-center gap-2 min-w-0`}>
                           {canExpand ? (
                             <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(r.gkey); }} aria-label={open ? 'Collapse' : 'Expand'} className="shrink-0 w-5 h-5 -ml-0.5 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
@@ -762,33 +799,33 @@ export default function ReportsPage() {
                           {r.leaf
                             ? <span className="shrink-0 text-[15px] leading-none">{r.emoji}</span>
                             : <span className="shrink-0 w-3.5 h-3.5 rounded-[4px]" style={{ background: r.color }} />}
-                          <span className="font-semibold text-sm truncate">{r.name}</span>
+                          <span className={`font-semibold ${tlMd} ${tlNameCls}`}>{tlName(r.name)}</span>
                         </span>
-                        {r.cells.map((v, i) => <span key={i} className="text-right text-sm tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === r.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === r.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
-                        <span className="w-[104px] shrink-0 text-right font-bold text-sm tabular-nums">{dollars(r.total)}</span>
+                        {tlShown(r.cells).map((v, i) => <span key={i} className={`${tlCellCls} ${tlMd} tabular-nums`} style={{ ...tlCellStyle, color: (v === r.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === r.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
+                        <span className={`${tlTotCls} font-bold ${tlMd} tabular-nums`}>{dollars(r.total)}</span>
                       </div>
                       {open && r.subs.map((sub) => (
-                        <div key={sub.key} className="flex items-center border-b border-line bg-surface-2/40" style={{ padding: '10px 26px' }}>
-                          <span className="w-[214px] shrink-0 flex items-center gap-2 min-w-0" style={{ paddingLeft: 34 }}>
+                        <div key={sub.key} className="flex items-center border-b border-line bg-surface-2/40" style={{ padding: isMobile ? '10px 16px' : '10px 26px' }}>
+                          <span className={`${tlNameCol} flex items-center gap-2 min-w-0`} style={{ paddingLeft: 34 }}>
                             <span className="shrink-0 text-sm leading-none">{sub.emoji}</span>
-                            <span className="text-sm text-content-2 truncate">{sub.name}</span>
+                            <span className={`${tlMd} text-content-2 ${tlNameCls}`}>{tlName(sub.name)}</span>
                           </span>
-                          {sub.cells.map((v, i) => <span key={i} className="text-right text-[13px] tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === sub.peak && v > 0) ? 'var(--text)' : 'var(--text-3)', fontWeight: (v === sub.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
-                          <span className="w-[104px] shrink-0 text-right font-semibold text-[13px] tabular-nums">{dollars(sub.total)}</span>
+                          {tlShown(sub.cells).map((v, i) => <span key={i} className={`${tlCellCls} ${tlSm} tabular-nums`} style={{ ...tlCellStyle, color: (v === sub.peak && v > 0) ? 'var(--text)' : 'var(--text-3)', fontWeight: (v === sub.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
+                          <span className={`${tlTotCls} font-semibold ${tlSm} tabular-nums`}>{dollars(sub.total)}</span>
                         </div>
                       ))}
                     </div>
                     );
                   })}
                   {!sec.collapsed && sec.unc && (
-                    <div className="flex items-center border-b border-line" style={{ padding: '13px 26px' }}>
-                      <span className="w-[214px] shrink-0 flex items-center gap-2 min-w-0">
+                    <div className="flex items-center border-b border-line" style={{ padding: tlRowPad }}>
+                      <span className={`${tlNameCol} flex items-center gap-2 min-w-0`}>
                         <span className="shrink-0 w-5 -ml-0.5" />
                         <span className="uncategorized-hatch shrink-0 w-3.5 h-3.5 rounded-[4px] border border-line-strong" aria-hidden="true" />
-                        <span className="font-semibold text-sm text-content-2 truncate">Uncategorized</span>
+                        <span className={`font-semibold ${tlMd} text-content-2 ${tlNameCls}`}>Uncategorized</span>
                       </span>
-                      {sec.unc.cells.map((v, i) => <span key={i} className="text-right text-sm tabular-nums" style={{ flex: '1 1 0', minWidth: trendColMin, color: (v === sec.unc!.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === sec.unc!.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
-                      <span className="w-[104px] shrink-0 text-right font-bold text-sm tabular-nums">{dollars(sec.unc.total)}</span>
+                      {tlShown(sec.unc.cells).map((v, i) => <span key={i} className={`${tlCellCls} ${tlMd} tabular-nums`} style={{ ...tlCellStyle, color: (v === sec.unc!.peak && v > 0) ? 'var(--text)' : 'var(--text-2)', fontWeight: (v === sec.unc!.peak && v > 0) ? 700 : 500 }}>{dollars(v)}</span>)}
+                      <span className={`${tlTotCls} font-bold ${tlMd} tabular-nums`}>{dollars(sec.unc.total)}</span>
                     </div>
                   )}
                 </div>
