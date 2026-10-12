@@ -76,7 +76,12 @@ export default function FilterPopover({
     };
     const onPress = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (!menuRef.current?.contains(t) && !triggerRef.current?.contains(t)) setMenuOpen(false);
+      if (menuRef.current?.contains(t) || triggerRef.current?.contains(t)) return;
+      setMenuOpen(false);
+      // The tap only dismisses the menu: swallow its click so it can't also hit the scrim and close the sheet.
+      const swallow = (ev: MouseEvent) => { ev.stopPropagation(); ev.preventDefault(); };
+      document.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => document.removeEventListener('click', swallow, true), 400);
     };
     menuRef.current?.querySelector<HTMLElement>('[aria-selected=true]')?.focus();
     document.addEventListener('keydown', onKey, true);
