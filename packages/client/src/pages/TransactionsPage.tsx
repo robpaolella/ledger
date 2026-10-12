@@ -23,7 +23,7 @@ import { ListRow, CategoryTag, GroupHeader } from '../components/ListRow';
 import SplitEditor from '../components/SplitEditor';
 import type { SplitRow } from '../components/SplitEditor';
 import FilterPopover from '../components/FilterPopover';
-import { filtersFromParams, hasUrlFilters, type FilterDraft } from '../components/filterModel';
+import { filtersFromParams, hasUrlFilters, isActiveSort, sortButtonLabel, SORT_OPTIONS, type FilterDraft } from '../components/filterModel';
 import DateRangePopover from '../components/DateRangePopover';
 import ManualImportModal from '../components/ManualImportModal';
 import MerchantPicker from '../components/MerchantPicker';
@@ -923,13 +923,6 @@ export default function TransactionsPage() {
     } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load accounts and categories', 'error'); }
   }, [addToast]);
 
-  const SORT_OPTIONS: { by: string; order: 'asc' | 'desc'; label: string }[] = [
-    { by: 'date', order: 'desc', label: 'Date (new → old)' },
-    { by: 'date', order: 'asc', label: 'Date (old → new)' },
-    { by: 'merchant', order: 'asc', label: 'Merchant (A → Z)' },
-    { by: 'amount', order: 'desc', label: 'Amount (high → low)' },
-    { by: 'amount', order: 'asc', label: 'Amount (low → high)' },
-  ];
   const applySort = (by: string, order: 'asc' | 'desc') => {
     setSortBy(by); setSortOrder(order); setSortTouched(true); setSortOpen(false); setLimit(PAGE);
   };
@@ -1436,7 +1429,7 @@ export default function TransactionsPage() {
   const formatDateHeader = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   // Merchant name suggestions for the inline vendor picker — the real merchant list.
   const vendorOptions = merchants.map((m) => m.name).sort((a, b) => a.localeCompare(b));
-  const sortLabel = !sortTouched ? 'Sort' : (SORT_OPTIONS.find((o) => o.by === sortBy && o.order === sortOrder)?.label ?? 'Sort');
+  const sortLabel = sortButtonLabel(sortTouched, sortBy, sortOrder);
   const DATE_PRESETS: { value: string; label: string }[] = [
     { value: 'all', label: 'All time' }, { value: 'this-month', label: 'This month' }, { value: 'last-month', label: 'Last month' },
     { value: 'this-quarter', label: 'This quarter' }, { value: 'last-quarter', label: 'Last quarter' },
@@ -1781,12 +1774,26 @@ export default function TransactionsPage() {
               {sortLabel}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
             </Button>
-            {sortOpen && (
+            {sortOpen && isMobile && (
+              <BottomSheet isOpen onClose={() => setSortOpen(false)} title="Sort">
+                {/* The sheet always ticks the sort in force, including the untouched default. */}
+                {SORT_OPTIONS.map((o) => {
+                  const active = isActiveSort(o, true, sortBy, sortOrder);
+                  return (
+                    <button key={o.label} onClick={() => applySort(o.by, o.order)} aria-pressed={active} className={`flex items-center gap-3 w-[calc(100%+16px)] -mx-2 h-11 px-4 rounded-[10px] text-[15px] text-left ${active ? 'bg-surface-2 font-semibold text-content' : 'font-medium text-content-2'}`}>
+                      <span className="w-4 flex justify-center">{active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}</span>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </BottomSheet>
+            )}
+            {sortOpen && !isMobile && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
                 <div className="absolute top-12 right-0 z-50 w-60 bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
                   {SORT_OPTIONS.map((o) => {
-                    const active = sortTouched && o.by === sortBy && o.order === sortOrder;
+                    const active = isActiveSort(o, sortTouched, sortBy, sortOrder);
                     return (
                       <button key={o.label} onClick={() => applySort(o.by, o.order)} className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-content hover:bg-surface-2">
                         <span className="w-4 flex justify-center">{active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}</span>
