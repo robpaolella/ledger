@@ -273,6 +273,23 @@ export default function BudgetPage() {
   const pastMonth = isCurYear && mi < curMi;
   const phoneYear = annualData && annualYear === yr ? annualData : null;
   const yearEmpty = !!phoneYear && annualSections.every((sec) => sec.groups.every((g) => g.subs.every((s) => s.planned.every((v) => !v))));
+  // Notes above the Year table (phone and desktop): an empty year, and view-only access.
+  const yearNotes = (
+    <>
+        {yearEmpty && (
+          <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <span>{`Nothing planned for ${yr} yet.`}</span>
+          </div>
+        )}
+        {!canEditBudgets && (
+          <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>You can view this budget. Ask an admin if you need to change it.</span>
+          </div>
+        )}
+    </>
+  );
   const yearSum = (arr: number[]) => arr.reduce((a, v) => a + (v || 0), 0);
   const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const monthCols = 'w-[76px] shrink-0 text-right';
@@ -539,18 +556,7 @@ export default function BudgetPage() {
       /* ===== YEAR VIEW · PHONE ===== one month at a time beside the year total */
       annualError && !phoneYear ? yearError : !phoneYear ? yearLoading : (
       <div>
-        {yearEmpty && (
-          <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            <span>{`Nothing planned for ${yr} yet.`}</span>
-          </div>
-        )}
-        {!canEditBudgets && (
-          <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <span>You can view this budget. Ask an admin if you need to change it.</span>
-          </div>
-        )}
+        {yearNotes}
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
           <MonthSwitcher title={`${MONTH_FULL[mi]} ${yr}`}
             subtitle={pastMonth ? 'Planned · past month, locked' : isCurYear && mi === curMi ? 'Planned · this month' : 'Planned'}
@@ -625,6 +631,8 @@ export default function BudgetPage() {
       )
       ) : annualError && annualYear !== yr ? yearError : annualData ? (
       /* ===== YEAR VIEW ===== */
+      <div>
+      {yearNotes}
       <div className="bg-surface rounded-card border border-line shadow-sm overflow-x-auto">
         <div>
           {/* month header */}
@@ -679,12 +687,14 @@ export default function BudgetPage() {
                             const targetMonth = `${yr}-${String(m + 1).padStart(2, '0')}`;
                             return (
                               <div key={m} className="flex-1 min-w-0 px-2.5 py-1.5 flex justify-end" style={{ background: colTint(m) }}>
-                                <button onClick={() => { if (canEditBudgets && !past) openEdit(sub.categoryId, g.groupName, `${sub.subName} · ${MONTHS[m]} ${yr}`, v, targetMonth, sub.recurring[m], sub.manual[m], sub.overridden[m], sec.key === 'income'); }}
-                                  disabled={!canEditBudgets || past}
-                                  className="min-w-16 text-right text-sm tabular-nums px-2.5 py-1.5 rounded-lg enabled:hover:border-primary"
-                                  style={{ border: past ? '1px solid transparent' : '1px solid var(--line-strong)', color: past ? 'var(--text-3)' : 'var(--text)' }}>
-                                  {whole(v)}
-                                </button>
+                                {past || !canEditBudgets ? (
+                                  <span className="min-w-16 text-right text-sm tabular-nums px-2.5 py-1.5 border border-transparent text-content-3">{whole(v)}</span>
+                                ) : (
+                                  <button onClick={() => openEdit(sub.categoryId, g.groupName, `${sub.subName} · ${MONTHS[m]} ${yr}`, v, targetMonth, sub.recurring[m], sub.manual[m], sub.overridden[m], sec.key === 'income')}
+                                    className="min-w-16 text-right text-sm tabular-nums px-2.5 py-1.5 rounded-lg border border-line-strong text-content hover:border-primary">
+                                    {whole(v)}
+                                  </button>
+                                )}
                               </div>
                             );
                           })}
@@ -697,6 +707,7 @@ export default function BudgetPage() {
             );
           })}
         </div>
+      </div>
       </div>
       ) : (
       yearLoading
