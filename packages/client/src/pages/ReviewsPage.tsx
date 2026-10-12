@@ -257,7 +257,7 @@ export default function ReviewsPage() {
     : 'Users';
   // One overlay at a time: opening a header menu closes any row popover.
   const toggleMenu = (which: 'date' | 'users') => { setEditAssign(null); setEditCat(null); setMenu((m) => (m === which ? null : which)); };
-  const ctrl = 'h-10 flex items-center gap-2 rounded-[11px] bg-surface border text-sm font-semibold whitespace-nowrap';
+  const ctrl = 'tap-grow h-10 flex items-center gap-2 rounded-[11px] bg-surface border text-sm font-semibold whitespace-nowrap';
   const anyOverlay = menu !== null || editAssign !== null || editCat !== null;
 
   return (
@@ -270,13 +270,13 @@ export default function ReviewsPage() {
           </span>
         )} right={<>
           {searchOpen ? (
-            <div className="h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3">
+            <div className="tap-grow h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
               <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }} placeholder="Search…" className="w-40 bg-transparent outline-none text-sm text-content" />
-              <button onClick={() => { setSearch(''); setSearchOpen(false); }} className="text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+              <button onClick={() => { setSearch(''); setSearchOpen(false); }} aria-label="Close search" className="tap-grow-sq flex items-center justify-center text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
             </div>
           ) : (
-            <button onClick={() => setSearchOpen(true)} className="w-10 h-10 flex-none flex items-center justify-center rounded-[11px] bg-surface border border-line-strong text-content-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></button>
+            <button onClick={() => setSearchOpen(true)} className="tap-grow-sq w-10 h-10 flex-none flex items-center justify-center rounded-[11px] bg-surface border border-line-strong text-content-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></button>
           )}
           {/* date filter */}
           <div className="relative">
@@ -345,7 +345,7 @@ export default function ReviewsPage() {
             )}
           </div>
           {canEdit && (
-            <button onClick={() => shown.length > 0 && setConfirmAll(true)} disabled={shown.length === 0} className="h-10 px-4 flex items-center gap-2 rounded-[11px] font-bold text-sm shadow-sm disabled:cursor-not-allowed"
+            <button onClick={() => shown.length > 0 && setConfirmAll(true)} disabled={shown.length === 0} className="tap-grow h-10 px-4 flex items-center gap-2 rounded-[11px] font-bold text-sm shadow-sm disabled:cursor-not-allowed"
               style={shown.length > 0 ? { background: 'var(--primary)', color: 'var(--on-primary)' } : { background: 'var(--surface)', color: 'var(--text-3)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>
               Approve all
