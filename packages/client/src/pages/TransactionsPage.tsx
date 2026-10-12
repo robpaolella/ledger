@@ -2518,9 +2518,8 @@ export default function TransactionsPage() {
                   <div className="relative w-full md:w-[104px] shrink-0">
                     {splitMode === '$' ? (
                       <>
-                        <span className="absolute left-3 top-3 text-[14px] text-content-3 font-semibold">$</span>
-                        <input value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value.replace(/[^0-9.]/g, ''), pctRaw: undefined })} inputMode="decimal" placeholder="0.00"
-                          className="w-full h-11 pl-6 pr-2.5 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-semibold text-right tabular-nums outline-none" />
+                        <CurrencyInput value={r.amount} onChange={(v) => setRow(i, { amount: v, pctRaw: undefined })}
+                          className="w-full h-11 px-2.5 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-semibold text-right tabular-nums outline-none" />
                       </>
                     ) : (
                       <>
@@ -2546,7 +2545,7 @@ export default function TransactionsPage() {
                   {balanced && <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--positive)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg></span>}
                   <div className="text-right leading-tight">
                     {/* A remainder, not money in or out: plain magnitude; colour shows balanced or not. */}
-                    <div className="text-[17px] font-extrabold tabular-nums" style={{ color: balanced ? 'var(--positive)' : 'var(--negative)' }}>{formatMoney(Math.abs(splitRemainingVal), { kind: 'balance' }).text}</div>
+                    <div className="text-[17px] font-extrabold tabular-nums" style={{ color: balanced ? 'var(--positive)' : 'var(--negative)' }}>{formatMoney(Math.abs(splitRemainingVal), { kind: 'balance', showZero: true }).text}</div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-content-3">{splitRemainingVal < -0.005 ? 'Over by' : 'Left to split'}</div>
                   </div>
                 </div>
