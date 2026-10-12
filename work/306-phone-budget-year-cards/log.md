@@ -1,0 +1,2 @@
+# Log
+- 2026-10-12: Built and verified on verify-ledger data: every approved state in light and dark at 390 (empty, loading and error reached with a browser fetch mock; view-only by removing the sample member's budget editing through the users API). Desktop Month and Year, light and dark, are byte-identical base vs build. Review: FIXES for missing evidence and one unused import, both fixed, then ready for PR.

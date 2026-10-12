@@ -13,6 +13,8 @@ interface BottomSheetProps {
   /** Keep a long description to one line (the full text stays in its tooltip). */
   truncateDescription?: boolean;
   footer?: ReactNode;
+  /** Optional area fixed between the title and the scrolling body (a search box, a picker). */
+  pinned?: ReactNode;
   children: ReactNode;
 }
 
@@ -22,7 +24,7 @@ let scrollLocks = 0;
 let unlockedOverflow = '';
 
 /** Phone counterpart of ResponsiveModal — same header · body · footer anatomy. */
-export default function BottomSheet({ isOpen, onClose, title, description, icon, truncateDescription, footer, children }: BottomSheetProps) {
+export default function BottomSheet({ isOpen, onClose, title, description, icon, truncateDescription, footer, pinned, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -158,6 +160,8 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
             </button>
           </div>
         )}
+
+        {pinned && <div className="relative shrink-0">{pinned}</div>}
 
         <div
           ref={bodyRef}

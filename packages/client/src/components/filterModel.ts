@@ -17,6 +17,24 @@ export const filterDraftCount = (d: FilterDraft) =>
 export const FILTER_SECTIONS = ['Categories', 'Merchants', 'Accounts', 'Amount', 'Other'] as const;
 export type FilterSection = (typeof FILTER_SECTIONS)[number];
 
+/** The filter types a page lists: its own `sections`, else all but "Other", which only Transactions-style hosts offer. */
+export const visibleFilterSections = (sections: FilterSection[] | undefined, showNeedsReview: boolean): FilterSection[] =>
+  FILTER_SECTIONS.filter((n) => (sections ? sections.includes(n) : n !== 'Other' || showNeedsReview));
+
+/** Filters chosen under one type. Summed over every type this equals `filterDraftCount`. */
+export const filterSectionCount = (s: FilterSection, d: FilterDraft): number => {
+  switch (s) {
+    case 'Categories': return d.category.filter((c) => c.startsWith('sub:')).length;
+    case 'Merchants': return d.merchant.length;
+    case 'Accounts': return d.account.length;
+    case 'Amount': return (d.op ? 1 : 0) + (d.type !== 'All' ? 1 : 0);
+    case 'Other': return d.needsReview ? 1 : 0;
+  }
+};
+
+/** Types with a list to search; Amount and Other have none. */
+export const isSearchableSection = (s: string) => s === 'Categories' || s === 'Merchants' || s === 'Accounts';
+
 // Same shape as DateRangePopover's DateRangeValue (not imported: this file stays free of JSX for the unit tests).
 export interface DateRangeValue { preset: string; start: string; end: string }
 
