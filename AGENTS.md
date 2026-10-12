@@ -53,6 +53,14 @@ designs to real app states. Visible changes also follow Maestro's shared `design
 skill. After building, run the helper's safety/lifecycle tests with
 `node --test .pi/skills/verify-ledger/*.test.mjs`.
 
+## Previews
+
+Robert answered “A.” to “Do you want each Ledger PR's preview kept running until you merge it?” on 2026-10-11.
+
+```
+Previews: keep until merge
+```
+
 ## Setup after clone
 ```
 git config core.hooksPath .githooks
