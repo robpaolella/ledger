@@ -30,6 +30,7 @@ import ManualImportModal from '../components/ManualImportModal';
 import MerchantPicker from '../components/MerchantPicker';
 import { chevronIcon, btnPrimary, btnSecondary } from '../components/settings/ui';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { phoneToolbarMode, reviewChipLabel, showClearAll } from '../lib/toolbar';
 
 interface DuplicateMatch {
   id: number;
@@ -128,7 +129,6 @@ function txnCount(n: number): string {
 
 /** Stretches a 40px toolbar button's tap area to 44px without changing how it looks. */
 const HIT_44 = 'relative after:absolute after:inset-x-0 after:-inset-y-0.5';
-const listIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>;
 
 const PANEL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -1772,7 +1772,7 @@ export default function TransactionsPage() {
           <div className="relative">
             <Button variant="outline" size="sm" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); }} active={sortTouched}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
-              {sortLabel}
+              {isMobile ? 'Sort' : sortLabel}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
             </Button>
             {sortOpen && isMobile && (
@@ -1825,38 +1825,70 @@ export default function TransactionsPage() {
             </Button>
           </PermissionGate>
   </>);
+  // Phones: search field with Filters inside (44px tap area), shown expanded or while selecting.
+  const phoneSearchField = (closable: boolean) => (
+    <div className="relative flex items-center flex-1 min-w-0 h-11 rounded-[12px] bg-surface border border-line-strong pl-3 gap-2">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="shrink-0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input autoFocus={closable} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" autoCapitalize="off"
+        className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
+      {search && (
+        <button onClick={() => setSearch('')} aria-label="Clear search" className="w-11 h-11 -my-px shrink-0 flex items-center justify-center text-content-3">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      )}
+      <button onClick={openFilterPopover} aria-label="Filters" className={`relative w-11 h-11 -my-px shrink-0 flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        {filterCount > 0 && <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{filterCount}</span>}
+      </button>
+      {filterPopoverEl}
+    </div>
+  );
+  const toolbarMode = phoneToolbarMode(bulkMode, searchOpen);
   const phoneToolbar = (
     <div className="w-full flex flex-col gap-2">
-      <div className="relative flex items-center h-11 rounded-[12px] bg-surface border border-line-strong pl-3 pr-1 gap-2">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" autoCapitalize="off"
-          className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
-        {search && (
-          <button onClick={() => setSearch('')} aria-label="Clear search" className="w-8 h-8 flex items-center justify-center text-content-3">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
-        )}
-        <button onClick={openFilterPopover} aria-label="Filters" className={`relative w-9 h-9 rounded-[9px] flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-          {filterCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{filterCount}</span>}
-        </button>
-        {filterPopoverEl}
-      </div>
-      {bulkMode ? (
+      {toolbarMode === 'select' && (<>
+        {phoneSearchField(false)}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[15px] font-bold text-content">Select transactions</span>
           <Button variant="outline" size="sm" onClick={exitBulkMode} className={HIT_44}>Cancel</Button>
         </div>
-      ) : (
-        <div className="flex items-center gap-2 flex-wrap">
-          {dateRangeEl}{sortEl}
+      </>)}
+      {toolbarMode === 'search' && (
+        <div className="flex items-center gap-2">
+          {phoneSearchField(true)}
+          <Button variant="ghost" size="sm" iconOnly aria-label="Close search" onClick={() => { setSearch(''); setSearchOpen(false); }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </Button>
+        </div>
+      )}
+      {toolbarMode === 'row' && (
+        <div className="flex items-center flex-nowrap gap-2">
+          <Button variant="outline" size="sm" iconOnly aria-label="Search transactions" title="Search" onClick={() => { setSortOpen(false); setSearchOpen(true); }} active={!!search || filterCount > 0}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </Button>
+          {/* Date and Sort drop their leading icons here to make room; a long Date label truncates. */}
+          <div className="min-w-0 [&_button]:max-w-full [&_button]:max-md:px-3 [&_button>svg:first-child]:hidden">{dateRangeEl}</div>
+          <div className="shrink-0 [&_button]:max-md:px-3 [&_button>svg:first-child]:hidden">{sortEl}</div>
           <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
-            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)} className={HIT_44}>
-              {listIcon}
-              Select
-            </Button>
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)} className="max-md:px-3 shrink-0">Select</Button>
           </PermissionGate>
-          {nudgeEl}{clearEl}
+          {reviewCount > 0 && (
+            <Link
+              to="/reviews"
+              aria-label={reviewChipLabel(reviewCount)}
+              title={reviewChipLabel(reviewCount)}
+              className="ml-auto min-w-0 flex items-center gap-1 h-11 px-2.5 rounded-[11px] font-semibold text-sm"
+              style={{ background: 'color-mix(in srgb, var(--warning) 16%, transparent)', color: 'var(--warning)' }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
+              <span className="truncate">{reviewCount.toLocaleString('en-US')}</span>
+            </Link>
+          )}
+        </div>
+      )}
+      {showClearAll(anyActive, bulkMode) && (
+        <div className="flex justify-end">
+          <button onClick={clearAll} className="tap-area text-primary hover:text-primary-hover font-semibold text-sm">Clear all</button>
         </div>
       )}
     </div>

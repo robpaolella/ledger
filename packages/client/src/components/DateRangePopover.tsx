@@ -163,9 +163,9 @@ export default function DateRangePopover({
     <div className="relative">
       <button onClick={open ? () => setOpen(false) : openPop} aria-haspopup="dialog" aria-expanded={open}
         className={`tap-grow flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border-2 ${open || active ? 'border-primary' : 'border-line-strong'} text-content font-semibold text-sm hover:bg-surface-2`}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
-        {label}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+        <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
+        <span className="truncate">{label}</span>
+        <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
       </button>
       {open && (isMobile
         ? <BottomSheet isOpen onClose={() => setOpen(false)} title="Date Range" footer={footer}>{body}</BottomSheet>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
 import Spinner from '../components/Spinner';
@@ -60,6 +60,11 @@ const friendlyDate = (ymd: string) => parseDate(ymd).toLocaleDateString('en-US',
 function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: string; size?: number; font?: number }) {
   const c = color ?? colorVar(seed);
   return <span className="flex-none rounded-full inline-flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: font, background: tint(c), color: c }}>{initialOf(seed)}</span>;
+}
+
+/** Phones: the toolbar is one 44px row that never wraps. Desktop: the header lays the controls out itself. */
+function ToolbarRow({ phone, children }: { phone: boolean; children: ReactNode }) {
+  return phone ? <div className="flex items-center flex-nowrap gap-2 w-full">{children}</div> : <>{children}</>;
 }
 
 export default function ReviewsPage() {
@@ -268,26 +273,27 @@ export default function ReviewsPage() {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
             {openTotal} to review
           </span>
-        )} right={<>
+        )} right={<ToolbarRow phone={isMobile}>
           {searchOpen ? (
-            <div className="tap-grow h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3">
+            <div className="tap-grow h-10 max-md:flex-1 max-md:min-w-0 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-              <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }} placeholder="Search…" className="w-40 bg-transparent outline-none text-sm text-content" />
+              <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }} placeholder="Search…" className="w-40 max-md:w-auto flex-1 min-w-0 bg-transparent outline-none text-sm text-content" />
               <button onClick={() => { setSearch(''); setSearchOpen(false); }} aria-label="Close search" className="tap-grow-sq flex items-center justify-center text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
             </div>
           ) : (
-            <button onClick={() => setSearchOpen(true)} className="tap-grow-sq w-10 h-10 flex-none flex items-center justify-center rounded-[11px] bg-surface border border-line-strong text-content-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></button>
+            <button onClick={() => setSearchOpen(true)} aria-label="Search" title="Search" className="tap-grow-sq w-10 h-10 flex-none flex items-center justify-center rounded-[11px] bg-surface border border-line-strong text-content-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></button>
           )}
+          {!(isMobile && searchOpen) && <>
           {/* date filter */}
-          <div className="relative">
-            <button onClick={() => toggleMenu('date')} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'date' ? 'var(--primary)' : 'var(--line-strong)' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
-              {dateLabel}
+          <div className="relative max-md:static min-w-0">
+            <button onClick={() => toggleMenu('date')} className={`${ctrl} px-3.5 max-md:px-3 max-md:max-w-full`} style={{ borderColor: menu === 'date' ? 'var(--primary)' : 'var(--line-strong)' }}>
+              <svg className="max-md:hidden" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
+              <span className="truncate">{dateLabel}</span>
               {(period || dateFilter !== 'all') && <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--primary)' }} />}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {menu === 'date' && (
-              <div className="absolute top-[46px] right-0 z-40 w-[220px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
+              <div className="absolute top-[46px] right-0 max-md:top-full max-md:mt-1 max-md:inset-x-4 max-md:w-auto z-40 w-[220px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
                 {DATE_DEFS.map(([v, label]) => {
                   const on = !period && dateFilter === v;
                   return (
@@ -301,15 +307,15 @@ export default function ReviewsPage() {
             )}
           </div>
           {/* users filter */}
-          <div className="relative">
-            <button onClick={() => toggleMenu('users')} className={`${ctrl} px-3.5`} style={{ borderColor: menu === 'users' ? 'var(--primary)' : 'var(--line-strong)' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>
-              {usersLabel}
+          <div className="relative max-md:static min-w-0">
+            <button onClick={() => toggleMenu('users')} className={`${ctrl} px-3.5 max-md:px-3 max-md:max-w-full`} style={{ borderColor: menu === 'users' ? 'var(--primary)' : 'var(--line-strong)' }}>
+              <svg className="max-md:hidden" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>
+              <span className="truncate">{usersLabel}</span>
               {selUsers.size > 0 && <span className="min-w-[18px] h-[18px] px-[5px] rounded-full text-[11px] font-bold inline-flex items-center justify-center bg-primary text-on-primary">{selUsers.size}</span>}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {menu === 'users' && (
-              <div className="absolute top-[46px] right-0 z-40 w-[250px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
+              <div className="absolute top-[46px] right-0 max-md:top-full max-md:mt-1 max-md:inset-x-4 max-md:w-auto z-40 w-[250px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
                 <div className="flex items-center justify-between px-2 pt-1 pb-2">
                   <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-content-3">Assigned to</span>
                   <span onClick={() => setSelUsers(new Set())} className="text-[12px] font-semibold cursor-pointer" style={{ color: selUsers.size > 0 ? 'var(--primary)' : 'var(--text-3)' }}>Clear</span>
@@ -345,13 +351,14 @@ export default function ReviewsPage() {
             )}
           </div>
           {canEdit && (
-            <button onClick={() => shown.length > 0 && setConfirmAll(true)} disabled={shown.length === 0} className="tap-grow h-10 px-4 flex items-center gap-2 rounded-[11px] font-bold text-sm shadow-sm disabled:cursor-not-allowed"
+            <button onClick={() => shown.length > 0 && setConfirmAll(true)} disabled={shown.length === 0} className="tap-grow h-10 px-4 max-md:px-3 max-md:ml-auto max-md:shrink-0 flex items-center gap-2 rounded-[11px] font-bold text-sm shadow-sm disabled:cursor-not-allowed"
               style={shown.length > 0 ? { background: 'var(--primary)', color: 'var(--on-primary)' } : { background: 'var(--surface)', color: 'var(--text-3)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>
               Approve all
             </button>
           )}
-        </>} />
+          </>}
+        </ToolbarRow>} />
 
       {/* body card */}
       <div className="pt-5 md:pt-6 pb-16">
