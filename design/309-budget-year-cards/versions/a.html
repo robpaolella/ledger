@@ -503,8 +503,9 @@
       if (REM[g.n] !== undefined) c2 = REM[g.n];
       c2cls = c2 < 0 ? 'text-negative' : c2 ? 'text-positive' : 'text-content-3';
     }
-    // Year: one faint stripe down the year column (82px column + 12px card padding + 4px air) says "this stays put".
-    var stripe = year ? ' style="background: linear-gradient(to left, var(--surface-2) 98px, var(--surface) 98px);"' : '';
+    // Year: one faint stripe down the year column says "this stays put". Its edge sits midway between the
+    // month buttons (102px from the card's right edge) and the widest year figure (~70px), with a hairline.
+    var stripe = year ? ' style="background: linear-gradient(to left, color-mix(in srgb, var(--surface-2) 50%, var(--surface)) 86px, var(--line) 86px, var(--line) 87px, var(--surface) 87px);"' : '';
     var h = '<div class="bg-surface border border-line rounded-card shadow-sm overflow-hidden"' + stripe + '><div class="flex items-center gap-2 px-3 py-3">' +
       '<button type="button" data-toggle="' + esc(gk) + '" aria-label="' + (collapsed ? 'Expand ' : 'Collapse ') + esc(g.n) + '" aria-expanded="' + !collapsed + '" class="tap-area shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">' + chevron(collapsed) + '</button>' +
       '<button type="button" class="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><span aria-hidden="true" class="shrink-0 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center leading-none w-7 h-7 text-[15px]">' + g.e + '</span><span class="truncate">' + esc(g.n) + '</span></button>' +

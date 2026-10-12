@@ -18,7 +18,7 @@ A household member on their phone opens Budget and switches between Month and Ye
 - Phone only (Robert, 2026-10-12: "Desktop shouldn't be changing at all. this is strictly mobile"). No server work: the columns keep today's Year contents ("Just follow what is already shown in those columns now and theme it differently").
 - Navigation is unchanged. The month stepper moves one month within the year and stops at January and December. The header arrows move a year, and Today returns to the current month.
 - Month view's layout is unchanged; only the notice's placement and look are in question.
-- One new kind of element, approved by Robert (#7, 2026-10-12): a faint `--surface-2` stripe down the year column of each Year card (98px from the card's right edge: the 82px column, 12px padding and 4px of air), with the year numbers as plain `--text-2` text. It marks the year column as fixed while the month changes. The month column keeps its edit buttons.
+- One new kind of element, approved by Robert (#7, 2026-10-12): a faint stripe down the year column of each Year card: a half-strength `--surface-2` (`color-mix(in srgb, var(--surface-2) 50%, var(--surface))`, one rule for both themes) with a 1px `--line` hairline on its left edge. It is 87px from the card's right edge, so the edge sits midway between the month buttons (102px) and the widest year figure (~70px), with the year numbers as plain `--text-2` text. It marks the year column as fixed while the month changes. The month column keeps its edit buttons.
 
 ## States, themes and content
 | State slug | Role / situation | Content | Actions / feedback |

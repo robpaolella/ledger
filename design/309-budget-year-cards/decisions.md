@@ -9,6 +9,8 @@ Picks so far (Robert, 2026-10-12):
 - #5 Notice: **a** ("I like A the best. This is a good look.")
 - #6 Year rows with nothing planned all year behind "Show N unbudgeted": keep ("I'm fine with keeping that.")
 - #7 Year column look: **faint grey stripe** ("Faint grey stripe."). Robert asked to bring back the old layout's different colour for the year column, so it reads as fixed while the months change. Offered a stripe or plain grey text in the existing boxes; he chose the stripe. Applied to all versions (a shared change); the per-row grey boxes are gone. Restyle only, no new behaviour, so no repeat critique.
+- #7 follow-up (Robert, 2026-10-12): "it feels like it's encroaching on the month column too much right now and should be more centered between the month and year columns. I also think the contrast is a bit too high on the light version. Maybe it could use a bit of border definition?" Changes: the stripe narrowed from 98px to 87px so its edge sits midway between the month buttons and the widest year figure; the tint went from full `--surface-2` to a half-strength mix with `--surface` (tried `--bg` first: fine in light, but a dark well in dark); a 1px `--line` hairline was added on its edge. Checked at 390 in light and dark.
+- #8 Drop b and c (Robert): "Yeah, I'm fine with dropping B and C." What only they had: b's notice as a separate card below the band with a gap; c's notice as a second line inside the band, with shorter wording. Robert also said: "I don't want to start building yet." Not approved.
 
 Original summary: Versions differ on one decision, the phone uncategorized notice:
 - a: a full-width warning strip joined to the top of the "Left to budget" band
@@ -35,7 +37,7 @@ None yet.
 None.
 
 ## Open items
-None; awaiting Robert's "approved".
+Robert to review the revised year-column stripe (#7 follow-up); not approved yet.
 
 ## Build handoff
 The merged folder/revision is the feature authority; DESIGN.md and the live site govern the site-wide look.
