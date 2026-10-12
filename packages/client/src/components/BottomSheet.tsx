@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useCallback, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogLayer } from '../hooks/useDialogLayer';
+import { CLOSE_DISTANCE, startsOnFormField, swipeIntent, type SwipeIntent } from '../lib/sheetSwipe';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -23,7 +24,9 @@ let unlockedOverflow = '';
 /** Phone counterpart of ResponsiveModal — same header · body · footer anatomy. */
 export default function BottomSheet({ isOpen, onClose, title, description, icon, truncateDescription, footer, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
-  const dragStartY = useRef<number | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
   const currentTranslateY = useRef(0);
   const descriptionId = useId();
 
@@ -47,30 +50,61 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
     }
   }, [isOpen]);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    dragStartY.current = e.touches[0].clientY;
-    if (sheetRef.current) sheetRef.current.style.transition = 'none';
-  }, []);
+  // Swipe down from anywhere on the sheet to close it. Native listeners, because
+  // touchmove must be non-passive to stop the page scrolling under a drag.
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!isOpen || !sheet) return;
+    let start: { x: number; y: number; inBody: boolean } | null = null;
+    let intent: SwipeIntent = 'ignore';
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (dragStartY.current === null) return;
-    const deltaY = e.touches[0].clientY - dragStartY.current;
-    const translate = Math.max(0, deltaY); // downward only
-    currentTranslateY.current = translate;
-    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${translate}px)`;
-  }, []);
+    const onStart = (e: TouchEvent) => {
+      const target = e.target as Element | null;
+      if (e.touches.length !== 1 || startsOnFormField(target)) { start = null; return; }
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY, inBody: !!target && !!bodyRef.current?.contains(target) };
+      intent = 'pending';
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || intent === 'ignore') return;
+      const dx = e.touches[0].clientX - start.x;
+      const dy = e.touches[0].clientY - start.y;
+      if (intent === 'pending') {
+        // Read the scroll position now: a body already scrolling is a scroll, not a drag.
+        intent = swipeIntent(dx, dy, start.inBody ? bodyRef.current?.scrollTop ?? 0 : 0);
+        if (intent === 'pending') return;
+        if (intent === 'drag') sheet.style.transition = 'none';
+      }
+      if (intent !== 'drag') return;
+      if (e.cancelable) e.preventDefault();
+      currentTranslateY.current = Math.max(0, dy); // downward only
+      sheet.style.transform = `translateY(${currentTranslateY.current}px)`;
+    };
+    const onEnd = () => {
+      const dragged = start !== null && intent === 'drag';
+      start = null;
+      intent = 'ignore';
+      if (!dragged) return;
+      sheet.style.transition = 'transform 200ms ease-out';
+      if (currentTranslateY.current > CLOSE_DISTANCE) {
+        sheet.style.transform = 'translateY(100%)';
+        setTimeout(() => onCloseRef.current(), 200);
+      } else {
+        currentTranslateY.current = 0;
+        sheet.style.transform = 'translateY(0)';
+      }
+    };
 
-  const handleTouchEnd = useCallback(() => {
-    dragStartY.current = null;
-    if (sheetRef.current) sheetRef.current.style.transition = 'transform 200ms ease-out';
-    if (currentTranslateY.current > 100) {
-      if (sheetRef.current) sheetRef.current.style.transform = 'translateY(100%)';
-      setTimeout(onClose, 200);
-    } else {
-      currentTranslateY.current = 0;
-      if (sheetRef.current) sheetRef.current.style.transform = 'translateY(0)';
-    }
-  }, [onClose]);
+    sheet.addEventListener('touchstart', onStart, { passive: true });
+    sheet.addEventListener('touchmove', onMove, { passive: false });
+    sheet.addEventListener('touchend', onEnd);
+    sheet.addEventListener('touchcancel', onEnd);
+    return () => {
+      sheet.removeEventListener('touchstart', onStart);
+      sheet.removeEventListener('touchmove', onMove);
+      sheet.removeEventListener('touchend', onEnd);
+      sheet.removeEventListener('touchcancel', onEnd);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -95,14 +129,8 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle */}
-        <div
-          className="flex justify-center shrink-0 cursor-grab active:cursor-grabbing select-none touch-none"
-          style={{ padding: '12px 0 8px' }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
+        {/* Drag handle: a visual cue; the whole sheet is draggable */}
+        <div className="flex justify-center shrink-0 select-none touch-none" style={{ padding: '12px 0 8px' }}>
           <div className="w-9 h-1 rounded-full bg-line-strong" />
         </div>
 
@@ -129,6 +157,7 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
         )}
 
         <div
+          ref={bodyRef}
           className="flex-1 min-h-0 overflow-y-auto px-5 py-3 touch-auto"
           style={{ scrollbarWidth: 'none', overscrollBehavior: 'contain' }}
         >
