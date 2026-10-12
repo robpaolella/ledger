@@ -143,3 +143,72 @@ test('public launch, doctor, cleanup and repeat cleanup commands', { timeout: 18
     rmSync(evidence, { recursive: true });
   }
 });
+
+test('cleanup is refused from another checkout, unowned state, and allowed by owner or override', { timeout: 90_000 }, async () => {
+  const run = start();
+  const elsewhere = mkdtempSync('/tmp/ledger-notgit-');
+  const cleanup = (cwd, ...flags) => promisify(execFile)(process.execPath, [helper, 'cleanup', run.evidence, ...flags], { cwd, env: { PATH: process.env.PATH } }).then((r) => ({ ok: true, ...r }), (e) => ({ ok: false, stderr: e.stderr }));
+  try {
+    const s = await state(run);
+    assert.ok(s.owner);
+    const health = async () => (await fetch(`${s.url}/api/health`)).status;
+    // A folder that is not a git checkout is refused.
+    let result = await cleanup(elsewhere);
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /Cleanup refused.*not in a git checkout/);
+    // A different checkout is refused and the owner is named.
+    writeFileSync(`${run.evidence}/run.json`, JSON.stringify({ ...s, owner: '/git/some-other-checkout' }));
+    result = await cleanup(process.cwd());
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /started from \/git\/some-other-checkout/);
+    // No recorded owner is refused too.
+    const { owner, ...unowned } = s;
+    writeFileSync(`${run.evidence}/run.json`, JSON.stringify(unowned));
+    result = await cleanup(process.cwd());
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /no recorded owner/);
+    assert.equal(await health(), 200);
+    assert.equal(existsSync(`${run.evidence}/cleaned.json`), false);
+    // The override stops it from elsewhere.
+    result = await cleanup(elsewhere, '--override-owner');
+    assert.equal(result.ok, true);
+    await until(() => run.process.exitCode !== null);
+    assert.equal(existsSync(s.scratch), false);
+    // Repeat passes from any folder.
+    result = await cleanup(elsewhere);
+    assert.match(result.stdout, /already cleaned/);
+  } finally {
+    if (run.process.exitCode === null) run.process.kill('SIGTERM');
+    await until(() => run.process.exitCode !== null || run.process.signalCode !== null);
+    rmSync(run.evidence, { recursive: true });
+    rmSync(elsewhere, { recursive: true });
+  }
+});
+
+test('cleanup from the owning checkout stops the instance', { timeout: 90_000 }, async () => {
+  const run = start();
+  try {
+    const s = await state(run);
+    const { stdout } = await promisify(execFile)(process.execPath, [helper, 'cleanup', run.evidence], { env: { PATH: process.env.PATH } });
+    assert.match(stdout, /"cleaned": true/);
+    await until(() => run.process.exitCode !== null);
+    assert.equal(existsSync(s.scratch), false);
+  } finally {
+    if (run.process.exitCode === null) run.process.kill('SIGTERM');
+    await until(() => run.process.exitCode !== null || run.process.signalCode !== null);
+    rmSync(run.evidence, { recursive: true });
+  }
+});
+
+test('launch from a folder that is not a git checkout fails and starts nothing', () => {
+  const dir = mkdtempSync('/tmp/ledger-notgit-');
+  const evidence = mkdtempSync('/tmp/ledger-notgit-evidence-');
+  return promisify(execFile)(process.execPath, [helper, 'launch', evidence], { cwd: dir, env: { PATH: process.env.PATH } }).then(
+    () => assert.fail('launch should fail'),
+    (e) => {
+      assert.match(e.stderr, /Launch refused.*git checkout/);
+      assert.equal(existsSync(`${evidence}/launch.lock`), false);
+      assert.equal(existsSync(`${evidence}/run.json`), false);
+    },
+  ).finally(() => { rmSync(dir, { recursive: true }); rmSync(evidence, { recursive: true }); });
+});
