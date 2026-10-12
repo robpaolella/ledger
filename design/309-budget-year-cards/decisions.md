@@ -5,7 +5,12 @@
 - Maker: claude-bridge/claude-opus-5-5, medium thinking
 
 ## Choice and approval
-Pending. Versions differ on one decision, the phone uncategorized notice:
+Picks so far (Robert, 2026-10-12):
+- #5 Notice: **a** ("I like A the best. This is a good look.")
+- #6 Year rows with nothing planned all year behind "Show N unbudgeted": keep ("I'm fine with keeping that.")
+- #7 Year column look: **faint grey stripe** ("Faint grey stripe."). Robert asked to bring back the old layout's different colour for the year column, so it reads as fixed while the months change. Offered a stripe or plain grey text in the existing boxes; he chose the stripe. Applied to all versions (a shared change); the per-row grey boxes are gone. Restyle only, no new behaviour, so no repeat critique.
+
+Original summary: Versions differ on one decision, the phone uncategorized notice:
 - a: a full-width warning strip joined to the top of the "Left to budget" band
 - b: the band stays under the controls; the notice is today's card below it, with a normal gap
 - c: the notice is a second line inside the band
@@ -30,7 +35,7 @@ None yet.
 None.
 
 ## Open items
-The notice choice (a/b/c) and the unbudgeted-rows behaviour.
+None; awaiting Robert's "approved".
 
 ## Build handoff
 The merged folder/revision is the feature authority; DESIGN.md and the live site govern the site-wide look.

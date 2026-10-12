@@ -503,7 +503,9 @@
       if (REM[g.n] !== undefined) c2 = REM[g.n];
       c2cls = c2 < 0 ? 'text-negative' : c2 ? 'text-positive' : 'text-content-3';
     }
-    var h = '<div class="bg-surface border border-line rounded-card shadow-sm overflow-hidden"><div class="flex items-center gap-2 px-3 py-3">' +
+    // Year: one faint stripe down the year column (82px column + 12px card padding + 4px air) says "this stays put".
+    var stripe = year ? ' style="background: linear-gradient(to left, var(--surface-2) 98px, var(--surface) 98px);"' : '';
+    var h = '<div class="bg-surface border border-line rounded-card shadow-sm overflow-hidden"' + stripe + '><div class="flex items-center gap-2 px-3 py-3">' +
       '<button type="button" data-toggle="' + esc(gk) + '" aria-label="' + (collapsed ? 'Expand ' : 'Collapse ') + esc(g.n) + '" aria-expanded="' + !collapsed + '" class="tap-area shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">' + chevron(collapsed) + '</button>' +
       '<button type="button" class="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><span aria-hidden="true" class="shrink-0 rounded-[8px] bg-surface-2 border border-line flex items-center justify-center leading-none w-7 h-7 text-[15px]">' + g.e + '</span><span class="truncate">' + esc(g.n) + '</span></button>' +
       '<span class="w-[76px] text-right font-bold text-[15px] tabular-nums">' + money(c1) + '</span><span class="tabular-nums ' + c2cls + ' w-[82px] text-right font-bold text-[15px]">' + money(c2) + '</span></div>';
@@ -516,7 +518,7 @@
           h += locked
             ? '<span aria-label="' + esc(label) + '" class="w-[76px] h-9 shrink-0 inline-flex items-center justify-end text-[14px] font-semibold tabular-nums text-content-3" style="padding-right:10px">' + money(v) + '</span>'
             : '<button type="button" aria-label="' + esc(label) + '. Edit" class="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content">' + money(v) + '</button>';
-          h += '<span class="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center text-[14px] font-bold tabular-nums bg-surface-2 text-content-2">' + money(sum(s.plan)) + '</span>';
+          h += '<span class="w-[82px] h-9 shrink-0 inline-flex items-center justify-end text-[14px] font-semibold tabular-nums text-content-2">' + money(sum(s.plan)) + '</span>';
         } else {
           h += '<button class="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content">' + money(s.p) + '</button>';
           var r = s.r, style, txt;
