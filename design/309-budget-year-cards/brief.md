@@ -35,7 +35,7 @@ A household member on their phone opens Budget and switches between Month and Ye
 - Months before any data: January 2026 in the sample has no plans, so stepping back to January shows "—" for every month value.
 - Content range: from a single income row up to 14 expense groups with 3–6 categories each. Long names ("Doctor/Dentist/Optometrist", "Auto/Transportation") truncate with an ellipsis, as in Month view.
 - Income vs expense: same card treatment; section headings "Income" and "Expenses".
-- Themes: light and dark. Widths: 390×844 is the design. At 1440×900 the prototype shows the phone design in a 390×844 frame, because desktop is unchanged.
+- Themes: light and dark. Widths: 390×844 is the design. At 1440×900 the prototype shows the phone design in a 390×844 frame, because desktop is unchanged. Those 1440 images are presentation only: they do not show or prove the desktop Budget page. The unchanged desktop reference is the real capture in `hosts/month.html` and `hosts/year.html` at 1440; the build proves desktop is untouched with before/after 1440 captures of Month and Year.
 - Keyboard: every control is a real button with a label (collapse/expand names the group; the edit button names the category, month and value).
 
 ## Host snapshot and offline proof
@@ -57,4 +57,4 @@ None.
 
 ## Open decisions
 - Notice look: a, b or c (versions).
-- Year rows with nothing planned all year sit behind "Show N unbudgeted", like Month. Today's Year view lists every category. Robert to confirm.
+- Year rows with nothing planned in any month of the selected year sit behind "Show N unbudgeted", like Month. A row planned in some other month but not the chosen one stays visible, with "—" in the month column. The count does not change as the month stepper moves. Today's Year view lists every category. Robert to confirm.
