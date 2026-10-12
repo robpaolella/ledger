@@ -1,0 +1,24 @@
+{
+  "design_issue": 309,
+  "covers": [
+    306
+  ],
+  "revision": 1,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "month-notice",
+    "month-clear",
+    "year",
+    "year-past",
+    "year-empty",
+    "year-viewonly",
+    "year-loading",
+    "year-error"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}
