@@ -178,3 +178,5 @@ None.
 
 ## Open decisions
 None. V1–V4: Robert picked Version A on each (2026-10-11; see `decisions.md`).
+At freeze, two clashes with work merged since (#270, #278) were settled by Robert as F1 and F2
+in `decisions.md`: Select joins the one-row toolbar, and card balances follow `PRODUCT.md`.

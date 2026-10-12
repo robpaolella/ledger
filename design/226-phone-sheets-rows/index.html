@@ -952,6 +952,16 @@ function toolbarTx(main, s) {
     // Compact: Date and Sort keep their label and chevron; the leading icon goes.
     for (const b of [$('button', dateWrap), $('button', sortWrap)]) { b.firstElementChild.remove(); b.classList.replace('px-3.5', 'px-3'); b.classList.remove('gap-2'); b.classList.add('gap-1'); }
     chip.classList.add('ml-auto'); chip.style.paddingInline = '10px';
+    // Room for #109's Select: the chip keeps its icon and count; the full wording stays for screen readers.
+    const label = chip.textContent.trim();
+    chip.setAttribute('aria-label', label); chip.title = label;
+    chip.lastChild.textContent = label.replace(/\D+$/, '');
+    // Select (#109, built in #270): only people allowed to bulk edit see it.
+    if (s.role !== 'member') {
+      const sel = h(`<button type="button" class="${$('button', sortWrap).className}">Select</button>`);
+      sel.style.height = '44px';
+      chip.before(sel);
+    }
     bar.firstElementChild.replaceChildren(row);
     bar.classList.replace('py-3', 'py-2');
     sBtn.addEventListener('click', () => {
