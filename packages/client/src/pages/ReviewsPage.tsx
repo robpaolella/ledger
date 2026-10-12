@@ -4,6 +4,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import Spinner from '../components/Spinner';
 import Button from '../components/Button';
 import BottomSheet from '../components/BottomSheet';
+import { reviewSheetMeta } from '../lib/reviewSheetMeta';
 import ResponsiveModal from '../components/ResponsiveModal';
 import { VendorAvatar } from '../components/primitives';
 import { ownerColor, initOwnerSlots } from '../components/badges';
@@ -560,12 +561,20 @@ export default function ReviewsPage() {
           </>
         );
         if (isMobile) {
+          const meta = loaded ? reviewSheetMeta(parseDate(d.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), d.account.name, d.account.lastFour) : null;
           return (
             <BottomSheet
               isOpen
               onClose={() => setDetail(null)}
               title={loaded ? label : 'Loading…'}
-              description={loaded ? `${parseDate(d.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} · ${d.account.name}${d.account.lastFour ? ` (${d.account.lastFour})` : ''}` : undefined}
+              description={meta ? (
+                <>
+                  <span className="shrink-0">{meta.dateText} ·</span>
+                  <VendorAvatar name={d.account.name} src={d.account.logoUrl || undefined} color={d.account.color || 'var(--c-blue)'} size={16} />
+                  <span className="truncate">{meta.account}</span>
+                </>
+              ) : undefined}
+              descriptionTitle={meta ? meta.tooltip : undefined}
               icon={loaded ? <VendorAvatar name={label} src={d.merchant?.logoUrl || undefined} color={colorVar(label)} size={40} /> : undefined}
               truncateDescription
             >
