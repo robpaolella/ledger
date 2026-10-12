@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
+import { pageQuery, pagingHint, hasMoreTxns, type ReportsSort } from '../lib/reportsPaging';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
 import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
 import { Money } from '../components/Money';
@@ -35,7 +36,7 @@ type Preset = '1M' | '3M' | '6M' | 'YTD' | 'CY' | '1Y' | 'custom';
 type TrendMetric = 'expenses' | 'income';
 type ChartMode = 'cumulative' | 'monthly';
 type CatView = 'summary' | 'timeline';
-type SortId = 'date_desc' | 'date_asc' | 'amt_desc' | 'amt_asc';
+type SortId = ReportsSort;
 
 const MFULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const SUBPAL = ['--c-violet', '--c-blue', '--c-teal', '--c-orange', '--c-green', '--c-fuchsia', '--c-amber', '--c-rose', '--c-indigo'];
@@ -181,7 +182,8 @@ export default function ReportsPage() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [groupMeta, setGroupMeta] = useState<{ name: string; type: string; color: string | null }[]>([]);
 
-  const TXN_LIMIT = 1000;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const txnReq = useRef(0); // latest request wins; older responses are dropped
   const appliedKey = useMemo(() => JSON.stringify(filters), [filters]);
 
   // Load filter option lists once.
@@ -218,12 +220,11 @@ export default function ReportsPage() {
     return () => { cancelled = true; };
   }, [range.start, range.end, appliedKey, filters]);
 
-  // Load transactions for the bottom card (range + applied filters + focus).
-  useEffect(() => {
-    let cancelled = false;
+  // Load transactions for the bottom card (range + applied filters + focus + sort), a page at a time.
+  const fetchTxnPage = useCallback((loaded: number) => {
     const p = new URLSearchParams();
-    p.set('startDate', range.start); p.set('endDate', range.end); p.set('limit', String(TXN_LIMIT));
-    p.set('sortBy', 'date'); p.set('sortOrder', 'desc');
+    p.set('startDate', range.start); p.set('endDate', range.end);
+    for (const [k, v] of Object.entries(pageQuery(txnSort, loaded))) p.set(k, v);
     let scope: CatScope = {};
     if (focusGroup) { p.set('groupName', focusGroup); scope = { groupNames: [focusGroup] }; }
     else {
@@ -241,11 +242,29 @@ export default function ReportsPage() {
     }
     if (filters.type === 'Expense') p.set('type', 'expense');
     else if (filters.type === 'Income') p.set('type', 'income');
-    apiFetch<{ data: Txn[]; total: number }>(`/transactions?${p.toString()}`)
-      .then((r) => { if (!cancelled) { setTxns(scopeTxnsToCategory(r.data, scope)); setTxnTotal(r.total ?? r.data.length); } })
-      .catch(() => { if (!cancelled) { setTxns([]); setTxnTotal(0); } });
-    return () => { cancelled = true; };
-  }, [range.start, range.end, appliedKey, filters, focusGroup]);
+    return apiFetch<{ data: Txn[]; total: number }>(`/transactions?${p.toString()}`)
+      .then((r) => ({ rows: scopeTxnsToCategory(r.data, scope), total: r.total ?? r.data.length }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.start, range.end, appliedKey, filters, focusGroup, txnSort]);
+
+  // First page: reloads whenever the range, filters, focus or sort change.
+  useEffect(() => {
+    const req = ++txnReq.current;
+    setLoadingMore(false);
+    fetchTxnPage(0)
+      .then((r) => { if (req === txnReq.current) { setTxns(r.rows); setTxnTotal(r.total); } })
+      .catch(() => { if (req === txnReq.current) { setTxns([]); setTxnTotal(0); } });
+  }, [fetchTxnPage]);
+
+  const showMoreTxns = () => {
+    if (loadingMore) return;
+    const req = ++txnReq.current;
+    setLoadingMore(true);
+    fetchTxnPage(txns.length)
+      .then((r) => { if (req === txnReq.current) { setTxns((cur) => [...cur, ...r.rows]); setTxnTotal(r.total); } })
+      .catch(() => {})
+      .finally(() => { if (req === txnReq.current) setLoadingMore(false); });
+  };
 
   const [tlPick, setTlPick] = useState<number | null>(null);
   useEffect(() => { setTlPick(null); }, [report]);
@@ -471,15 +490,12 @@ export default function ReportsPage() {
   // ── TRANSACTIONS card (client group-by-day + sort) ──
   const dayGroups = (() => {
     const type = focusObj ? focusObj.group.type : filters.type === 'Income' ? 'income' : 'expense';
-    const rowSort = txnSort === 'amt_desc' ? (a: Txn, b: Txn) => Math.abs(b.amount) - Math.abs(a.amount)
-      : txnSort === 'amt_asc' ? (a: Txn, b: Txn) => Math.abs(a.amount) - Math.abs(b.amount) : null;
-    const dateAsc = txnSort === 'date_asc';
+    // The server already orders the rows (date, then amount within a day for the amount sorts).
     const byDay = new Map<string, Txn[]>();
     for (const t of txns) { if (!byDay.has(t.date)) byDay.set(t.date, []); byDay.get(t.date)!.push(t); }
-    const keys = Array.from(byDay.keys()).sort((a, b) => (dateAsc ? a.localeCompare(b) : b.localeCompare(a)));
+    const keys = Array.from(byDay.keys());
     return keys.map((key) => {
-      let rows = byDay.get(key)!;
-      if (rowSort) rows = rows.slice().sort(rowSort);
+      const rows = byDay.get(key)!;
       const [yy, mm, dd] = key.split('-').map(Number);
       const total = rows.reduce((s, t) => s + t.amount, 0);
       return { key, label: `${MFULL[mm - 1]} ${dd}, ${yy}`, total, transfer: type === 'transfer', rows };
@@ -509,7 +525,7 @@ export default function ReportsPage() {
 
   const fCount = filterDraftCount(filters);
   const catHint = focusObj ? `Sub-categories of ${focusObj.group.groupName}` : (catView === 'timeline' ? `Totals by ${nB > 0 && buckets[0].label.startsWith('Wk') ? 'week' : 'month'} · click a category to drill in` : 'Click a category to drill into sub-categories');
-  const txnHint = focusGroup ? `Activity in ${focusGroup} · ${txnTotal} transaction${txnTotal === 1 ? '' : 's'}` : 'Recent activity across all categories';
+  const txnHint = pagingHint(txns.length, txnTotal) ?? (focusGroup ? `Activity in ${focusGroup} · ${txnTotal} transaction${txnTotal === 1 ? '' : 's'}` : 'Recent activity across all categories');
 
   // Category groups for the shared filter popover.
   const categoryGroups = (() => {
@@ -864,9 +880,6 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="border-t border-line">
-          {txns.length < txnTotal && (
-            <div className="text-[13px] text-content-2" style={{ padding: '10px 26px', background: 'color-mix(in srgb, var(--warning) 12%, var(--surface-2))' }}>Showing the {txns.length.toLocaleString()} most recent of {txnTotal.toLocaleString()} transactions.</div>
-          )}
           {dayGroups.length === 0 ? (
             <div className="text-center text-content-3 text-sm" style={{ padding: '36px' }}>No transactions in this {focusGroup ? 'category' : 'period'}.</div>
           ) : dayGroups.map((g) => (
@@ -907,6 +920,15 @@ export default function ReportsPage() {
               })}
             </div>
           ))}
+          {hasMoreTxns(txns.length, txnTotal) && (
+            <div className="flex justify-center px-4 py-4">
+              <button type="button" onClick={showMoreTxns} disabled={loadingMore} aria-busy={loadingMore}
+                className="inline-flex items-center justify-center gap-2 h-11 md:h-10 px-5 rounded-[11px] bg-surface-2 border border-line-strong text-content font-semibold text-sm">
+                {loadingMore && <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg>}
+                Show 50 more
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
