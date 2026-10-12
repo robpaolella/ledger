@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
+import { accountShortName } from '../lib/accounts';
 import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
 import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
@@ -906,7 +907,7 @@ export default function ReportsPage() {
                       title={vendor}
                       subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
                       amount={amt}
-                      meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined} />
+                      meta={t.account ? accountShortName(t.account) : undefined} />
                   );
                 }
                 return (
