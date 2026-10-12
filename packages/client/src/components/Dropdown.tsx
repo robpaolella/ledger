@@ -54,7 +54,7 @@ export default function Dropdown({ value, options, onChange, minWidth = 130, ful
   return (
     <div className="relative">
       <button ref={btnRef} type="button" onClick={toggle} aria-haspopup="listbox" aria-expanded={open} style={{ minWidth }}
-        className={`flex items-center justify-between gap-2 px-3.5 bg-surface-2 border border-line text-sm font-semibold text-content hover:border-line-strong ${fullWidth ? 'w-full h-11 rounded-[10px]' : 'h-10 rounded-[11px]'}`}>
+        className={`flex items-center justify-between max-md:min-h-11 gap-2 px-3.5 bg-surface-2 border border-line text-sm font-semibold text-content hover:border-line-strong ${fullWidth ? 'w-full h-11 rounded-[10px]' : 'h-10 rounded-[11px]'}`}>
         <span className={`truncate ${current ? '' : 'text-content-3'}`}>{current}</span>
         <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
       </button>
@@ -67,7 +67,7 @@ export default function Dropdown({ value, options, onChange, minWidth = 130, ful
               <div key={`h-${o.label}`} className="px-3.5 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-content-3">{o.label}</div>
             ) : (
               <button key={o.key} type="button" role="option" aria-selected={o.key === value} onClick={() => { onChange(o.key); setOpen(false); }}
-                className={`block w-full text-left px-3.5 py-2 text-sm hover:bg-surface-2 ${fullWidth ? '' : 'whitespace-nowrap'} ${o.key === value ? 'text-primary font-semibold' : 'text-content'}`}>
+                className={`block max-md:flex max-md:items-center max-md:min-h-11 w-full text-left px-3.5 py-2 text-sm hover:bg-surface-2 ${fullWidth ? '' : 'whitespace-nowrap'} ${o.key === value ? 'text-primary font-semibold' : 'text-content'}`}>
                 {o.label}
               </button>
             ))}

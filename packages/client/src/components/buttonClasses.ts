@@ -4,10 +4,10 @@
  * so pages not yet moved to <Button> look the same.
  */
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-/** md = 42px (footers, forms), sm = 40px (toolbars, panel headers), row = 34px (row actions). */
+/** md = 42px (footers, forms), sm = 40px (toolbars, panel headers), row = 34px (row actions); all grow to 44px on phones. */
 export type ButtonSize = 'md' | 'sm' | 'row';
 
-const BASE = 'inline-flex items-center justify-center whitespace-nowrap transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+const BASE = 'max-md:min-h-11 inline-flex items-center justify-center whitespace-nowrap transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 
 const VARIANT: Record<ButtonVariant, string> = {
   primary: 'bg-primary text-on-primary font-bold shadow-sm hover:bg-primary-hover',
@@ -45,6 +45,6 @@ export function buttonClasses({ variant = 'primary', size = 'md', iconOnly = fal
   const v = active && variant === 'outline' ? OUTLINE_ACTIVE
     : size === 'row' && variant === 'secondary' ? ROW_SECONDARY
     : VARIANT[variant];
-  return [BASE, s.box, iconOnly ? s.square : PAD[variant][size], s.shape, v].join(' ').replace(/\s+/g, ' ').trim();
+  return [BASE, s.box, iconOnly ? `${s.square} max-md:min-w-11` : PAD[variant][size], s.shape, v].join(' ').replace(/\s+/g, ' ').trim();
 }
 
