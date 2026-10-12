@@ -482,7 +482,6 @@ export default function ReviewsPage() {
         isOpen={confirmAll}
         onClose={() => setConfirmAll(false)}
         title={`Approve ${shown.length} transaction${shown.length === 1 ? '' : 's'}?`}
-        maxWidth="25rem"
         footer={(
           <div className="flex items-center gap-2.5 md:justify-end">
             <Button variant="secondary" onClick={() => setConfirmAll(false)} className="flex-1 md:flex-none">Cancel</Button>
