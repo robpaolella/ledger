@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SWIPE_SLOP, startsOnFormField, swipeIntent } from '../../client/src/lib/sheetSwipe';
+import { CLOSE_DISTANCE, SWIPE_SLOP, releaseOutcome, startsOnFormField, swipeIntent } from '../../client/src/lib/sheetSwipe';
 
 describe('swipeIntent', () => {
   it('waits until the touch has travelled past the tap slop', () => {
@@ -40,5 +40,17 @@ describe('startsOnFormField', () => {
     expect(asked).toMatch(/select/);
     expect(asked).toMatch(/textarea/);
     expect(asked).not.toMatch(/button/);
+  });
+});
+
+describe('releaseOutcome', () => {
+  it('closes only past the release distance', () => {
+    expect(releaseOutcome(CLOSE_DISTANCE + 1, false)).toBe('close');
+    expect(releaseOutcome(CLOSE_DISTANCE, false)).toBe('snap-back');
+    expect(releaseOutcome(0, false)).toBe('snap-back');
+  });
+
+  it('never closes on a cancelled touch, however far it was dragged', () => {
+    expect(releaseOutcome(CLOSE_DISTANCE + 200, true)).toBe('snap-back');
   });
 });

@@ -17,6 +17,11 @@ export function swipeIntent(dx: number, dy: number, bodyScrollTop: number): Swip
   return 'drag';
 }
 
+/** What happens when a drag ends: a cancelled touch (system gesture, interruption) never closes. */
+export function releaseOutcome(translateY: number, cancelled: boolean): 'close' | 'snap-back' {
+  return !cancelled && translateY > CLOSE_DISTANCE ? 'close' : 'snap-back';
+}
+
 /** Fields that own their own touch gestures (caret, selection, pickers): never start a drag on them. */
 const OWN_GESTURE = 'input, select, textarea, [contenteditable=""], [contenteditable="true"], [role="slider"]';
 

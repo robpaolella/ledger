@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogLayer } from '../hooks/useDialogLayer';
-import { CLOSE_DISTANCE, startsOnFormField, swipeIntent, type SwipeIntent } from '../lib/sheetSwipe';
+import { releaseOutcome, startsOnFormField, swipeIntent, type SwipeIntent } from '../lib/sheetSwipe';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -79,13 +79,13 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
       currentTranslateY.current = Math.max(0, dy); // downward only
       sheet.style.transform = `translateY(${currentTranslateY.current}px)`;
     };
-    const onEnd = () => {
+    const release = (cancelled: boolean) => {
       const dragged = start !== null && intent === 'drag';
       start = null;
       intent = 'ignore';
       if (!dragged) return;
       sheet.style.transition = 'transform 200ms ease-out';
-      if (currentTranslateY.current > CLOSE_DISTANCE) {
+      if (releaseOutcome(currentTranslateY.current, cancelled) === 'close') {
         sheet.style.transform = 'translateY(100%)';
         setTimeout(() => onCloseRef.current(), 200);
       } else {
@@ -94,15 +94,18 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
       }
     };
 
+    const onEnd = () => release(false);
+    const onCancel = () => release(true);
+
     sheet.addEventListener('touchstart', onStart, { passive: true });
     sheet.addEventListener('touchmove', onMove, { passive: false });
     sheet.addEventListener('touchend', onEnd);
-    sheet.addEventListener('touchcancel', onEnd);
+    sheet.addEventListener('touchcancel', onCancel);
     return () => {
       sheet.removeEventListener('touchstart', onStart);
       sheet.removeEventListener('touchmove', onMove);
       sheet.removeEventListener('touchend', onEnd);
-      sheet.removeEventListener('touchcancel', onEnd);
+      sheet.removeEventListener('touchcancel', onCancel);
     };
   }, [isOpen]);
 
