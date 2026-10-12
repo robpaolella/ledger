@@ -317,7 +317,7 @@ export default function SimpleFinCard({
           {connections.map((c, i) => {
             const status = statusOf(c, off);
             const reconnect = status === 'reconnect' && <button type="button" onClick={() => setEditingConn(c)} className={btnRow} style={{ color: 'var(--primary)' }}>Reconnect</button>;
-            const disconnect = <ConfirmDeleteButton label="Disconnect" confirmLabel="Confirm disconnect?" onConfirm={() => deleteConnection(c.id)} />;
+            const disconnect = <ConfirmDeleteButton label="Disconnect" confirmLabel="Confirm disconnect?" onConfirm={() => deleteConnection(c.id)} className="max-md:h-11" />;
             return (
               <div key={c.id} className={`py-3 ${i > 0 ? 'border-t border-line' : ''}`}>
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -350,7 +350,7 @@ export default function SimpleFinCard({
       {/* accounts from SimpleFIN */}
       {canManage && <div className="border-t border-line">
         <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 flex-wrap">
-          <button type="button" onClick={() => setListOpen((v) => !v)} className="flex items-center gap-2 text-left" aria-expanded={listOpen}>
+          <button type="button" onClick={() => setListOpen((v) => !v)} className="max-md:min-h-11 flex items-center gap-2 text-left" aria-expanded={listOpen}>
             <span className={`text-content-3 transition-transform ${listOpen ? 'rotate-90' : ''}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg></span>
             <Caption className="tracking-[0.08em]">Accounts from SimpleFIN</Caption>
             <span className="font-mono text-[12px] text-content-3">· {accountsLoading ? 'loading…' : `${sfAccounts.length} ${sfAccounts.length === 1 ? 'account' : 'accounts'}`}</span>
@@ -362,7 +362,7 @@ export default function SimpleFinCard({
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SimpleFIN accounts…"
                   className="h-[38px] w-[240px] pl-9 pr-3 rounded-[10px] bg-surface-2 border border-line-strong text-[13.5px] text-content outline-none placeholder:text-content-3" />
               </label>
-              <button type="button" onClick={() => setOpenOrgs(allOpen ? new Set() : new Set(groups.map((g) => g.org)))} className="text-[13px] font-semibold text-primary whitespace-nowrap">
+              <button type="button" onClick={() => setOpenOrgs(allOpen ? new Set() : new Set(groups.map((g) => g.org)))} className="max-md:min-h-11 text-[13px] font-semibold text-primary whitespace-nowrap">
                 {allOpen ? 'Collapse all' : 'Expand all'}
               </button>
             </div>
@@ -394,13 +394,13 @@ export default function SimpleFinCard({
                         {mask && <span className="font-mono text-[12px] text-content-3">…{mask}</span>}
                         {a.link ? (
                           <button type="button" onClick={() => linked && onOpenAccount(linked)} title={linked ? 'Open account' : undefined}
-                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[12.5px] font-semibold max-w-[260px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }}>
+                            className="inline-flex items-center gap-1.5 h-7 max-md:min-h-11 px-2.5 rounded-lg text-[12.5px] font-semibold max-w-[260px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }}>
                             {ICON.link}<span className="truncate">{linked?.name ?? 'Linked'}</span>
                           </button>
                         ) : canManage ? (
                           <div className="relative">
                             <select value="" disabled={busy} onChange={(e) => setLink(a, e.target.value)} aria-label={`Link ${a.name}`}
-                              className="h-8 pl-3 pr-8 rounded-[8px] bg-surface border border-line-strong text-[12.5px] font-semibold text-content-2 appearance-none cursor-pointer outline-none disabled:opacity-50">
+                              className="h-8 max-md:h-11 pl-3 pr-8 rounded-[8px] bg-surface border border-line-strong text-[12.5px] font-semibold text-content-2 appearance-none cursor-pointer outline-none disabled:opacity-50">
                               <option value="">{busy ? 'Linking…' : 'Link to…'}</option>
                               {(['liquid', 'investment', 'liability'] as const).map((cls) => {
                                 const list = accounts.filter((x) => x.is_active && x.classification === cls && !sfAccounts.some((s) => s.link?.accountId === x.id));
@@ -415,7 +415,7 @@ export default function SimpleFinCard({
                           <span className="text-content-3">·</span>
                         )}
                         {a.link && canManage && (
-                          <button type="button" disabled={busy} onClick={() => setLink(a, '')} title="Unlink" className="w-7 h-7 rounded-[7px] flex items-center justify-center text-content-3 hover:text-negative hover:bg-surface disabled:opacity-50">{ICON.unlink}</button>
+                          <button type="button" disabled={busy} onClick={() => setLink(a, '')} title="Unlink" className="w-7 h-7 max-md:w-11 max-md:h-11 rounded-[7px] flex items-center justify-center text-content-3 hover:text-negative hover:bg-surface disabled:opacity-50">{ICON.unlink}</button>
                         )}
                       </div>
                     );
