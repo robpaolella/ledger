@@ -44,6 +44,15 @@ a long list without losing the search box. Source: Robert, 2026-10-12, testing P
 | keyboard | Owner, Transactions, typing "amber" in Merchants search | Phone keyboard covers the lower part of the screen | Picker, search and footer stay above the keyboard; list scrolls between |
 | reports | Owner, Reports | 4 types (no Other) | Same picker with 4 types |
 
+Pages that share the sheet, beyond the captured states (Robert, decision 3):
+- **Account detail** (4 types: Categories, Merchants, Amount, Other; no Accounts, since the
+  list is already one account) gets the same dropdown, listing its 4 types. It is the
+  same layout as the `reports` state with a different type list, so it has no separate state.
+- **Accounts page** (1 type: Accounts) shows **no picker**: the sheet is the pinned
+  search ("Search accounts…"), the "N filters selected" line, then the Accounts list,
+  exactly the `start` layout minus the "Filter by" row. A one-option dropdown would be
+  a control with nothing to choose.
+
 Amount and Other have nothing to search, so the search box is hidden on them (Robert,
 decision 2). Empty, loading, error, locked and no-permission states don't apply: the sheet
 opens on data the page already loaded, has no save of its own (Apply filters the page),
