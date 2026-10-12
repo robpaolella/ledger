@@ -322,11 +322,11 @@ export default function BudgetPage() {
       {/* Top bar */}
       <PageHeader title="Budget" subtitle={subtitle} mobileTitle={subtitle}
         mobileActions={<>
-          <button onClick={goPrev} aria-label="Previous"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-          <button onClick={goNext} aria-label="Next"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+          <button onClick={goPrev} aria-label="Previous" className="tap-area"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button onClick={goNext} aria-label="Next" className="tap-area"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
         </>}
         right={<>
-          <button onClick={goToday} className="h-10 px-4 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">Today</button>
+          <button onClick={goToday} className="tap-grow h-10 px-4 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">Today</button>
           {!isMobile && <div className="flex items-center gap-0.5 h-10 px-1 bg-surface border border-line-strong rounded-[11px]">
             <button onClick={goPrev} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2" aria-label="Previous">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -375,10 +375,10 @@ export default function BudgetPage() {
                   <div key={groupKey} className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-3">
                       <button type="button" onClick={() => setCollapsedGroups((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
-                        aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
+                        aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="tap-area shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
                       </button>
-                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className="truncate">{g.groupName}</span></button>
+                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className="truncate">{g.groupName}</span></button>
                       <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{whole(gPlanned)}</span>
                       <RemainingCell value={gRem} income={sec.key === 'income'} className="w-[82px] text-right font-bold text-[15px]" />
                     </div>
@@ -387,10 +387,10 @@ export default function BudgetPage() {
                       return (
                         <div key={r.categoryId} className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
                           <span className="w-7 shrink-0 text-center text-[16px] leading-none">{getCategoryEmoji(r.subName, g.groupName)}</span>
-                          <button type="button" onClick={() => drillSub(r.categoryId)} className="flex-1 min-w-0 text-left text-[15px] font-medium truncate">{r.subName}</button>
+                          <button type="button" onClick={() => drillSub(r.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium"><span className="block truncate">{r.subName}</span></button>
                           <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden, sec.key === 'income'); }}
                             disabled={!canEditBudgets}
-                            className="w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
+                            className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
                             {whole(r.budgeted)}
                           </button>
                           <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(isOver(rem))}
@@ -403,7 +403,7 @@ export default function BudgetPage() {
                     })}
                     {!gCollapsed && unbudgeted.length > 0 && (
                       <button type="button" onClick={() => setShowUnbudgeted((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
-                        className="w-full flex items-center gap-2.5 px-3 py-3 border-t border-line text-content-3 text-left active:bg-surface-2">
+                        className="tap-area w-full flex items-center gap-2.5 px-3 py-3 border-t border-line text-content-3 text-left active:bg-surface-2">
                         <span className="w-7 shrink-0 flex justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
                         <span className="text-[13px] font-semibold">{showUn ? 'Hide' : 'Show'} {unbudgeted.length} unbudgeted</span>
                       </button>

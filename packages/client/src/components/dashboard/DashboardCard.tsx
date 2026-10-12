@@ -65,7 +65,7 @@ export function CardSection({ className = 'px-4 md:px-6 py-5 md:py-[22px]', chil
 export function CardHeaderControl({
   children, onClick, small = false,
 }: { children: ReactNode; onClick?: () => void; small?: boolean }) {
-  const cls = `flex items-center justify-between bg-surface-2 border border-line font-semibold whitespace-nowrap ${
+  const cls = `tap-grow flex items-center justify-between bg-surface-2 border border-line font-semibold whitespace-nowrap ${
     small ? 'h-[38px] px-[13px] gap-2.5 rounded-[10px] text-[13px]' : 'h-10 px-3.5 gap-3 rounded-[11px] text-sm'
   }`;
   if (!onClick) return <div className={`${cls} text-content-2 select-none`}>{children}</div>;
@@ -86,7 +86,7 @@ export function CardHeaderLink({ children, onClick, small = false }: { children:
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center justify-between bg-surface-2 border border-line text-content font-semibold whitespace-nowrap cursor-pointer hover:border-line-strong transition-colors ${
+      className={`tap-grow flex items-center justify-between bg-surface-2 border border-line text-content font-semibold whitespace-nowrap cursor-pointer hover:border-line-strong transition-colors ${
         small ? 'h-[38px] px-[13px] gap-2 rounded-[10px] text-[13px]' : 'h-10 px-3.5 gap-2.5 rounded-[11px] text-sm'
       }`}
     >

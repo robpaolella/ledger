@@ -21,7 +21,7 @@ export default function ReviewsCard({ dragHandleProps }: DashboardCardProps) {
       title="Reviews"
       subtitle={<>
         <span className="hidden md:inline text-[15px] font-semibold text-content-3">Needs your attention</span>
-        <button type="button" onClick={() => navigate('/reviews')} className="md:hidden inline-flex items-center gap-1 text-[15px] font-semibold text-content-3 -ml-0.5 pl-0.5 active:text-content">
+        <button type="button" onClick={() => navigate('/reviews')} className="tap-area md:hidden inline-flex items-center gap-1 text-[15px] font-semibold text-content-3 -ml-0.5 pl-0.5 active:text-content">
           Needs your attention<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
         </button>
       </>}
@@ -43,7 +43,7 @@ export default function ReviewsCard({ dragHandleProps }: DashboardCardProps) {
             <button
               type="button"
               onClick={() => navigate('/reviews?assignee=me')}
-              className="mt-2 text-[13px] font-semibold text-primary"
+              className="tap-area mt-2 text-[13px] font-semibold text-primary"
             >
               {counts.assignedToMe} assigned to you →
             </button>
