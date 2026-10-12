@@ -3,6 +3,7 @@ import Calendar from './Calendar';
 import Popover from './Popover';
 import BottomSheet from './BottomSheet';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { buttonClasses } from './buttonClasses';
 
 export interface DatePreset {
   value: string;
@@ -45,6 +46,7 @@ export default function DateRangePopover({
   label,
   active,
   requireBoth = false,
+  iconOnly = false,
   clearValue,
   onApply,
   onOpen,
@@ -59,6 +61,8 @@ export default function DateRangePopover({
   active: boolean;
   /** Require both start+end before Apply is enabled (endpoints that need a bounded range). */
   requireBoth?: boolean;
+  /** Phone toolbar: a calendar icon button (primary border and icon when a range is set) named "Date" or "Date: <range>". */
+  iconOnly?: boolean;
   /** What the footer Clear resets to (e.g. 'all' for Transactions, the default preset for Reports). */
   clearValue: DateRangeValue;
   onApply: (v: DateRangeValue) => void;
@@ -161,12 +165,20 @@ export default function DateRangePopover({
 
   return (
     <div className="relative">
+      {iconOnly ? (
+        <button onClick={open ? () => setOpen(false) : openPop} aria-haspopup="dialog" aria-expanded={open}
+          aria-label={active ? `Date: ${label}` : label} title={label}
+          className={buttonClasses({ variant: 'outline', size: 'sm', iconOnly: true, active: open || active })}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--primary)' : 'var(--text-2)'} strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
+        </button>
+      ) : (
       <button onClick={open ? () => setOpen(false) : openPop} aria-haspopup="dialog" aria-expanded={open}
         className={`tap-grow flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface border-2 ${open || active ? 'border-primary' : 'border-line-strong'} text-content font-semibold text-sm hover:bg-surface-2`}>
         <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
         <span className="truncate">{label}</span>
         <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
       </button>
+      )}
       {open && (isMobile
         ? <BottomSheet isOpen onClose={() => setOpen(false)} title="Date Range" footer={footer}>{body}</BottomSheet>
         : <Popover onClose={() => setOpen(false)} label="Date range" className="absolute top-12 right-0 z-50 w-[660px] max-w-[calc(100vw-64px)] max-h-[calc(100dvh-8rem)] bg-elevated border border-line-strong rounded-[16px] shadow-md flex flex-col overflow-hidden">{body}{footer}</Popover>
