@@ -1,0 +1,60 @@
+# Design: Budget Year view in Month view's cards (phone); phone uncategorized notice
+
+- Design issue: #309
+- Revision: 1
+- Replaces: the phone Year layout in `design/226-phone-sheets-rows/` (approved for #271); the desktop Year layout is not replaced.
+- Source plan: #306
+
+## Job and audience
+A household member on their phone opens Budget and switches between Month and Year. Today, Year is one big table. It "makes it feel like completely separate information" (Robert, 2026-10-12). The job: switching Month ↔ Year should feel like the same page, with the same group cards, where only the two number columns change. Separately, the yellow "no category yet" notice should sit well with the "Left to budget" bar on phones.
+
+## Covers
+| Build issue | Part of this feature | Out of scope |
+| --- | --- | --- |
+| #306 | Phone Year view restyled in phone Month view's group cards; phone uncategorized notice treatment | Desktop Month and Year (unchanged); server changes; the notice's gap fix (#304); tap targets (#289); Budget category detail and history |
+
+## Boundaries and visual authority
+- `DESIGN.md` and `.github/design-system.jsx` govern the look. Everything is reused from the existing phone Budget page: group cards, row layout, the Planned edit button, the pill shape of the Remaining column, the section headings with mono column labels, the month stepper (`MonthSwitcher`), the empty-year and view-only notes, and the loading and error cards.
+- Phone only (Robert, 2026-10-12: "Desktop shouldn't be changing at all. this is strictly mobile"). No server work: the columns keep today's Year contents ("Just follow what is already shown in those columns now and theme it differently").
+- Navigation is unchanged. The month stepper moves one month within the year and stops at January and December. The header arrows move a year, and Today returns to the current month.
+- Month view's layout is unchanged; only the notice's placement and look are in question.
+- No new kind of element: the Year column's neutral pill reuses the Remaining pill shape, filled with `surface-2`.
+
+## States, themes and content
+| State slug | Role / situation | Content | Actions / feedback |
+| --- | --- | --- | --- |
+| month-notice | Owner, Month, October 2026, 2 uncategorized ($37 out) | Notice: "**2 transactions have no category yet** ($37 out). They're counted in the totals below." with "Review them ›" (c shortens to "They're counted in these totals.") | Review them goes to Review for the month |
+| month-clear | Owner, Month, nothing uncategorized | No notice; band directly under the controls | — |
+| year | Owner, Year, October (this month) | Columns OCT and 2026; section totals under the column labels; month plan is an edit button; year total in a neutral pill | Tap month plan to edit (opens today's edit sheet); stepper changes month; Show/Hide N unbudgeted |
+| year-past | Owner, July 2026 | Stepper subline "Planned · past month, locked"; month values plain text, not buttons | No editing |
+| year-empty | Owner, 2027 (future, nothing planned) | Note "Nothing planned for 2027 yet."; every value "—"; all rows behind "Show N unbudgeted" | — |
+| year-viewonly | Member without budget editing | Note "You can view this budget. Ask an admin if you need to change it."; month values plain | No editing |
+| year-loading | Any | Skeleton band and three skeleton cards in the card layout | — |
+| year-error | Any | "Couldn't load your budget" card with Try again (today's wording) | Try again reloads |
+
+- Months before any data: January 2026 in the sample has no plans, so stepping back to January shows "—" for every month value.
+- Content range: from a single income row up to 14 expense groups with 3–6 categories each. Long names ("Doctor/Dentist/Optometrist", "Auto/Transportation") truncate with an ellipsis, as in Month view.
+- Income vs expense: same card treatment; section headings "Income" and "Expenses".
+- Themes: light and dark. Widths: 390×844 is the design. At 1440×900 the prototype shows the phone design in a 390×844 frame, because desktop is unchanged.
+- Keyboard: every control is a real button with a label (collapse/expand names the group; the edit button names the category, month and value).
+
+## Host snapshot and offline proof
+- Source: `feature/platform-retheme` at 6af785f, verify-ledger skill (`.pi/skills/verify-ledger/SKILL.md`).
+- Commands: `npm ci`, `node .pi/skills/verify-ledger/run.mjs launch "$EVIDENCE"` (Doctor PASS), sign in as john/password1 at 390×844, `/budget` (launch month October 2026). Captured with `snapshot.mjs capture` at light/dark × 390/1440 for Month (`month-*`) and Year (`year-*`), then assembled with `snapshot.mjs assemble`. Theme set with the sidebar Dark mode / Light mode control. `run.mjs cleanup` reported PASS (the app was stopped).
+- Offline proof: `hosts/month.html` and `hosts/year.html` were opened from `file://` with network emulated offline, at 390 and 1440 in both themes. They rendered with fonts and images, and no network resources loaded.
+- Versions are built from the Month capture `month-light-390.html` (its stylesheet, fonts, app shell and phone header). The Budget content after the page header (from `div[role=status]` to the end of the page root) is replaced with `#proto-page`, rendered by local script from synthetic sample data. The CSP gains only `script-src 'unsafe-inline'`, and `default-src 'none'` remains.
+- Host parts used: `#mobile-bar-title span` (header title), `button[aria-pressed]` (Month/Year control), the phone group card markup (`.rounded-card` group cards, row and pill classes), `MonthSwitcher` markup from `hosts/year.html` (`aria-label="Previous month"`), and `div[role=status]` (notice) from `hosts/month.html`.
+
+## Confirmed decisions
+1. Phone only; desktop unchanged; no server work (Robert, 2026-10-12).
+2. The columns keep today's Year contents: the chosen month's plan and the year's plan, labelled with the month (e.g. OCT) and the year (Robert: "follow what is already shown in those columns now and theme it differently").
+3. Navigation stays as today (Robert: "We shouldn't need to change it").
+4. The month stepper sits where Month view has its "Left to budget" band (Robert, plan confirmed: "Yes, build it").
+5. The notice stays on Month view only. Three looks to compare in versions a/b/c (Robert: "Show me the versions and I'll comment on it").
+
+## Real-site experiment
+None.
+
+## Open decisions
+- Notice look: a, b or c (versions).
+- Year rows with nothing planned all year sit behind "Show N unbudgeted", like Month. Today's Year view lists every category. Robert to confirm.
