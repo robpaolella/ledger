@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
 import Spinner from '../components/Spinner';
+import Button from '../components/Button';
+import BottomSheet from '../components/BottomSheet';
+import ResponsiveModal from '../components/ResponsiveModal';
 import { VendorAvatar } from '../components/primitives';
 import { ownerColor, initOwnerSlots } from '../components/badges';
 import PageHeader from '../components/PageHeader';
@@ -475,109 +478,122 @@ export default function ReviewsPage() {
       {anyOverlay && <div onClick={closeAll} className="fixed inset-0 z-[35]" />}
 
       {/* approve-all confirm */}
-      {confirmAll && (
-        <>
-          <div className="fixed inset-0 z-[80]" style={{ background: 'var(--bg-modal)', backdropFilter: 'blur(3px)' }} onClick={() => setConfirmAll(false)} />
-          <div className="fixed left-1/2 top-1/2 z-[90] w-[400px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 bg-elevated border border-line-strong rounded-[16px] shadow-md p-5">
-            <h2 className="text-[17px] font-extrabold m-0 mb-1">Approve {shown.length} transaction{shown.length === 1 ? '' : 's'}?</h2>
-            <p className="text-sm text-content-2 mb-5">This marks every transaction in the current view reviewed and clears it from the queue.</p>
-            <div className="flex justify-end gap-2.5">
-              <button onClick={() => setConfirmAll(false)} className="h-10 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-              <button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} disabled={busy} className="h-10 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">Approve all</button>
-            </div>
+      <ResponsiveModal
+        isOpen={confirmAll}
+        onClose={() => setConfirmAll(false)}
+        title={`Approve ${shown.length} transaction${shown.length === 1 ? '' : 's'}?`}
+        footer={(
+          <div className="flex items-center gap-2.5 md:justify-end">
+            <Button variant="secondary" onClick={() => setConfirmAll(false)} className="flex-1 md:flex-none">Cancel</Button>
+            <Button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} loading={busy} className="flex-1 md:flex-none">Approve all</Button>
           </div>
-        </>
-      )}
+        )}
+      >
+        <p className="text-sm text-content-2 m-0">This marks every transaction in the current view reviewed and clears it from the queue.</p>
+      </ResponsiveModal>
 
-      {/* in-page transaction detail panel */}
-      {detail && (
-        <>
-          <div className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} onClick={() => setDetail(null)} />
-          <div className="fixed top-0 right-0 bottom-0 z-[80] w-[420px] max-w-[calc(100vw-24px)] bg-surface border-l border-line shadow-md overflow-y-auto">
-            {(() => {
-              const d = detail;
-              const loaded = d.account !== undefined;
-              const label = d.merchant?.name || d.description || '';
-              const fieldCls = 'w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer disabled:cursor-default';
-              const chevron = <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>;
-              const labelCls = 'text-[11px] font-semibold text-content-3 mb-1.5';
-              return (
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3 mb-5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {loaded && <VendorAvatar name={label} src={d.merchant?.logoUrl || undefined} color={colorVar(label)} size={38} />}
-                      <div className="min-w-0">
-                        <div className="font-extrabold text-[17px] truncate">{loaded ? label : 'Loading…'}</div>
-                        {loaded && (
-                          <div className="text-[13px] text-content-3 flex items-center gap-1.5">
-                            <span>{parseDate(d.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} ·</span>
-                            <VendorAvatar name={d.account.name} src={d.account.logoUrl || undefined} color={d.account.color || 'var(--c-blue)'} size={16} />
-                            <span>{d.account.name}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <button onClick={() => setDetail(null)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-surface-2 border border-line-strong text-content-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+      {/* in-page transaction detail: a bottom sheet on phones, a side drawer on desktop */}
+      {detail && (() => {
+        const d = detail;
+        const loaded = d.account !== undefined;
+        const label = d.merchant?.name || d.description || '';
+        const fieldCls = 'w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer disabled:cursor-default';
+        const chevron = <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>;
+        const labelCls = 'text-[11px] font-semibold text-content-3 mb-1.5';
+        const content = !loaded ? <Spinner size={24} className="py-10" /> : (
+          <>
+              <Money amount={d.amount} transfer={d.category?.type === 'transfer'} className="block text-right font-extrabold text-[22px] mb-5" />
+
+              {d.review?.status === 'resolved' && (
+                <div className="mb-4 text-[13px] font-semibold px-3 py-2 rounded-[10px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }}>Reviewed</div>
+              )}
+
+              <div className={labelCls}>Category</div>
+              <div className="relative mb-4">
+                <select value={d.category?.id ?? ''} onChange={(e) => e.target.value && setTxnCategory(d, parseInt(e.target.value, 10))} className={fieldCls} disabled={!canEdit}>
+                  <option value="">Uncategorized</option>
+                  {catGroups.map(([grp, cats]) => (
+                    <optgroup key={grp} label={grp}>{cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>
+                  ))}
+                </select>
+                {chevron}
+              </div>
+
+              <div className={labelCls}>Transaction note</div>
+              <textarea value={detailNote} onChange={(e) => setDetailNote(e.target.value)} disabled={!canEdit}
+                onBlur={() => { if (canEdit && (d.note ?? '') !== detailNote) { saveTxnNote(d, detailNote).then(() => refetchDetail(d.id)); } }}
+                placeholder="Add a note…" className="w-full min-h-[64px] resize-y p-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-5" />
+
+              {canEdit && (
+                <div className="rounded-[12px] border p-3 mb-5" style={{ borderColor: d.needsReview ? 'color-mix(in srgb, var(--warning) 45%, var(--line))' : 'var(--line)', background: d.needsReview ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : 'transparent' }}>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Marked to review') : 'No review needed'}</span>
+                    {d.needsReview && <button onClick={() => resolve([d.id])} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>}
                   </div>
-
-                  {!loaded ? <Spinner size={24} className="py-10" /> : (
+                  {d.needsReview && (
                     <>
-                      <Money amount={d.amount} transfer={d.category?.type === 'transfer'} className="block text-right font-extrabold text-[22px] mb-5" />
-
-                      {d.review?.status === 'resolved' && (
-                        <div className="mb-4 text-[13px] font-semibold px-3 py-2 rounded-[10px]" style={{ background: 'color-mix(in srgb, var(--positive) 12%, transparent)', color: 'var(--positive)' }}>Reviewed</div>
-                      )}
-
-                      <div className={labelCls}>Category</div>
-                      <div className="relative mb-4">
-                        <select value={d.category?.id ?? ''} onChange={(e) => e.target.value && setTxnCategory(d, parseInt(e.target.value, 10))} className={fieldCls} disabled={!canEdit}>
-                          <option value="">Uncategorized</option>
-                          {catGroups.map(([grp, cats]) => (
-                            <optgroup key={grp} label={grp}>{cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>
-                          ))}
+                      <div className={labelCls}>Assign to</div>
+                      <div className="relative mb-3">
+                        <select value={d.review?.assignee?.id ?? ''} onChange={(e) => e.target.value && reassign(d.id, parseInt(e.target.value, 10))} className={fieldCls}>
+                          {!d.review?.assignee && <option value="" disabled>Select assignee…</option>}
+                          {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
                         </select>
                         {chevron}
                       </div>
-
-                      <div className={labelCls}>Transaction note</div>
-                      <textarea value={detailNote} onChange={(e) => setDetailNote(e.target.value)} disabled={!canEdit}
-                        onBlur={() => { if (canEdit && (d.note ?? '') !== detailNote) { saveTxnNote(d, detailNote).then(() => refetchDetail(d.id)); } }}
-                        placeholder="Add a note…" className="w-full min-h-[64px] resize-y p-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-5" />
-
-                      {canEdit && (
-                        <div className="rounded-[12px] border p-3 mb-5" style={{ borderColor: d.needsReview ? 'color-mix(in srgb, var(--warning) 45%, var(--line))' : 'var(--line)', background: d.needsReview ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : 'transparent' }}>
-                          <div className="flex items-center justify-between gap-2 mb-3">
-                            <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Marked to review') : 'No review needed'}</span>
-                            {d.needsReview && <button onClick={() => resolve([d.id])} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>}
-                          </div>
-                          {d.needsReview && (
-                            <>
-                              <div className={labelCls}>Assign to</div>
-                              <div className="relative mb-3">
-                                <select value={d.review?.assignee?.id ?? ''} onChange={(e) => e.target.value && reassign(d.id, parseInt(e.target.value, 10))} className={fieldCls}>
-                                  {!d.review?.assignee && <option value="" disabled>Select assignee…</option>}
-                                  {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
-                                </select>
-                                {chevron}
-                              </div>
-                              <div className={labelCls}>Review note</div>
-                              <textarea value={detailReviewNote} onChange={(e) => setDetailReviewNote(e.target.value)}
-                                onBlur={() => { if ((d.review?.note ?? '') !== detailReviewNote) saveReviewNote(d.id, detailReviewNote).then(() => refetchDetail(d.id)); }}
-                                placeholder="Why does this need review?" className="w-full min-h-[56px] resize-y p-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none" />
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      <Link to={`/transactions?review=${d.id}`} className="text-[13px] font-semibold text-primary">Open in Transactions →</Link>
+                      <div className={labelCls}>Review note</div>
+                      <textarea value={detailReviewNote} onChange={(e) => setDetailReviewNote(e.target.value)}
+                        onBlur={() => { if ((d.review?.note ?? '') !== detailReviewNote) saveReviewNote(d.id, detailReviewNote).then(() => refetchDetail(d.id)); }}
+                        placeholder="Why does this need review?" className="w-full min-h-[56px] resize-y p-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none" />
                     </>
                   )}
                 </div>
-              );
-            })()}
-          </div>
-        </>
-      )}
+              )}
+
+              <Link to={`/transactions?review=${d.id}`} className="text-[13px] font-semibold text-primary">Open in Transactions →</Link>
+          </>
+        );
+        if (isMobile) {
+          return (
+            <BottomSheet
+              isOpen
+              onClose={() => setDetail(null)}
+              title={loaded ? label : 'Loading…'}
+              description={loaded ? `${parseDate(d.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} · ${d.account.name}${d.account.lastFour ? ` (${d.account.lastFour})` : ''}` : undefined}
+              icon={loaded ? <VendorAvatar name={label} src={d.merchant?.logoUrl || undefined} color={colorVar(label)} size={40} /> : undefined}
+              truncateDescription
+            >
+              {content}
+            </BottomSheet>
+          );
+        }
+        return (
+          <>
+            <div className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} onClick={() => setDetail(null)} />
+            <div className="fixed top-0 right-0 bottom-0 z-[80] w-[420px] max-w-[calc(100vw-24px)] bg-surface border-l border-line shadow-md overflow-y-auto">
+              <div className="p-5">
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div className="flex items-center gap-3 min-w-0">
+                {loaded && <VendorAvatar name={label} src={d.merchant?.logoUrl || undefined} color={colorVar(label)} size={38} />}
+                <div className="min-w-0">
+                  <div className="font-extrabold text-[17px] truncate">{loaded ? label : 'Loading…'}</div>
+                  {loaded && (
+                    <div className="text-[13px] text-content-3 flex items-center gap-1.5">
+                      <span>{parseDate(d.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} ·</span>
+                      <VendorAvatar name={d.account.name} src={d.account.logoUrl || undefined} color={d.account.color || 'var(--c-blue)'} size={16} />
+                      <span>{d.account.name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setDetail(null)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-surface-2 border border-line-strong text-content-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+            </div>
+
+                {content}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
