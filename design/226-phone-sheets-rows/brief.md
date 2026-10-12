@@ -1,8 +1,7 @@
 # Design: Phone, part 2 (sheets, touch targets, rows)
 
-- Design issue: #226
-- Revision: 2
 - Design issue: #295
+- Revision: 2
 - Replaces: revision 1
 - Source plan: retheme plan agreed 2026-10-08; phone audit `work/108-phone-audit/report.md` (#108), Areas 2, 3, 5 and 6
 

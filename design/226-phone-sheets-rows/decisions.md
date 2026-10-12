@@ -4,7 +4,7 @@
 - Revision: 2; replaces: revision 1
 - Maker: claude-bridge/claude-opus-5-5 (Claude Opus 5.5), both design sessions
 
-## Revision 2 (2026-10-12)
+## Revision 2 (2026-10-11)
 
 Coverage only: adds #286–#294 after the split of #228–#230. No visual or wording change.
 
