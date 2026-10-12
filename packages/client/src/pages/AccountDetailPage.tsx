@@ -56,8 +56,9 @@ const isoOf = (d: Date) =>
 
 // Build the range series from raw snapshots: sort asc, clamp the window to
 // [rangeStart, today], carry the latest snapshot forward across ~90 sampled
-// dates. Balances plot with their stored sign (a liability owed is negative).
-function buildSeries(snapshots: Snapshot[], rangeKey: string): ChartPoint[] {
+// dates. Balances plot with their stored sign, except a liability, which plots the
+// amount owed (sign flipped) so the line rises as debt grows; a credit plots below zero.
+function buildSeries(snapshots: Snapshot[], rangeKey: string, liability = false): ChartPoint[] {
   if (snapshots.length === 0) return [];
   const asc = [...snapshots].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id - b.id));
   const today = new Date();
@@ -80,7 +81,7 @@ function buildSeries(snapshots: Snapshot[], rangeKey: string): ChartPoint[] {
     const dateStr = isoOf(new Date(t));
     while (k < asc.length && asc[k].date <= dateStr) { last = asc[k].balance; k++; }
     if (last == null) continue; // sampled date precedes the first snapshot
-    points.push({ date: dateStr, value: last });
+    points.push({ date: dateStr, value: liability ? 0 - last : last });
   }
   return points;
 }
@@ -277,16 +278,21 @@ function AccountDetail() {
   })();
 
   const isLiability = meta?.classification === 'liability';
-  const points = useMemo(() => buildSeries(snapshots, range), [snapshots, range]);
+  const points = useMemo(() => buildSeries(snapshots, range, isLiability), [snapshots, range, isLiability]);
 
-  // Range delta on the plotted series. Owed liabilities are stored negative, so
-  // the sign already carries the inverted polarity (debt paid down → delta ≥ 0 → green).
+  // Range delta on the plotted series. A liability plots amount owed, so a rising
+  // line means more debt: its chip is neutral, unsigned, and the arrow shows direction only.
   const delta = points.length >= 2 ? points[points.length - 1].value - points[0].value : null;
   // No percentage when the range-start balance is 0 — dividing by it yields a bogus +0.0%.
   const deltaPct = delta != null && points[0].value !== 0 ? (delta / Math.abs(points[0].value)) * 100 : null;
-  // Oriented so up is good (liabilities are plotted negative); zero shows "$0.00" in green.
-  const change = delta != null ? formatMoney(delta, { kind: 'total', showZero: true, zeroTone: 'positive' }) : null;
-  const up = change?.tone !== 'negative';
+  // Non-liabilities: up is good, zero shows "$0.00" in green.
+  const change = delta != null
+    ? isLiability
+      ? formatMoney(Math.abs(delta), { kind: 'balance', showZero: true })
+      : formatMoney(delta, { kind: 'total', showZero: true, zeroTone: 'positive' })
+    : null;
+  const up = isLiability ? (delta ?? 0) >= 0 : change?.tone !== 'negative';
+  const sign = isLiability ? '' : up ? '+' : '-';
   const rangeLabel = RANGES.find((r) => r.key === range)?.label ?? range;
 
   // Axis date format tracks the plotted span: ≤3m "Jun 12", ≤1y "Mar", all "Mar '24".
@@ -386,14 +392,14 @@ function AccountDetail() {
           <div className="min-w-0">
             <div className="font-mono text-[11px] uppercase tracking-[.1em] text-content-3 mb-2 md:mb-2.5">Current balance</div>
             <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{formatMoney(meta.balance, { kind: 'balance', showZero: true }).text}</span>
+              <span className="text-[30px] font-extrabold tracking-tight tabular-nums">{formatMoney(meta.balance, { kind: 'balance', showZero: true, liability: isLiability }).text}</span>
               {change != null && (
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold tabular-nums"
-                  style={{ color: up ? 'var(--positive)' : 'var(--negative)' }}>
+                  style={{ color: isLiability ? 'var(--text-2)' : up ? 'var(--positive)' : 'var(--negative)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d={up ? 'M7 17 17 7M9 7h8v8' : 'M7 7l10 10M17 9v8H9'} />
                   </svg>
-                  {`${change.text}${deltaPct != null ? ` (${up ? '+' : '-'}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
+                  {`${change.text}${deltaPct != null ? ` (${sign}${Math.abs(deltaPct).toFixed(1)}%)` : ''}`}
                 </span>
               )}
               <span className="text-[15px] font-medium text-content-3">{rangeLabel} change</span>
@@ -407,7 +413,8 @@ function AccountDetail() {
           {points.length === 0 ? (
             <div className="h-[260px] flex items-center justify-center text-sm text-content-3">No balance history yet.</div>
           ) : (
-            <AreaLineChart points={points} height={260} formatDate={fmtAxisDate} highlightLast xTicks={6} />
+            <AreaLineChart points={points} height={260} formatDate={fmtAxisDate} highlightLast xTicks={6}
+              liability={isLiability} color={isLiability ? 'var(--text-2)' : undefined} />
           )}
         </div>
       </div>

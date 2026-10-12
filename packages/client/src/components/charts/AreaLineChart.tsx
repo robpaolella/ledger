@@ -20,6 +20,8 @@ interface Props {
   lastLabel?: 'auto' | 'date' | 'none';
   /** In 'auto' mode: render this many evenly-spaced x labels instead of 3. */
   xTicks?: number;
+  /** Points are a liability's amount owed (stored sign flipped): a point below zero is a credit. */
+  liability?: boolean;
 }
 
 const defaultDate = (d: string) => {
@@ -30,6 +32,10 @@ const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision:
 /** One decimal ($24.5k, but $8k not $8.0k), for when axis labels collide and for the default hover value. */
 const compact = (n: number) =>
   formatMoney(n, { kind: 'balance', precision: 'compact', showZero: true }).text.replace(/\.0(?=[kMB]$)/, '');
+// Liability points are amount owed, so the stored value is the flipped one.
+const liabilityValue = (n: number) => formatMoney(-n, { kind: 'balance', precision: 'axis', liability: true }).text;
+const liabilityCompact = (n: number) =>
+  formatMoney(-n, { kind: 'balance', precision: 'compact', showZero: true, liability: true }).text.replace(/\.0(?=[kMB]$)/, '');
 
 /**
  * Reusable inline-SVG area+line chart with gridlines, axis labels, and a hover
@@ -40,13 +46,17 @@ export default function AreaLineChart({
   points: rawPoints,
   height = 240,
   color = 'var(--primary)',
-  formatValue = defaultValue,
+  formatValue: formatValueProp,
   formatDate = defaultDate,
   yTicks = 5,
   highlightLast = false,
   lastLabel = 'auto',
   xTicks,
+  liability = false,
 }: Props) {
+  const defaultFormat = liability ? liabilityValue : defaultValue;
+  const compactFormat = liability ? liabilityCompact : compact;
+  const formatValue = formatValueProp ?? defaultFormat;
   // Guard against non-finite values (NaN/Infinity) breaking SVG coordinates.
   const points = useMemo(() => rawPoints.filter((p) => Number.isFinite(p.value)), [rawPoints]);
   const ref = useRef<HTMLDivElement>(null);
@@ -65,10 +75,6 @@ export default function AreaLineChart({
     return () => ro.disconnect();
   }, []);
 
-  const pad = { left: 54, right: 14, top: 12, bottom: 24 };
-  const plotW = Math.max(1, width - pad.left - pad.right);
-  const plotH = Math.max(1, height - pad.top - pad.bottom);
-
   const { min, max } = useMemo(() => {
     if (points.length === 0) return { min: 0, max: 1 };
     let lo = Infinity, hi = -Infinity;
@@ -77,6 +83,11 @@ export default function AreaLineChart({
     else { const padY = (hi - lo) * 0.12; lo -= padY; hi += padY; }
     return { min: lo, max: hi };
   }, [points]);
+
+  // Credit axis labels ("$212 credit") are wider than the usual figure.
+  const pad = { left: liability && min < 0 ? 84 : 54, right: 14, top: 12, bottom: 24 };
+  const plotW = Math.max(1, width - pad.left - pad.right);
+  const plotH = Math.max(1, height - pad.top - pad.bottom);
 
   const xFor = (i: number) => pad.left + (points.length <= 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
   const yFor = (v: number) => pad.top + (1 - (v - min) / (max - min)) * plotH;
@@ -90,8 +101,8 @@ export default function AreaLineChart({
   // A narrow range (a balance moving $24.2k to $24.9k) can round two gridlines to the
   // same axis label; then show one decimal so each line stays distinct.
   const axisLabels = ticks.map(formatValue);
-  const tickLabels = formatValue === defaultValue && new Set(axisLabels).size < axisLabels.length
-    ? ticks.map(compact)
+  const tickLabels = formatValue === defaultFormat && new Set(axisLabels).size < axisLabels.length
+    ? ticks.map(compactFormat)
     : axisLabels;
   const gid = 'nw-area-grad';
 
@@ -184,7 +195,7 @@ export default function AreaLineChart({
             top: Math.max(yFor(hp.value) - 52, 0),
           }}
         >
-          <div className="font-bold tabular-nums text-content">{(formatValue === defaultValue ? compact : formatValue)(hp.value)}</div>
+          <div className="font-bold tabular-nums text-content">{(formatValue === defaultFormat ? compactFormat : formatValue)(hp.value)}</div>
           <div className="text-content-3">{formatDate(hp.date)}</div>
         </div>
       )}
