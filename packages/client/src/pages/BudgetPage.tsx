@@ -14,7 +14,7 @@ import Button from '../components/Button';
 import UncategorizedNotice from '../components/UncategorizedNotice';
 import BudgetHistory from '../components/budget/BudgetHistory';
 import MonthSwitcher from '../components/MonthSwitcher';
-import { yearSum, isUnbudgetedYear, yearLine, sectionYearLine } from '../lib/budgetYear';
+import { isUnbudgetedYear, yearLine, sectionYearLine } from '../lib/budgetYear';
 import { useToast } from '../context/ToastContext';
 
 // Recurring overlay meta on a budget row (null when no recurring items apply).
