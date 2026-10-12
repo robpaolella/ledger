@@ -41,6 +41,9 @@ interface HistoryPoint {
 
 // ---- helpers ----
 const balance = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
+// A liability's own balance reads as amount owed (or credit), not the stored signed value.
+const acctBalance = (n: number, classification: string) =>
+  formatMoney(n, { kind: 'balance', showZero: true, liability: classification === 'liability' }).text;
 
 const SUBTYPE: Record<string, string> = {
   checking: 'Checking', savings: 'Savings', credit: 'Credit Card', investment: 'Brokerage',
@@ -216,6 +219,7 @@ export default function AccountsPage() {
   // GET /simplefin/balances carries only the bank-side figure; the current
   // balance comes from the accounts already loaded on this page.
   const currentBalanceOf = (accountId: number) => data?.accounts.find((a) => a.accountId === accountId)?.balance ?? 0;
+  const classificationOf = (accountId: number) => data?.accounts.find((a) => a.accountId === accountId)?.classification ?? '';
 
   const canEdit = hasPermission('accounts.edit');
   const acctColor = (cls: string) => cls === 'liability' ? 'var(--negative)' : cls === 'investment' ? 'var(--c-teal)' : 'var(--c-blue)';
@@ -339,7 +343,7 @@ export default function AccountsPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-bold text-[15px] tabular-nums">{balance(a.balance)}</div>
+                      <div className="font-bold text-[15px] tabular-nums">{acctBalance(a.balance, a.classification)}</div>
                       {a.lastUpdated && <div className="text-[12px] text-content-3">{timeAgo(a.lastUpdated)}</div>}
                     </div>
                   </div>
@@ -507,9 +511,9 @@ export default function AccountsPage() {
                   className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-2 cursor-pointer">
                   {chkbox(syncSel.has(b.accountId))}
                   <span className="flex-1 truncate text-sm font-medium">{b.accountName}</span>
-                  <span className="text-sm text-content-3 tabular-nums">{balance(currentBalanceOf(b.accountId))}</span>
+                  <span className="text-sm text-content-3 tabular-nums">{acctBalance(currentBalanceOf(b.accountId), classificationOf(b.accountId))}</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-                  <span className="text-sm font-semibold tabular-nums">{balance(b.simplefinBalance)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{acctBalance(b.simplefinBalance, classificationOf(b.accountId))}</span>
                 </div>
               ))}
               <div className="flex justify-end gap-2 pt-3">

@@ -98,6 +98,33 @@ describe('formatMoney: signed totals', () => {
   });
 });
 
+describe('formatMoney: liability balances', () => {
+  const liab = (n: number, o = {}) => formatMoney(n, { kind: 'balance', liability: true, ...o });
+  it('shows an amount owed (stored negative) as a positive figure', () => {
+    expect(liab(-1200)).toEqual({ text: '$1,200.00', tone: 'neutral' });
+  });
+  it('shows an overpaid balance (stored positive) as credit, never a minus', () => {
+    expect(liab(50)).toEqual({ text: '$50.00 credit', tone: 'neutral' });
+  });
+  it('shows zero by the usual balance rule', () => {
+    expect(liab(0)).toEqual({ text: '—', tone: 'neutral' });
+    expect(liab(0, { showZero: true })).toEqual({ text: '$0.00', tone: 'neutral' });
+    expect(liab(-0.004, { showZero: true }).text).toBe('$0.00');
+  });
+  it('rounds fractions and honours precision', () => {
+    expect(liab(-1234.567).text).toBe('$1,234.57');
+    expect(liab(-1234.5, { precision: 'whole' }).text).toBe('$1,235');
+    expect(liab(-48_200, { precision: 'compact' }).text).toBe('$48.2k');
+    expect(liab(-48_200, { precision: 'axis' }).text).toBe('$48k');
+    expect(liab(1500, { precision: 'axis' }).text).toBe('$1.5k credit');
+    expect(liab(1500, { precision: 'compact' }).text).toBe('$1.5k credit');
+  });
+  it('leaves non-liability balances unchanged', () => {
+    expect(formatMoney(-1200, { kind: 'balance', liability: false }).text).toBe('-$1,200.00');
+    expect(formatMoney(50, { kind: 'balance' }).text).toBe('$50.00');
+  });
+});
+
 describe('formatMoney: balances', () => {
   it('shows a negative balance with a real minus and no colour', () => {
     expect(formatMoney(-2500.75, { kind: 'balance' })).toEqual({ text: '-$2,500.75', tone: 'neutral' });
