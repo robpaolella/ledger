@@ -9,6 +9,8 @@ interface BottomSheetProps {
   description?: string;
   /** Optional emoji or glyph, shown in a tile to the left of the title. */
   icon?: ReactNode;
+  /** Keep a long description to one line (the full text stays in its tooltip). */
+  truncateDescription?: boolean;
   footer?: ReactNode;
   children: ReactNode;
 }
@@ -19,7 +21,7 @@ let scrollLocks = 0;
 let unlockedOverflow = '';
 
 /** Phone counterpart of ResponsiveModal — same header · body · footer anatomy. */
-export default function BottomSheet({ isOpen, onClose, title, description, icon, footer, children }: BottomSheetProps) {
+export default function BottomSheet({ isOpen, onClose, title, description, icon, truncateDescription, footer, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const currentTranslateY = useRef(0);
@@ -107,10 +109,12 @@ export default function BottomSheet({ isOpen, onClose, title, description, icon,
         {title && (
           <div className="flex items-start justify-between gap-3 shrink-0 px-5 pt-1 pb-3 border-b border-line">
             <div className="min-w-0 flex items-center gap-3">
-              {icon && <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{icon}</span>}
+              {icon && (typeof icon === 'string'
+                ? <span className="w-11 h-11 shrink-0 rounded-[12px] bg-surface-2 border border-line flex items-center justify-center text-[22px] leading-none">{icon}</span>
+                : <span className="shrink-0 flex">{icon}</span>)}
               <div className="min-w-0">
                 <div className="text-[18px] font-extrabold tracking-tight text-content leading-tight break-words">{title}</div>
-                {description && <div id={descriptionId} className="text-[13px] text-content-3 mt-1 leading-snug">{description}</div>}
+                {description && <div id={descriptionId} title={truncateDescription ? description : undefined} className={`text-[13px] text-content-3 mt-1 leading-snug ${truncateDescription ? 'truncate' : ''}`}>{description}</div>}
               </div>
             </div>
             <button

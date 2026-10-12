@@ -17,6 +17,7 @@ import { NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
+import BottomSheet from '../components/BottomSheet';
 import PageHeader from '../components/PageHeader';
 import { ListRow, CategoryTag, GroupHeader } from '../components/ListRow';
 import SplitEditor from '../components/SplitEditor';
@@ -2137,35 +2138,18 @@ export default function TransactionsPage() {
         </p>
       </ResponsiveModal>
 
-      {/* ===== Detail side panel ===== */}
-      {detail && (
-        <>
-          <div onClick={closeDetail} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
-          <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="txn-panel-title" tabIndex={-1}
-            className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col outline-none">
-            {(() => {
-              // Header: who was paid, with "Category · Account" beneath. A split leg shows
-              // its own merchant and category; a split parent reads "Split".
-              const leg = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
-              const name = leg ? splitVendorLabel(detail, leg) : vendorLabel(detail);
-              const logo = leg ? (leg.merchant ?? detail.merchant)?.logoUrl : detail.merchant?.logoUrl;
-              const group = leg ? leg.groupName : detail.category?.groupName;
-              const category = leg ? leg.subName : (detail.splits && detail.splits.length > 0 ? 'Split' : (detail.category?.subName ?? 'Uncategorized'));
-              return (
-                <div className="flex items-center gap-3 pl-5 pr-3 py-3 border-b border-line">
-                  <span aria-hidden="true" className="shrink-0 flex">
-                    <VendorAvatar name={name} src={logo || undefined} color={group ? getCategoryColorHex(group) : undefined} size={40} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <h2 id="txn-panel-title" className="m-0 text-[16px] font-extrabold tracking-tight leading-tight truncate">{name}</h2>
-                    <div className="text-[13px] text-content-3 truncate mt-0.5">{category} · {accountLabel(detail.account)}</div>
-                  </div>
-                  <button onClick={closeDetail} aria-label="Close" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-                </div>
-              );
-            })()}
-            {/* On phones the rule prompt sits over the bottom edge: extra room lets the actions scroll clear of it. */}
-            <div className={`flex-1 overflow-y-auto px-6 py-6 ${ruleSuggest && isMobile ? 'pb-40' : ''}`}>
+      {/* ===== Detail: bottom sheet on phones, side panel on desktop ===== */}
+      {detail && (() => {
+        // Header: who was paid, with "Category · Account" beneath. A split leg shows
+        // its own merchant and category; a split parent reads "Split".
+        const leg = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
+        const name = leg ? splitVendorLabel(detail, leg) : vendorLabel(detail);
+        const logo = leg ? (leg.merchant ?? detail.merchant)?.logoUrl : detail.merchant?.logoUrl;
+        const group = leg ? leg.groupName : detail.category?.groupName;
+        const category = leg ? leg.subName : (detail.splits && detail.splits.length > 0 ? 'Split' : (detail.category?.subName ?? 'Uncategorized'));
+        const avatar = <VendorAvatar name={name} src={logo || undefined} color={group ? getCategoryColorHex(group) : undefined} size={40} />;
+        const body = (
+          <>
               {(() => {
                 const isTransfer = (detail.category?.type ?? detail.splits?.[0]?.type) === 'transfer';
                 const isSplit = !!(detail.splits && detail.splits.length > 0);
@@ -2425,10 +2409,34 @@ export default function TransactionsPage() {
                   </>
                 );
               })()}
+          </>
+        );
+        if (isMobile) {
+          return (
+            <BottomSheet isOpen onClose={closeDetail} title={name} description={`${category} · ${accountLabel(detail.account)}`} icon={avatar} truncateDescription>
+              {/* The rule prompt sits over the bottom edge: extra room lets the actions scroll clear of it. */}
+              <div className={ruleSuggest ? 'pb-40' : ''}>{body}</div>
+            </BottomSheet>
+          );
+        }
+        return (
+          <>
+            <div onClick={closeDetail} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
+            <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="txn-panel-title" tabIndex={-1}
+              className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col outline-none">
+              <div className="flex items-center gap-3 pl-5 pr-3 py-3 border-b border-line">
+                <span aria-hidden="true" className="shrink-0 flex">{avatar}</span>
+                <div className="flex-1 min-w-0">
+                  <h2 id="txn-panel-title" className="m-0 text-[16px] font-extrabold tracking-tight leading-tight truncate">{name}</h2>
+                  <div className="text-[13px] text-content-3 truncate mt-0.5">{category} · {accountLabel(detail.account)}</div>
+                </div>
+                <button onClick={closeDetail} aria-label="Close" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-6">{body}</div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
 
       {/* ===== Split modal ===== */}
       {splitOpen && detail && (() => {
@@ -2445,18 +2453,21 @@ export default function TransactionsPage() {
         };
         const setRow = (i: number, patch: Partial<{ categoryId: number | ''; amount: string; merchant: string; pctRaw: string }>) =>
           setSplitDraft((d) => d.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-        return (
-        <div onClick={() => setSplitOpen(false)} className="fixed inset-0 z-[80] flex items-center justify-center p-6" style={{ background: 'var(--bg-modal)', backdropFilter: 'blur(3px)' }}>
-          <div onClick={(e) => e.stopPropagation()} className="w-[620px] max-w-full max-h-[90vh] bg-surface border border-line-strong rounded-card shadow-md overflow-hidden flex flex-col">
-            <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-line">
-              <div>
-                <div className="text-[19px] font-extrabold tracking-tight">Split transaction</div>
-                <div className="text-[13px] text-content-3 mt-0.5">Splitting creates individual transactions you can categorize and manage separately.</div>
-              </div>
-              <button onClick={() => setSplitOpen(false)} className="w-11 h-11 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        const footer = (
+          <div className="flex items-center justify-between gap-3">
+            {isExistingSplit && canEdit ? (
+              <button onClick={removeSplitFromDetail} className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
+            ) : <span />}
+            <div className="flex items-center gap-2.5">
+              <button onClick={() => setSplitOpen(false)} className="h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+              <button onClick={saveSplit} disabled={!splitValid} className="h-11 md:h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
             </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+          </div>
+        );
+        return (
+          <ResponsiveModal isOpen onClose={() => setSplitOpen(false)} title="Split transaction"
+            description="Splitting creates individual transactions you can categorize and manage separately."
+            maxWidth="38.75rem" footer={footer}>
               {/* ORIGINAL — expandable card */}
               <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-content-3 mb-2">Original</div>
               <div className="rounded-[12px] border border-line bg-surface-2 mb-5">
@@ -2540,20 +2551,7 @@ export default function TransactionsPage() {
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-3.5 border-t border-line">
-              {isExistingSplit && canEdit ? (
-                <button onClick={removeSplitFromDetail} className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
-              ) : <span />}
-              <div className="flex items-center gap-2.5">
-                <button onClick={() => setSplitOpen(false)} className="h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-                <button onClick={saveSplit} disabled={!splitValid} className="h-11 md:h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
+          </ResponsiveModal>
         );
       })()}
 
