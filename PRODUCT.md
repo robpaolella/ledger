@@ -146,7 +146,7 @@ Data stays untouched; these are never rebuilt.
 - Money in shows as green **+$X**: paychecks, interest, and refunds.
 - Money out shows as plain **$X** with no minus sign, including income reversals.
 - Transfers follow the same sign rule, in grey: the incoming leg shows **+$X**, the outgoing leg **$X**.
-- Balances (account balances, net worth, holdings, investment values, chart axes) are plain text with a real minus when negative and no colour.
+- Balances (account balances, net worth, holdings, investment values, chart axes) are plain text with a real minus when negative and no colour. The exception is a liability account's own balance (credit cards): it shows the amount owed as a positive figure, and an overpaid card as "$X credit", never a minus. The per-account chart for a liability plots amount owed in a neutral colour. Stored values and sums keep their sign.
 - Totals that can go either way (Net, budget remaining, changes) show a real minus when negative and are coloured good or bad.
 - Refunds still lower their category's spending; they remain expenses, not income.
 
