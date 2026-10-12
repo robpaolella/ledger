@@ -2,6 +2,8 @@ import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { VendorAvatar } from './primitives';
 import { type FilterDraft, filterDraftCount, FILTER_SECTIONS, type FilterSection } from './filterModel';
 import Popover from './Popover';
+import BottomSheet from './BottomSheet';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface AccountOpt { id: number | string; name: string; last_four?: string | null; lastFour?: string | null; avatar_url?: string | null; classification?: string | null; institutionRef?: { logo_url: string | null; color: string | null } | null }
 interface MerchantOpt { id: number; name: string; txn_count?: number; logo_url?: string | null }
@@ -52,6 +54,7 @@ export default function FilterPopover({
   showNeedsReview?: boolean; // Transactions opts in to the "Needs review" dimension
   sections?: FilterSection[]; // show only these sections (default: all); `tab` must be one of them
 }) {
+  const isMobile = useIsMobile();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   // Reports has nothing under "Other" — only Transactions offers the needs-review flag.
   const NAV = FILTER_SECTIONS.filter((n) => (sections ? sections.includes(n) : n !== 'Other' || showNeedsReview));
@@ -89,28 +92,25 @@ export default function FilterPopover({
   const visibleAccountIds = visibleAccounts.map((a) => a.id.toString());
   const acctAllChecked = visibleAccountIds.length > 0 && visibleAccountIds.every((id) => draft.account.includes(id));
 
-  return (
-    <>
-      {/* Phones: pinned under the app bar, full width. md+: anchored to the Filters button. */}
-      <Popover onClose={onCancel} label="Filters" className="fixed inset-x-4 top-20 md:absolute md:inset-x-auto md:top-12 md:right-0 z-50 md:w-[820px] md:max-w-[calc(100vw-64px)] max-h-[calc(100dvh-112px)] md:max-h-none bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
-        {/* header */}
+  const header = (
         <div className="flex flex-col md:flex-row border-b border-line">
-          <div className="md:w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-b md:border-b-0 md:border-r border-line">Filters</div>
+          <div className="hidden md:block md:w-[170px] shrink-0 px-5 py-[18px] text-base font-extrabold tracking-tight border-b md:border-b-0 md:border-r border-line">Filters</div>
           <div className="flex-1 flex items-center gap-2.5 px-5 border-b md:border-b-0 md:border-r border-line">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search filters" placeholder={`Search ${tab.toLowerCase()}…`} className="no-focus-ring flex-1 h-12 bg-transparent outline-none text-sm text-content" />
           </div>
           <div className="md:w-[240px] shrink-0 px-5 py-3 md:py-0 flex items-center text-sm font-semibold text-content-2">{count} filter{count === 1 ? '' : 's'} selected</div>
         </div>
-        {/* body: nav · checklist · selected summary (stacked on phones) */}
+  );
+  const body = (
         <div className="flex flex-col md:flex-row md:min-h-[380px] min-h-0 flex-1 overflow-y-auto md:overflow-visible">
-          <div className="md:w-[170px] shrink-0 p-3 border-b md:border-b-0 md:border-r border-line flex flex-row md:flex-col gap-0.5 overflow-x-auto">
+          <div className="md:w-[170px] shrink-0 px-5 py-3 md:p-3 border-b md:border-b-0 md:border-r border-line flex flex-row flex-wrap md:flex-nowrap md:flex-col gap-0.5 md:overflow-x-auto">
             {NAV.map((n) => {
               const active = tab === n;
-              return <button key={n} onClick={() => { setTab(n); setSearch(''); }} className={`px-3.5 py-2.5 rounded-[9px] text-sm font-semibold text-left ${FOCUS}`} style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent' }}>{n}</button>;
+              return <button key={n} onClick={() => { setTab(n); setSearch(''); }} className={`px-4 h-11 md:h-auto md:px-3.5 md:py-2.5 rounded-[9px] text-sm font-semibold text-left ${FOCUS}`} style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent' }}>{n}</button>;
             })}
           </div>
-          <div className="flex-1 p-3 border-r border-line overflow-auto" style={{ maxHeight: 440 }}>
+          <div className="flex-1 px-5 py-3 md:p-3 md:border-r border-line md:overflow-auto md:max-h-[440px]">
             {tab === 'Categories' && visibleCatTokens.length > 0 && (
               <CheckRow on={catAllChecked} onToggle={toggleAllCategories} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={catAllChecked} />Select all</CheckRow>
             )}
@@ -118,7 +118,7 @@ export default function FilterPopover({
               <CheckRow on={merAllChecked} onToggle={toggleAllMerchants} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={merAllChecked} />Select all</CheckRow>
             )}
             {tab === 'Categories' && q && !categoryGroups.some((g) => g.group.toLowerCase().includes(q) || g.subs.some((s) => `${s.sub} ${g.group}`.toLowerCase().includes(q))) && (
-              <div className="flex items-center justify-center h-full min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
+              <div className="flex items-center justify-center h-full py-4 md:py-0 md:min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
             )}
             {tab === 'Categories' && categoryGroups.map((g) => {
               const gChecked = g.subs.length > 0 && g.subs.every((s) => draft.category.includes(`sub:${s.id}`));
@@ -135,7 +135,7 @@ export default function FilterPopover({
             })}
             {tab === 'Accounts' && (
               accountSections.length === 0 ? (
-                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">{search.trim() ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : 'No accounts match'}</div>
+                <div className="flex items-center justify-center h-full py-4 md:py-0 md:min-h-[320px] text-content-3 text-sm">{search.trim() ? <span className="block truncate">Nothing matches “{search.trim()}”</span> : 'No accounts match'}</div>
               ) : (
                 <>
                   <CheckRow on={acctAllChecked} onToggle={() => setDraft((d) => ({ ...d, account: acctAllChecked ? d.account.filter((id) => !visibleAccountIds.includes(id)) : [...new Set([...d.account, ...visibleAccountIds])] }))} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={acctAllChecked} />Select all</CheckRow>
@@ -188,10 +188,10 @@ export default function FilterPopover({
             )}
             {tab === 'Merchants' && (
               merchants.length === 0 ? (
-                <div className="flex items-center justify-center h-full min-h-[320px] text-content-3 text-sm">No merchants yet</div>
+                <div className="flex items-center justify-center h-full py-4 md:py-0 md:min-h-[320px] text-content-3 text-sm">No merchants yet</div>
               ) : (
                 q && !merchants.some((m) => m.name.toLowerCase().includes(q)) ? (
-                  <div className="flex items-center justify-center h-full min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
+                  <div className="flex items-center justify-center h-full py-4 md:py-0 md:min-h-[320px] px-3 text-content-3 text-sm"><span className="block truncate">Nothing matches “{search.trim()}”</span></div>
                 ) : merchants.filter((m) => !q || m.name.toLowerCase().includes(q)).map((m) => (
                   <CheckRow key={m.id} on={draft.merchant.includes(m.id.toString())} onToggle={() => toggleMerchant(m.id.toString())} className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-surface-2 text-[15px]">
                     <Chk on={draft.merchant.includes(m.id.toString())} />
@@ -212,7 +212,7 @@ export default function FilterPopover({
             )}
           </div>
           {/* selected filters — ALL dimensions */}
-          <div className="md:w-[240px] shrink-0 p-4 border-t md:border-t-0 border-line md:overflow-auto md:max-h-[440px]">
+          <div className="md:w-[240px] shrink-0 px-5 py-4 md:p-4 border-t md:border-t-0 border-line md:overflow-auto md:max-h-[440px]">
             {count === 0 ? (
               <div className="text-content-3 text-sm">No filters selected yet.</div>
             ) : (
@@ -282,15 +282,27 @@ export default function FilterPopover({
             )}
           </div>
         </div>
-        {/* footer */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-line">
-          <button onClick={onClear} className="h-10 px-[18px] rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Clear</button>
+  );
+  const footer = (
+        <div className="flex items-center justify-between md:px-5 md:py-3.5 md:border-t border-line">
+          <button onClick={onClear} className="h-11 md:h-10 px-[18px] rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Clear</button>
           <div className="flex gap-2.5">
-            <button onClick={onCancel} className="h-10 px-[18px] rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-            <button onClick={onApply} className="h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm">Apply</button>
+            <button onClick={onCancel} className="h-11 md:h-10 px-[18px] rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+            <button onClick={onApply} className="h-11 md:h-10 px-5 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm">Apply</button>
           </div>
         </div>
-      </Popover>
-    </>
+  );
+
+  if (isMobile) {
+    return (
+      <BottomSheet isOpen onClose={onCancel} title="Filters" footer={footer}>
+        <div className="-mx-5 -my-3 flex flex-col">{header}{body}</div>
+      </BottomSheet>
+    );
+  }
+  return (
+    <Popover onClose={onCancel} label="Filters" className="absolute top-12 right-0 z-50 w-[820px] max-w-[calc(100vw-64px)] bg-elevated border border-line-strong rounded-[16px] shadow-md overflow-hidden flex flex-col">
+      {header}{body}{footer}
+    </Popover>
   );
 }
