@@ -293,7 +293,7 @@ export default function AccountsPage() {
           <div className="flex items-center justify-between mt-3 -mx-1">
             {RANGES.map((r) => (
               <button key={r.key} onClick={() => setRange(r.key)} aria-pressed={range === r.key}
-                className={`h-8 px-3 rounded-full text-[13px] font-bold tabular-nums transition-colors ${range === r.key ? 'bg-surface-2 text-content' : 'text-content-3'}`}>
+                className={`tap-grow-sq h-8 px-3 rounded-full text-[13px] font-bold tabular-nums transition-colors ${range === r.key ? 'bg-surface-2 text-content' : 'text-content-3'}`}>
                 {RANGE_SHORT[r.key]}
               </button>
             ))}
@@ -405,7 +405,7 @@ export default function AccountsPage() {
         <div className="flex items-center gap-3 px-4 md:px-5 py-4">
           <span className="text-[17px] font-extrabold">Physical Assets</span>
           <span className="ml-auto text-[17px] font-extrabold tabular-nums">{balance(physicalTotal)}</span>
-          {canEdit && <button onClick={() => openAsset('new')} className="h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-sm font-semibold">Add</button>}
+          {canEdit && <button onClick={() => openAsset('new')} className="tap-grow h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-sm font-semibold">Add</button>}
         </div>
         {data.assets.length === 0 ? (
           <div className="px-5 pb-5 text-content-3 text-sm">No physical assets tracked.</div>
@@ -423,7 +423,7 @@ export default function AccountsPage() {
               <div className="md:hidden text-[11px] font-semibold" style={{ color: 'var(--c-amber)' }}>{a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}</div>
             </div>
             {canEdit && (
-              <button onClick={() => openAsset(a)} aria-label={`Edit ${a.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0">
+              <button onClick={() => openAsset(a)} aria-label={`Edit ${a.name}`} className="tap-grow-sq w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
               </button>
             )}

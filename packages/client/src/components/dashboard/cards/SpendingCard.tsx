@@ -46,7 +46,7 @@ export default function SpendingCard({ dragHandleProps }: DashboardCardProps) {
               {' · '}
               <Link
                 to={`/reviews?from=${from}&to=${to}`}
-                className="inline-flex items-center max-md:min-h-[44px] font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="tap-area inline-flex items-center font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 style={{ color: 'var(--primary)' }}
               >
                 Review
