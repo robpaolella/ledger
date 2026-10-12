@@ -37,7 +37,7 @@ export default function TransactionsCard({ dragHandleProps }: DashboardCardProps
       title="Transactions"
       subtitle={<>
         <span className="hidden md:inline text-[15px] font-semibold text-content-3">Most recent</span>
-        <button type="button" onClick={() => navigate('/transactions')} className="md:hidden inline-flex items-center gap-1 text-[15px] font-semibold text-content-3 -ml-0.5 pl-0.5 active:text-content">
+        <button type="button" onClick={() => navigate('/transactions')} className="tap-area md:hidden inline-flex items-center gap-1 text-[15px] font-semibold text-content-3 -ml-0.5 pl-0.5 active:text-content">
           Most recent<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
         </button>
       </>}
