@@ -72,6 +72,8 @@ states below (member detail without Delete; Accounts unchanged).
    (4417)"; $12,345.67 beside $4.50; a 4-way split; a Review row with "Low-confidence category"
    and a note; 412 transactions in the Reports range; "Other Auto/Transportation" on Budget.
 9. Wording: existing wording everywhere; new text only "Show 50 more" and "50 of 412 transactions".
+10. Brief confirmed ("Yes, confirmed.").
+11. F14 (Add transaction's Account list) needs no design; `tx-add-account` dropped ("Agreed.").
 
 ## Questions the versions answer (Robert picks each separately)
 | # | Decision | Version A | Version B | Version C |
@@ -81,14 +83,18 @@ states below (member detail without Delete; Accounts unchanged).
 | V3 | What gives way in a narrow row | Account shrinks to its last four ("•• 4417") in the normal font | Account keeps its name in the normal font, capped at 40% of the row, truncated | Account leaves the phone row (shown in the detail); category alone under the name |
 | V4 | Pinned Transactions toolbar (173px) and Review toolbar | One 44px row: search icon (expands on tap), Date, Sort, review chip | Toolbar hides while scrolling down and returns on scroll up; Review's Approve all moves into the app bar | Only search stays pinned; Date, Sort and the review chip scroll with the list; Review as A |
 
+Version A's compact toolbar drops the leading icons on Date, Sort and Users (label and chevron
+stay); Filters is reached inside the expanded search, as today. App-bar icons become 44px squares
+in every version.
+
 Sort is the same in every version: a bottom sheet of choices on phones (44px rows, a tick on
 the current one; tapping applies and closes).
 
 F14 (Add transaction → Account list) needs no design: the Account field is a native `<select>`
 (`TransactionsPage.tsx`, `Field label="Account"`). The clipped list in the audit is the desktop
 browser drawing a native list at 390px; real phones use the system picker. The field itself
-already truncates long names with an ellipsis. To be confirmed with Robert (found at capture,
-2026-10-11); the `tx-add-account` state is dropped.
+already truncates long names with an ellipsis. Found at capture; Robert confirmed 2026-10-11
+(decision 11, "Agreed."); the `tx-add-account` state is dropped.
 
 ## States, themes and content
 Themes `light`, `dark`; 390×844 and 1440×900. Each state opens the screen it names; the prototype
@@ -99,7 +105,7 @@ bar switches state and theme. Owner (John Sample) unless stated. Desktop shows t
 | `tx-detail` | Transactions → Larkspindle Financial Services detail | $12,345.67, Jane's Emergency Savings (4417) | Close by handle / scrim / back (per V1) |
 | `tx-detail-member` | Everyday member, same detail | No Delete transaction | — |
 | `tx-split` | Split editor, 4 legs | Existing split wording | Cancel / Save split pinned |
-| `review-detail` | Review → Larkspindle Books | "Low-confidence category", note "Check this transaction" | Mark reviewed |
+| `review-detail` | Review → Larkspindle Finance | "Low-confidence category", note "Check this transaction" | Mark reviewed |
 | `review-detail-viewonly` | View-only member | Fields read-only, no Mark reviewed | — |
 | `recurring-detail` | Recurring → Car insurance detail | Existing detail | Edit |
 | `approve-all` | Review → Approve all | Existing confirm wording | Cancel / Approve all pinned |
@@ -108,8 +114,10 @@ bar switches state and theme. Owner (John Sample) unless stated. Desktop shows t
 | `tx-date` | Transactions → Date | All presets reachable | Clear / Cancel / Apply |
 | `tx-sort` | Transactions → Sort | Existing sort options | Tap applies |
 | `transactions` | Transactions list | Long names, $12,345.67 and $4.50, 13px day totals | Toolbar per V4, rows per V3 |
+| `transactions-scrolled` | Transactions list scrolled down | Same rows, further down | Toolbar per V4 while scrolling (B: hidden) |
 | `reviews` | Review list | Toolbar per V4, "Low-confidence category" reasons | — |
-| `budget-month` | Budget → Month | "Other Auto/Transportation"; 15px amounts; 44px buttons | — |
+| `reviews-viewonly` | View-only member, Review list | No Approve all | — |
+| `budget-month` | Budget → Month | "Other Auto/Transportation" (category names wrap to 2 lines, breaking after "/"); 15px amounts; 44px buttons | — |
 | `budget-category` | Budget → a category | 15px amounts | — |
 | `dashboard` | Dashboard | Links with 44px tap areas | — |
 | `accounts` | Accounts | 44px period chips, Totals/Percent, Add, edit pencil | — |
@@ -119,7 +127,7 @@ bar switches state and theme. Owner (John Sample) unless stated. Desktop shows t
 | `reports-trends` | Reports → Trends | 220px chart, thinned labels, 44px Breakdown/Trends and segmented controls | — |
 | `reports-list` | Reports → Transactions list | "50 of 412 transactions" | Show 50 more |
 | `reports-list-more` | After tapping, loading | "Show 50 more" in its loading state | — |
-| `reports-list-empty` | Range with nothing | "No transactions in this period." | — |
+| `reports-list-empty` | Range with nothing | "No transactions in this period."; the header keeps its hint "Recent activity across all categories" | — |
 | `recurring-list` | Recurring | 44px tabs and toggle | — |
 | `investments` | Investments | 44px Market/Allocation; chart labels not cut | — |
 
@@ -169,4 +177,4 @@ mapped back to `--c-*` tokens, long lists capped) by `/tmp/d226-build/extract.js
 None.
 
 ## Open decisions
-V1–V4 (answered by the versions).
+None. V1–V4: Robert picked Version A on each (2026-10-11; see `decisions.md`).
