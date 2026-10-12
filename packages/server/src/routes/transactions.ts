@@ -132,6 +132,7 @@ router.get('/', (req: Request, res: Response) => {
       needsReview,
       limit: limitStr, offset: offsetStr,
       sortBy = 'date', sortOrder = 'desc',
+      thenBy, thenOrder,
     } = req.query as Record<string, string | undefined>;
 
     const limit = clampInt(limitStr, 50, 1, 1000);
@@ -276,6 +277,20 @@ router.get('/', (req: Request, res: Response) => {
       sortBy === 'subcategory' ? categories.sub_name :
       transactions.date;
     const orderFn = sortOrder === 'asc' ? asc : desc;
+    // Optional second key (Reports): within each date, order by absolute amount. Under a
+    // category/group scope a split parent counts as the sum of its matching legs, the
+    // amount the client shows for it (scopeTxnsToCategory), so pages match what is displayed.
+    const thenFn = thenOrder === 'asc' ? asc : desc;
+    const scopeIds = [...(categoryId ? [categoryId] : []), ...(categoryIds ? categoryIds.split(',') : [])].map(Number).filter((n) => !isNaN(n));
+    const scopeGroups = [...(groupName ? [groupName] : []), ...(groupNames ? groupNames.split(',') : [])];
+    const legMatch = [
+      ...(scopeIds.length ? [sql`ts.category_id IN (${sql.join(scopeIds.map((n) => sql`${n}`), sql`, `)})`] : []),
+      ...(scopeGroups.length ? [sql`c2.group_name IN (${sql.join(scopeGroups.map((g) => sql`${g}`), sql`, `)})`] : []),
+    ];
+    const absAmount = legMatch.length
+      ? sql`ABS(COALESCE((SELECT SUM(ts.amount) FROM transaction_splits ts JOIN categories c2 ON ts.category_id = c2.id WHERE ts.transaction_id = ${transactions.id} AND (${sql.join(legMatch, sql` OR `)})), ${transactions.amount}))`
+      : sql`ABS(${transactions.amount})`;
+    const thenOrderBy = thenBy === 'absAmount' ? [thenFn(absAmount)] : [];
 
     const rows = db
       .select({
@@ -308,7 +323,7 @@ router.get('/', (req: Request, res: Response) => {
       .leftJoin(categories, eq(transactions.category_id, categories.id))
       .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
       .where(where)
-      .orderBy(orderFn(sortColumn), desc(transactions.id))
+      .orderBy(orderFn(sortColumn), ...thenOrderBy, desc(transactions.id))
       .limit(limit)
       .offset(offset)
       .all();
