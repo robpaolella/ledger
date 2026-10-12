@@ -2457,10 +2457,10 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between gap-3">
             {isExistingSplit && canEdit ? (
               <button onClick={removeSplitFromDetail} className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
-            ) : <span />}
-            <div className="flex items-center gap-2.5">
-              <button onClick={() => setSplitOpen(false)} className="h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
-              <button onClick={saveSplit} disabled={!splitValid} className="h-11 md:h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
+            ) : <span className="hidden md:block" />}
+            <div className="flex flex-1 md:flex-none items-center gap-2.5">
+              <button onClick={() => setSplitOpen(false)} className="flex-1 md:flex-none h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+              <button onClick={saveSplit} disabled={!splitValid} className="flex-1 md:flex-none h-11 md:h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
             </div>
           </div>
         );
