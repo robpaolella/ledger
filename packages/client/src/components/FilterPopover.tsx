@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { VendorAvatar } from './primitives';
-import { type FilterDraft, filterDraftCount, FILTER_SECTIONS, type FilterSection } from './filterModel';
+import { type FilterDraft, filterDraftCount, filterSectionCount, isSearchableSection, visibleFilterSections, type FilterSection } from './filterModel';
 import Popover from './Popover';
 import BottomSheet from './BottomSheet';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -23,6 +24,9 @@ const Chk = ({ on }: { on: boolean }) => (
     {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6" /></svg>}
   </span>
 );
+const CountBadge = ({ n }: { n: number }) => n > 0 ? (
+  <span aria-label={`${n} selected`} className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold tabular-nums text-primary" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)' }}>{n}</span>
+) : null;
 const FOCUS = 'outline-none focus-visible:ring-2 focus-visible:ring-primary';
 /** A checklist row: a real checkbox button, so Tab reaches it and Space/Enter toggles it. */
 const CheckRow = ({ on, onToggle, className, children }: { on: boolean; onToggle: () => void; className: string; children: React.ReactNode }) => (
@@ -57,7 +61,28 @@ export default function FilterPopover({
   const isMobile = useIsMobile();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   // Reports has nothing under "Other" — only Transactions offers the needs-review flag.
-  const NAV = FILTER_SECTIONS.filter((n) => (sections ? sections.includes(n) : n !== 'Other' || showNeedsReview));
+  const NAV = visibleFilterSections(sections, showNeedsReview);
+  // Phone type picker: a dropdown under the search box.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    // Escape closes the menu only, not the sheet: capture it before the dialog's own handler.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation(); e.preventDefault();
+      setMenuOpen(false); triggerRef.current?.focus();
+    };
+    const onPress = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !triggerRef.current?.contains(t)) setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onPress, true);
+    return () => { document.removeEventListener('keydown', onKey, true); document.removeEventListener('pointerdown', onPress, true); };
+  }, [menuOpen]);
+  const chooseSection = (n: FilterSection) => { setTab(n); setSearch(''); setMenuOpen(false); triggerRef.current?.focus(); };
   const toggleCategory = (token: string) => setDraft((d) => ({ ...d, category: d.category.includes(token) ? d.category.filter((v) => v !== token) : [...d.category, token] }));
   const toggleGroup = (subs: { id: number }[]) => setDraft((d) => {
     const tokens = subs.map((s) => `sub:${s.id}`);
@@ -102,14 +127,15 @@ export default function FilterPopover({
           <div className="md:w-[240px] shrink-0 px-5 py-3 md:py-0 flex items-center text-sm font-semibold text-content-2">{count} filter{count === 1 ? '' : 's'} selected</div>
         </div>
   );
-  const body = (
-        <div className="flex flex-col md:flex-row md:min-h-[380px] min-h-0 flex-1 overflow-y-auto md:overflow-visible">
+  const navTabs = (
           <div className="md:w-[170px] shrink-0 px-5 py-3 md:p-3 border-b md:border-b-0 md:border-r border-line flex flex-row flex-wrap md:flex-nowrap md:flex-col gap-0.5 md:overflow-x-auto">
             {NAV.map((n) => {
               const active = tab === n;
               return <button key={n} onClick={() => { setTab(n); setSearch(''); }} className={`px-4 h-11 md:h-auto md:px-3.5 md:py-2.5 rounded-[9px] text-sm font-semibold text-left ${FOCUS}`} style={{ color: active ? 'var(--primary)' : 'var(--text)', background: active ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent' }}>{n}</button>;
             })}
           </div>
+  );
+  const listPane = (
           <div className="flex-1 px-5 py-3 md:p-3 md:border-r border-line md:overflow-auto md:max-h-[440px]">
             {tab === 'Categories' && visibleCatTokens.length > 0 && (
               <CheckRow on={catAllChecked} onToggle={toggleAllCategories} className="flex items-center gap-3 px-1 py-2 mb-1 border-b border-line rounded-lg hover:bg-surface-2 text-sm font-semibold text-content-2"><Chk on={catAllChecked} />Select all</CheckRow>
@@ -211,7 +237,8 @@ export default function FilterPopover({
               </div>
             )}
           </div>
-          {/* selected filters — ALL dimensions */}
+  );
+  const selectedPane = (
           <div className="md:w-[240px] shrink-0 px-5 py-4 md:p-4 border-t md:border-t-0 border-line md:overflow-auto md:max-h-[440px]">
             {count === 0 ? (
               <div className="text-content-3 text-sm">No filters selected yet.</div>
@@ -281,6 +308,10 @@ export default function FilterPopover({
               </div>
             )}
           </div>
+  );
+  const body = (
+        <div className="flex flex-col md:flex-row md:min-h-[380px] min-h-0 flex-1 overflow-y-auto md:overflow-visible">
+          {navTabs}{listPane}{selectedPane}
         </div>
   );
   const footer = (
@@ -294,9 +325,63 @@ export default function FilterPopover({
   );
 
   if (isMobile) {
+    // Search, the count and the type picker stay pinned under the title while the list scrolls.
+    const pinned = (
+      <>
+        {isSearchableSection(tab) && (
+          <div className="flex items-center gap-2.5 px-5 border-b border-line focus-within:shadow-[inset_0_-2px_0_var(--primary)]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search filters" placeholder={`Search ${tab.toLowerCase()}…`} className="no-focus-ring flex-1 h-12 bg-transparent outline-none text-sm text-content" />
+          </div>
+        )}
+        <div className="px-5 py-3 flex items-center text-sm font-semibold text-content-2 border-b border-line">{count} filter{count === 1 ? '' : 's'} selected</div>
+        {NAV.length > 1 && (
+          <>
+            <div className="px-5 py-3 border-b border-line">
+              <button
+                ref={triggerRef} type="button" aria-haspopup="listbox" aria-expanded={menuOpen} aria-label={`Filter by: ${tab}`}
+                onClick={() => setMenuOpen((o) => !o)}
+                className={`flex items-center gap-2 w-full h-11 pl-3.5 pr-3 rounded-[11px] border bg-surface text-content text-[15px] font-semibold text-left ${FOCUS}`}
+                style={{ borderColor: menuOpen ? 'var(--primary)' : 'var(--line-strong)' }}
+              >
+                <span className="text-content-3 text-[13px] font-semibold">Filter by</span>
+                {tab}
+                <CountBadge n={filterSectionCount(tab as FilterSection, draft)} />
+                <svg className="ml-auto text-content-3" style={{ transform: menuOpen ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+            </div>
+            {menuOpen && (
+              <div
+                ref={menuRef} role="listbox" aria-label="Filter type"
+                className="absolute left-5 right-5 top-full -mt-1.5 z-20 bg-elevated border border-line-strong rounded-[12px] shadow-md p-1"
+                onKeyDown={(e) => {
+                  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                  e.preventDefault();
+                  const opts = [...menuRef.current!.querySelectorAll<HTMLElement>('[role=option]')];
+                  const i = opts.indexOf(document.activeElement as HTMLElement);
+                  opts[(i + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length].focus();
+                }}
+              >
+                {NAV.map((n) => (
+                  <button
+                    key={n} type="button" role="option" aria-selected={n === tab} onClick={() => chooseSection(n)}
+                    ref={n === tab ? (el) => el?.focus() : undefined}
+                    className={`flex items-center gap-2.5 w-full h-11 px-3 rounded-[9px] text-[15px] text-left hover:bg-surface-2 ${FOCUS} ${n === tab ? 'text-primary font-semibold' : 'text-content'}`}
+                  >
+                    {n}
+                    <CountBadge n={filterSectionCount(n, draft)} />
+                    <span className="ml-auto w-[18px] text-primary">{n === tab && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6" /></svg>}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </>
+    );
     return (
-      <BottomSheet isOpen onClose={onCancel} title="Filters" footer={footer}>
-        <div className="-mx-5 -my-3 flex flex-col">{header}{body}</div>
+      <BottomSheet isOpen onClose={onCancel} title="Filters" footer={footer} pinned={pinned}>
+        <div className="-mx-5 -my-3 flex flex-col">{listPane}{selectedPane}</div>
       </BottomSheet>
     );
   }
