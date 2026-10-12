@@ -33,7 +33,7 @@ A household member on their phone opens Budget and switches between Month and Ye
 | year-error | Any | "Couldn't load your budget" card with Try again (today's wording) | Try again reloads |
 
 - Months before any data: January 2026 in the sample has no plans, so stepping back to January shows "—" for every month value.
-- Content range: from a single income row up to 14 expense groups with 3–6 categories each. Long names ("Doctor/Dentist/Optometrist", "Auto/Transportation") show in full in Year at 390px and still truncate with an ellipsis if longer; Month view is unchanged (they truncate there).
+- Content range: from a single income row up to 14 expense groups with 3–6 categories each. Long names ("Doctor/Dentist/Optometrist", "Auto/Transportation") show in full in Year at 390px. The build keeps the base's newer name wrapping (#314: up to two lines, breaking after "/") in both views, with the year line under the name; see `decisions.md`, Build handoff.
 - Income vs expense: same card treatment; section headings "Income" and "Expenses".
 - Themes: light and dark. Widths: 390×844 is the design. At 1440×900 the prototype shows the phone design in a 390×844 frame, because desktop is unchanged. Those 1440 images are presentation only: they do not show or prove the desktop Budget page. The build proves desktop is untouched with before/after 1440×900 captures of Month and Year in both themes, taken from the base branch and the build branch with the verify-ledger skill.
 - Keyboard: every control is a real button with a label (collapse/expand names the group; the edit button names the category, month and value).

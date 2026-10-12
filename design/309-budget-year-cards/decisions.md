@@ -54,3 +54,7 @@ None affecting the approved scope.
 The merged folder/revision is the feature authority; DESIGN.md and the live site govern the site-wide look.
 - Approved file `index.html`, evidence `screenshots/approved/` (8 states × light/dark × 390/1440). The 1440 images show the phone design framed; desktop Budget must not change, proven by before/after desktop captures.
 - The year second line is a new use of existing parts (12px `--text-3` text under a name); Robert's merge grants it.
+- Base changes since the capture (6af785f), reconciled 2026-10-12 against `origin/feature/platform-retheme` @ 9d79fa3:
+  - #311 (gap between the uncategorized notice and the band on phones) is superseded on phones by notice a: the notice strip joins the top of the band with no gap, as Robert chose (#5).
+  - #314 wraps phone Budget names to at most two lines, breaking after "/" (`wrapName`, `line-clamp-2`). Keep that in both views; in Year the year line sits under the (possibly wrapped) name. The design's truncated names in Month reflect the older capture, not a change.
+  - #312 sets phone Budget amounts to 15px. Keep that; the design's 14px month buttons reflect the older capture. The year line stays 12px.
