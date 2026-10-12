@@ -8,6 +8,7 @@ import { initOwnerSlots } from '../components/badges';
 import { Stepper, vendorColor, type ImpCategory } from '../components/import/cells';
 import { SegmentedControl } from '../components/primitives';
 import { MobileBar } from '../components/PageHeader';
+import { useIsMobile } from '../hooks/useIsMobile';
 import BankSyncSelect from '../components/import/BankSyncSelect';
 import SyncReview from '../components/import/SyncReview';
 import CsvUpload from '../components/import/CsvUpload';
@@ -71,7 +72,21 @@ function buildVenmoDescription(type: string, from: string, to: string, note: str
   return note ? `${prefix}: ${note}` : prefix;
 }
 
+/** Phones: a progress bar and one line, "Step 2 of 3 · Map columns", in place of the three-label stepper. */
+function PhoneStepLine({ labels, activeIndex }: { labels: string[]; activeIndex: number }) {
+  const label = labels[activeIndex].charAt(0) + labels[activeIndex].slice(1).toLowerCase();
+  return (
+    <div className="mb-5">
+      <div className="h-1 rounded-full bg-surface-2 overflow-hidden mb-3">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${((activeIndex + 1) / labels.length) * 100}%`, transition: 'width .3s' }} />
+      </div>
+      <div className="text-[14px] font-bold text-content">Step {activeIndex + 1} of {labels.length} · <span className="text-primary">{label}</span></div>
+    </div>
+  );
+}
+
 export default function ImportPage() {
+  const isMobile = useIsMobile();
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
   const navigate = useNavigate();
@@ -476,7 +491,9 @@ export default function ImportPage() {
         {toggle}
       </div>
 
-      <Stepper labels={stepLabels} activeIndex={activeIndex} />
+      {isMobile
+        ? <PhoneStepLine labels={stepLabels} activeIndex={activeIndex} />
+        : <Stepper labels={stepLabels} activeIndex={activeIndex} />}
 
       {mode === 'sync' && (!syncOk ? permMsg : (
         syncStep === 1
