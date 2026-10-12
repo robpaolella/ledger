@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { formatMoney, monthPeriod, type UncategorizedTotals } from '@ledger/shared';
+import { formatMoney, monthPeriod, uncategorizedNoticeText, type UncategorizedTotals } from '@ledger/shared';
 import { Change } from '../components/Money';
 import Spinner from '../components/Spinner';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
@@ -347,7 +347,7 @@ export default function BudgetPage() {
       {isMonth && isMobile ? (
       /* ===== MONTH VIEW · PHONE ===== planned / remaining grid, one card per group */
       <div>
-        <div className="-mx-4 -mt-5 mb-4 px-4 py-3 flex items-center justify-between" style={{ background: `color-mix(in srgb, ${leftTint(totals.leftToBudget)} 14%, transparent)` }}>
+        <div className={`-mx-4 ${uncategorizedNoticeText(uncategorized) ? '' : '-mt-5'} mb-4 px-4 py-3 flex items-center justify-between`} style={{ background: `color-mix(in srgb, ${leftTint(totals.leftToBudget)} 14%, transparent)` }}>
           <span className="text-[15px] font-extrabold">Left to budget</span>
           <Remaining value={totals.leftToBudget} className="text-[17px] font-extrabold" />
         </div>
