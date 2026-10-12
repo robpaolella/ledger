@@ -43,6 +43,7 @@ Complete evidence for every rejected version (8 states × light/dark × 390/1440
 - No Open Design comments were left; all feedback came in herdr (recorded above).
 - After approval, one consistency fix: the year-loading skeleton still showed two number columns; it now shows a name bar, a second-line bar and one month bar, matching the approved layout. Only the four year-loading screenshots changed.
 - Prototype-only fix: switching state now resets expanded/collapsed groups so they don't carry over. No screenshots changed.
+- Pre-PR review fix (GPT-5.6 Terra, blocking #1): names in both views now wrap to at most two lines, breaking after "/", as the current base does (#314), instead of truncating. Year names already fit at 390, so only the eight Month screenshots changed. Trailing whitespace from the capture was stripped (nit). Mid-word breaks such as "Entertainm/ent" match the base's current behaviour and are left to a follow-up.
 
 ## Experiment
 None.
@@ -56,5 +57,5 @@ The merged folder/revision is the feature authority; DESIGN.md and the live site
 - The year second line is a new use of existing parts (12px `--text-3` text under a name); Robert's merge grants it.
 - Base changes since the capture (6af785f), reconciled 2026-10-12 against `origin/feature/platform-retheme` @ 9d79fa3:
   - #311 (gap between the uncategorized notice and the band on phones) is superseded on phones by notice a: the notice strip joins the top of the band with no gap, as Robert chose (#5).
-  - #314 wraps phone Budget names to at most two lines, breaking after "/" (`wrapName`, `line-clamp-2`). Keep that in both views; in Year the year line sits under the (possibly wrapped) name. The design's truncated names in Month reflect the older capture, not a change.
+  - #314 wraps phone Budget names to at most two lines, breaking after "/" (`wrapName`, `line-clamp-2`). Keep that in both views; in Year the year line sits under the (possibly wrapped) name. `index.html` shows this wrapping.
   - #312 sets phone Budget amounts to 15px. Keep that; the design's 14px month buttons reflect the older capture. The year line stays 12px.
