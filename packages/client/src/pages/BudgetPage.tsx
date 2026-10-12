@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { formatMoney, monthPeriod, type UncategorizedTotals } from '@ledger/shared';
@@ -13,6 +13,7 @@ import ResponsiveModal from '../components/ResponsiveModal';
 import Button from '../components/Button';
 import UncategorizedNotice from '../components/UncategorizedNotice';
 import BudgetHistory from '../components/budget/BudgetHistory';
+import MonthSwitcher from '../components/MonthSwitcher';
 import { useToast } from '../context/ToastContext';
 
 // Recurring overlay meta on a budget row (null when no recurring items apply).
@@ -141,6 +142,10 @@ export default function BudgetPage() {
   const [view, setView] = useState<'month' | 'year'>('month');
   const [data, setData] = useState<BudgetSummary | null>(null);
   const [annualData, setAnnualData] = useState<AnnualSummary | null>(null);
+  const [annualYear, setAnnualYear] = useState<number | null>(null); // year annualData was loaded for
+  const [annualError, setAnnualError] = useState(false);
+  const annualReq = useRef(0); // latest request wins when the year changes quickly
+  const shownYear = useRef<number | null>(null); // same as annualYear, readable inside loadAnnual
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [showUnbudgeted, setShowUnbudgeted] = useState<Record<string, boolean>>({});
@@ -160,12 +165,23 @@ export default function BudgetPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const selectedYear = month.getFullYear();
   const loadAnnual = useCallback(async () => {
+    const req = ++annualReq.current;
+    setAnnualError(false);
     try {
-      const res = await apiFetch<{ data: AnnualSummary }>(`/budgets/annual?year=${month.getFullYear()}`);
+      const res = await apiFetch<{ data: AnnualSummary }>(`/budgets/annual?year=${selectedYear}`);
+      if (req !== annualReq.current) return;
       setAnnualData(res.data);
-    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load annual budget', 'error'); }
-  }, [month, addToast]);
+      setAnnualYear(selectedYear);
+      shownYear.current = selectedYear;
+    } catch (e) {
+      if (req !== annualReq.current) return;
+      setAnnualError(true);
+      // With no table to show, the page's own "Try again" card says it; otherwise a toast does.
+      if (shownYear.current === selectedYear) addToast(e instanceof Error ? e.message : 'Failed to load annual budget', 'error');
+    }
+  }, [selectedYear, addToast]);
 
   useEffect(() => { if (view === 'year') loadAnnual(); }, [view, loadAnnual]);
 
@@ -251,6 +267,38 @@ export default function BudgetPage() {
     { key: 'income', label: 'Income', groups: [{ groupName: 'Income', subs: annualData.income }] },
     { key: 'expenses', label: 'Expenses', groups: annualData.expenseGroups },
   ] : [];
+
+  // Year view · phone: one month beside the year total. The month is the page's selected month.
+  const mi = month.getMonth();
+  const pastMonth = isCurYear && mi < curMi;
+  const phoneYear = annualData && annualYear === yr ? annualData : null;
+  const yearEmpty = !!phoneYear && annualSections.every((sec) => sec.groups.every((g) => g.subs.every((s) => s.planned.every((v) => !v))));
+  const yearSum = (arr: number[]) => arr.reduce((a, v) => a + (v || 0), 0);
+  const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthCols = 'w-[76px] shrink-0 text-right';
+  const yearCols = 'w-[60px] shrink-0 text-right';
+  // Long names wrap at word boundaries and after "/", never mid-word.
+  const wrapName = (name: string) => name.split('/').flatMap((part, i, a) => (i < a.length - 1 ? [part, '/', <wbr key={i} />] : [part]));
+  const wrapCls = 'line-clamp-2 [overflow-wrap:break-word]';
+  // Year view loading and error cards (approved design: skeleton rows, "Try again").
+  const yearLoading = (
+    <div className="bg-surface border border-line rounded-card shadow-sm overflow-hidden" aria-busy="true" aria-label="Loading budget">
+      <div className="bg-surface-2 border-b border-line h-11" />
+      {[150, 110, 170, 90, 140, 120, 160, 100].map((w, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 px-4 md:px-6 py-3.5 border-b border-line">
+          <div className="bg-surface-2 rounded-lg h-4" style={{ width: w }} />
+          <div className="flex gap-3">{Array.from({ length: isMobile ? 2 : 8 }, (_, j) => <div key={j} className="bg-surface-2 rounded-lg h-4 w-14" />)}</div>
+        </div>
+      ))}
+    </div>
+  );
+  const yearError = (
+    <div className="bg-surface border border-line rounded-card shadow-sm p-6 md:p-10 flex flex-col items-center text-center gap-3">
+      <div className="text-[17px] font-extrabold text-content">Couldn’t load your budget</div>
+      <p className="text-sm text-content-3 m-0 max-w-[360px]">Check your connection, then try again. Nothing you planned was lost.</p>
+      <Button variant="secondary" onClick={loadAnnual}>Try again</Button>
+    </div>
+  );
 
   return (
     <div>
@@ -487,7 +535,95 @@ export default function BudgetPage() {
           </div>
         </div>
       </div>
-      ) : annualData ? (
+      ) : isMobile ? (
+      /* ===== YEAR VIEW · PHONE ===== one month at a time beside the year total */
+      annualError && !phoneYear ? yearError : !phoneYear ? yearLoading : (
+      <div>
+        {yearEmpty && (
+          <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <span>{`Nothing planned for ${yr} yet.`}</span>
+          </div>
+        )}
+        {!canEditBudgets && (
+          <div className="mb-4 flex items-center gap-2 text-[13px] text-content-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>You can view this budget. Ask an admin if you need to change it.</span>
+          </div>
+        )}
+        <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
+          <MonthSwitcher title={`${MONTH_FULL[mi]} ${yr}`}
+            subtitle={pastMonth ? 'Planned · past month, locked' : isCurYear && mi === curMi ? 'Planned · this month' : 'Planned'}
+            onPrev={() => setMonth(new Date(yr, mi - 1, 1))} onNext={() => setMonth(new Date(yr, mi + 1, 1))}
+            prevDisabled={mi === 0} nextDisabled={mi === 11} />
+          <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-line font-mono text-[11px] uppercase tracking-wide text-content-3">
+            <div className="flex-1">Category</div>
+            <div className={monthCols} style={{ color: 'var(--primary)', fontWeight: 700 }}>{MONTHS[mi]}</div>
+            <div className={yearCols}>{yr}</div>
+          </div>
+          {annualSections.map((sec) => {
+            const secTotals = sec.groups.reduce<number[]>((acc, g) => { const gt = sumCols(g.subs); return acc.map((v, m) => v + gt[m]); }, new Array(12).fill(0));
+            return (
+              <div key={sec.key}>
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-line">
+                  <div className="flex-1 text-xs font-bold uppercase tracking-wide text-content-2">{sec.label}</div>
+                  <div className={`${monthCols} text-[15px] font-bold tabular-nums text-content-2`}>{whole(secTotals[mi])}</div>
+                  <div className={`${yearCols} text-[15px] font-bold tabular-nums text-content-2`}>{whole(yearSum(secTotals))}</div>
+                </div>
+                {sec.groups.map((g) => {
+                  const groupKey = 'y|' + sec.key + '|' + g.groupName;
+                  const gCollapsed = collapsedGroups[groupKey];
+                  const gTotals = sumCols(g.subs);
+                  return (
+                    <div key={groupKey}>
+                      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line min-h-[52px]">
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <button type="button" onClick={() => setCollapsedGroups((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
+                            aria-label={gCollapsed ? `Expand ${g.groupName}` : `Collapse ${g.groupName}`} aria-expanded={!gCollapsed}
+                            className="shrink-0 w-8 h-8 -m-1 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface-2">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: gCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
+                          </button>
+                          <GroupTile name={g.groupName} compact />
+                          <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className={`min-w-0 text-left font-bold text-[15px] ${wrapCls}`}>{wrapName(g.groupName)}</button>
+                        </div>
+                        <div className={`${monthCols} text-[15px] font-semibold tabular-nums`}>{whole(gTotals[mi])}</div>
+                        <div className={`${yearCols} text-[15px] font-semibold tabular-nums text-content-2`}>{whole(yearSum(gTotals))}</div>
+                      </div>
+                      {!gCollapsed && g.subs.map((sub) => {
+                        const v = sub.planned[mi];
+                        const locked = pastMonth || !canEditBudgets;
+                        const label = `${sub.subName}, ${MONTH_FULL[mi]} ${yr}: ${whole(v) === '—' ? 'nothing planned' : whole(v)}`;
+                        return (
+                          <div key={sub.categoryId} className="flex items-center gap-2 pl-[52px] pr-4 py-1.5 border-b border-line min-h-[56px]">
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <span className="shrink-0 text-[15px] leading-none" aria-hidden="true">{getCategoryEmoji(sub.subName, g.groupName)}</span>
+                              <button type="button" onClick={() => drillSub(sub.categoryId)} className={`min-w-0 text-left text-[15px] text-content-2 ${wrapCls}`}>{wrapName(sub.subName)}</button>
+                            </div>
+                            <div className={monthCols}>
+                              {locked ? (
+                                <span aria-label={label} className="inline-block min-h-11 leading-[44px] px-2 text-[15px] font-medium tabular-nums whitespace-nowrap text-content-3">{whole(v)}</span>
+                              ) : (
+                                <button type="button" aria-label={`${label}. Edit`}
+                                  onClick={() => openEdit(sub.categoryId, g.groupName, `${sub.subName} · ${MONTHS[mi]} ${yr}`, v, `${yr}-${String(mi + 1).padStart(2, '0')}`, sub.recurring[mi], sub.manual[mi], sub.overridden[mi], sec.key === 'income')}
+                                  className="min-h-11 min-w-16 px-2 text-right text-[15px] font-semibold tabular-nums whitespace-nowrap text-content rounded-[10px] border border-line-strong bg-surface enabled:hover:border-primary">
+                                  {whole(v)}
+                                </button>
+                              )}
+                            </div>
+                            <div className={`${yearCols} text-[15px] tabular-nums text-content-3`}>{whole(yearSum(sub.planned))}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      )
+      ) : annualError && annualYear !== yr ? yearError : annualData ? (
       /* ===== YEAR VIEW ===== */
       <div className="bg-surface rounded-card border border-line shadow-sm overflow-x-auto">
         <div>
@@ -563,7 +699,7 @@ export default function BudgetPage() {
         </div>
       </div>
       ) : (
-      <div className="bg-surface rounded-card border border-line shadow-sm p-10 flex justify-center"><Spinner /></div>
+      yearLoading
       )}
 
       {/* ===== Edit budget popup ===== */}
