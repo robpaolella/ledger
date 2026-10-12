@@ -140,7 +140,7 @@ export default function InvestmentsPage() {
       <PageHeader stackRight={false} title="Investments" right={accounts.length > 0 && (
           <div className="relative">
             <button onClick={() => setFilterOpen((o) => !o)}
-              className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface-2 border text-sm font-semibold text-content"
+              className="tap-grow flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface-2 border text-sm font-semibold text-content"
               style={{ borderColor: filterOpen || selectedIds.size > 0 ? 'var(--primary)' : 'var(--line-strong)' }}>
               Accounts
               {selectedIds.size > 0 && <span className="min-w-5 h-5 px-1 inline-flex items-center justify-center rounded-full bg-primary text-on-primary text-[11px] font-bold">{selectedIds.size}</span>}
@@ -184,7 +184,7 @@ export default function InvestmentsPage() {
                 <StaticControl label="By asset class" />
                 <Dropdown value={range} options={RANGE_OPTIONS} onChange={(k) => setRange(k as RangeKey)} />
                 <button onClick={exportCsv} title="Download CSV"
-                  className="w-10 h-10 shrink-0 flex items-center justify-center bg-surface-2 border border-line rounded-[11px] text-content-2 hover:text-content">
+                  className="tap-grow-sq w-10 h-10 shrink-0 flex items-center justify-center bg-surface-2 border border-line rounded-[11px] text-content-2 hover:text-content">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16" /></svg>
                 </button>
               </div>

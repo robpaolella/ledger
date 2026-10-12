@@ -252,8 +252,8 @@ export default function RecurringPage() {
         )}
         left={<>
           <div className="flex items-center gap-4 md:gap-5 text-[15px] font-semibold whitespace-nowrap">
-            <button onClick={() => setTab('month')} className={tab === 'month' ? 'text-primary border-b-2 border-primary pb-0.5' : 'text-content-3 hover:text-content pb-0.5'}>This month</button>
-            <button onClick={() => setTab('all')} className={tab === 'all' ? 'text-primary border-b-2 border-primary pb-0.5' : 'text-content-3 hover:text-content pb-0.5'}>All recurring</button>
+            <button onClick={() => setTab('month')} className={'tap-area ' + (tab === 'month' ? 'text-primary border-b-2 border-primary pb-0.5' : 'text-content-3 hover:text-content pb-0.5')}>This month</button>
+            <button onClick={() => setTab('all')} className={'tap-area ' + (tab === 'all' ? 'text-primary border-b-2 border-primary pb-0.5' : 'text-content-3 hover:text-content pb-0.5')}>All recurring</button>
           </div>
         </>} right={canEdit && !isMobile && (
           <button onClick={() => { setPanel(null); setModalOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm">
@@ -269,10 +269,10 @@ export default function RecurringPage() {
               <span className="text-lg font-extrabold tracking-tight whitespace-nowrap">{monthLabel(month)}</span>
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center">
-                  <button onClick={() => setMonthOffset((o) => o - 1)} className="w-8 h-8 flex items-center justify-center rounded-l-[9px] border border-line text-content-2 hover:bg-surface-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg></button>
-                  <button onClick={() => setMonthOffset((o) => o + 1)} className="w-8 h-8 flex items-center justify-center rounded-r-[9px] border-y border-r border-line text-content-2 hover:bg-surface-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                  <button onClick={() => setMonthOffset((o) => o - 1)} className="tap-grow-sq w-8 h-8 flex items-center justify-center rounded-l-[9px] border border-line text-content-2 hover:bg-surface-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                  <button onClick={() => setMonthOffset((o) => o + 1)} className="tap-grow-sq w-8 h-8 flex items-center justify-center rounded-r-[9px] border-y border-r border-line text-content-2 hover:bg-surface-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
                 </div>
-                <button onClick={() => setMonthOffset(0)} className="h-8 px-3 flex items-center rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Today</button>
+                <button onClick={() => setMonthOffset(0)} className="tap-grow h-8 px-3 flex items-center rounded-[9px] border border-line text-content-2 font-semibold text-[13px] hover:bg-surface-2">Today</button>
                 <SegmentedControl value={view} onChange={(v) => setView(v as 'list' | 'calendar')}
                   options={[
                     { value: 'list', label: <span className="inline-flex items-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>List</span> },
