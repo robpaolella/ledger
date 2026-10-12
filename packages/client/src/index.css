@@ -329,6 +329,15 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   /* Touch targets */
   .touch-row { min-height: 44px; }
+  /* Boxed controls (chips, toolbar buttons) that Button/SegmentedControl don't cover:
+     44px tall, and 44px wide too when icon-only (tap-grow-sq). */
+  .tap-grow { min-height: 44px; }
+  .tap-grow-sq { min-height: 44px; min-width: 44px; }
+  /* Invisible 44px tap area for text links, switches and drag handles. The look is
+     unchanged; the element's own click covers the area. Keep neighbours 44px apart
+     (rows, gap) so two areas never overlap. */
+  .tap-area { position: relative; }
+  .tap-area::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: 44px; transform: translate(-50%, -50%); }
 
   /* Hide scrollbars on mobile */
   .no-scrollbar::-webkit-scrollbar { display: none; }
