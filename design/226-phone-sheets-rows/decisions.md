@@ -1,8 +1,12 @@
 # Design decisions: Phone, part 2 (sheets, touch targets, rows)
 
-- Design issue: #226; covered build issues: #228, #229, #230
-- Revision: 1; replaces: none
+- Design issue: #295; covered build issues: #228, #229, #230, #286, #287, #288, #289, #290, #291, #292, #293, #294
+- Revision: 2; replaces: revision 1
 - Maker: claude-bridge/claude-opus-5-5 (Claude Opus 5.5), both design sessions
+
+## Revision 2 (2026-10-12)
+
+Coverage only: adds #286–#294 after the split of #228–#230. No visual or wording change.
 
 ## Choice and approval
 Robert picked Version A on every decision (herdr, this tab, 2026-10-11), so A is the chosen

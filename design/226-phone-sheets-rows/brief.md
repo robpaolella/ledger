@@ -1,8 +1,9 @@
 # Design: Phone, part 2 (sheets, touch targets, rows)
 
 - Design issue: #226
-- Revision: 1
-- Replaces: none
+- Revision: 2
+- Design issue: #295
+- Replaces: revision 1
 - Source plan: retheme plan agreed 2026-10-08; phone audit `work/108-phone-audit/report.md` (#108), Areas 2, 3, 5 and 6
 
 ## Job and audience
@@ -19,11 +20,22 @@ Success: every detail and confirm feels like the rest of the phone app (sheet, h
 pinned buttons), everything tappable is easy to hit, and row names and amounts read clearly.
 
 ## Covers
-| Build issue | Part of this design | Out of scope |
-| --- | --- | --- |
-| #228 | Sheets (audit Area 2: F07–F14): Transactions detail, Review detail, Recurring detail, Split editor, Approve all, Filters / Date / Sort pop-ups, Add transaction's Account list | F01 Split category and F05 rule prompt (fixed, #218); bulk edit on phones (#109 design) |
-| #229 | Touch targets (Area 3: F20–F27): Budget Month, Dashboard, Transactions toolbar, Settings → Categories, Accounts, Settings switches, Bank sync and Merchants buttons, Reports / Recurring / Review / Investments toolbars | New-control sizes in #109's design (already ≥44px) |
-| #230 | Rows and numbers (Area 5: F36–F40, F42): row truncation, Budget and day-total amount sizes, trends and Investments charts, Reports list length, pinned Transactions toolbar, Review toolbar | Budget Year, Timeline, holdings (#109) |
+| Build issue | Part of this design | States | Out of scope |
+| --- | --- | --- | --- |
+| #228 | Sheets: Transactions detail and Split editor | `tx-detail`, `tx-detail-member`, `tx-split` | F01 Split category and F05 rule prompt (fixed, #218); bulk edit on phones (#109 design) |
+| #286 | Sheets: Review detail and Approve all | `review-detail`, `review-detail-viewonly`, `approve-all` | — |
+| #287 | Sheet: Recurring detail | `recurring-detail` | — |
+| #288 | Filters, Date and Sort sheets | `tx-filters`, `filters-no-match`, `tx-date`, `tx-sort` | — |
+| #229 | Shared 44px touch targets | — | New-control sizes in #109's design (already ≥44px) |
+| #289 | Budget, Dashboard and Accounts touch targets | `budget-month`, `dashboard`, `accounts` | — |
+| #290 | Settings touch targets | `settings-categories`, `settings-bank`, `settings-merchants` | — |
+| #291 | Reports, Recurring, Review and Investments toolbar touch targets | `reports-trends`, `recurring-list`, `reviews`, `investments` | — |
+| #230 | Row truncation and short account names | `transactions` | Budget Year, Timeline, holdings (#109) |
+| #292 | Amount sizes and taller charts | `budget-month`, `budget-category`, `transactions`, `reports-trends`, `investments` | — |
+| #293 | Reports list, 50 at a time | `reports-list`, `reports-list-more`, `reports-list-empty` | Budget category detail's list |
+| #294 | One-row Transactions and Review toolbars | `transactions`, `transactions-scrolled`, `reviews`, `reviews-viewonly` | — |
+
+The existing #228–#230 entries remain covered by this design; #286–#294 add the split-build coverage.
 
 Area 6 (F02, F15) needs no design: both were fixed by #205 and #215 (closed); confirmed in the
 states below (member detail without Delete; Accounts unchanged).
