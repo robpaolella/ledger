@@ -14,6 +14,7 @@ import Calendar from '../components/Calendar';
 import Popover from '../components/Popover';
 import PermissionGate from '../components/PermissionGate';
 import { NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
+import { accountShortName } from '../lib/accounts';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
@@ -1974,11 +1975,15 @@ export default function TransactionsPage() {
                     title={label}
                     titleExtra={<>
                       {split && <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(11)}</span>}
-                      {t.needsReview && !split && <NeedsReviewBadge />}
+                      {t.needsReview && !split && (
+                        <span role="img" aria-label="Needs review" title={NEEDS_REVIEW_HINT} className="shrink-0 inline-flex" style={{ color: 'var(--warning)' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
+                        </span>
+                      )}
                     </>}
                     subtitle={catName ? <CategoryTag color={catGroup ? getCategoryColorHex(catGroup) : undefined}>{catName}</CategoryTag> : <span className="text-content-3">Uncategorized</span>}
                     amount={<Money amount={split ? split.amount : t.amount} transfer={isTransfer} />}
-                    meta={<span className="font-mono">{accountLabel(t.account)}</span>}
+                    meta={accountShortName(t.account)}
                   />
                 );
                 if (!bulkMode) return row;

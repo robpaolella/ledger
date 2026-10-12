@@ -89,3 +89,12 @@ export function createAccountSaver(request: Request) {
     reset() { pendingId = null; },
   };
 }
+
+/**
+ * Phone rows give the room to the description, so the account shrinks to its
+ * last four ("•• 4417"). With no last four on file the name stands in.
+ */
+export function accountShortName(a: { name: string; lastFour?: string | null; last_four?: string | null }): string {
+  const lf = (a.lastFour ?? a.last_four)?.trim();
+  return lf ? `\u2022\u2022 ${lf}` : a.name;
+}

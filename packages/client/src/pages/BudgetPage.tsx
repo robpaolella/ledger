@@ -378,7 +378,7 @@ export default function BudgetPage() {
                         aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="tap-area shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
                       </button>
-                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className="truncate">{g.groupName}</span></button>
+                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className={`min-w-0 ${wrapCls}`}>{wrapName(g.groupName)}</span></button>
                       <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{whole(gPlanned)}</span>
                       <RemainingCell value={gRem} income={sec.key === 'income'} className="w-[82px] text-right font-bold text-[15px]" />
                     </div>
@@ -387,7 +387,7 @@ export default function BudgetPage() {
                       return (
                         <div key={r.categoryId} className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
                           <span className="w-7 shrink-0 text-center text-[16px] leading-none">{getCategoryEmoji(r.subName, g.groupName)}</span>
-                          <button type="button" onClick={() => drillSub(r.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium"><span className="block truncate">{r.subName}</span></button>
+                          <button type="button" onClick={() => drillSub(r.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium"><span className={`block ${wrapCls}`}>{wrapName(r.subName)}</span></button>
                           <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden, sec.key === 'income'); }}
                             disabled={!canEditBudgets}
                             className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[15px] font-semibold tabular-nums text-content disabled:cursor-default">
