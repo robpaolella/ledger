@@ -91,3 +91,18 @@ export function filtersFromParams(p: URLSearchParams): UrlFilters {
 /** Whether the URL carries any search, date or filter part, so the page knows to apply it. */
 export const hasUrlFilters = (u: UrlFilters) =>
   u.search !== '' || u.date !== null || filterDraftCount(u.filter) > 0;
+
+export type SortOrder = 'asc' | 'desc';
+/** The Transactions Sort choices, in menu order. */
+export const SORT_OPTIONS: { by: string; order: SortOrder; label: string }[] = [
+  { by: 'date', order: 'desc', label: 'Date (new → old)' },
+  { by: 'date', order: 'asc', label: 'Date (old → new)' },
+  { by: 'merchant', order: 'asc', label: 'Merchant (A → Z)' },
+  { by: 'amount', order: 'desc', label: 'Amount (high → low)' },
+  { by: 'amount', order: 'asc', label: 'Amount (low → high)' },
+];
+/** A choice is ticked only once the person has picked a sort; the untouched default shows none. */
+export const isActiveSort = (o: { by: string; order: SortOrder }, touched: boolean, by: string, order: SortOrder) =>
+  touched && o.by === by && o.order === order;
+export const sortButtonLabel = (touched: boolean, by: string, order: SortOrder) =>
+  (touched ? SORT_OPTIONS.find((o) => isActiveSort(o, touched, by, order))?.label : undefined) ?? 'Sort';

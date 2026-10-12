@@ -5,6 +5,17 @@ import { useEffect, useRef, type RefObject } from 'react';
 const layers: symbol[] = [];
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Safari doesn't focus a button on tap, so the opener would read as <body>. Remember the
+// last thing pressed, briefly, to know where to return focus to.
+let lastPressed: { el: HTMLElement; at: number } | null = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', (e) => {
+    const el = (e.target as Element | null)?.closest<HTMLElement>('button, a, [tabindex]');
+    lastPressed = el ? { el, at: Date.now() } : null;
+  }, true);
+}
+const PRESS_WINDOW_MS = 1000;
+
 /**
  * Dialog behaviour shared by the pop-up window and the bottom sheet: focus moves in on
  * open (unless a field already took it with autoFocus), Tab stays inside, Escape closes
@@ -18,7 +29,8 @@ export function useDialogLayer(ref: RefObject<HTMLElement | null>, active: boole
     if (!active) return;
     const id = Symbol('dialog');
     layers.push(id);
-    const opener = document.activeElement as HTMLElement | null;
+    const focused = document.activeElement as HTMLElement | null;
+    const opener = focused && focused !== document.body ? focused : (lastPressed && Date.now() - lastPressed.at < PRESS_WINDOW_MS ? lastPressed.el : focused);
     const el = ref.current;
     if (el && !el.contains(document.activeElement)) el.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
+import { accountShortName } from '../lib/accounts';
 import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
 import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
@@ -13,6 +14,7 @@ import MonthSwitcher from '../components/MonthSwitcher';
 import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { thinLabelIndices } from '../lib/chartLabels';
 import FilterPopover from '../components/FilterPopover';
 import DateRangePopover from '../components/DateRangePopover';
 import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/filterModel';
@@ -373,11 +375,12 @@ export default function ReportsPage() {
   const visible = (focusObj || showAll) ? withTotal : withTotal.slice(0, TOPN);
 
   // chart geometry (viewBox 1200x380)
-  const PX0 = 110, PX1 = 1180, PY0 = 24, PY1 = 336, PW = PX1 - PX0, PH = PY1 - PY0;
+  const PX0 = isMobile ? 170 : 110, PX1 = isMobile ? 1140 : 1180, PY0 = 24, PY1 = 336, PW = PX1 - PX0, PH = PY1 - PY0;
   const nP = Math.max(1, nB);
   const xOf = (i: number) => (nP === 1 ? (PX0 + PW / 2) : PX0 + PW * i / (nP - 1));
   const vmax = Math.max(1, ...totalVals) * 1.06;
   const yOf = (v: number) => PY1 - (v / vmax) * PH;
+  const phoneLabelIdx = new Set(thinLabelIndices(nB, 5)); // phones: thinned month labels, newest always shown
   const ptsOf = (vals: number[]) => vals.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
   const emph = hoverLine || isolate;
   const chartTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => { const v = vmax * f; const y = yOf(v); return { label: axis(v), y: y.toFixed(1), topPct: `${(y / 380 * 100).toFixed(2)}%` }; });
@@ -543,7 +546,7 @@ export default function ReportsPage() {
   })();
 
   const exportEl = (
-    <button onClick={exportCsv} title="Export CSV" className="w-10 h-10 shrink-0 flex items-center justify-center bg-surface border border-line-strong rounded-[11px] text-content-2 hover:bg-surface-2">
+    <button onClick={exportCsv} title="Export CSV" className="tap-grow-sq w-10 h-10 shrink-0 flex items-center justify-center bg-surface border border-line-strong rounded-[11px] text-content-2 hover:bg-surface-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16" /></svg>
           </button>
   );
@@ -559,7 +562,7 @@ export default function ReportsPage() {
               setPreset('YTD');
               setCustomStart(ymd(new Date(new Date().getFullYear(), 0, 1)));
               setCustomEnd(ymd(new Date()));
-            }} className="h-10 px-2.5 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
+            }} className="tap-grow h-10 px-2.5 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
           )}
           {/* Date range (shared DateRangePopover) */}
           <DateRangePopover
@@ -574,7 +577,7 @@ export default function ReportsPage() {
           />
           {/* Filters */}
           <div className="relative">
-            <button onClick={() => (filterOpen ? setFilterOpen(false) : openFilters())} className="flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface text-sm font-semibold text-content" style={{ border: `2px solid ${filterOpen ? 'var(--primary)' : 'var(--line-strong)'}` }}>
+            <button onClick={() => (filterOpen ? setFilterOpen(false) : openFilters())} className="tap-grow flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface text-sm font-semibold text-content" style={{ border: `2px solid ${filterOpen ? 'var(--primary)' : 'var(--line-strong)'}` }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
               Filters
               {fCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold flex items-center justify-center">{fCount}</span>}
@@ -608,8 +611,8 @@ export default function ReportsPage() {
       <div className="border border-line rounded-card bg-surface shadow-sm mb-[22px]" style={{ padding: '20px 26px 22px' }}>
         <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
           <div className="flex items-center gap-6">
-            <button onClick={() => setView('breakdown')} className="text-[17px] font-extrabold pb-[3px]" style={{ color: view === 'breakdown' ? 'var(--text)' : 'var(--text-3)', borderBottom: `2px solid ${view === 'breakdown' ? 'var(--primary)' : 'transparent'}` }}>Breakdown</button>
-            <button onClick={() => setView('trends')} className="text-[17px] font-extrabold pb-[3px]" style={{ color: view === 'trends' ? 'var(--text)' : 'var(--text-3)', borderBottom: `2px solid ${view === 'trends' ? 'var(--primary)' : 'transparent'}` }}>Trends</button>
+            <button onClick={() => setView('breakdown')} className="tap-area text-[17px] font-extrabold pb-[3px]" style={{ color: view === 'breakdown' ? 'var(--text)' : 'var(--text-3)', borderBottom: `2px solid ${view === 'breakdown' ? 'var(--primary)' : 'transparent'}` }}>Breakdown</button>
+            <button onClick={() => setView('trends')} className="tap-area text-[17px] font-extrabold pb-[3px]" style={{ color: view === 'trends' ? 'var(--text)' : 'var(--text-3)', borderBottom: `2px solid ${view === 'trends' ? 'var(--primary)' : 'transparent'}` }}>Trends</button>
           </div>
           {view === 'breakdown' ? (
             <span className="text-[13px] text-content-3">{flowDenomLabel} · {range.label}</span>
@@ -655,9 +658,9 @@ export default function ReportsPage() {
         ) : (
           <div>
             <div className="relative">
-              <svg viewBox="0 0 1200 380" onMouseMove={onChartMove} onMouseLeave={() => setHoverIdx(null)} style={{ width: '100%', height: 'auto', display: 'block', cursor: 'crosshair' }}>
-                {chartTicks.map((g, i) => <line key={i} x1="120" y1={g.y} x2="1188" y2={g.y} stroke="var(--line)" strokeWidth="1" />)}
-                <line x1="120" y1="24" x2="120" y2="330" stroke="var(--line-strong)" strokeWidth="1" />
+              <svg viewBox="0 0 1200 380" preserveAspectRatio={isMobile ? 'none' : undefined} className={isMobile ? '[&_polyline]:[vector-effect:non-scaling-stroke] [&_line]:[vector-effect:non-scaling-stroke]' : undefined} onMouseMove={onChartMove} onMouseLeave={() => setHoverIdx(null)} style={{ width: '100%', height: isMobile ? 220 : 'auto', display: 'block', cursor: 'crosshair' }}>
+                {chartTicks.map((g, i) => <line key={i} x1={PX0 + 10} y1={g.y} x2={PX1 + 8} y2={g.y} stroke="var(--line)" strokeWidth="1" />)}
+                <line x1={PX0 + 10} y1="24" x2={PX0 + 10} y2="330" stroke="var(--line-strong)" strokeWidth="1" />
                 {hovering && <line x1={hoverX} y1="24" x2={hoverX} y2="330" stroke="var(--line-strong)" strokeWidth="1.5" strokeDasharray="5 4" />}
                 {visible.map((c) => { const dim = !!emph && emph !== c.key; return (
                   <g key={c.key}>
@@ -679,8 +682,8 @@ export default function ReportsPage() {
                   </>
                 )}
               </svg>
-              {chartTicks.map((g, i) => <div key={i} className="absolute text-[13px] font-semibold text-content-2 tabular-nums text-right" style={{ left: 0, top: g.topPct, transform: 'translateY(-50%)', width: '8.2%', pointerEvents: 'none' }}>{g.label}</div>)}
-              {buckets.map((b, i) => <div key={i} className="absolute text-[13px] font-semibold text-content-2" style={{ top: '90%', left: `${(xOf(i) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>{b.label}</div>)}
+              {chartTicks.map((g, i) => <div key={i} className={`absolute font-semibold text-content-2 tabular-nums text-right ${isMobile ? 'text-[11px]' : 'text-[13px]'}`} style={{ left: 0, top: g.topPct, transform: 'translateY(-50%)', width: isMobile ? '13%' : '8.2%', pointerEvents: 'none' }}>{g.label}</div>)}
+              {buckets.map((b, i) => (isMobile && !phoneLabelIdx.has(i)) ? null : <div key={i} className={`absolute font-semibold text-content-2 ${isMobile ? 'text-[11px]' : 'text-[13px]'}`} style={{ top: '90%', left: `${(xOf(i) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>{b.label}</div>)}
               {hovering && (
                 <div className="absolute bg-elevated border border-line-strong rounded-[11px] shadow-md" style={{ top: 6, left: `${(xOf(hoverIdx!) / 1200 * 100).toFixed(2)}%`, transform: 'translateX(-50%)', pointerEvents: 'none', padding: '11px 13px', minWidth: 168, zIndex: 5 }}>
                   <div className="text-[12px] font-bold text-content-2 mb-2">{buckets[hoverIdx!].label}</div>
@@ -697,21 +700,21 @@ export default function ReportsPage() {
             <div className="text-center text-[12px] font-semibold text-content-3 mt-2" style={{ letterSpacing: '.04em' }}>{buckets[0]?.label.startsWith('Wk') ? 'Weeks' : `Month · ${range.start.slice(0, 4)}`}</div>
             <div className="mt-4 border-t border-line pt-4 flex flex-wrap gap-2 items-center">
               {legendChips.map((l) => (
-                <div key={l.key} onClick={l.key === '__total' ? () => setIsolate(null) : isoToggle(l.key, false)} onMouseEnter={() => setHoverLine(l.key)} onMouseLeave={() => setHoverLine(null)} className="inline-flex items-center gap-2 h-[34px] px-3 rounded-full cursor-pointer" style={{ border: `1px solid ${l.border}`, background: l.bg, opacity: l.muted ? 0.4 : 1 }}>
+                <div key={l.key} onClick={l.key === '__total' ? () => setIsolate(null) : isoToggle(l.key, false)} onMouseEnter={() => setHoverLine(l.key)} onMouseLeave={() => setHoverLine(null)} className="tap-grow inline-flex items-center gap-2 h-[34px] px-3 rounded-full cursor-pointer" style={{ border: `1px solid ${l.border}`, background: l.bg, opacity: l.muted ? 0.4 : 1 }}>
                   <span className="w-2.5 h-2.5 shrink-0 rounded-[3px]" style={{ background: l.color }} />
                   <span className="text-[13px]" style={{ fontWeight: l.weight }}>{l.name}</span>
                   <span className="text-[13px] font-bold text-content-3 tabular-nums">{l.total}</span>
                 </div>
               ))}
               {hasUnc && (
-                <button type="button" aria-pressed={showUnc} onClick={() => setShowUnc((v) => !v)} className="inline-flex items-center gap-2 h-[34px] px-3 rounded-full cursor-pointer" style={{ border: '1px dashed var(--line-strong)', background: 'var(--surface-2)', opacity: showUnc && !(emph) ? 1 : 0.4 }}>
+                <button type="button" aria-pressed={showUnc} onClick={() => setShowUnc((v) => !v)} className="tap-grow inline-flex items-center gap-2 h-[34px] px-3 rounded-full cursor-pointer" style={{ border: '1px dashed var(--line-strong)', background: 'var(--surface-2)', opacity: showUnc && !(emph) ? 1 : 0.4 }}>
                   <span className="uncategorized-hatch w-2.5 h-2.5 shrink-0 rounded-[3px] border border-line-strong" aria-hidden="true" />
                   <span className="text-[13px] font-semibold">Uncategorized</span>
                   <span className="text-[13px] font-bold text-content-3 tabular-nums">{dollars(uncTotal)}</span>
                 </button>
               )}
               {rest.length > 0 && (
-                <button onClick={() => { if (showAll) setIsolate(null); setShowAll((s) => !s); }} className="inline-flex items-center gap-1.5 h-[34px] px-3.5 rounded-full text-[13px] font-bold text-primary" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)' }}>
+                <button onClick={() => { if (showAll) setIsolate(null); setShowAll((s) => !s); }} className="tap-grow inline-flex items-center gap-1.5 h-[34px] px-3.5 rounded-full text-[13px] font-bold text-primary" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)' }}>
                   {showAll ? 'Show fewer' : `+${rest.length} more`}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showAll ? 'rotate(90deg)' : 'rotate(0deg)' }}><path d="m9 6 6 6-6 6" /></svg>
                 </button>
@@ -730,7 +733,7 @@ export default function ReportsPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {allGroupKeys.length > 0 && (
-              <button onClick={toggleAllGroups} className="text-[13px] font-semibold text-primary hover:text-primary-hover">{allGroupsExpanded ? 'Collapse all' : 'Expand all'}</button>
+              <button onClick={toggleAllGroups} className="tap-area text-[13px] font-semibold text-primary hover:text-primary-hover">{allGroupsExpanded ? 'Collapse all' : 'Expand all'}</button>
             )}
             <MiniToggle value={catView} onChange={(v) => setCatView(v as CatView)} options={[{ v: 'summary', l: 'Summary' }, { v: 'timeline', l: 'Timeline' }]} />
           </div>
@@ -752,7 +755,7 @@ export default function ReportsPage() {
                   <div key={r.key}>
                     <div onClick={() => r.drill && drillTo(r.drill)} className="flex items-center gap-3 border-b border-line" style={{ padding: '15px 26px', cursor: r.drill ? 'pointer' : 'default' }}>
                       {canExpand ? (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(r.gkey); }} aria-label={open ? 'Collapse' : 'Expand'} className="shrink-0 w-6 h-6 -ml-1 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface-2">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(r.gkey); }} aria-label={open ? 'Collapse' : 'Expand'} className="tap-area shrink-0 w-6 h-6 -ml-1 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface-2">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
                         </button>
                       ) : <span className="shrink-0 w-6 -ml-1" />}
@@ -813,7 +816,7 @@ export default function ReportsPage() {
                       <div onClick={() => r.drill && drillTo(r.drill)} className="flex items-center border-b border-line" style={{ padding: tlRowPad, cursor: r.drill ? 'pointer' : 'default' }}>
                         <span className={`${tlNameCol} flex items-center gap-2 min-w-0`}>
                           {canExpand ? (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(r.gkey); }} aria-label={open ? 'Collapse' : 'Expand'} className="shrink-0 w-5 h-5 -ml-0.5 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface">
+                            <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(r.gkey); }} aria-label={open ? 'Collapse' : 'Expand'} className="tap-area shrink-0 w-5 h-5 -ml-0.5 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
                             </button>
                           ) : <span className="shrink-0 w-5 -ml-0.5" />}
@@ -864,7 +867,7 @@ export default function ReportsPage() {
             <div className="text-[13px] text-content-3 mt-0.5">{txnHint}</div>
           </div>
           <div className="relative shrink-0">
-            <button onClick={() => setSortOpen((o) => !o)} className="flex items-center gap-2 h-[38px] px-3.5 bg-surface-2 rounded-[10px] text-[13px] font-semibold" style={{ border: `1px solid ${sortOpen ? 'var(--primary)' : 'var(--line)'}` }}>
+            <button onClick={() => setSortOpen((o) => !o)} className="tap-grow flex items-center gap-2 h-[38px] px-3.5 bg-surface-2 rounded-[10px] text-[13px] font-semibold" style={{ border: `1px solid ${sortOpen ? 'var(--primary)' : 'var(--line)'}` }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l3 3M17 20l-3-3" /></svg>
               {sortLabelMap[txnSort]}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
@@ -904,7 +907,7 @@ export default function ReportsPage() {
                       title={vendor}
                       subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
                       amount={amt}
-                      meta={t.account ? <span className="font-mono">{t.account.name}{t.account.lastFour ? ` (…${t.account.lastFour})` : ''}</span> : undefined} />
+                      meta={t.account ? accountShortName(t.account) : undefined} />
                   );
                 }
                 return (
@@ -945,7 +948,7 @@ export default function ReportsPage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
           <span className="text-sm font-extrabold truncate">{focusObj.group.groupName}</span>
           <span className="text-[13px] text-content-2 tabular-nums">{dollars(focusObj.group.total)} · {focusObj.section.total > 0 ? Math.round(focusObj.group.total / focusObj.section.total * 100) : 0}% of {focusObj.section.label.toLowerCase()}</span>
-          <button onClick={clearFocus} title="Clear drill-down" className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full" style={{ border: '1px solid var(--negative)', color: 'var(--negative)', background: 'color-mix(in srgb, var(--negative) 12%, transparent)' }}>
+          <button onClick={clearFocus} title="Clear drill-down" className="tap-grow-sq shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full" style={{ border: '1px solid var(--negative)', color: 'var(--negative)', background: 'color-mix(in srgb, var(--negative) 12%, transparent)' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </div>
@@ -957,10 +960,10 @@ export default function ReportsPage() {
 // ── Small segmented toggle (design's inline pill toggle) ──
 function MiniToggle({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
   return (
-    <div className="flex bg-surface-2 border border-line rounded-[10px] p-[3px] gap-0.5 shrink-0">
+    <div className="flex max-md:min-h-11 bg-surface-2 border border-line rounded-[10px] p-[3px] gap-0.5 shrink-0">
       {options.map((o) => {
         const on = value === o.v;
-        return <button key={o.v} onClick={() => onChange(o.v)} className="px-3.5 py-1.5 rounded-lg text-[13px] font-semibold" style={{ color: on ? 'var(--text)' : 'var(--text-3)', background: on ? 'var(--elevated)' : 'transparent', boxShadow: on ? 'var(--shadow-sm)' : 'none' }}>{o.l}</button>;
+        return <button key={o.v} onClick={() => onChange(o.v)} className="relative max-md:inline-flex max-md:items-center max-md:justify-center max-md:after:content-[''] max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold" style={{ color: on ? 'var(--text)' : 'var(--text-3)', background: on ? 'var(--elevated)' : 'transparent', boxShadow: on ? 'var(--shadow-sm)' : 'none' }}>{o.l}</button>;
       })}
     </div>
   );

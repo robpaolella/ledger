@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { formatMoney, monthPeriod, type UncategorizedTotals } from '@ledger/shared';
+import { formatMoney, monthPeriod, uncategorizedNoticeText, type UncategorizedTotals } from '@ledger/shared';
 import { Change } from '../components/Money';
 import Spinner from '../components/Spinner';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
@@ -347,7 +347,7 @@ export default function BudgetPage() {
       {isMonth && isMobile ? (
       /* ===== MONTH VIEW · PHONE ===== planned / remaining grid, one card per group */
       <div>
-        <div className="-mx-4 -mt-5 mb-4 px-4 py-3 flex items-center justify-between" style={{ background: `color-mix(in srgb, ${leftTint(totals.leftToBudget)} 14%, transparent)` }}>
+        <div className={`-mx-4 ${uncategorizedNoticeText(uncategorized) ? '' : '-mt-5'} mb-4 px-4 py-3 flex items-center justify-between`} style={{ background: `color-mix(in srgb, ${leftTint(totals.leftToBudget)} 14%, transparent)` }}>
           <span className="text-[15px] font-extrabold">Left to budget</span>
           <Remaining value={totals.leftToBudget} className="text-[17px] font-extrabold" />
         </div>
@@ -378,7 +378,7 @@ export default function BudgetPage() {
                         aria-label={gCollapsed ? 'Expand' : 'Collapse'} className="tap-area shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
                       </button>
-                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className="truncate">{g.groupName}</span></button>
+                      <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]"><GroupTile name={g.groupName} /><span className={`min-w-0 ${wrapCls}`}>{wrapName(g.groupName)}</span></button>
                       <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{whole(gPlanned)}</span>
                       <RemainingCell value={gRem} income={sec.key === 'income'} className="w-[82px] text-right font-bold text-[15px]" />
                     </div>
@@ -387,13 +387,13 @@ export default function BudgetPage() {
                       return (
                         <div key={r.categoryId} className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
                           <span className="w-7 shrink-0 text-center text-[16px] leading-none">{getCategoryEmoji(r.subName, g.groupName)}</span>
-                          <button type="button" onClick={() => drillSub(r.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium"><span className="block truncate">{r.subName}</span></button>
+                          <button type="button" onClick={() => drillSub(r.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium"><span className={`block ${wrapCls}`}>{wrapName(r.subName)}</span></button>
                           <button onClick={() => { if (canEditBudgets) openEdit(r.categoryId, g.groupName, r.subName, r.budgeted, undefined, r.recurring, r.manual, r.overridden, sec.key === 'income'); }}
                             disabled={!canEditBudgets}
-                            className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[14px] font-semibold tabular-nums text-content disabled:cursor-default">
+                            className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[15px] font-semibold tabular-nums text-content disabled:cursor-default">
                             {whole(r.budgeted)}
                           </button>
-                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[14px] font-bold tabular-nums" style={pillTint(isOver(rem))}
+                          <span className="w-[82px] h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center gap-1 text-[15px] font-bold tabular-nums" style={pillTint(isOver(rem))}
                             title={r.recurring ? `Recurring (minimum): ${r.recurring.items.map((i) => i.label).join(', ')}` : undefined}>
                             {r.recurring && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>}
                             {sec.key === 'income' && isOver(rem) ? `+${whole(-rem)}` : formatMoney(rem, { kind: 'total', precision: 'whole' }).text}

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export interface PerfSeries {
   name: string;
@@ -17,7 +18,9 @@ const fmtDate = (d: string) => {
  * spaced date x-labels, and a centered dot legend below. No hover crosshair
  * (design fidelity). Renders at real pixel width via ResizeObserver.
  */
-export default function PerformanceChart({ dates, series, height = 400 }: { dates: string[]; series: PerfSeries[]; height?: number }) {
+export default function PerformanceChart({ dates, series, height: heightProp }: { dates: string[]; series: PerfSeries[]; height?: number }) {
+  const isMobile = useIsMobile();
+  const height = heightProp ?? (isMobile ? 220 : 400);
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(960);
 
@@ -39,7 +42,9 @@ export default function PerformanceChart({ dates, series, height = 400 }: { date
     [series, dates],
   );
 
-  const pad = { left: 70, right: 8, top: 12, bottom: 36 };
+  // Phones: smaller labels and room at the right so the last date is never cut off.
+  const pad = isMobile ? { left: 52, right: 28, top: 12, bottom: 30 } : { left: 70, right: 8, top: 12, bottom: 36 };
+  const axisSize = isMobile ? 11 : 13;
   const plotW = Math.max(1, width - pad.left - pad.right);
   const plotH = Math.max(1, height - pad.top - pad.bottom);
 
@@ -65,10 +70,10 @@ export default function PerformanceChart({ dates, series, height = 400 }: { date
   const xIdx = useMemo(() => {
     const n = dates.length;
     if (n === 0) return [];
-    const count = Math.min(n, Math.max(2, Math.min(13, Math.round(plotW / 115) + 1)));
+    const count = Math.min(n, Math.max(2, Math.min(13, Math.round(plotW / (isMobile ? 90 : 115)) + 1)));
     const idx = Array.from({ length: count }, (_, i) => Math.round((i * (n - 1)) / (count - 1)));
     return [...new Set(idx)];
-  }, [dates, plotW]);
+  }, [dates, plotW, isMobile]);
 
   if (dates.length === 0 || drawn.length === 0) return null;
 
@@ -82,7 +87,7 @@ export default function PerformanceChart({ dates, series, height = 400 }: { date
               return (
                 <g key={i}>
                   <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="var(--line)" strokeWidth="1" />
-                  <text x={pad.left - 14} y={y + 5} textAnchor="end" fontSize="14" fontWeight="500" fill="var(--text-3)" className="tabular-nums">
+                  <text x={pad.left - (isMobile ? 8 : 14)} y={y + 4} textAnchor="end" fontSize={isMobile ? 11 : 14} fontWeight="500" fill="var(--text-3)" className="tabular-nums">
                     {`${parseFloat(t.toFixed(2))}%`}
                   </text>
                 </g>
@@ -97,7 +102,7 @@ export default function PerformanceChart({ dates, series, height = 400 }: { date
               />
             ))}
             {xIdx.map((i) => (
-              <text key={i} x={xFor(i)} y={height - 8} textAnchor="middle" fontSize="13" fontWeight="500" fill="var(--text-3)">
+              <text key={i} x={xFor(i)} y={height - 8} textAnchor="middle" fontSize={axisSize} fontWeight="500" fill="var(--text-3)">
                 {fmtDate(dates[i])}
               </text>
             ))}
