@@ -5,10 +5,14 @@ interface TotpCodeInputProps {
   onChange: (value: string) => void;
   autoFocus?: boolean;
   disabled?: boolean;
+  /** Marks the boxes red after a wrong code. */
+  invalid?: boolean;
+  /** Left-align the boxes from the md breakpoint up (the two-step setup layout). */
+  alignStart?: boolean;
 }
 
 /** Six-box one-time-code input (auto-advance, paste, backspace). */
-export default function TotpCodeInput({ value, onChange, autoFocus = false, disabled = false }: TotpCodeInputProps) {
+export default function TotpCodeInput({ value, onChange, autoFocus = false, disabled = false, invalid = false, alignStart = false }: TotpCodeInputProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = value.padEnd(6, '').slice(0, 6).split('');
 
@@ -72,7 +76,7 @@ export default function TotpCodeInput({ value, onChange, autoFocus = false, disa
   };
 
   return (
-    <div className="flex gap-2 justify-center" role="group" aria-label="Verification code">
+    <div className={`flex gap-2 ${alignStart ? 'justify-center md:justify-start' : 'justify-center'}`} role="group" aria-label="Verification code">
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <input
           key={i}
@@ -88,7 +92,8 @@ export default function TotpCodeInput({ value, onChange, autoFocus = false, disa
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
           disabled={disabled}
-          className="w-11 h-[52px] text-center text-xl font-mono font-semibold rounded-[11px] bg-surface-2 border border-line-strong text-content outline-none transition-colors focus:border-primary disabled:opacity-50"
+          aria-invalid={invalid || undefined}
+          className={`w-11 h-[52px] text-center text-xl font-mono font-semibold rounded-[11px] bg-surface-2 border text-content outline-none transition-colors focus:border-primary ${invalid ? 'border-negative' : 'border-line-strong'} disabled:opacity-50`}
           style={{ caretColor: 'transparent' }}
         />
       ))}

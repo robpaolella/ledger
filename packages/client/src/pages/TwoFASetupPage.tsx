@@ -4,20 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../lib/api';
 import AuthShell from '../components/AuthShell';
 import InlineNotification from '../components/InlineNotification';
-import TotpCodeInput from '../components/TotpCodeInput';
-import Tooltip from '../components/Tooltip';
+import TwoFAKeySetup, { WRONG_CODE_MESSAGE, copyText, isWrongCodeError } from '../components/TwoFAKeySetup';
 import { btnPrimary, btnSecondary } from '../components/settings/ui';
 
 interface SetupData { qrCodeUrl: string; secret: string; otpauthUri: string }
-
-async function copyText(text: string) {
-  try { await navigator.clipboard.writeText(text); }
-  catch {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-  }
-}
 
 /** Forced two-factor enrolment (an admin requires it for this role). */
 export default function TwoFASetupPage() {
@@ -30,12 +20,13 @@ export default function TwoFASetupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [secretCopied, setSecretCopied] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
+  const [codeError, setCodeError] = useState('');
+  const [failed, setFailed] = useState(false);
 
-  // Auto-submit when 6 digits entered
+  // Auto-submit when 6 digits entered. After a wrong code the boxes stay filled for editing, so
+  // retries go through the Verify button (editing one digit would otherwise submit a half-edited code).
   useEffect(() => {
-    if (verifyCode.length === 6 && step === 'scan' && !loading) handleVerify({ preventDefault: () => {} } as FormEvent);
+    if (verifyCode.length === 6 && step === 'scan' && !loading && !failed) handleVerify({ preventDefault: () => {} } as FormEvent);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifyCode]);
 
@@ -52,14 +43,15 @@ export default function TwoFASetupPage() {
   const handleVerify = async (e: FormEvent) => {
     e.preventDefault();
     if (!setupData) return;
-    setError(''); setLoading(true);
+    setError(''); setCodeError(''); setLoading(true);
     try {
       const res = await apiFetch<{ data: { backupCodes: string[] } }>('/auth/2fa/confirm', { method: 'POST', body: JSON.stringify({ token: verifyCode, secret: setupData.secret }) });
       setBackupCodes(res.data.backupCodes); setStep('backup');
       await refreshUser();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
-      setVerifyCode('');
+      setFailed(true);
+      if (isWrongCodeError(err)) setCodeError(WRONG_CODE_MESSAGE);
+      else setError(err instanceof Error ? err.message : 'Verification failed');
     } finally { setLoading(false); }
   };
 
@@ -90,28 +82,12 @@ export default function TwoFASetupPage() {
 
   if (step === 'scan' && setupData) {
     return (
-      <AuthShell title="Scan the QR code" description="Open your authenticator app, scan this code, then enter the 6-digit code it shows." maxWidth={440}>
-        <form onSubmit={handleVerify} className="flex flex-col gap-4">
+      <AuthShell title="Set up two-factor authentication" description="Your administrator requires a second sign-in step for your account." maxWidth={480}>
+        <form onSubmit={handleVerify} className="flex flex-col gap-6">
           {error && <InlineNotification type="error" message={error} />}
-          <div className="flex justify-center">
-            <div className="bg-white p-3 rounded-[12px]"><img src={setupData.qrCodeUrl} alt="Two-factor QR code" className="w-44 h-44 block" /></div>
-          </div>
-          <button type="button" onClick={() => { setShowSecret(!showSecret); setSecretCopied(false); }} className="text-[13px] font-semibold text-primary w-full text-center">
-            {showSecret ? 'Hide secret key' : "Can't scan? Enter the key manually"}
-          </button>
-          {showSecret && (
-            <div className="flex justify-center">
-              <Tooltip content={secretCopied ? 'Copied to clipboard' : 'Click to copy'}>
-                <button type="button" onClick={async () => { await copyText(setupData.secret); setSecretCopied(true); setTimeout(() => setSecretCopied(false), 2000); }}
-                  className="bg-surface-2 border border-line-strong rounded-[11px] px-4 py-2.5 hover:border-primary transition-colors">
-                  <code className="font-mono text-[12px] text-content break-all">{setupData.secret}</code>
-                </button>
-              </Tooltip>
-            </div>
-          )}
-          <div className="text-[13px] font-bold text-content text-center">Verification code</div>
-          <TotpCodeInput value={verifyCode} onChange={setVerifyCode} autoFocus />
-          <button type="submit" disabled={loading || verifyCode.length !== 6} className={`${btnPrimary} w-full h-11 mt-1`}>{loading ? 'Verifying…' : 'Verify and enable'}</button>
+          <TwoFAKeySetup qrCodeUrl={setupData.qrCodeUrl} secret={setupData.secret} otpauthUri={setupData.otpauthUri}
+            verifyCode={verifyCode} onCodeChange={(v) => { setVerifyCode(v); setCodeError(''); }} codeError={codeError} autoSubmitHint={!failed} />
+          <button type="submit" disabled={loading || verifyCode.length !== 6} className={`${btnPrimary} w-full h-11`}>{loading ? 'Verifying…' : 'Verify and enable'}</button>
         </form>
       </AuthShell>
     );
