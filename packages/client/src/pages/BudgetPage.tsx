@@ -14,6 +14,7 @@ import Button from '../components/Button';
 import UncategorizedNotice from '../components/UncategorizedNotice';
 import BudgetHistory from '../components/budget/BudgetHistory';
 import MonthSwitcher from '../components/MonthSwitcher';
+import { isUnbudgetedYear, yearLine, sectionYearLine } from '../lib/budgetYear';
 import { useToast } from '../context/ToastContext';
 
 // Recurring overlay meta on a budget row (null when no recurring items apply).
@@ -290,10 +291,7 @@ export default function BudgetPage() {
         )}
     </>
   );
-  const yearSum = (arr: number[]) => arr.reduce((a, v) => a + (v || 0), 0);
   const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const monthCols = 'w-[76px] shrink-0 text-right';
-  const yearCols = 'w-[60px] shrink-0 text-right';
   // Long names wrap at word boundaries and after "/", never mid-word.
   const wrapName = (name: string) => name.split('/').flatMap((part, i, a) => (i < a.length - 1 ? [part, '/', <wbr key={i} />] : [part]));
   const wrapCls = 'line-clamp-2 [overflow-wrap:break-word]';
@@ -304,7 +302,22 @@ export default function BudgetPage() {
       {[150, 110, 170, 90, 140, 120, 160, 100].map((w, i) => (
         <div key={i} className="flex items-center justify-between gap-4 px-4 md:px-6 py-3.5 border-b border-line">
           <div className="bg-surface-2 rounded-lg h-4" style={{ width: w }} />
-          <div className="flex gap-3">{Array.from({ length: isMobile ? 2 : 8 }, (_, j) => <div key={j} className="bg-surface-2 rounded-lg h-4 w-14" />)}</div>
+          <div className="flex gap-3">{Array.from({ length: 8 }, (_, j) => <div key={j} className="bg-surface-2 rounded-lg h-4 w-14" />)}</div>
+        </div>
+      ))}
+    </div>
+  );
+  const yearLoadingPhone = (
+    <div aria-busy="true" aria-label="Loading budget">
+      <div className="-mx-4 -mt-5 mb-4 h-[60px] bg-surface border-b border-line" />
+      {[[150, 4], [110, 3], [170, 5]].map(([w, n]) => (
+        <div key={w} className="bg-surface border border-line rounded-card shadow-sm overflow-hidden mb-3">
+          {Array.from({ length: n }, (_, i) => (
+            <div key={i} className={`flex items-center justify-between gap-4 px-3 py-3 ${i ? 'border-t border-line' : ''}`}>
+              <div className="flex flex-col gap-1.5"><div className="bg-surface-2 rounded-lg h-4" style={{ width: w - i * 12 }} /><div className="bg-surface-2 rounded-lg h-3 w-[90px]" /></div>
+              <div className="bg-surface-2 rounded-lg h-4 w-[76px]" />
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -341,12 +354,13 @@ export default function BudgetPage() {
         </>} />
 
       {/* Money with no category is already inside the totals; this says so. Year view shows plans only. */}
-      {isMonth && <UncategorizedNotice totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} className="mb-5" />}
+      {isMonth && !isMobile && <UncategorizedNotice totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} className="mb-5" />}
 
       {/* ===== MONTH VIEW ===== */}
       {isMonth && isMobile ? (
       /* ===== MONTH VIEW · PHONE ===== planned / remaining grid, one card per group */
       <div>
+        <UncategorizedNotice strip totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} />
         <div className={`-mx-4 ${uncategorizedNoticeText(uncategorized) ? '' : '-mt-5'} mb-4 px-4 py-3 flex items-center justify-between`} style={{ background: `color-mix(in srgb, ${leftTint(totals.leftToBudget)} 14%, transparent)` }}>
           <span className="text-[15px] font-extrabold">Left to budget</span>
           <Remaining value={totals.leftToBudget} className="text-[17px] font-extrabold" />
@@ -553,80 +567,92 @@ export default function BudgetPage() {
         </div>
       </div>
       ) : isMobile ? (
-      /* ===== YEAR VIEW · PHONE ===== one month at a time beside the year total */
-      annualError && !phoneYear ? yearError : !phoneYear ? yearLoading : (
+      /* ===== YEAR VIEW · PHONE ===== Month's group cards; the right side is the chosen month, the year plan is a second line */
+      annualError && !phoneYear ? yearError : !phoneYear ? yearLoadingPhone : (
       <div>
-        {yearNotes}
-        <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
+        <div className="-mx-4 -mt-5 mb-4 bg-surface">
           <MonthSwitcher title={`${MONTH_FULL[mi]} ${yr}`}
             subtitle={pastMonth ? 'Planned · past month, locked' : isCurYear && mi === curMi ? 'Planned · this month' : 'Planned'}
             onPrev={() => setMonth(new Date(yr, mi - 1, 1))} onNext={() => setMonth(new Date(yr, mi + 1, 1))}
             prevDisabled={mi === 0} nextDisabled={mi === 11} />
-          <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-line font-mono text-[11px] uppercase tracking-wide text-content-3">
-            <div className="flex-1">Category</div>
-            <div className={monthCols} style={{ color: 'var(--primary)', fontWeight: 700 }}>{MONTHS[mi]}</div>
-            <div className={yearCols}>{yr}</div>
-          </div>
-          {annualSections.map((sec) => {
-            const secTotals = sec.groups.reduce<number[]>((acc, g) => { const gt = sumCols(g.subs); return acc.map((v, m) => v + gt[m]); }, new Array(12).fill(0));
-            return (
-              <div key={sec.key}>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-line">
-                  <div className="flex-1 text-xs font-bold uppercase tracking-wide text-content-2">{sec.label}</div>
-                  <div className={`${monthCols} text-[15px] font-bold tabular-nums text-content-2`}>{whole(secTotals[mi])}</div>
-                  <div className={`${yearCols} text-[15px] font-bold tabular-nums text-content-2`}>{whole(yearSum(secTotals))}</div>
+        </div>
+        {yearNotes}
+        {annualSections.map((sec) => {
+          const secTotals = sec.groups.reduce<number[]>((acc, g) => { const gt = sumCols(g.subs); return acc.map((v, m) => v + gt[m]); }, new Array(12).fill(0));
+          return (
+            <div key={sec.key} className="mb-6">
+              <div className="flex items-end justify-between px-3 mb-2">
+                <div>
+                  <div className="text-[17px] font-bold">{sec.label}</div>
+                  <div className="text-[12px] text-content-3 tabular-nums">{sectionYearLine(secTotals, yr)}</div>
                 </div>
+                <div className="flex flex-col items-end">
+                  <span className="w-[76px] text-right font-mono text-[11px] uppercase tracking-wide text-content-3" style={{ color: 'var(--primary)', fontWeight: 700 }}>{MONTHS[mi]}</span>
+                  <span className="w-[76px] text-right text-[13px] font-bold tabular-nums text-content-2">{whole(secTotals[mi])}</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
                 {sec.groups.map((g) => {
                   const groupKey = 'y|' + sec.key + '|' + g.groupName;
                   const gCollapsed = collapsedGroups[groupKey];
                   const gTotals = sumCols(g.subs);
+                  const showUn = showUnbudgeted[groupKey];
+                  const unbudgeted = g.subs.filter((r) => isUnbudgetedYear(r.planned));
+                  const rows = showUn ? g.subs : g.subs.filter((r) => !isUnbudgetedYear(r.planned));
+                  const locked = pastMonth || !canEditBudgets;
                   return (
-                    <div key={groupKey}>
-                      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line min-h-[52px]">
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <button type="button" onClick={() => setCollapsedGroups((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
-                            aria-label={gCollapsed ? `Expand ${g.groupName}` : `Collapse ${g.groupName}`} aria-expanded={!gCollapsed}
-                            className="shrink-0 w-8 h-8 -m-1 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface-2">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: gCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6"/></svg>
-                          </button>
-                          <GroupTile name={g.groupName} compact />
-                          <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className={`min-w-0 text-left font-bold text-[15px] ${wrapCls}`}>{wrapName(g.groupName)}</button>
-                        </div>
-                        <div className={`${monthCols} text-[15px] font-semibold tabular-nums`}>{whole(gTotals[mi])}</div>
-                        <div className={`${yearCols} text-[15px] font-semibold tabular-nums text-content-2`}>{whole(yearSum(gTotals))}</div>
+                    <div key={groupKey} className="bg-surface border border-line rounded-card shadow-sm overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-3">
+                        <button type="button" onClick={() => setCollapsedGroups((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
+                          aria-label={gCollapsed ? `Expand ${g.groupName}` : `Collapse ${g.groupName}`} aria-expanded={!gCollapsed}
+                          className="tap-area shrink-0 w-8 h-8 rounded-full border border-line-strong flex items-center justify-center text-content-2 active:bg-surface-2">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: gCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .15s' }}><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <button type="button" onClick={() => drillGroup(g.groupName, sec.key)} className="tap-area flex-1 min-w-0 flex items-center gap-2 text-left font-bold text-[15px]">
+                          <GroupTile name={g.groupName} />
+                          <span className="min-w-0">
+                            <span className={`block ${wrapCls}`}>{wrapName(g.groupName)}</span>
+                            <span className="block text-[12px] font-semibold text-content-3 tabular-nums">{yearLine(gTotals, yr)}</span>
+                          </span>
+                        </button>
+                        <span className="w-[76px] text-right font-bold text-[15px] tabular-nums">{whole(gTotals[mi])}</span>
                       </div>
-                      {!gCollapsed && g.subs.map((sub) => {
+                      {!gCollapsed && rows.map((sub) => {
                         const v = sub.planned[mi];
-                        const locked = pastMonth || !canEditBudgets;
                         const label = `${sub.subName}, ${MONTH_FULL[mi]} ${yr}: ${whole(v) === '—' ? 'nothing planned' : whole(v)}`;
                         return (
-                          <div key={sub.categoryId} className="flex items-center gap-2 pl-[52px] pr-4 py-1.5 border-b border-line min-h-[56px]">
-                            <div className="flex-1 min-w-0 flex items-center gap-2">
-                              <span className="shrink-0 text-[15px] leading-none" aria-hidden="true">{getCategoryEmoji(sub.subName, g.groupName)}</span>
-                              <button type="button" onClick={() => drillSub(sub.categoryId)} className={`min-w-0 text-left text-[15px] text-content-2 ${wrapCls}`}>{wrapName(sub.subName)}</button>
-                            </div>
-                            <div className={monthCols}>
-                              {locked ? (
-                                <span aria-label={label} className="inline-block min-h-11 leading-[44px] px-2 text-[15px] font-medium tabular-nums whitespace-nowrap text-content-3">{whole(v)}</span>
-                              ) : (
-                                <button type="button" aria-label={`${label}. Edit`}
-                                  onClick={() => openEdit(sub.categoryId, g.groupName, `${sub.subName} · ${MONTHS[mi]} ${yr}`, v, `${yr}-${String(mi + 1).padStart(2, '0')}`, sub.recurring[mi], sub.manual[mi], sub.overridden[mi], sec.key === 'income')}
-                                  className="min-h-11 min-w-16 px-2 text-right text-[15px] font-semibold tabular-nums whitespace-nowrap text-content rounded-[10px] border border-line-strong bg-surface enabled:hover:border-primary">
-                                  {whole(v)}
-                                </button>
-                              )}
-                            </div>
-                            <div className={`${yearCols} text-[15px] tabular-nums text-content-3`}>{whole(yearSum(sub.planned))}</div>
+                          <div key={sub.categoryId} className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
+                            <span className="w-7 shrink-0 text-center text-[16px] leading-none" aria-hidden="true">{getCategoryEmoji(sub.subName, g.groupName)}</span>
+                            <button type="button" onClick={() => drillSub(sub.categoryId)} className="tap-area flex-1 min-w-0 text-left text-[15px] font-medium">
+                              <span className={`block ${wrapCls}`}>{wrapName(sub.subName)}</span>
+                              <span className="block text-[12px] font-normal text-content-3 tabular-nums">{yearLine(sub.planned, yr)}</span>
+                            </button>
+                            {locked ? (
+                              <span aria-label={label} className="w-[76px] h-9 shrink-0 inline-flex items-center justify-end pr-2.5 text-[15px] font-semibold tabular-nums text-content-3">{whole(v)}</span>
+                            ) : (
+                              <button type="button" aria-label={`${label}. Edit`}
+                                onClick={() => openEdit(sub.categoryId, g.groupName, `${sub.subName} · ${MONTHS[mi]} ${yr}`, v, `${yr}-${String(mi + 1).padStart(2, '0')}`, sub.recurring[mi], sub.manual[mi], sub.overridden[mi], sec.key === 'income')}
+                                className="tap-grow w-[76px] h-9 shrink-0 rounded-[10px] border border-line-strong bg-surface text-[15px] font-semibold tabular-nums text-content">
+                                {whole(v)}
+                              </button>
+                            )}
                           </div>
                         );
                       })}
+                      {!gCollapsed && unbudgeted.length > 0 && (
+                        <button type="button" onClick={() => setShowUnbudgeted((s) => ({ ...s, [groupKey]: !s[groupKey] }))}
+                          className="tap-area w-full flex items-center gap-2.5 px-3 py-3 border-t border-line text-content-3 text-left active:bg-surface-2">
+                          <span className="w-7 shrink-0 flex justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                          <span className="text-[13px] font-semibold">{showUn ? 'Hide' : 'Show'} {unbudgeted.length} unbudgeted</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
       )
       ) : annualError && annualYear !== yr ? yearError : annualData ? (
