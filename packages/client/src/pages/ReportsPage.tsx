@@ -447,6 +447,9 @@ export default function ReportsPage() {
     if (tlWeekly) return `${b.label} · ${mon(sm)} ${sd}–${em === sm ? '' : `${mon(em)} `}${ed}`;
     return b.label.includes("'") ? b.label : `${b.label} ${sy}`;
   })();
+  const tlRangeLabel = preset === 'custom'
+    ? [range.start, range.end].map((d) => { const [y, m] = d.split('-').map(Number); return `${MFULL[m - 1].slice(0, 3)} ${y}`; }).join(' – ')
+    : range.label;
   const tlShown = <T,>(a: T[]): T[] => (isMobile ? a.slice(tlIdx, tlIdx + 1) : a);
   const tlNameCol = isMobile ? 'flex-1 min-w-0' : 'w-[214px] shrink-0';
   const tlCellCls = isMobile ? 'w-[80px] shrink-0 text-right' : 'text-right';
@@ -760,7 +763,7 @@ export default function ReportsPage() {
         ) : (
           <div className={isMobile ? 'border-t border-line' : 'border-t border-line overflow-x-auto'}>
             {isMobile && nB > 0 && (
-              <MonthSwitcher title={tlTitle} subtitle={`${tlIdx + 1} of ${nB} · ${range.label}`}
+              <MonthSwitcher title={tlTitle} subtitle={`${tlIdx + 1} of ${nB} · ${tlRangeLabel}`}
                 prevLabel={tlWeekly ? 'Previous week' : 'Previous month'} nextLabel={tlWeekly ? 'Next week' : 'Next month'}
                 onPrev={() => setTlPick(tlIdx - 1)} onNext={() => setTlPick(tlIdx + 1)}
                 prevDisabled={tlIdx === 0} nextDisabled={tlIdx === nB - 1} />
