@@ -132,6 +132,7 @@ router.get('/', (req: Request, res: Response) => {
       needsReview,
       limit: limitStr, offset: offsetStr,
       sortBy = 'date', sortOrder = 'desc',
+      thenBy, thenOrder,
     } = req.query as Record<string, string | undefined>;
 
     const limit = clampInt(limitStr, 50, 1, 1000);
@@ -276,6 +277,9 @@ router.get('/', (req: Request, res: Response) => {
       sortBy === 'subcategory' ? categories.sub_name :
       transactions.date;
     const orderFn = sortOrder === 'asc' ? asc : desc;
+    // Optional second key (Reports): within each date, order by absolute amount.
+    const thenFn = thenOrder === 'asc' ? asc : desc;
+    const thenOrderBy = thenBy === 'absAmount' ? [thenFn(sql`ABS(${transactions.amount})`)] : [];
 
     const rows = db
       .select({
@@ -308,7 +312,7 @@ router.get('/', (req: Request, res: Response) => {
       .leftJoin(categories, eq(transactions.category_id, categories.id))
       .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
       .where(where)
-      .orderBy(orderFn(sortColumn), desc(transactions.id))
+      .orderBy(orderFn(sortColumn), ...thenOrderBy, desc(transactions.id))
       .limit(limit)
       .offset(offset)
       .all();
