@@ -266,7 +266,7 @@ export default function AccountForm({
         )}
 
         {account && onDelete && (
-          <div className="flex items-center justify-between gap-4 px-4 py-3.5 rounded-[12px]"
+          <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between md:gap-4 px-4 py-3.5 rounded-[12px]"
             style={{ background: 'color-mix(in srgb, var(--negative) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--negative) 30%, transparent)' }}>
             <div className="min-w-0">
               <div className="text-sm font-bold text-content">Remove account</div>
