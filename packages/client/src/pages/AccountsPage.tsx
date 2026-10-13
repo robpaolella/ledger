@@ -503,7 +503,7 @@ export default function AccountsPage() {
                 <div className="text-[12px] text-content-3 mt-1">after {prev.years.toFixed(1)} yrs</div>
               </div>
               <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                {assetModal !== 'new' && <ConfirmDeleteButton className="max-md:h-11" onConfirm={deleteAsset} />}
+                {assetModal !== 'new' && hasPermission('assets.delete') && <ConfirmDeleteButton className="max-md:h-11" onConfirm={deleteAsset} />}
                 <button onClick={() => setAssetModal(null)} className="ml-auto h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
                 <button onClick={saveAsset} disabled={!af.name || !af.purchaseDate} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">{assetModal === 'new' ? 'Add asset' : 'Save changes'}</button>
               </div>
