@@ -30,7 +30,7 @@ const CountBadge = ({ n }: { n: number }) => n > 0 ? (
 const FOCUS = 'outline-none focus-visible:ring-2 focus-visible:ring-primary';
 /** A checklist row: a real checkbox button, so Tab reaches it and Space/Enter toggles it. */
 const CheckRow = ({ on, onToggle, className, children }: { on: boolean; onToggle: () => void; className: string; children: React.ReactNode }) => (
-  <button type="button" role="checkbox" aria-checked={on} onClick={onToggle} className={`${className} w-full text-left ${FOCUS}`}>{children}</button>
+  <button type="button" role="checkbox" aria-checked={on} onClick={onToggle} className={`${className} max-md:min-h-11 w-full text-left ${FOCUS}`}>{children}</button>
 );
 const RemoveBtn = ({ onClick }: { onClick: () => void }) => (
   <button onClick={onClick} aria-label="Remove" className={`text-content-3 hover:text-content shrink-0 rounded ${FOCUS}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" /></svg></button>

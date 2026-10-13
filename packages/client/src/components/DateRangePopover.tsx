@@ -135,7 +135,7 @@ export default function DateRangePopover({
                           className="flex-1 min-w-0 h-full bg-transparent outline-none tabular-nums text-content placeholder:text-content-3" />
                         <button type="button" tabIndex={-1} onClick={() => setCalOpen((c) => (c === f ? null : f))}
                           aria-label={f === 'start' ? 'Open start date calendar' : 'Open end date calendar'} aria-expanded={calOpen === f}
-                          className="w-10 h-10 flex items-center justify-center rounded-[10px] hover:bg-surface-2 shrink-0">
+                          className="w-10 h-10 max-md:w-11 max-md:h-11 flex items-center justify-center rounded-[10px] hover:bg-surface-2 shrink-0">
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>
                         </button>
                       </div>

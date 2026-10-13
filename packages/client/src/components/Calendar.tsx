@@ -37,8 +37,8 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
   const lastYear = Math.max(today.getFullYear() + 3, vy);
   for (let y = firstYear; y <= lastYear; y++) years.push(y);
 
-  const navBtn = 'w-10 h-10 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 shrink-0';
-  const selectCls = 'h-10 px-3 pr-8 rounded-[10px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';
+  const navBtn = 'w-10 h-10 max-md:w-11 max-md:h-11 flex items-center justify-center rounded-[10px] text-content-2 hover:bg-surface-2 shrink-0';
+  const selectCls = 'h-10 max-md:h-11 px-3 pr-8 rounded-[10px] bg-surface-2 border border-line text-content text-sm font-semibold outline-none appearance-none cursor-pointer';
 
   return (
     <div>
@@ -66,13 +66,13 @@ export default function Calendar({ value, onChange }: { value: string; onChange:
       <div className="grid grid-cols-7 border-t border-l border-line rounded-[8px] overflow-hidden">
         {cells.map((d, i) => (
           d === null
-            ? <div key={i} className="border-r border-b border-line aspect-square" />
+            ? <div key={i} className="border-r border-b border-line aspect-square max-md:min-h-11" />
             : (
               <button
                 key={i}
                 type="button"
                 onClick={() => onChange(dayStr(d))}
-                className={`border-r border-b border-line aspect-square flex items-center justify-center text-sm font-medium relative ${isSel(d) ? '' : 'hover:bg-surface-2'}`}
+                className={`border-r border-b border-line aspect-square max-md:min-h-11 flex items-center justify-center text-sm font-medium relative ${isSel(d) ? '' : 'hover:bg-surface-2'}`}
                 style={isSel(d) ? { background: 'var(--primary)', color: 'var(--on-primary)' } : undefined}
               >
                 {d}

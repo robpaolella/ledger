@@ -132,7 +132,7 @@ export default function ManualImportModal({ onClose, onImported }: { onClose: ()
         <div className="flex flex-wrap gap-2 mb-4">
           {PRESETS.map((p) => (
             <button key={p.key} onClick={() => setPreset(p.key)}
-              className={`h-9 px-3.5 rounded-[10px] text-sm font-semibold border transition-colors ${preset === p.key ? 'bg-primary text-on-primary border-primary' : 'bg-surface border-line-strong text-content-2 hover:bg-surface-2'}`}>
+              className={`h-9 max-md:h-11 px-3.5 rounded-[10px] text-sm font-semibold border transition-colors ${preset === p.key ? 'bg-primary text-on-primary border-primary' : 'bg-surface border-line-strong text-content-2 hover:bg-surface-2'}`}>
               {p.label}
             </button>
           ))}
