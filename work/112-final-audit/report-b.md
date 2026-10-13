@@ -1,0 +1,150 @@
+# Final audit, re-check B (#388)
+
+Part B of the final audit (#281, `part-b.md`): Budget, Reports, Reviews, Import, Recurring and Investments. This re-check confirms that every high and medium fix really landed, on fresh verify-ledger sample data.
+
+- **Run on:** 2026-10-13 (launch month October 2026).
+- **Against commit:** `6501ea897e9e6a5bc4ddcd04b91fc4a2e6c6e057` (`feature/platform-retheme`, "household investment total and truthful empty states (#386)"), built and launched with `.pi/skills/verify-ledger` (Doctor PASS) on a fresh worktree after `npm ci`.
+
+## Bottom line
+
+**All 9 high and medium findings re-checked: pass. None is open, no re-check failed, and no new high or medium problem was found, so no new issue was filed.** 20 low findings were not re-checked (they go to `backlog.md` through #112). One small observation is recorded below (O1).
+
+Two fixes changed shape after part B because Robert decided Investments data is household-visible (#325, 2026-10-12): B1 is now "every person sees every account's holdings", not "hide the chart". B8 was re-checked against that rule and against its follow-up [#385](https://github.com/robpaolella/ledger/issues/385).
+
+## Findings
+
+Part B has no B3 (it was withdrawn during the audit; see "How it was checked" in `part-b.md`). Screenshot names are `<issue>-<page>-<role>-<theme>-<width>.png` in `screenshots/recheck/b/`.
+
+| # | Sev | Page | Issue | Status | What was checked (and what was seen) | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| B1 | High | Investments | [#325](https://github.com/robpaolella/ledger/issues/325) | Re-checked (pass) | **All accounts:** Holdings total is $155,684.54 for owner, admin and member, equal to the Investments group total on Accounts. **Each of the 6 accounts, as owner, admin and member:** identical holdings total and 3-month return in all three roles (for example Jane's Roth IRA $24,075.19, 2.55%), and the six totals add to $155,684.54. Picking another person's account shows its real holdings next to its own chart, never a chart beside $0.00. | [325-investments-member-light-1440.png](screenshots/recheck/b/325-investments-member-light-1440.png)<br>[325-investments-one-account-member-light-1440.png](screenshots/recheck/b/325-investments-one-account-member-light-1440.png)<br>[325-investments-one-account-holdings-member-light-1440.png](screenshots/recheck/b/325-investments-one-account-holdings-member-light-1440.png)<br>[325-investments-one-account-holdings-member-dark-390.png](screenshots/recheck/b/325-investments-one-account-holdings-member-dark-390.png)<br>[325-investments-other-persons-account-chart-owner-light-1440.png](screenshots/recheck/b/325-investments-other-persons-account-chart-owner-light-1440.png)<br>[325-investments-other-persons-account-holdings-owner-light-1440.png](screenshots/recheck/b/325-investments-other-persons-account-holdings-owner-light-1440.png)<br>[325-investments-all-accounts-total-admin-dark-1440.png](screenshots/recheck/b/325-investments-all-accounts-total-admin-dark-1440.png)<br>[325-investments-chart-admin-dark-390.png](screenshots/recheck/b/325-investments-chart-admin-dark-390.png) |
+| B2 | Medium | Reports | [#326](https://github.com/robpaolella/ledger/issues/326) | Re-checked (pass) | Summary with Expand all at 390: every group and sub-category row shows its dollar amount and percentage, right-aligned; names truncate first ("Dining/Eating O…"). Page width 390 = screen width 390 and no amount past the right edge, owner light and dark, admin light, member dark. Desktop 1440 unchanged. | [326-reports-summary-expanded-owner-light-390.png](screenshots/recheck/b/326-reports-summary-expanded-owner-light-390.png)<br>[326-reports-summary-expanded-owner-dark-390.png](screenshots/recheck/b/326-reports-summary-expanded-owner-dark-390.png)<br>[326-reports-summary-expanded-admin-light-390.png](screenshots/recheck/b/326-reports-summary-expanded-admin-light-390.png)<br>[326-reports-summary-expanded-member-dark-390.png](screenshots/recheck/b/326-reports-summary-expanded-member-dark-390.png)<br>[326-reports-summary-expanded-owner-light-1440.png](screenshots/recheck/b/326-reports-summary-expanded-owner-light-1440.png) |
+| B4 | Medium | Import (CSV review) | [#328](https://github.com/robpaolella/ledger/issues/328) | Re-checked (pass) | Synthetic 4-row CSV, owner. Header counts only importable rows ("1 of 4 selected"), matching the footer ("1 transaction will be imported"). Ticking all 4 puts "Choose a category to import this row" on each uncategorized row and the footer says "3 selected rows skipped: choose a category to import." Phone cards show the same. The two numbers never disagree without a reason on the page. | [328-import-review-owner-light-1440.png](screenshots/recheck/b/328-import-review-owner-light-1440.png)<br>[328-import-review-owner-light-390.png](screenshots/recheck/b/328-import-review-owner-light-390.png) |
+| B5 | Medium | Reviews | [#329](https://github.com/robpaolella/ledger/issues/329) | Re-checked (pass) | The confirmation reads "Mark 19 transactions reviewed? 26 transactions need a category first and stay in the list." Confirming cleared 19 and left 26 (45 to 26 to review, $571.25 pending), matching the dialog. With only uncategorized rows left, the dialog says "Nothing to approve yet" and offers only Close. | [329-reviews-approve-all-owner-light-1440.png](screenshots/recheck/b/329-reviews-approve-all-owner-light-1440.png)<br>[329-reviews-approve-all-owner-light-390.png](screenshots/recheck/b/329-reviews-approve-all-owner-light-390.png)<br>[329-reviews-after-approve-owner-light-390.png](screenshots/recheck/b/329-reviews-after-approve-owner-light-390.png)<br>[329-reviews-approve-all-only-uncategorized-owner-light-1440.png](screenshots/recheck/b/329-reviews-approve-all-only-uncategorized-owner-light-1440.png) |
+| B6 | Medium | Reviews, Recurring | [#330](https://github.com/robpaolella/ledger/issues/330) | Re-checked (pass) | With the page's `/api` GET calls returning HTTP 500: Reviews shows "Couldn't load your reviews", counts and money as "–", and Try again; Recurring shows "Couldn't load this month's recurring items", "–" for income and bills, and Try again. No "all caught up", no $0.00. Try again recovered both pages once calls succeeded again. | [330-reviews-error-owner-light-1440.png](screenshots/recheck/b/330-reviews-error-owner-light-1440.png)<br>[330-reviews-error-owner-dark-390.png](screenshots/recheck/b/330-reviews-error-owner-dark-390.png)<br>[330-recurring-error-owner-light-1440.png](screenshots/recheck/b/330-recurring-error-owner-light-1440.png)<br>[330-recurring-error-owner-light-390.png](screenshots/recheck/b/330-recurring-error-owner-light-390.png) |
+| B7 | Medium | Budget (Month), Reports, category detail | [#331](https://github.com/robpaolella/ledger/issues/331) | Re-checked (pass) | Same simulated failure: Budget Month ("Couldn't load your budget"), Reports ("Couldn't load your reports", header and toolbar kept) and category detail ("Couldn't load this category", Try again plus Back to budget) show the error card, no endless spinner, plain wording. Try again recovered all three. | [331-budget-error-owner-light-1440.png](screenshots/recheck/b/331-budget-error-owner-light-1440.png)<br>[331-budget-error-owner-dark-390.png](screenshots/recheck/b/331-budget-error-owner-dark-390.png)<br>[331-reports-error-owner-light-1440.png](screenshots/recheck/b/331-reports-error-owner-light-1440.png)<br>[331-reports-error-owner-light-390.png](screenshots/recheck/b/331-reports-error-owner-light-390.png)<br>[331-budget-category-error-owner-light-390.png](screenshots/recheck/b/331-budget-category-error-owner-light-390.png) |
+| B8 | Medium | Investments | [#332](https://github.com/robpaolella/ledger/issues/332), follow-up [#385](https://github.com/robpaolella/ledger/issues/385) | Re-checked (pass) | The Accounts filter lists all six accounts and a member sees real holdings, so the original "no holdings" state no longer happens on sample data; it was reproduced by rewriting the holdings response in the browser to be empty. **Member (no bank-connection permission):** "Holdings appear here once an owner or admin links an investment account." with no link, at 390 and 1440. **Owner (light, 1440 and 390) and admin (dark, 390):** the pointer to **Settings → Bank Sync** stays. **A selection with no holdings** (member and owner): the chart card stays and a separate "No holdings / No holdings for the selected accounts." card replaces the table; no "$0.00 / 100.00%" total anywhere. A member who has the "Manage bank connections" permission was not driven in the UI; the rule is in `canLinkAccounts` (`emptyState.ts`), covered by #385's test. | [332-investments-empty-member-light-1440.png](screenshots/recheck/b/332-investments-empty-member-light-1440.png)<br>[332-investments-empty-member-light-390.png](screenshots/recheck/b/332-investments-empty-member-light-390.png)<br>[332-investments-empty-selection-member-light-1440.png](screenshots/recheck/b/332-investments-empty-selection-member-light-1440.png)<br>[332-investments-empty-selection-member-light-390.png](screenshots/recheck/b/332-investments-empty-selection-member-light-390.png)<br>[332-investments-empty-selection-owner-light-1440.png](screenshots/recheck/b/332-investments-empty-selection-owner-light-1440.png)<br>[385-investments-empty-link-owner-light-1440.png](screenshots/recheck/b/385-investments-empty-link-owner-light-1440.png)<br>[385-investments-empty-link-owner-light-390.png](screenshots/recheck/b/385-investments-empty-link-owner-light-390.png)<br>[385-investments-empty-link-admin-dark-390.png](screenshots/recheck/b/385-investments-empty-link-admin-dark-390.png) |
+| B9 | Medium | Reports (Export CSV) | [#333](https://github.com/robpaolella/ledger/issues/333) | Re-checked (pass) | The export header is `Date,Merchant,Category,Account,Amount,Type`. Interest income -3.00 reads `Income`, Publix 69.19 `Expense`, Target refund -42.50 `Refund`, card payment `Transfer`, uncategorized Costco empty. Counts across the 1,270 rows: Expense 1055, Transfer 86, Income 76, Refund 2, empty 51. Amount sign unchanged. | [333-reports-export-csv-excerpt.txt](screenshots/recheck/b/333-reports-export-csv-excerpt.txt) |
+| B10 | Medium | Reviews | [#334](https://github.com/robpaolella/ledger/issues/334) | Re-checked (pass) | At 390 with the Users filter (Sample Member) and Date filter (Last 30 days) both active: both labels read in full; the toolbar wraps to two rows; buttons are 44px high; page width 390. Light and dark. | [334-reviews-filtered-owner-light-390.png](screenshots/recheck/b/334-reviews-filtered-owner-light-390.png)<br>[334-reviews-filtered-owner-dark-390.png](screenshots/recheck/b/334-reviews-filtered-owner-dark-390.png) |
+
+All nine fix issues are closed. No issue was filed: nothing failed and nothing new at high or medium appeared.
+
+### Observation (not a finding)
+
+- **O1.** Investments, All accounts: the Market card's "Your Portfolio" 3-month return reads 2.02% while the Holdings Total row reads 2.03%. They use different calculations (the chart is the portfolio's value history, the row blends each holding's return), so a 0.01-point gap is expected; the money totals match exactly. #325's check "the Market card's return equals the Holdings Total row's return" holds to within that rounding. Say so if you want it forced equal.
+- The sample total is $155,684.54, not the $155,794.13 quoted in #325 (sample prices differ day to day). The check that matters, Holdings total equal to the Accounts Investments group total, holds.
+
+## Low findings (no re-check)
+
+Copied from `part-b.md`. They go to `backlog.md` through #112.
+
+| # | Finding | Status |
+| --- | --- | --- |
+| L1 | Budget phone: "Entertainment" breaks mid-word as "Entertainm / ent" (known; design 309 left it to a follow-up). | Low (no re-check) |
+| L2 | Budget phone: a month with no budget (for example January 2026) is 20 rows of dashes under a green "Left to budget —" band, with no hint to plan something; the way forward is "Show N unbudgeted". | Low (no re-check) |
+| L3 | Budget with a View-only member: the planned-amount boxes are disabled but look the same as editable ones, so tapping does nothing and nothing says why. | Low (no re-check) |
+| L4 | Investments: the last x-axis label of the chart is clipped ("Oct ·") at both widths. | Low (no re-check) |
+| L5 | Reviews phone: the row subtitle clips the note ("· C…", "Check thi…"). | Low (no re-check) |
+| L6 | Import Bank Sync phone: account names truncate beside the owner badge ("John's Masterc…"). | Low (no re-check) |
+| L7 | Recurring phone: the account name truncates ("John's Chec…"). | Low (no re-check) |
+| L8 | Reports phone drill-down: the sticky pill truncates the category ("Dail…") and covers the last visible row. | Low (no re-check) |
+| L9 | Reports empty range: Net $0 still reads "▲ saved" in green; with a custom range the phone toolbar wraps to two rows. | Low (no re-check) |
+| L10 | Reviews "No matches" reuses the green check icon from "all caught up". | Low (no re-check) |
+| L11 | Every sheet and dialog opens with a focus ring on the close X (phone and desktop). | Low (no re-check) |
+| L12 | Reviews phone search field shows a double focus ring (outline plus box). | Low (no re-check) |
+| L13 | Import CSV review: the duplicate warning icon is explained only by a hover tooltip ("Likely Duplicate"), so phone users can't read it. | Low (no re-check) |
+| L14 | Recurring empty ("No recurring items yet.") doesn't point to the Add button (the + in the phone app bar). | Low (no re-check) |
+| L15 | Investments failed load has no Try again. | Low (no re-check) |
+| L16 | Import Bank Sync phone: row check boxes are 20×20 and the search field's inner input measures 81×20 (the surrounding row and field are 44px; the box itself is the small target). | Low (no re-check) |
+| L17 | Sample data has no genuine "all caught up" Reviews state (26 uncategorized rows can't be bulk-approved); it can only be seen by failing the load (B6). | Low (no re-check) |
+| L18 | Budget category detail desktop: the account label truncates ("John's Mastercard (….."). | Low (no re-check) |
+| L19 | Budget Year: "planned in 2026" totals count carried-forward future months (11 months of 9 seeded), which is correct for the plan but unexplained. | Low (no re-check) |
+| L20 | Import: the page opens on the Bank Sync tab although CSV Import is listed first. | Low (no re-check) |
+
+## Coverage table
+
+One row for every page × role × theme × width (6 × 3 × 2 × 2 = 72), as in part B. "Part B result" is what part B recorded. "Re-check" says whether a fixed state was re-checked at that combination. Rows with no finding have nothing to re-check. Rows marked "same code path" were not captured at that exact role, theme and width: the fix is role- and theme-independent code, and the same fix was re-checked in the combinations linked on the findings above.
+
+| Page | Role | Theme | Width | Part B result | Re-check |
+| --- | --- | --- | --- | --- | --- |
+| Budget | owner | light | 390 | No problems (low: L1) | No finding to re-check |
+| Budget | owner | light | 1440 | No problems | No finding to re-check |
+| Budget | owner | dark | 390 | No problems (low: L1) | No finding to re-check |
+| Budget | owner | dark | 1440 | No problems | No finding to re-check |
+| Budget | admin | light | 390 | No problems (low: L1) | No finding to re-check |
+| Budget | admin | light | 1440 | No problems | No finding to re-check |
+| Budget | admin | dark | 390 | No problems (low: L1) | No finding to re-check |
+| Budget | admin | dark | 1440 | No problems | No finding to re-check |
+| Budget | member | light | 390 | No problems (low: L1) | No finding to re-check |
+| Budget | member | light | 1440 | No problems | No finding to re-check |
+| Budget | member | dark | 390 | No problems (low: L1) | No finding to re-check |
+| Budget | member | dark | 1440 | No problems | No finding to re-check |
+| Reports | owner | light | 390 | #326 (Summary amounts clipped) | Pass (fixed state seen): [shot](screenshots/recheck/b/326-reports-summary-expanded-owner-light-390.png) |
+| Reports | owner | light | 1440 | No problems | No finding; 1440 still lays out as before: [shot](screenshots/recheck/b/326-reports-summary-expanded-owner-light-1440.png) |
+| Reports | owner | dark | 390 | #326 (Summary amounts clipped) | Pass (fixed state seen): [shot](screenshots/recheck/b/326-reports-summary-expanded-owner-dark-390.png) |
+| Reports | owner | dark | 1440 | No problems | No finding to re-check |
+| Reports | admin | light | 390 | #326 (Summary amounts clipped) | Pass (fixed state seen): [shot](screenshots/recheck/b/326-reports-summary-expanded-admin-light-390.png) |
+| Reports | admin | light | 1440 | No problems | No finding to re-check |
+| Reports | admin | dark | 390 | #326 (Summary amounts clipped) | Pass by same code path; this combination not captured |
+| Reports | admin | dark | 1440 | No problems | No finding to re-check |
+| Reports | member | light | 390 | #326 (Summary amounts clipped) | Pass by same code path; this combination not captured |
+| Reports | member | light | 1440 | No problems | No finding to re-check |
+| Reports | member | dark | 390 | #326 (Summary amounts clipped) | Pass (fixed state seen): [shot](screenshots/recheck/b/326-reports-summary-expanded-member-dark-390.png) |
+| Reports | member | dark | 1440 | No problems | No finding to re-check |
+| Reviews | owner | light | 390 | No problems in the default view (low: L5) | No finding to re-check |
+| Reviews | owner | light | 1440 | No problems in the default view | No finding to re-check |
+| Reviews | owner | dark | 390 | No problems in the default view (low: L5) | No finding to re-check |
+| Reviews | owner | dark | 1440 | No problems in the default view | No finding to re-check |
+| Reviews | admin | light | 390 | No problems in the default view (low: L5) | No finding to re-check |
+| Reviews | admin | light | 1440 | No problems in the default view | No finding to re-check |
+| Reviews | admin | dark | 390 | No problems in the default view (low: L5) | No finding to re-check |
+| Reviews | admin | dark | 1440 | No problems in the default view | No finding to re-check |
+| Reviews | member | light | 390 | No problems in the default view (low: L5) | No finding to re-check |
+| Reviews | member | light | 1440 | No problems in the default view | No finding to re-check |
+| Reviews | member | dark | 390 | No problems in the default view (low: L5) | No finding to re-check |
+| Reviews | member | dark | 1440 | No problems in the default view | No finding to re-check |
+| Import | owner | light | 390 | No problems in the default view (Bank Sync tab) (low: L6, L16) | No finding to re-check |
+| Import | owner | light | 1440 | No problems in the default view (Bank Sync tab) (low: L16) | No finding to re-check |
+| Import | owner | dark | 390 | No problems in the default view (Bank Sync tab) (low: L6, L16) | No finding to re-check |
+| Import | owner | dark | 1440 | No problems in the default view (Bank Sync tab) (low: L16) | No finding to re-check |
+| Import | admin | light | 390 | No problems in the default view (Bank Sync tab) (low: L6, L16) | No finding to re-check |
+| Import | admin | light | 1440 | No problems in the default view (Bank Sync tab) (low: L16) | No finding to re-check |
+| Import | admin | dark | 390 | No problems in the default view (Bank Sync tab) (low: L6, L16) | No finding to re-check |
+| Import | admin | dark | 1440 | No problems in the default view (Bank Sync tab) (low: L16) | No finding to re-check |
+| Import | member | light | 390 | No problems in the default view (Bank Sync tab, 2 shared accounts only) (low: L6, L16) | No finding to re-check |
+| Import | member | light | 1440 | No problems in the default view (Bank Sync tab, 2 shared accounts only) (low: L16) | No finding to re-check |
+| Import | member | dark | 390 | No problems in the default view (Bank Sync tab, 2 shared accounts only) (low: L6, L16) | No finding to re-check |
+| Import | member | dark | 1440 | No problems in the default view (Bank Sync tab, 2 shared accounts only) (low: L16) | No finding to re-check |
+| Recurring | owner | light | 390 | No problems (low: L7) | No finding to re-check |
+| Recurring | owner | light | 1440 | No problems | No finding to re-check |
+| Recurring | owner | dark | 390 | No problems (low: L7) | No finding to re-check |
+| Recurring | owner | dark | 1440 | No problems | No finding to re-check |
+| Recurring | admin | light | 390 | No problems (low: L7) | No finding to re-check |
+| Recurring | admin | light | 1440 | No problems | No finding to re-check |
+| Recurring | admin | dark | 390 | No problems (low: L7) | No finding to re-check |
+| Recurring | admin | dark | 1440 | No problems | No finding to re-check |
+| Recurring | member | light | 390 | No problems (low: L7) | No finding to re-check |
+| Recurring | member | light | 1440 | No problems | No finding to re-check |
+| Recurring | member | dark | 390 | No problems (low: L7) | No finding to re-check |
+| Recurring | member | dark | 1440 | No problems | No finding to re-check |
+| Investments | owner | light | 390 | #325 (Market card not scoped to the viewer) (low: L4) | Pass by same code path; this combination not captured. Totals and per-account holdings read as text for all three roles. |
+| Investments | owner | light | 1440 | #325 (Market card not scoped to the viewer) (low: L4) | Pass (fixed state seen): [shot](screenshots/recheck/b/325-investments-other-persons-account-chart-owner-light-1440.png), [shot](screenshots/recheck/b/325-investments-other-persons-account-holdings-owner-light-1440.png). Totals and per-account holdings read as text for all three roles. |
+| Investments | owner | dark | 390 | #325 (Market card not scoped to the viewer) (low: L4) | Pass by same code path; this combination not captured. Totals and per-account holdings read as text for all three roles. |
+| Investments | owner | dark | 1440 | #325 (Market card not scoped to the viewer) (low: L4) | Pass by same code path; this combination not captured. Totals and per-account holdings read as text for all three roles. |
+| Investments | admin | light | 390 | #325 (Market card not scoped to the viewer) (low: L4) | Pass by same code path; this combination not captured. Totals and per-account holdings read as text for all three roles. |
+| Investments | admin | light | 1440 | #325 (Market card not scoped to the viewer) (low: L4) | Pass by same code path; this combination not captured. Totals and per-account holdings read as text for all three roles. |
+| Investments | admin | dark | 390 | #325 (Market card not scoped to the viewer) (low: L4) | Pass (fixed state seen): [shot](screenshots/recheck/b/325-investments-chart-admin-dark-390.png). Totals and per-account holdings read as text for all three roles. |
+| Investments | admin | dark | 1440 | #325 (Market card not scoped to the viewer) (low: L4) | Pass (fixed state seen): [shot](screenshots/recheck/b/325-investments-all-accounts-total-admin-dark-1440.png). Totals and per-account holdings read as text for all three roles. |
+| Investments | member | light | 390 | #332 (empty state wording); #325 (low: L4) | Pass (fixed state seen): [shot](screenshots/recheck/b/332-investments-empty-member-light-390.png). Totals and per-account holdings read as text for all three roles. |
+| Investments | member | light | 1440 | #332 (empty state wording); #325 (low: L4) | Pass (fixed state seen): [shot](screenshots/recheck/b/325-investments-member-light-1440.png), [shot](screenshots/recheck/b/325-investments-one-account-holdings-member-light-1440.png), [shot](screenshots/recheck/b/332-investments-empty-member-light-1440.png). Totals and per-account holdings read as text for all three roles. |
+| Investments | member | dark | 390 | #332 (empty state wording); #325 (low: L4) | Pass (fixed state seen): [shot](screenshots/recheck/b/325-investments-one-account-holdings-member-dark-390.png). Totals and per-account holdings read as text for all three roles. |
+| Investments | member | dark | 1440 | #332 (empty state wording); #325 (low: L4) | Pass by same code path; this combination not captured. Totals and per-account holdings read as text for all three roles. |
+
+## How it was checked
+
+- Launched `.pi/skills/verify-ledger` (Doctor PASS) in this worktree, driven with chrome-devtools-axi at `resize 390 844` and `resize 1440 900`, signing in through the real form as John (owner), Jane (admin) and Sample Member. Theme was set through the app's saved theme setting (`ledger-theme`) before each capture. Phone and desktop screenshots were read at full size.
+- The sample's data is synthetic; nothing touched `data/` or any live instance. The app was cleaned up with `run.mjs cleanup` (Cleaned: true).
+- Simulated states, as in part B: load failures were made by returning HTTP 500 for the page's `/api` GET calls in the browser (the server stayed healthy), and Try again was tested by restoring the calls first. The empty Investments state was made by rewriting the holdings response in the browser. The CSV was uploaded by setting the page's file input from a synthetic file; nothing else bypassed the UI.
+- Data changed on the throwaway database through the real UI: "Approve all" (19 transactions marked reviewed). The CSV was not imported.
+- Screenshots whose 1440 view is a scrolled page show the part of the page that proves the fix (for example the Holdings table or Total row), not the top.
+- Not driven in the UI: a member given the "Manage bank connections" permission on Investments (covered by #385's test); Reviews Approve all as admin or member (the dialog code is role-independent; owner checked).
