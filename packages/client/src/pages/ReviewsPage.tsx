@@ -13,6 +13,7 @@ import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { formatMoney } from '@ledger/shared';
 import { Money } from '../components/Money';
+import { approveAllText } from '../lib/approveAll';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -159,6 +160,7 @@ export default function ReviewsPage() {
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
   const anyFilter = period !== null || dateFilter !== 'all' || selUsers.size > 0 || q !== '';
+  const approveText = approveAllText(shown.map((r) => ({ categorized: r.transaction.category != null })));
   const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
@@ -489,15 +491,15 @@ export default function ReviewsPage() {
       <ResponsiveModal
         isOpen={confirmAll}
         onClose={() => setConfirmAll(false)}
-        title={`Approve ${shown.length} transaction${shown.length === 1 ? '' : 's'}?`}
+        title={approveText.title}
         footer={(
           <div className="flex items-center gap-2.5 md:justify-end">
-            <Button variant="secondary" onClick={() => setConfirmAll(false)} className="flex-1 md:flex-none">Cancel</Button>
-            <Button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} loading={busy} className="flex-1 md:flex-none">Approve all</Button>
+            <Button variant="secondary" onClick={() => setConfirmAll(false)} className="flex-1 md:flex-none">{approveText.approvable === 0 ? 'Close' : 'Cancel'}</Button>
+            {approveText.approvable > 0 && <Button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} loading={busy} className="flex-1 md:flex-none">Mark reviewed</Button>}
           </div>
         )}
       >
-        <p className="text-sm text-content-2 m-0">This marks every transaction in the current view reviewed and clears it from the queue.</p>
+        <p className="text-sm text-content-2 m-0">{approveText.body}</p>
       </ResponsiveModal>
 
       {/* in-page transaction detail: a bottom sheet on phones, a side drawer on desktop */}
