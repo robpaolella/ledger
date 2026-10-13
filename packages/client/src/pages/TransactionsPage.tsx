@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
+import { tapTwoStep } from '../lib/twoStepConfirm';
 import CurrencyInput from '../components/CurrencyInput';
 import Calendar from '../components/Calendar';
 import Popover from '../components/Popover';
@@ -1195,6 +1196,15 @@ export default function TransactionsPage() {
   // detail panel now, so this is the un-split path). The parent amount is kept
   // as-is; the category becomes the first assigned split's category, which the
   // user can then re-pick from the (now single) category select.
+  const [unsplitArmed, setUnsplitArmed] = useState(false);
+  // The first tap on Unsplit only arms it; it disarms after 3s or when the window closes.
+  useEffect(() => {
+    if (!unsplitArmed) return;
+    const t = setTimeout(() => setUnsplitArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [unsplitArmed]);
+  useEffect(() => { if (!splitOpen) setUnsplitArmed(false); }, [splitOpen]);
+
   const removeSplitFromDetail = async () => {
     if (!detail || !detail.splits?.length) return;
     const catId = detail.splits.find((s) => s.categoryId)?.categoryId ?? detail.splits[0].categoryId;
@@ -2510,7 +2520,13 @@ export default function TransactionsPage() {
         const footer = (
           <div className="flex items-center justify-between gap-3">
             {isExistingSplit && canEdit ? (
-              <button onClick={removeSplitFromDetail} className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
+              <button onClick={() => { const t = tapTwoStep(unsplitArmed); setUnsplitArmed(t.armed); if (t.run) removeSplitFromDetail(); }}
+                className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm cursor-pointer transition-colors whitespace-nowrap"
+                style={unsplitArmed
+                  ? { border: '1px solid var(--negative)', background: 'var(--negative)', color: 'var(--on-primary)' }
+                  : { border: '1px solid color-mix(in srgb, var(--negative) 40%, var(--line))', color: 'var(--negative)', background: 'transparent' }}>
+                {unsplitArmed ? 'Confirm unsplit?' : 'Unsplit'}
+              </button>
             ) : <span className="hidden md:block" />}
             <div className="flex flex-1 md:flex-none items-center gap-2.5">
               <button onClick={() => setSplitOpen(false)} className="flex-1 md:flex-none h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
