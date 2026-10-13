@@ -184,11 +184,12 @@ router.get('/holdings-blended', (req: Request, res: Response) => {
   try {
     const range = parseRange(req.query.range);
     const accountIds = parseAccountIds(req.query.accountIds);
-    const userId = req.user!.userId;
     const today = new Date().toISOString().slice(0, 10);
     const rangeStart = rangeStartDate(range, today);
 
-    const acctFilter = accountIds ? `AND sl.account_id IN (${accountIds.map(() => '?').join(',')})` : '';
+    // Investments are household-visible: every person sees every account's
+    // holdings, whichever connection (shared or personal) syncs it.
+    const acctFilter = accountIds ? `WHERE sl.account_id IN (${accountIds.map(() => '?').join(',')})` : '';
     const rows = sqlite.prepare(`
       SELECT UPPER(h.symbol) AS symbol,
              MAX(h.description) AS name,
@@ -197,11 +198,10 @@ router.get('/holdings-blended', (req: Request, res: Response) => {
              MAX(sm.asset_class) AS asset_class
       FROM simplefin_holdings h
       JOIN simplefin_links sl ON h.simplefin_link_id = sl.id
-      JOIN simplefin_connections sc ON sl.simplefin_connection_id = sc.id
       LEFT JOIN symbol_meta sm ON sm.symbol = UPPER(h.symbol)
-      WHERE (sc.user_id IS NULL OR sc.user_id = ?) ${acctFilter}
+      ${acctFilter}
       GROUP BY UPPER(h.symbol)
-    `).all(userId, ...(accountIds ?? [])) as {
+    `).all(...(accountIds ?? [])) as {
       symbol: string; name: string; shares: number; value: number; asset_class: string | null;
     }[];
 
@@ -271,22 +271,20 @@ router.get('/holdings-blended', (req: Request, res: Response) => {
 router.get('/movers', (req: Request, res: Response) => {
   try {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '4'), 10) || 4, 1), 20);
-    const userId = req.user!.userId;
 
     // PER-LINK snapshot pairs: each link contributes its own two latest dates,
     // so a connection that hasn't synced today still compares its last two
     // snapshots instead of vanishing from the aggregation (a global date pair
-    // would misread any partial sync).
+    // would misread any partial sync). Every link counts: investments are
+    // household-visible, personal connections included.
     const linkPairs = sqlite.prepare(`
       SELECT hh.simplefin_link_id AS link, MAX(hh.date) AS d0,
              (SELECT MAX(h2.date) FROM holdings_history h2
                WHERE h2.simplefin_link_id = hh.simplefin_link_id AND h2.date < MAX(hh.date)) AS d1
       FROM holdings_history hh
       JOIN simplefin_links sl ON hh.simplefin_link_id = sl.id
-      JOIN simplefin_connections sc ON sl.simplefin_connection_id = sc.id
-      WHERE sc.user_id IS NULL OR sc.user_id = ?
       GROUP BY hh.simplefin_link_id
-    `).all(userId) as { link: number; d0: string; d1: string | null }[];
+    `).all() as { link: number; d0: string; d1: string | null }[];
 
     const asOf = linkPairs.reduce<string | null>((m, p) => (m == null || p.d0 > m ? p.d0 : m), null);
     if (linkPairs.length === 0 || !linkPairs.some((p) => p.d1 != null)) {

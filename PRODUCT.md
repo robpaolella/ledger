@@ -60,7 +60,7 @@ People in the household use Ledger to understand and maintain their shared finan
 
 The 18 configurable member permissions (see Member permissions below) cover transaction create/edit/delete/bulk edit, CSV import, bank-sync import, category create/edit/delete, account create/edit/delete, budget editing, balance updates, asset create/edit/delete, and SimpleFIN connection management. User management is reserved for owner/admin roles, not a grantable member permission. Owner and admin bypass individual permission checks.
 
-Do not mistake an owner filter for a privacy boundary. Shared account transactions belong in each applicable member view; the combined household view must count them only once. Personal SimpleFIN connections, unlike shared connections, are scoped to the user they belong to.
+Do not mistake an owner filter for a privacy boundary. Shared account transactions belong in each applicable member view; the combined household view must count them only once. Personal SimpleFIN connections, unlike shared connections, are scoped to the user they belong to: only that user sees and manages the connection itself (its label, credentials, linked-account list and sync status). Investment accounts, holdings and performance are household-visible: every signed-in person, whatever their role, sees every household investment account, whichever connection syncs it (Robert, 2026-10-12).
 
 ### Member permissions
 
@@ -76,7 +76,7 @@ Member permissions come in three presets, with individual switches under "Custom
 - Supports username/password sign-in and optional authenticator-based two-factor authentication with recovery codes. Preserve account recovery and security states when designing these flows.
 - Desktop supports dense review and editing; phone layouts provide a header with a slide-out menu, card lists, and bottom-sheet forms rather than squeezing desktop tables into a narrow viewport.
 - Transactions can be entered manually or reviewed and imported from CSV and SimpleFIN Bridge.
-- SimpleFIN is an external service. Shared and personal connections can coexist; credentials and personal connection details must not leak between users. Do not describe self-hosting as proof that no external services are involved.
+- SimpleFIN is an external service. Shared and personal connections can coexist; credentials and personal connection details must not leak between users, while the investment data a personal connection syncs is household-visible. Do not describe self-hosting as proof that no external services are involved.
 - Current currency formatters display dollar amounts with US number formatting. This is observed implementation, not a claim of multi-currency support.
 
 ## Core features

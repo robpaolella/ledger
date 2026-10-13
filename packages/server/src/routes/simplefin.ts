@@ -609,10 +609,11 @@ router.get('/balances', requirePermission('balances.update'), async (req: Reques
   }
 });
 
-// GET /api/simplefin/holdings — holdings grouped by account for Net Worth
-router.get('/holdings', (req: Request, res: Response) => {
+// GET /api/simplefin/holdings — holdings grouped by account for Net Worth.
+// Household-visible: every account's holdings, personal connections included
+// (only connection details stay with their owner).
+router.get('/holdings', (_req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
     const rows = sqlite.prepare(`
       SELECT
         sl.account_id,
@@ -620,11 +621,9 @@ router.get('/holdings', (req: Request, res: Response) => {
         sh.symbol, sh.description, sh.shares, sh.cost_basis, sh.market_value, sh.updated_at
       FROM simplefin_holdings sh
       JOIN simplefin_links sl ON sh.simplefin_link_id = sl.id
-      JOIN simplefin_connections sc ON sl.simplefin_connection_id = sc.id
       JOIN accounts a ON sl.account_id = a.id
-      WHERE sc.user_id IS NULL OR sc.user_id = ?
       ORDER BY a.name, sh.symbol
-    `).all(userId) as {
+    `).all() as {
       account_id: number;
       account_name: string;
       symbol: string;
