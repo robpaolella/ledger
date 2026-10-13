@@ -108,7 +108,7 @@ export default function RulesPanel() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-3">{ICON.search}</span>
                 <span className="sr-only">Search rules</span>
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rules by merchant or category…"
-                  className="h-[38px] w-full pl-9 pr-3 rounded-[10px] bg-surface-2 border border-line-strong text-[13.5px] text-content outline-none placeholder:text-content-3" />
+                  className="h-[38px] max-md:h-11 w-full pl-9 pr-3 rounded-[10px] bg-surface-2 border border-line-strong text-[13.5px] text-content outline-none placeholder:text-content-3" />
               </label>
             </div>
             {visible.map((r) => (

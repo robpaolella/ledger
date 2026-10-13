@@ -489,12 +489,12 @@ export default function AccountsPage() {
               {af.method === 'declining_balance' ? (
                 <div>
                   <div className="flex items-center justify-between mb-1.5"><label className="text-[13px] font-semibold text-content-2">Annual rate</label><span className="tabular-nums font-bold">{rate}%</span></div>
-                  <input type="range" min={5} max={60} step={1} value={af.rate} onChange={(e) => setAf({ ...af, rate: e.target.value })} className="w-full accent-[var(--primary)]" />
+                  <input type="range" min={5} max={60} step={1} value={af.rate} onChange={(e) => setAf({ ...af, rate: e.target.value })} className="w-full max-md:h-11 accent-[var(--primary)]" />
                 </div>
               ) : (
                 <div>
                   <div className="flex items-center justify-between mb-1.5"><label className="text-[13px] font-semibold text-content-2">Useful life</label><span className="tabular-nums font-bold">{life} yrs</span></div>
-                  <input type="range" min={1} max={30} step={1} value={af.life} onChange={(e) => setAf({ ...af, life: e.target.value })} className="w-full accent-[var(--primary)]" />
+                  <input type="range" min={1} max={30} step={1} value={af.life} onChange={(e) => setAf({ ...af, life: e.target.value })} className="w-full max-md:h-11 accent-[var(--primary)]" />
                 </div>
               )}
               <div className="rounded-[12px] bg-surface-2 border border-line px-4 py-3">

@@ -511,7 +511,7 @@ function TransactionForm({
                 </div>
               </Field>
               <button type="button" onClick={handleEnterSplitMode}
-                className="text-[13px] font-semibold text-primary mt-2">
+                className="tap-area text-[13px] font-semibold text-primary mt-2 max-md:mt-4">
                 Split across categories
               </button>
             </div>
@@ -523,7 +523,7 @@ function TransactionForm({
               {splits && splits.length >= 2 ? (
                 <div className="text-[13px] text-positive font-semibold">
                   {splits.length} categories assigned
-                  <button type="button" onClick={handleCancelSplit} className="ml-2.5 text-[13px] font-semibold text-content-3 hover:text-content">Remove split</button>
+                  <button type="button" onClick={handleCancelSplit} className="tap-area ml-2.5 text-[13px] font-semibold text-content-3 hover:text-content">Remove split</button>
                 </div>
               ) : (
                 <div className="text-[13px] text-content-3">
@@ -2291,7 +2291,7 @@ export default function TransactionsPage() {
                           <div className="text-[13px] text-content-2 leading-snug">
                             This is a split of <Money amount={detail.amount} transfer={isTransfer} className="font-bold" /> from <span className="font-bold text-content">{vendorLabel(detail)}</span> on {dateLabel}.
                           </div>
-                          <button onClick={openSplit} className="mt-2.5 h-9 px-3.5 rounded-[9px] bg-primary text-on-primary font-bold text-[13px] shadow-sm">Open splits</button>
+                          <button onClick={openSplit} className="mt-2.5 h-9 max-md:h-11 px-3.5 rounded-[9px] bg-primary text-on-primary font-bold text-[13px] shadow-sm">Open splits</button>
                         </div>
                       </div>
 
@@ -2299,7 +2299,7 @@ export default function TransactionsPage() {
                       <div className="mb-6 flex items-start gap-2">
                         <span className="flex-1 text-[13px] text-content-2 leading-snug break-words">{statementText || '—'}</span>
                         <button onClick={copyStatement} title="Copy statement"
-                          className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
+                          className="tap-area w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
                           {copyGlyph}
                         </button>
                       </div>
@@ -2360,7 +2360,7 @@ export default function TransactionsPage() {
                     <div className="mb-6 flex items-start gap-2">
                       <span className="flex-1 text-[13px] text-content-2 leading-snug break-words">{statementText || '—'}</span>
                       <button onClick={copyStatement} title="Copy statement"
-                        className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
+                        className="tap-area w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
                         {copyGlyph}
                       </button>
                     </div>
@@ -2372,9 +2372,9 @@ export default function TransactionsPage() {
                         triggerClassName={`${fieldCls} font-semibold`} />
                     </div>
 
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2 max-md:mb-4">
                       <span className="text-[13px] font-semibold text-content-2">Category</span>
-                      {!isSplit && <button onClick={openSplit} className="text-[13px] font-semibold text-primary inline-flex items-center gap-1.5">{splitIcon(13)}Split</button>}
+                      {!isSplit && <button onClick={openSplit} className="tap-area text-[13px] font-semibold text-primary inline-flex items-center gap-1.5">{splitIcon(13)}Split</button>}
                     </div>
                     {isSplit ? (
                       <div className="mb-6 rounded-[12px] border p-4" style={{ borderColor: 'color-mix(in srgb, var(--primary) 30%, var(--line))', background: 'color-mix(in srgb, var(--primary) 8%, transparent)' }}>
@@ -2395,7 +2395,7 @@ export default function TransactionsPage() {
                             );
                           })}
                         </div>
-                        <button onClick={openSplit} className="w-full h-10 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm">Open splits</button>
+                        <button onClick={openSplit} className="w-full h-10 max-md:h-11 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm">Open splits</button>
                       </div>
                     ) : (
                       <div className="relative mb-6">
@@ -2468,11 +2468,11 @@ export default function TransactionsPage() {
                                   : detail.review?.reason === 'auto_low_confidence' ? 'Low-confidence auto-category'
                                   : 'Marked to review'}
                               </span>
-                              <button onClick={markReviewed} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>
+                              <button onClick={markReviewed} className="h-8 max-md:h-11 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>
                             </div>
                             <div className="text-[12px] font-semibold text-content-3 mb-1">Assign to</div>
                             <select value={detail.review?.assignee?.id ?? ''} onChange={(e) => patchReview({ assigneeId: e.target.value ? parseInt(e.target.value, 10) : null })}
-                              className="w-full h-10 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none mb-3">
+                              className="w-full h-10 max-md:h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none mb-3">
                               <option value="">Unassigned</option>
                               {householdUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
                             </select>

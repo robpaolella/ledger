@@ -62,15 +62,15 @@ export default function InstitutionManager({ canEdit, onClose }: { canEdit: bool
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search institutions…"
-            className="flex-1 h-10 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none" />
-          {canEdit && <button onClick={() => setEditing('new')} className="h-10 px-3.5 rounded-[10px] bg-primary text-on-primary font-bold text-[13px] whitespace-nowrap">Add</button>}
+            className="flex-1 h-10 max-md:h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none" />
+          {canEdit && <button onClick={() => setEditing('new')} className="h-10 max-md:h-11 px-3.5 rounded-[10px] bg-primary text-on-primary font-bold text-[13px] whitespace-nowrap">Add</button>}
         </div>
         {canEdit && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] text-content-3">{configured ? 'Missing logos are fetched automatically.' : "Logos aren't set up. They're optional; setup steps are in Ledger's documentation."}</span>
             {configured && (
               <button onClick={hydrateMissing} disabled={hydrating}
-                className="h-8 px-3 rounded-[9px] bg-surface-2 border border-line-strong text-content font-semibold text-[12px] disabled:opacity-40 whitespace-nowrap">
+                className="h-8 max-md:h-11 px-3 rounded-[9px] bg-surface-2 border border-line-strong text-content font-semibold text-[12px] disabled:opacity-40 whitespace-nowrap">
                 {hydrating ? 'Fetching…' : 'Fetch missing logos'}
               </button>
             )}
@@ -98,7 +98,7 @@ export default function InstitutionManager({ canEdit, onClose }: { canEdit: bool
           ))}
         </div>
         <div className="flex justify-end">
-          <button onClick={onClose} className="h-10 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Done</button>
+          <button onClick={onClose} className="h-10 max-md:h-11 px-4 rounded-[10px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Done</button>
         </div>
       </div>
     </ResponsiveModal>
@@ -225,10 +225,10 @@ function InstitutionEditor({
               <span className="text-[12px] text-content-3">Save first to add a logo</span>
             ) : (
               <>
-                <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="text-[12px] font-semibold text-primary text-left disabled:opacity-60">{logoUrl ? 'Change logo' : 'Upload logo'}</button>
+                <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="max-md:min-h-11 text-[12px] font-semibold text-primary text-left disabled:opacity-60">{logoUrl ? 'Change logo' : 'Upload logo'}</button>
                 {configured && domain.trim() && (
                   domain.trim().toLowerCase() === savedDomain.trim().toLowerCase()
-                    ? <button type="button" disabled={busy} onClick={fetchLogo} className="text-[12px] font-semibold text-content-2 text-left disabled:opacity-60">Fetch logo</button>
+                    ? <button type="button" disabled={busy} onClick={fetchLogo} className="max-md:min-h-11 text-[12px] font-semibold text-content-2 text-left disabled:opacity-60">Fetch logo</button>
                     : <span className="text-[11px] text-content-3">Save to fetch the new domain’s logo</span>
                 )}
                 {logoUrl && <button type="button" disabled={busy} onClick={removeLogo} className="text-[12px] font-semibold text-negative text-left disabled:opacity-60">Remove</button>}
