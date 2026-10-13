@@ -11,6 +11,9 @@ import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import Spinner from '../components/Spinner';
+import Button from '../components/Button';
+import LoadError from '../components/LoadError';
+import { loadState } from '../lib/loadState';
 
 // ── Types (mirror GET /api/budgets/category-detail + GET /api/transactions) ──
 interface SeriesPoint { month: string; actual: number }
@@ -96,7 +99,9 @@ export default function CategoryDetailPage() {
 
   const [detail, setDetail] = useState<CategoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // only for a missing category in the link
+  const [failed, setFailed] = useState(false); // the request itself failed
+  const [reloadKey, setReloadKey] = useState(0); // bumped by "Try again"
   const [period, setPeriodState] = useState<Period>('month');
   const isMobile = useIsMobile();
   const yAxisW = isMobile ? 44 : 56;
@@ -119,12 +124,13 @@ export default function CategoryDetailPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setFailed(false);
     apiFetch<{ data: CategoryDetail }>(`/budgets/category-detail?${detailQuery}`)
       .then((r) => { if (!cancelled) { setDetail(r.data); setSel(null); } })
-      .catch(() => { if (!cancelled) setError('Failed to load category'); })
+      .catch(() => { if (!cancelled) { setDetail(null); setFailed(true); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [detailQuery]);
+  }, [detailQuery, reloadKey]);
 
   const cfg = detail?.category;
   const isIncome = cfg?.type === 'income';
@@ -240,6 +246,16 @@ export default function CategoryDetailPage() {
   }, [detail, selBucket, isIncome]);
 
   // ── Render ──
+  const backToBudget = <Button variant="secondary" onClick={() => navigate('/budget')}>Back to budget</Button>;
+  const state = loadState({ hasData: !!detail, failed });
+  if (state === 'failed') {
+    return (
+      <div>
+        <PageHeader title="Budget" mobileTitle="Budget" mobileBack="/budget" />
+        <LoadError title="Couldn’t load this category" message="Check your connection, then try again." onRetry={() => setReloadKey((n) => n + 1)}>{backToBudget}</LoadError>
+      </div>
+    );
+  }
   if (loading) {
     return <div className="flex justify-center py-24"><Spinner /></div>;
   }
@@ -247,7 +263,7 @@ export default function CategoryDetailPage() {
     return (
       <div className="text-center py-24 text-content-3">
         <p className="mb-4">{error ?? 'Category not found.'}</p>
-        <button onClick={() => navigate('/budget')} className="h-10 px-4 rounded-[11px] bg-surface border border-line-strong text-content font-semibold text-sm hover:bg-surface-2">Back to budget</button>
+        {backToBudget}
       </div>
     );
   }
