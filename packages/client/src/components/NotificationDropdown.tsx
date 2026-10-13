@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { timeAgo } from '../lib/formatters';
+import Popover from './Popover';
 
 export interface NotificationRow {
   id: number;
@@ -61,12 +62,6 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
       .then((r) => setData(r.data))
       .catch(() => setData({ unread: [], read: [], unreadCount: 0 }));
   }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   // Optimistic-mutation failure recovery: re-sync from the server; if even the
   // refetch fails (e.g. network down), restore the pre-mutation snapshot.
@@ -133,7 +128,7 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
           {NOTIF_ICONS[row.type] ?? fallbackIcon}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 pr-5">
+          <div className="flex items-center gap-1.5 pr-7 md:pr-5">
             {!row.isRead && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
             <span className="text-[13.5px] font-bold text-content truncate">{row.title}</span>
           </div>
@@ -142,7 +137,7 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
           {row.actionLabel && row.actionTarget?.startsWith('/') && (
             <button
               onClick={() => runAction(row)}
-              className="mt-2 h-8 px-3 rounded-[9px] bg-surface-2 border border-line text-[12px] font-semibold text-content hover:border-line-strong cursor-pointer transition-colors"
+              className="tap-grow mt-2 h-8 px-3 rounded-[9px] bg-surface-2 border border-line text-[12px] font-semibold text-content hover:border-line-strong cursor-pointer transition-colors"
             >
               {row.actionLabel}
             </button>
@@ -150,7 +145,7 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
         </div>
         <button
           onClick={() => clearOne(row.id)}
-          className="absolute top-2 right-2 w-[22px] h-[22px] rounded-md flex items-center justify-center bg-transparent border-none text-content-3 hover:text-content hover:bg-surface-2 opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity"
+          className="tap-grow-sq absolute top-0 right-0 md:top-2 md:right-2 w-[22px] h-[22px] rounded-md flex items-center justify-center bg-transparent border-none text-content-3 hover:text-content hover:bg-surface-2 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 cursor-pointer transition-opacity"
           title="Clear notification"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -164,31 +159,29 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
   );
 
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        className="fixed z-50 w-[360px] max-w-[calc(100vw-32px)] flex flex-col bg-elevated border border-line rounded-[12px] shadow-md overflow-hidden"
-        style={window.innerWidth < 768
-          // phones: full-width sheet under the app bar (the bell sits at the right edge)
-          ? { left: 16, right: 16, width: 'auto', top: 64, maxHeight: window.innerHeight - 96 }
-          : {
-            left: anchor.right + 10,
-            top: anchor.top,
-            maxHeight: Math.min(480, window.innerHeight - anchor.top - 12),
-          }}
-        role="dialog"
-        aria-label="Notifications"
-      >
+    <Popover
+      onClose={onClose}
+      label="Notifications"
+      className="fixed z-50 w-[360px] max-w-[calc(100vw-32px)] flex flex-col bg-elevated border border-line rounded-[12px] shadow-md overflow-hidden"
+      style={window.innerWidth < 768
+        // phones: full-width sheet under the app bar (the bell sits at the right edge)
+        ? { left: 16, right: 16, width: 'auto', top: 64, maxHeight: window.innerHeight - 96 }
+        : {
+          left: anchor.right + 10,
+          top: anchor.top,
+          maxHeight: Math.min(480, window.innerHeight - anchor.top - 12),
+        }}
+    >
         <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0">
           <span className="text-[15px] font-extrabold text-content">Notifications</span>
           <div className="flex items-center gap-3">
             {!!data && data.unread.length > 0 && (
-              <button onClick={markAllRead} className="bg-transparent border-none p-0 text-[13px] font-semibold text-primary hover:underline cursor-pointer">
+              <button onClick={markAllRead} className="tap-area bg-transparent border-none p-0 text-[13px] font-semibold text-primary hover:underline cursor-pointer">
                 Mark all read
               </button>
             )}
             {hasRows && (
-              <button onClick={clearAll} className="bg-transparent border-none p-0 text-[13px] font-semibold text-content-3 hover:text-negative cursor-pointer transition-colors">
+              <button onClick={clearAll} className="tap-area bg-transparent border-none p-0 text-[13px] font-semibold text-content-3 hover:text-negative cursor-pointer transition-colors">
                 Clear all
               </button>
             )}
@@ -225,7 +218,6 @@ export default function NotificationDropdown({ anchor, onClose }: Props) {
             </>
           )}
         </div>
-      </div>
-    </>
+    </Popover>
   );
 }
