@@ -19,6 +19,7 @@ import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
 import BottomSheet from '../components/BottomSheet';
+import LoadError from '../components/LoadError';
 import PageHeader from '../components/PageHeader';
 import { ListRow, CategoryTag, GroupHeader } from '../components/ListRow';
 import SplitEditor from '../components/SplitEditor';
@@ -614,6 +615,8 @@ export default function TransactionsPage() {
   useCategoryEmojis(); // re-render when stored category emojis load/change
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
+  // loading until the first answer; error keeps the toolbar and shows a Try again card (see `listFailed`)
+  const [listStatus, setListStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
@@ -825,8 +828,11 @@ export default function TransactionsPage() {
   // Monotonic request counter: a slow response for an older filter set must not
   // overwrite the list rendered for the current one.
   const loadSeq = useRef(0);
+  const transactionsRef = useRef<Transaction[]>([]);
+  transactionsRef.current = transactions;
   const loadTransactions = useCallback(async () => {
     const seq = ++loadSeq.current;
+    setListStatus((s) => (s === 'error' ? 'loading' : s));
     const params = new URLSearchParams();
     const { startDate, endDate } = getDateRange();
     if (startDate) params.set('startDate', startDate);
@@ -859,9 +865,12 @@ export default function TransactionsPage() {
       if (seq !== loadSeq.current) return;
       setTransactions(res.data);
       setTotal(res.total);
+      setListStatus('ready');
     } catch (e) {
       if (seq !== loadSeq.current) return;
-      addToast(e instanceof Error ? e.message : 'Failed to load transactions', 'error');
+      setListStatus('error');
+      // With an empty list the Try again card says it; otherwise the stale list stays and a toast does.
+      if (transactionsRef.current.length > 0) addToast(e instanceof Error ? e.message : 'Failed to load transactions', 'error');
     }
   }, [getDateRange, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder, addToast]);
 
@@ -1429,6 +1438,23 @@ export default function TransactionsPage() {
   const selectedMoney = formatMoney(selectedTotal, { showZero: true });
 
   const hasMore = transactions.length < total;
+  const listFailed = listStatus === 'error' && transactions.length === 0;
+  const listLoading = listStatus === 'loading' && transactions.length === 0;
+  const listSettled = listStatus === 'ready';
+  const emptyText = debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period';
+  const listError = (
+    <LoadError title="Couldn’t load your transactions" message="Check your connection, then try again." onRetry={loadTransactions} />
+  );
+  const listSkeleton = (
+    <div aria-busy="true" aria-label="Loading transactions">
+      {[150, 110, 170, 90, 140, 120].map((w, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 px-4 md:px-6 py-3.5 border-t border-line first:border-t-0">
+          <div className="bg-surface-2 rounded-lg h-4" style={{ width: w }} />
+          <div className="bg-surface-2 rounded-lg h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
 
   const canEdit = hasPermission('transactions.edit');
   // Rounded-square checkbox indicator (never a circle — circles read as radios).
@@ -1988,7 +2014,7 @@ export default function TransactionsPage() {
         right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{importEl}{addEl}</>} />
       {reviewStrip}
 
-      {isMobile ? (
+      {listFailed ? listError : isMobile ? (
         /* Phones: the same day groups as the desktop list, on two-line rows */
         <>
         <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
@@ -2045,8 +2071,9 @@ export default function TransactionsPage() {
               })}
             </div>
           ))}
-          {transactions.length === 0 && (
-            <p className="text-center py-10 text-content-3 text-sm m-0 truncate px-4">{debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period'}</p>
+          {listLoading && listSkeleton}
+          {listSettled && transactions.length === 0 && (
+            <p className="text-center py-10 text-content-3 text-sm m-0 truncate px-4">{emptyText}</p>
           )}
         </div>
         {bulkMode && (
@@ -2085,7 +2112,7 @@ export default function TransactionsPage() {
         >
         {!bulkMode ? (
           <div className="flex items-center justify-between gap-4 px-6 py-4">
-            <span className="text-[15px] font-bold tabular-nums">{txnCount(total)}</span>
+            <span className="text-[15px] font-bold tabular-nums">{listSettled || transactions.length > 0 ? txnCount(total) : ''}</span>
             <div className="flex items-center gap-2.5">
               <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
                 <button onClick={() => setBulkMode(true)} className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line text-content font-semibold text-sm hover:bg-surface">
@@ -2140,7 +2167,8 @@ export default function TransactionsPage() {
             {g.rows.map((r) => renderRow(r.t, r.split))}
           </div>
         ))}
-        {transactions.length === 0 && <div className="text-center py-10 text-content-3 text-sm truncate px-4">{debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period'}</div>}
+        {listLoading && listSkeleton}
+        {listSettled && transactions.length === 0 && <div className="text-center py-10 text-content-3 text-sm truncate px-4">{emptyText}</div>}
       </div>
       )}
       {(editCell || reviewPopId != null) && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); setReviewPopId(null); }} />}
@@ -2616,7 +2644,7 @@ export default function TransactionsPage() {
       {/* Infinite scroll: sentinel loads the next batch as it nears the viewport */}
       <div ref={loadMoreRef} />
       <div className={`mt-3 mb-16 text-center font-mono text-[12px] text-content-3`}>
-        {total > 0 ? (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : (total === 1 ? txnCount(total) : `All ${txnCount(total)}`)) : 'No transactions'}
+        {total > 0 && (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : (total === 1 ? txnCount(total) : `All ${txnCount(total)}`))}
       </div>
 
       {/* Modal */}
