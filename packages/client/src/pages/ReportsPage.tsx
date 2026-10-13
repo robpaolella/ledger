@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { accountShortName } from '../lib/accounts';
 import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
+import { buildReportsCsv } from '../lib/reportsCsv';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
 import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
 import { Money } from '../components/Money';
@@ -304,13 +305,7 @@ export default function ReportsPage() {
     // The list only holds the pages loaded so far; export the whole range, in list order.
     let all: Txn[];
     try { all = await fetchAllPages((offset, size) => fetchTxnPage(offset, size)); } catch { addToast('Could not export your transactions. Please try again.', 'error'); return; }
-    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header = ['Date', 'Merchant', 'Category', 'Account', 'Amount'];
-    const lines = [header.join(',')];
-    for (const t of all) {
-      lines.push([t.date, esc(t.merchant?.name || t.description || ''), esc(t.category?.displayName || ''), esc(t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : ''), t.amount.toFixed(2)].join(','));
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([buildReportsCsv(all)], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `reports-${range.start}_to_${range.end}.csv`;
