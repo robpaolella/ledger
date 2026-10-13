@@ -52,6 +52,7 @@ export const BANK_UNREACHABLE_MESSAGE = "Couldn't reach your bank. Try again in 
 
 /** fetch() that turns a network failure ("fetch failed") into plain wording. */
 async function fetchBank(url: string, init?: RequestInit): Promise<Response> {
+  new URL(url); // a malformed address keeps its own error; only a failed request is "unreachable"
   try {
     return await fetch(url, init);
   } catch {
