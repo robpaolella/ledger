@@ -167,6 +167,21 @@ describe('resolveReview guard', () => {
   });
 });
 
+describe('the list tells Approve all which rows stay', () => {
+  it('flags only rows the resolve endpoint would keep (not splits or linked transfers)', async () => {
+    const plain = flagged();
+    const categorized = flagged(food);
+    const split = flagged();
+    sqlite.prepare('INSERT INTO transaction_splits (transaction_id, category_id, amount) VALUES (?, ?, 40)').run(split, food);
+    const from = flagged();
+    sqlite.prepare("INSERT INTO transfer_links (from_transaction_id, to_transaction_id, amount, status) VALUES (?, ?, 40, 'linked')").run(from, txn());
+    const res = await fetch(`${base}/reviews?status=open&limit=500`);
+    const rows = ((await res.json()) as { data: { needsCategory: boolean; transaction: { id: number } }[] }).data;
+    const needs = (id: number) => rows.find((r) => r.transaction.id === id)?.needsCategory;
+    expect([plain, categorized, split, from].map(needs)).toEqual([true, false, false, false]);
+  });
+});
+
 describe('paths that assign a category still close the item', () => {
   it('transaction edit (single category and splits)', async () => {
     const single = flagged();
