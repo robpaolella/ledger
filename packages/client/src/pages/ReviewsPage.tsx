@@ -13,6 +13,7 @@ import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { formatMoney } from '@ledger/shared';
 import { Money } from '../components/Money';
+import { approveAllText } from '../lib/approveAll';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +26,8 @@ interface Txn {
 }
 interface ReviewRow {
   reviewId: number; reason: string; note: string | null;
+  /** Server's own verdict (no category, splits or linked transfer): Approve all leaves these open. */
+  needsCategory: boolean;
   assignee: { id: number; displayName: string } | null;
   transaction: Txn;
 }
@@ -63,9 +66,9 @@ function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: s
   return <span className="flex-none rounded-full inline-flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: font, background: tint(c), color: c }}>{initialOf(seed)}</span>;
 }
 
-/** Phones: the toolbar is one 44px row that never wraps. Desktop: the header lays the controls out itself. */
+/** Phones: the controls keep their full labels and wrap onto a second 44px row when they don't fit. Desktop: the header lays the controls out itself. */
 function ToolbarRow({ phone, children }: { phone: boolean; children: ReactNode }) {
-  return phone ? <div className="flex items-center flex-nowrap gap-2 w-full">{children}</div> : <>{children}</>;
+  return phone ? <div className="flex items-center flex-wrap gap-2 w-full">{children}</div> : <>{children}</>;
 }
 
 export default function ReviewsPage() {
@@ -159,6 +162,7 @@ export default function ReviewsPage() {
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
   const anyFilter = period !== null || dateFilter !== 'all' || selUsers.size > 0 || q !== '';
+  const approveText = approveAllText(shown.map((r) => ({ categorized: !r.needsCategory })));
   const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
@@ -489,15 +493,15 @@ export default function ReviewsPage() {
       <ResponsiveModal
         isOpen={confirmAll}
         onClose={() => setConfirmAll(false)}
-        title={`Approve ${shown.length} transaction${shown.length === 1 ? '' : 's'}?`}
+        title={approveText.title}
         footer={(
           <div className="flex items-center gap-2.5 md:justify-end">
-            <Button variant="secondary" onClick={() => setConfirmAll(false)} className="flex-1 md:flex-none">Cancel</Button>
-            <Button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} loading={busy} className="flex-1 md:flex-none">Approve all</Button>
+            <Button variant="secondary" onClick={() => setConfirmAll(false)} className="flex-1 md:flex-none">{approveText.approvable === 0 ? 'Close' : 'Cancel'}</Button>
+            {approveText.approvable > 0 && <Button onClick={() => { const ids = shown.map((r) => r.transaction.id); setConfirmAll(false); resolve(ids); }} loading={busy} className="flex-1 md:flex-none">Mark reviewed</Button>}
           </div>
         )}
       >
-        <p className="text-sm text-content-2 m-0">This marks every transaction in the current view reviewed and clears it from the queue.</p>
+        <p className="text-sm text-content-2 m-0">{approveText.body}</p>
       </ResponsiveModal>
 
       {/* in-page transaction detail: a bottom sheet on phones, a side drawer on desktop */}
