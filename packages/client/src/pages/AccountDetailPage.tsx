@@ -19,6 +19,7 @@ import { Money } from '../components/Money';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ListRow } from '../components/ListRow';
 import PageHeader from '../components/PageHeader';
+import { resolveAccountLoad, resolveAccountLoadError } from '../lib/accountLoad';
 import { getCategoryEmoji, getCategoryColorHex } from '../lib/categoryMeta';
 
 // ---- types ----
@@ -174,6 +175,7 @@ function AccountDetail() {
 
   const [meta, setMeta] = useState<AccountMeta | null>(null);
   const [metaLoaded, setMetaLoaded] = useState(false);
+  const [metaError, setMetaError] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [matchTotal, setMatchTotal] = useState(0); // transactions matching the filters
@@ -205,8 +207,14 @@ function AccountDetail() {
     try {
       const res = await apiFetch<{ data: { accounts: AccountMeta[] } }>('/networth/summary');
       if (!alive()) return;
-      setMeta(res.data.accounts.find((a) => a.accountId === id) ?? null);
-    } catch { if (alive()) setMeta(null); }
+      const result = resolveAccountLoad(res.data.accounts.find((a) => a.accountId === id));
+      setMeta(result.state === 'found' ? result.account : null);
+      setMetaError(false);
+    } catch (err) {
+      if (!alive()) return;
+      setMeta(null);
+      setMetaError(resolveAccountLoadError(err).state === 'error');
+    }
     finally { if (alive()) setMetaLoaded(true); }
   }, [id]);
   const loadHistory = useCallback(async (alive: () => boolean = () => true) => {
@@ -219,7 +227,7 @@ function AccountDetail() {
   useEffect(() => {
     let cancelled = false;
     const alive = () => !cancelled;
-    setMetaLoaded(false); loadMeta(alive); loadHistory(alive);
+    setMetaLoaded(false); setMetaError(false); loadMeta(alive); loadHistory(alive);
     return () => { cancelled = true; };
   }, [loadMeta, loadHistory]);
 
@@ -335,6 +343,22 @@ function AccountDetail() {
   );
 
   if (!metaLoaded) return <Spinner />;
+
+  if (!meta && metaError) {
+    return (
+      <div className="pb-16">
+        {topBar(<span className="text-[20px] font-extrabold tracking-tight truncate">Account</span>, undefined, 'Account')}
+        <div className="bg-surface border border-line rounded-card shadow-sm p-8 text-center">
+          <div className="text-[15px] font-semibold text-content mb-1.5">Couldn’t load this account</div>
+          <div className="text-sm text-content-3 mb-4">Check your connection, then try again.</div>
+          <div className="flex justify-center gap-2">
+            <Button variant="secondary" onClick={() => { setMetaLoaded(false); setMetaError(false); loadMeta(); }}>Try again</Button>
+            <Link to="/accounts" className="inline-flex items-center h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">Back to accounts</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!meta) {
     return (
