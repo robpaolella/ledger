@@ -17,6 +17,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import FilterPopover from '../components/FilterPopover';
 import AddAccountModal from '../components/accounts/AddAccountModal';
 import Button from '../components/Button';
+import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import { EMPTY_FILTER, type FilterDraft } from '../components/filterModel';
 
 // ---- types ----
@@ -413,7 +414,11 @@ export default function AccountsPage() {
           <div key={a.id} className="flex items-center gap-3 px-4 md:px-5 min-h-[62px] py-2.5 border-t border-line">
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-[15px] truncate">{a.name}</div>
-              <div className="font-mono text-[12px] text-content-3 truncate">Acquired {a.purchaseDate} · cost {balance(a.cost)}</div>
+              <div className="font-mono text-[12px] text-content-3 md:truncate">
+                <div className="truncate md:inline">Acquired {new Date(a.purchaseDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                <span className="hidden md:inline"> · </span>
+                <div className="md:inline">cost {balance(a.cost)}</div>
+              </div>
             </div>
             <span className="hidden md:inline-flex text-[12px] font-semibold px-2 py-0.5 rounded-md shrink-0" style={{ background: 'color-mix(in srgb, var(--c-amber) 16%, transparent)', color: 'var(--c-amber)' }}>
               {a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}
@@ -477,8 +482,8 @@ export default function AccountsPage() {
                 <div className="text-[26px] font-extrabold tabular-nums leading-none">{balance(prev.value)}</div>
                 <div className="text-[12px] text-content-3 mt-1">after {prev.years.toFixed(1)} yrs</div>
               </div>
-              <div className="flex items-center gap-2.5 pt-1">
-                {assetModal !== 'new' && <button onClick={deleteAsset} className="h-11 px-4 rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', border: '1px solid color-mix(in srgb, var(--negative) 40%, var(--line))' }}>Delete</button>}
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                {assetModal !== 'new' && <ConfirmDeleteButton className="max-md:h-11" onConfirm={deleteAsset} />}
                 <button onClick={() => setAssetModal(null)} className="ml-auto h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
                 <button onClick={saveAsset} disabled={!af.name || !af.purchaseDate} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">{assetModal === 'new' ? 'Add asset' : 'Save changes'}</button>
               </div>
