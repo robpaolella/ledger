@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
 import { ownerColor } from '../badges';
@@ -17,6 +18,7 @@ const chevronRight = <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 
 // --- Add user ---
 function AddUserModal({ onClose, onCreated, callerRole }: { onClose: () => void; onCreated: () => void; callerRole: string }) {
+  const isMobile = useIsMobile();
   const { addToast } = useToast();
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
@@ -53,7 +55,7 @@ function AddUserModal({ onClose, onCreated, callerRole }: { onClose: () => void;
       )}>
       {error && <InlineNotification type="error" message={error} dismissible onDismiss={() => setError('')} className="mb-4" />}
       <div className="flex flex-col gap-5">
-        <Field label="Name"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Full name" autoFocus className={inputCls} /></Field>
+        <Field label="Name"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Full name" autoFocus={!isMobile} className={inputCls} /></Field>
         <Field label="Username" hint="Lowercase letters and numbers only, 3–20 characters.">
           <input value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))} autoCapitalize="off" placeholder="username" className={`${inputCls} font-mono`} />
         </Field>
