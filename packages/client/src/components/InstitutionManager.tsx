@@ -67,11 +67,13 @@ export default function InstitutionManager({ canEdit, onClose }: { canEdit: bool
         </div>
         {canEdit && (
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] text-content-3">{configured ? 'Logos are fetched from logo.dev.' : 'Set LOGODEV_TOKEN on the server to fetch logos automatically.'}</span>
-            <button onClick={hydrateMissing} disabled={!configured || hydrating}
-              className="h-8 px-3 rounded-[9px] bg-surface-2 border border-line-strong text-content font-semibold text-[12px] disabled:opacity-40 whitespace-nowrap">
-              {hydrating ? 'Fetching…' : 'Fetch missing logos'}
-            </button>
+            <span className="text-[12px] text-content-3">{configured ? 'Missing logos are fetched automatically.' : "Logos aren't set up. They're optional; setup steps are in Ledger's documentation."}</span>
+            {configured && (
+              <button onClick={hydrateMissing} disabled={hydrating}
+                className="h-8 px-3 rounded-[9px] bg-surface-2 border border-line-strong text-content font-semibold text-[12px] disabled:opacity-40 whitespace-nowrap">
+                {hydrating ? 'Fetching…' : 'Fetch missing logos'}
+              </button>
+            )}
           </div>
         )}
         <div className="flex flex-col rounded-[12px] border border-line overflow-hidden" style={{ maxHeight: 420, overflowY: 'auto' }}>
@@ -226,7 +228,7 @@ function InstitutionEditor({
                 <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="text-[12px] font-semibold text-primary text-left disabled:opacity-60">{logoUrl ? 'Change logo' : 'Upload logo'}</button>
                 {configured && domain.trim() && (
                   domain.trim().toLowerCase() === savedDomain.trim().toLowerCase()
-                    ? <button type="button" disabled={busy} onClick={fetchLogo} className="text-[12px] font-semibold text-content-2 text-left disabled:opacity-60">Fetch from logo.dev</button>
+                    ? <button type="button" disabled={busy} onClick={fetchLogo} className="text-[12px] font-semibold text-content-2 text-left disabled:opacity-60">Fetch logo</button>
                     : <span className="text-[11px] text-content-3">Save to fetch the new domain’s logo</span>
                 )}
                 {logoUrl && <button type="button" disabled={busy} onClick={removeLogo} className="text-[12px] font-semibold text-negative text-left disabled:opacity-60">Remove</button>}

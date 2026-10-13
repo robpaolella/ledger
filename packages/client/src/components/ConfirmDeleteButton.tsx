@@ -14,6 +14,8 @@ interface ConfirmDeleteButtonProps {
   className?: string;
   /** Pill only: false drops the extra Cancel beside the button, for a footer that already has one. */
   showCancel?: boolean;
+  /** Tells a footer when the confirmation starts and ends (cancelled, timed out or confirmed). */
+  onConfirmingChange?: (confirming: boolean) => void;
 }
 
 /** Two-click destructive action: outlined `--negative` at rest, solid while
@@ -28,8 +30,11 @@ export default function ConfirmDeleteButton({
   disabled = false,
   className = '',
   showCancel = true,
+  onConfirmingChange,
 }: ConfirmDeleteButtonProps) {
   const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => { onConfirmingChange?.(confirming); }, [confirming, onConfirmingChange]);
 
   useEffect(() => {
     if (!confirming) return;
