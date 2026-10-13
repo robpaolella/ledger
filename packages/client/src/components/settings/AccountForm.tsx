@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import ConfirmDeleteButton from '../ConfirmDeleteButton';
 import InlineNotification from '../InlineNotification';
 import { Switch } from '../primitives';
@@ -65,6 +66,7 @@ export default function AccountForm({
   onAvatarChanged?: () => void;
 }) {
   const { hasPermission } = useAuth();
+  const isMobile = useIsMobile();
   const canManageSync = hasPermission('simplefin.manage');
   const [name, setName] = useState(account?.name ?? '');
   const [lastFour, setLastFour] = useState(account?.last_four ?? '');
@@ -188,7 +190,7 @@ export default function AccountForm({
         </div>
 
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Account name" className={inputCls} autoFocus={!account} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Account name" className={inputCls} autoFocus={!account && !isMobile} />
         </Field>
 
         <Field label="Institution">

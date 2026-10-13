@@ -9,6 +9,9 @@ interface CurrencyInputProps {
   onBlur?: () => void;
   placeholder?: string;
   allowNegative?: boolean;
+  id?: string;
+  invalid?: boolean;
+  describedBy?: string;
 }
 
 function formatCurrency(val: string): string {
@@ -24,7 +27,7 @@ function formatCurrency(val: string): string {
 }
 
 const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  ({ value, onChange, className, autoFocus, onKeyDown, onBlur, placeholder = '$0.00', allowNegative = false }, ref) => {
+  ({ value, onChange, className, autoFocus, onKeyDown, onBlur, placeholder = '$0.00', allowNegative = false, id, invalid, describedBy }, ref) => {
     const [focused, setFocused] = useState(!!autoFocus);
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -50,6 +53,9 @@ const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
     return (
       <input
         ref={ref}
+        id={id}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         type="text"
         inputMode="decimal"
         value={focused ? value : formatCurrency(value)}
