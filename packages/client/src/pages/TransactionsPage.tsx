@@ -2641,7 +2641,7 @@ export default function TransactionsPage() {
       {/* Infinite scroll: sentinel loads the next batch as it nears the viewport */}
       <div ref={loadMoreRef} />
       <div className={`mt-3 mb-16 text-center font-mono text-[12px] text-content-3`}>
-        {total > 0 && (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : (total === 1 ? txnCount(total) : `All ${txnCount(total)}`))}
+        {!listFailed && total > 0 && (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : (total === 1 ? txnCount(total) : `All ${txnCount(total)}`))}
       </div>
 
       {/* Modal */}
