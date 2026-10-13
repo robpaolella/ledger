@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader';
 import BenchmarkStrip, { type BenchmarkId } from '../components/investments/BenchmarkStrip';
 import PerformanceChart, { type PerfSeries } from '../components/investments/PerformanceChart';
 import AllocationView from '../components/investments/AllocationView';
-import { holdingsEmpty, type HoldingsEmptyCopy } from '../components/investments/emptyState';
+import { canLinkAccounts, holdingsEmpty, type HoldingsEmptyCopy } from '../components/investments/emptyState';
 import { useAuth } from '../context/AuthContext';
 import HoldingsTable, { type HoldingsGroup } from '../components/investments/HoldingsTable';
 
@@ -67,7 +67,7 @@ const EmptyCard = ({ copy }: { copy: HoldingsEmptyCopy }) => (
 const csvCell = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 export default function InvestmentsPage() {
-  const { isAdmin, hasPermission } = useAuth();
+  const { user } = useAuth();
   const [range, setRange] = useState<RangeKey>('3M');
   const [tab, setTab] = useState<'market' | 'allocation'>('market');
   const [benchmark, setBenchmark] = useState<BenchmarkId>('sp500');
@@ -144,8 +144,7 @@ export default function InvestmentsPage() {
 
   if (perf === undefined || holdings === undefined) return <Spinner />;
 
-  const canBankSync = isAdmin() || hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
-  const emptyState = holdings != null ? holdingsEmpty(holdings.groups.length, selectedIds.size, canBankSync) : null;
+  const emptyState = holdings != null ? holdingsEmpty(holdings.groups.length, selectedIds.size, canLinkAccounts(user)) : null;
 
   return (
     <div className="pb-16">
