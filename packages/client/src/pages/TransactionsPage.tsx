@@ -1195,8 +1195,11 @@ export default function TransactionsPage() {
   // detail panel now, so this is the un-split path). The parent amount is kept
   // as-is; the category becomes the first assigned split's category, which the
   // user can then re-pick from the (now single) category select.
+  const unsplitBusyRef = useRef(false); // blocks a second request from a rapid double tap
+
   const removeSplitFromDetail = async () => {
-    if (!detail || !detail.splits?.length) return;
+    if (!detail || !detail.splits?.length || unsplitBusyRef.current) return;
+    unsplitBusyRef.current = true;
     const catId = detail.splits.find((s) => s.categoryId)?.categoryId ?? detail.splits[0].categoryId;
     try {
       await apiFetch(`/transactions/${detail.id}`, {
@@ -1209,6 +1212,7 @@ export default function TransactionsPage() {
       await refreshDetail(detail.id);
       await loadTransactions();
     } catch { addToast('Failed to remove split', 'error'); }
+    finally { unsplitBusyRef.current = false; }
   };
 
   // Edit ONE split leg's category / merchant / note from the split-child detail
@@ -2510,7 +2514,8 @@ export default function TransactionsPage() {
         const footer = (
           <div className="flex items-center justify-between gap-3">
             {isExistingSplit && canEdit ? (
-              <button onClick={removeSplitFromDetail} className="h-11 md:h-[42px] px-[16px] rounded-[11px] font-bold text-sm" style={{ color: 'var(--negative)', background: 'transparent' }}>Unsplit</button>
+              <ConfirmDeleteButton label="Unsplit" confirmLabel="Confirm unsplit?" showCancel={false}
+                onConfirm={removeSplitFromDetail} className="h-11! md:h-[42px]! px-4!" />
             ) : <span className="hidden md:block" />}
             <div className="flex flex-1 md:flex-none items-center gap-2.5">
               <button onClick={() => setSplitOpen(false)} className="flex-1 md:flex-none h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>

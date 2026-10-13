@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { tapTwoStep } from '../lib/twoStepConfirm';
 
 interface ConfirmDeleteButtonProps {
   onConfirm: () => void | Promise<void>;
@@ -11,6 +12,8 @@ interface ConfirmDeleteButtonProps {
   disabled?: boolean;
   /** Extra classes for the pill's buttons (for example a taller phone tap target). */
   className?: string;
+  /** Pill only: false drops the extra Cancel beside the button, for a footer that already has one. */
+  showCancel?: boolean;
 }
 
 /** Two-click destructive action: outlined `--negative` at rest, solid while
@@ -24,6 +27,7 @@ export default function ConfirmDeleteButton({
   variant = 'pill',
   disabled = false,
   className = '',
+  showCancel = true,
 }: ConfirmDeleteButtonProps) {
   const [confirming, setConfirming] = useState(false);
 
@@ -34,9 +38,10 @@ export default function ConfirmDeleteButton({
   }, [confirming, timeout]);
 
   const handleClick = useCallback(() => {
-    if (!confirming) { setConfirming(true); onFirstClick?.(); return; }
+    const tap = tapTwoStep(confirming);
+    setConfirming(tap.armed);
+    if (!tap.run) { onFirstClick?.(); return; }
     onConfirm();
-    setConfirming(false);
   }, [confirming, onConfirm, onFirstClick]);
 
   const style = confirming
@@ -66,7 +71,7 @@ export default function ConfirmDeleteButton({
         className={`h-10 px-4 rounded-[11px] font-bold text-sm cursor-pointer transition-colors whitespace-nowrap disabled:opacity-50 ${className}`} style={style}>
         {confirming ? confirmLabel : label}
       </button>
-      {confirming && (
+      {confirming && showCancel && (
         <button type="button" onClick={() => setConfirming(false)}
           className={`h-10 px-3 rounded-[10px] bg-transparent border-none cursor-pointer text-sm font-semibold text-content-2 hover:bg-surface-2 ${className}`}>
           Cancel
