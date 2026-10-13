@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { thinLabelIndices } from '../../client/src/lib/chartLabels';
+import { formatMoney } from '@ledger/shared';
+import { distinctAxisLabels, thinLabelIndices } from '../../client/src/lib/chartLabels';
 
 describe('thinLabelIndices', () => {
   it('keeps every label when they all fit', () => {
@@ -24,5 +25,38 @@ describe('thinLabelIndices', () => {
     expect(thinLabelIndices(0, 5)).toEqual([]);
     expect(thinLabelIndices(1, 5)).toEqual([0]);
     expect(thinLabelIndices(3, 0)).toEqual([]);
+  });
+});
+
+describe('distinctAxisLabels', () => {
+  const axis = (n: number) => formatMoney(n, { kind: 'balance', precision: 'axis' }).text;
+  const compact = (n: number) => formatMoney(n, { kind: 'balance', precision: 'compact', showZero: true }).text.replace(/\.0(?=[kMB]$)/, '');
+  const whole = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole', showZero: true }).text;
+  const full = (n: number) => formatMoney(n, { kind: 'balance', precision: 'full', showZero: true }).text;
+  const fmts = [axis, compact, whole, full];
+  const spread = (lo: number, hi: number) => Array.from({ length: 5 }, (_, i) => lo + (i / 4) * (hi - lo));
+
+  it('keeps compact labels for a wide range', () => {
+    expect(distinctAxisLabels(spread(6900, 8000), fmts)).toEqual(spread(6900, 8000).map(axis));
+  });
+
+  it('never repeats a label for a narrow range', () => {
+    const labels = distinctAxisLabels(spread(7886, 7961), fmts);
+    expect(new Set(labels).size).toBe(5);
+    expect(labels.some((l) => l === '$8k')).toBe(false);
+  });
+
+  it('gives a flat series distinct labels', () => {
+    const labels = distinctAxisLabels(spread(7920, 8080), fmts);
+    expect(new Set(labels).size).toBe(5);
+  });
+
+  it('goes to cents when whole dollars still repeat', () => {
+    const labels = distinctAxisLabels(spread(100, 100.4), fmts);
+    expect(new Set(labels).size).toBe(5);
+  });
+
+  it('blanks later repeats when ticks are indistinguishable', () => {
+    expect(distinctAxisLabels([5, 5, 5], fmts)).toEqual(['$5.00', '', '']);
   });
 });
