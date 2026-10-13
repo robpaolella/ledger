@@ -198,9 +198,9 @@ export default function MerchantsPanel() {
             </>
           )}
         </div>
-        <div className="h-10 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3.5 w-[320px] max-w-full">
+        <div className="h-10 max-md:h-11 flex items-center gap-2 rounded-[11px] bg-surface border border-line-strong px-3.5 w-[320px] max-w-full">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${merchants.length} merchants…`} className="flex-1 bg-transparent outline-none text-sm text-content" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${merchants.length} merchants…`} className="flex-1 h-full bg-transparent outline-none text-sm text-content" />
         </div>
       </div>
 

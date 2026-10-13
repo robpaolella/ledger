@@ -231,7 +231,7 @@ function InstitutionEditor({
                     ? <button type="button" disabled={busy} onClick={fetchLogo} className="max-md:min-h-11 text-[12px] font-semibold text-content-2 text-left disabled:opacity-60">Fetch logo</button>
                     : <span className="text-[11px] text-content-3">Save to fetch the new domain’s logo</span>
                 )}
-                {logoUrl && <button type="button" disabled={busy} onClick={removeLogo} className="text-[12px] font-semibold text-negative text-left disabled:opacity-60">Remove</button>}
+                {logoUrl && <button type="button" disabled={busy} onClick={removeLogo} className="max-md:min-h-11 text-[12px] font-semibold text-negative text-left disabled:opacity-60">Remove</button>}
               </>
             )}
           </div>
@@ -251,7 +251,7 @@ function InstitutionEditor({
           <label className="block text-[11px] font-medium text-content-2 mb-1">Brand color (monogram fallback)</label>
           <div className="flex items-center gap-2">
             <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(color) ? color : '#64748b'} onChange={(e) => setColor(e.target.value)}
-              className="h-9 w-12 rounded-md border border-line bg-surface-2 cursor-pointer" />
+              className="h-9 max-md:h-11 w-12 rounded-md border border-line bg-surface-2 cursor-pointer" />
             <input value={color} onChange={(e) => setColor(e.target.value)} placeholder="#64748b"
               className="flex-1 h-11 px-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
           </div>
@@ -262,11 +262,11 @@ function InstitutionEditor({
             confirmDelete ? (
               <div className="mr-auto flex items-center gap-2">
                 <span className="text-[12px] text-content-2">Delete?</span>
-                <button onClick={del} disabled={busy} className="h-9 px-3 rounded-[10px] bg-negative text-white font-bold text-[12px] disabled:opacity-50">Confirm</button>
-                <button onClick={() => setConfirmDelete(false)} className="h-9 px-3 rounded-[10px] bg-surface-2 border border-line-strong text-content font-semibold text-[12px]">Cancel</button>
+                <button onClick={del} disabled={busy} className="h-9 max-md:h-11 px-3 rounded-[10px] bg-negative text-white font-bold text-[12px] disabled:opacity-50">Confirm</button>
+                <button onClick={() => setConfirmDelete(false)} className="h-9 max-md:h-11 px-3 rounded-[10px] bg-surface-2 border border-line-strong text-content font-semibold text-[12px]">Cancel</button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDelete(true)} className="mr-auto text-[13px] font-semibold text-negative">Delete</button>
+              <button onClick={() => setConfirmDelete(true)} className="mr-auto max-md:min-h-11 text-[13px] font-semibold text-negative">Delete</button>
             )
           )}
           <button onClick={onBack} disabled={busy} className="h-11 px-4 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm disabled:opacity-40">Back</button>
