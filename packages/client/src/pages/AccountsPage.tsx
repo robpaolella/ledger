@@ -18,6 +18,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import FilterPopover from '../components/FilterPopover';
 import AddAccountModal from '../components/accounts/AddAccountModal';
 import Button from '../components/Button';
+import { actionState, NO_ADD_ACCOUNT, NO_ADD_ASSET, NO_EDIT_ASSET } from '../lib/permissionState';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import { EMPTY_FILTER, type FilterDraft } from '../components/filterModel';
 
@@ -229,7 +230,10 @@ export default function AccountsPage() {
   const currentBalanceOf = (accountId: number) => data?.accounts.find((a) => a.accountId === accountId)?.balance ?? 0;
   const classificationOf = (accountId: number) => data?.accounts.find((a) => a.accountId === accountId)?.classification ?? '';
 
-  const canEdit = hasPermission('accounts.edit');
+  // The server checks assets.* for these, so the buttons follow the same keys.
+  const addAccountState = actionState(hasPermission('accounts.create'), NO_ADD_ACCOUNT);
+  const addAssetState = actionState(hasPermission('assets.create'), NO_ADD_ASSET);
+  const editAssetState = actionState(hasPermission('assets.edit'), NO_EDIT_ASSET);
   const acctColor = (cls: string) => cls === 'liability' ? 'var(--negative)' : cls === 'investment' ? 'var(--c-teal)' : 'var(--c-blue)';
 
   const ChangeText = ({ v }: { v: number }) => {
@@ -270,12 +274,10 @@ export default function AccountsPage() {
               <span className="hidden md:inline">Refresh all</span>
             </button>
           )}
-          {hasPermission('accounts.create') && (
-            <Button size="sm" onClick={() => setAddingAccount(true)} aria-label="Add account">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-              <span className="hidden md:inline">Add account</span>
-            </Button>
-          )}
+          <Button size="sm" onClick={() => setAddingAccount(true)} aria-label="Add account" disabled={addAccountState.disabled} title={addAccountState.reason}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            <span className="hidden md:inline">Add account</span>
+          </Button>
   </>);
 
   const header = <PageHeader stackRight={false} title="Accounts" right={isMobile ? undefined : headerControls} mobileActions={headerControls} />;
@@ -426,7 +428,7 @@ export default function AccountsPage() {
         <div className="flex items-center gap-3 px-4 md:px-5 py-4">
           <span className="text-[17px] font-extrabold">Physical Assets</span>
           <span className="ml-auto text-[17px] font-extrabold tabular-nums">{balance(physicalTotal)}</span>
-          {canEdit && <button onClick={() => openAsset('new')} className="tap-grow h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-sm font-semibold">Add</button>}
+          <button onClick={() => openAsset('new')} disabled={addAssetState.disabled} title={addAssetState.reason} className="tap-grow h-8 px-3 rounded-lg bg-surface-2 border border-line-strong text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Add</button>
         </div>
         {data.assets.length === 0 ? (
           <div className="px-5 pb-5 text-content-3 text-sm">No physical assets tracked.</div>
@@ -447,11 +449,9 @@ export default function AccountsPage() {
               <div className="font-bold text-[15px] tabular-nums">{balance(a.currentValue)}</div>
               <div className="md:hidden text-[11px] font-semibold" style={{ color: 'var(--c-amber)' }}>{a.depreciationMethod === 'declining_balance' ? `DB ${a.decliningRate}%` : `SL ${a.lifespanYears}y`}</div>
             </div>
-            {canEdit && (
-              <button onClick={() => openAsset(a)} aria-label={`Edit ${a.name}`} className="tap-grow-sq w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-              </button>
-            )}
+            <button onClick={() => openAsset(a)} aria-label={`Edit ${a.name}`} disabled={editAssetState.disabled} title={editAssetState.reason} className="tap-grow-sq w-8 h-8 flex items-center justify-center rounded-lg text-content-2 hover:bg-surface-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+            </button>
           </div>
         ))}
       </div>
@@ -503,7 +503,7 @@ export default function AccountsPage() {
                 <div className="text-[12px] text-content-3 mt-1">after {prev.years.toFixed(1)} yrs</div>
               </div>
               <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                {assetModal !== 'new' && <ConfirmDeleteButton className="max-md:h-11" onConfirm={deleteAsset} />}
+                {assetModal !== 'new' && hasPermission('assets.delete') && <ConfirmDeleteButton className="max-md:h-11" onConfirm={deleteAsset} />}
                 <button onClick={() => setAssetModal(null)} className="ml-auto h-11 px-4 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm">Cancel</button>
                 <button onClick={saveAsset} disabled={!af.name || !af.purchaseDate} className="h-11 px-5 rounded-[11px] bg-primary text-on-primary font-bold text-sm disabled:opacity-50">{assetModal === 'new' ? 'Add asset' : 'Save changes'}</button>
               </div>
