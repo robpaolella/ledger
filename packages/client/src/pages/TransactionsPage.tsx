@@ -828,8 +828,6 @@ export default function TransactionsPage() {
   // Monotonic request counter: a slow response for an older filter set must not
   // overwrite the list rendered for the current one.
   const loadSeq = useRef(0);
-  const transactionsRef = useRef<Transaction[]>([]);
-  transactionsRef.current = transactions;
   const loadTransactions = useCallback(async () => {
     const seq = ++loadSeq.current;
     setListStatus((s) => (s === 'error' ? 'loading' : s));
@@ -866,13 +864,12 @@ export default function TransactionsPage() {
       setTransactions(res.data);
       setTotal(res.total);
       setListStatus('ready');
-    } catch (e) {
+    } catch {
       if (seq !== loadSeq.current) return;
+      // One message, the Try again card: rows left over from another filter set would pass as current.
       setListStatus('error');
-      // With an empty list the Try again card says it; otherwise the stale list stays and a toast does.
-      if (transactionsRef.current.length > 0) addToast(e instanceof Error ? e.message : 'Failed to load transactions', 'error');
     }
-  }, [getDateRange, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder, addToast]);
+  }, [getDateRange, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder]);
 
   useEffect(() => {
     const el = pageHeaderRef.current;
@@ -1438,7 +1435,7 @@ export default function TransactionsPage() {
   const selectedMoney = formatMoney(selectedTotal, { showZero: true });
 
   const hasMore = transactions.length < total;
-  const listFailed = listStatus === 'error' && transactions.length === 0;
+  const listFailed = listStatus === 'error';
   const listLoading = listStatus === 'loading' && transactions.length === 0;
   const listSettled = listStatus === 'ready';
   const emptyText = debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period';
