@@ -163,14 +163,16 @@ export default function BudgetPage() {
   const [editScope, setEditScope] = useState<'month' | 'forward'>('month');
   const [editOverride, setEditOverride] = useState(false); // per-month sub-floor override
 
+  const monthReq = useRef(0); // latest request wins when the month changes quickly
   const loadData = useCallback(async () => {
+    const req = ++monthReq.current;
     setMonthError(false);
     try {
       const res = await apiFetch<{ data: BudgetSummary }>(
         `/budgets/summary?month=${monthStr(month)}`
       );
-      setData(res.data);
-    } catch { setMonthError(true); } // the page shows its own "Try again" card
+      if (req === monthReq.current) setData(res.data);
+    } catch { if (req === monthReq.current) setMonthError(true); } // the page shows its own "Try again" card
   }, [month]);
 
   useEffect(() => { loadData(); }, [loadData]);
