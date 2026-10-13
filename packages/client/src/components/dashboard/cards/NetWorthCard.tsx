@@ -48,7 +48,7 @@ function RangeDropdown({ value, onChange }: { value: Range; onChange: (r: Range)
               key={o.value}
               type="button"
               onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full text-left px-3.5 py-2 text-sm font-semibold hover:bg-surface-2 ${o.value === value ? 'text-content' : 'text-content-2'}`}
+              className={`w-full text-left px-3.5 py-2 text-sm font-semibold hover:bg-surface-2 max-md:min-h-[44px] ${o.value === value ? 'text-content' : 'text-content-2'}`}
             >
               {o.label}
             </button>
