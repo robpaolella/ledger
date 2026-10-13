@@ -15,6 +15,7 @@ import { seedInvestments } from '../src/db/demo-seed/investments.js';
 import { seedSettings } from '../src/db/demo-seed/settings.js';
 import { FAILURE_SENTENCES } from '../src/services/simplefinSync.js';
 import { buildCategorizer } from '../src/services/categorize.js';
+import { dailySyncInfo } from '../src/services/dailySync.js';
 
 function fixture(now: Date) {
   const db = new Database(':memory:');
@@ -135,18 +136,36 @@ describe('Settings sample data', () => {
       const db = fixture(now);
       try {
         const row = db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_run'").get() as { value: string };
-        return JSON.parse(row.value) as { day: string; at: string; transactionsImported: number; connections: number; connectionsWithProblems: number };
+        return JSON.parse(row.value) as { day: string; at: string; transactionsImported: number; connections: number; connectionsWithProblems: number; results: unknown[] };
       } finally {
         db.close();
       }
     };
     const afternoon = lastRun(NOON);
     expect(afternoon).toMatchObject({ day: '2026-10-31', transactionsImported: 7, connections: 10, connectionsWithProblems: 3 });
+    expect(afternoon.results).toHaveLength(10);
     expect(new Date(afternoon.at)).toEqual(new Date(2026, 9, 31, 5, 31));
     // Before 5:31 the run is still yesterday's.
     const early = lastRun(new Date(2026, 9, 31, 4, 0));
     expect(early.day).toBe('2026-10-30');
     expect(new Date(early.at)).toEqual(new Date(2026, 9, 30, 5, 31));
+  }, 15_000);
+
+  it("counts the last run's problems among the connections each person can see", () => {
+    const db = fixture(NOON);
+    try {
+      // The same visibility as Bank sync: shared connections plus the person's own.
+      const lastRunFor = (userId: number) => {
+        const ids = (db.prepare('SELECT id FROM simplefin_connections WHERE user_id IS NULL OR user_id = ?').all(userId) as { id: number }[]).map((r) => r.id);
+        return { seen: ids.length, ...dailySyncInfo(db, ids, null, NOON).lastRun };
+      };
+      const john = scalar(db, "SELECT id n FROM users WHERE username = 'john'");
+      // A member with no connections of their own sees the 3 shared ones, 2 with problems.
+      expect(lastRunFor(999)).toMatchObject({ seen: 3, connections: 3, connectionsWithProblems: 2 });
+      expect(lastRunFor(john)).toMatchObject({ seen: 7, connections: 7, connectionsWithProblems: 3 });
+    } finally {
+      db.close();
+    }
   }, 15_000);
 
   it('has 40 rules including contains and pattern rules, and 3 muted merchants with no rule', () => {

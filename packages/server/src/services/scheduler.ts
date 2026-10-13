@@ -134,10 +134,13 @@ async function runOnce(): Promise<void> {
   state.attempts += 1;
 
   const retryScope = state.failedConnectionIds?.filter((id) => !state!.authFailed.has(id));
+  const scope = retryScope && retryScope.length > 0 ? retryScope : undefined;
+  // Read before the run, so a connection added meanwhile isn't recorded as fetched.
+  const fetched = scope ?? (sqlite.prepare('SELECT id FROM simplefin_connections').all() as { id: number }[]).map((r) => r.id);
   const result = await withSyncLock(() =>
     runSyncPipeline({
       userId: null, // system scope: every connection (shared + personal)
-      connectionIds: retryScope && retryScope.length > 0 ? retryScope : undefined,
+      connectionIds: scope,
       startDate,
       endDate,
     }),
@@ -190,12 +193,12 @@ async function runOnce(): Promise<void> {
 
   const stillFailing = result.failures.map((f) => f.connectionId);
   // Earlier auth failures drop out of retries but are still problems today.
-  const problems = new Set([...stillFailing, ...state.authFailed]).size;
+  const problems = new Set([...stillFailing, ...state.authFailed]);
   recordDailyRun(sqlite, {
     day: today,
     transactionsImported: commit.transactionsImported,
     connections: result.connectionCount,
-    connectionsWithProblems: problems,
+    results: [...new Set([...fetched, ...problems])].map((connectionId) => ({ connectionId, problem: problems.has(connectionId) })),
   });
   if (result.failures.length === 0) {
     setConfig(LAST_SUCCESS_KEY, today);
