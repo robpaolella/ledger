@@ -181,7 +181,7 @@ export default function SplitEditor({
   // The editor works in magnitudes; the parent's sign is applied on save.
   const balance = (n: number) => formatMoney(n, { kind: 'balance', showZero: true }).text;
 
-  const inputCls = 'w-full h-10 px-3 rounded-[10px] bg-surface border border-line-strong text-content text-sm outline-none';
+  const inputCls = 'w-full h-10 max-md:h-11 px-3 rounded-[10px] bg-surface border border-line-strong text-content text-sm outline-none';
   const selectCls = `${inputCls} pr-9 appearance-none cursor-pointer`;
   const chevron = <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-content-3" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>;
   const balanced = Math.abs(remaining) < 0.01;
@@ -194,7 +194,7 @@ export default function SplitEditor({
         <button
           type="button"
           onClick={() => setMode((m) => (m === '$' ? '%' : '$'))}
-          className="h-7 px-2.5 rounded-lg text-[12px] font-semibold font-mono border border-line-strong bg-surface text-content-2 hover:text-content"
+          className="h-7 max-md:h-11 px-2.5 rounded-lg text-[12px] font-semibold font-mono border border-line-strong bg-surface text-content-2 hover:text-content"
           title={mode === '$' ? 'Enter percentages instead' : 'Enter amounts instead'}
         >
           {mode === '$' ? '$ → %' : '% → $'}
@@ -254,7 +254,7 @@ export default function SplitEditor({
                     type="button"
                     onClick={() => removeSplit(i)}
                     aria-label="Remove split"
-                    className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 text-content-3 hover:text-negative hover:bg-surface"
+                    className="w-8 h-8 max-md:w-11 max-md:h-11 rounded-[8px] flex items-center justify-center flex-shrink-0 text-content-3 hover:text-negative hover:bg-surface"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
                   </button>
@@ -263,11 +263,11 @@ export default function SplitEditor({
               {isReimb && (
                 <div className="flex items-center gap-2.5 mt-1.5 ml-0.5">
                   <ReimbursementBadge />
-                  <button type="button" onClick={() => updateSplit(i, 'isReimbursement', false)} className="text-[12px] font-semibold text-content-3 hover:text-content">Reset</button>
+                  <button type="button" onClick={() => updateSplit(i, 'isReimbursement', false)} className="tap-area text-[12px] font-semibold text-content-3 hover:text-content">Reset</button>
                 </div>
               )}
               {reimbursementEnabled && isLastRow && !isReimb && (
-                <button type="button" onClick={() => updateSplit(i, 'isReimbursement', true)} className="text-[12px] font-semibold text-primary mt-1.5 ml-0.5">
+                <button type="button" onClick={() => updateSplit(i, 'isReimbursement', true)} className="tap-area text-[12px] font-semibold text-primary mt-1.5 ml-0.5">
                   Mark as reimbursement
                 </button>
               )}
@@ -280,7 +280,7 @@ export default function SplitEditor({
       <button
         type="button"
         onClick={addSplit}
-        className="mt-2 w-full h-9 rounded-[10px] text-[13px] font-semibold border border-dashed border-line-strong bg-transparent text-primary hover:bg-surface"
+        className="mt-2 w-full h-9 max-md:h-11 rounded-[10px] text-[13px] font-semibold border border-dashed border-line-strong bg-transparent text-primary hover:bg-surface"
       >
         + Add split
       </button>
@@ -297,10 +297,10 @@ export default function SplitEditor({
           )}
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={onCancel} className="h-9 px-3.5 rounded-[10px] text-[13px] font-semibold border border-line-strong bg-surface text-content hover:bg-elevated">
+          <button type="button" onClick={onCancel} className="h-9 max-md:h-11 px-3.5 rounded-[10px] text-[13px] font-semibold border border-line-strong bg-surface text-content hover:bg-elevated">
             Cancel
           </button>
-          <button type="button" onClick={handleApply} disabled={!isValid} className="h-9 px-4 rounded-[10px] text-[13px] font-bold bg-primary text-on-primary disabled:opacity-50 disabled:cursor-not-allowed">
+          <button type="button" onClick={handleApply} disabled={!isValid} className="h-9 max-md:h-11 px-4 rounded-[10px] text-[13px] font-bold bg-primary text-on-primary disabled:opacity-50 disabled:cursor-not-allowed">
             Apply split
           </button>
         </div>

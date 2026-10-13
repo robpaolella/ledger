@@ -553,7 +553,7 @@ export default function ReviewsPage() {
                 <div className="rounded-[12px] border p-3 mb-5" style={{ borderColor: d.needsReview ? 'color-mix(in srgb, var(--warning) 45%, var(--line))' : 'var(--line)', background: d.needsReview ? 'color-mix(in srgb, var(--warning) 8%, transparent)' : 'transparent' }}>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <span className="text-[13px] font-semibold" style={{ color: d.needsReview ? 'var(--warning)' : 'var(--text-2)' }}>{d.needsReview ? (REASON_LABEL[d.review?.reason ?? ''] ?? 'Marked to review') : 'No review needed'}</span>
-                    {d.needsReview && <button onClick={() => resolve([d.id])} className="h-8 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>}
+                    {d.needsReview && <button onClick={() => resolve([d.id])} className="h-8 max-md:h-11 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>}
                   </div>
                   {d.needsReview && (
                     <>
@@ -574,7 +574,7 @@ export default function ReviewsPage() {
                 </div>
               )}
 
-              <Link to={`/transactions?review=${d.id}`} className="text-[13px] font-semibold text-primary">Open in Transactions →</Link>
+              <Link to={`/transactions?review=${d.id}`} className="tap-area inline-block text-[13px] font-semibold text-primary">Open in Transactions →</Link>
           </>
         );
         if (isMobile) {
