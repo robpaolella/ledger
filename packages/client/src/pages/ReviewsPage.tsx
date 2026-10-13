@@ -64,9 +64,9 @@ function Avatar({ seed, color, size = 24, font = 11 }: { seed: string; color?: s
   return <span className="flex-none rounded-full inline-flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: font, background: tint(c), color: c }}>{initialOf(seed)}</span>;
 }
 
-/** Phones: the toolbar is one 44px row that never wraps. Desktop: the header lays the controls out itself. */
+/** Phones: the controls keep their full labels and wrap onto a second 44px row when they don't fit. Desktop: the header lays the controls out itself. */
 function ToolbarRow({ phone, children }: { phone: boolean; children: ReactNode }) {
-  return phone ? <div className="flex items-center flex-nowrap gap-2 w-full">{children}</div> : <>{children}</>;
+  return phone ? <div className="flex items-center flex-wrap gap-2 w-full">{children}</div> : <>{children}</>;
 }
 
 export default function ReviewsPage() {
