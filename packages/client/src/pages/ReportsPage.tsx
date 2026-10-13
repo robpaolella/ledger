@@ -15,6 +15,8 @@ import PageHeader from '../components/PageHeader';
 import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { thinLabelIndices } from '../lib/chartLabels';
+import LoadError from '../components/LoadError';
+import { loadState } from '../lib/loadState';
 import FilterPopover from '../components/FilterPopover';
 import DateRangePopover from '../components/DateRangePopover';
 import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/filterModel';
@@ -178,6 +180,7 @@ export default function ReportsPage() {
   // ── data ──
   const [report, setReport] = useState<PeriodData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0); // bumped by "Try again"
   const [txns, setTxns] = useState<Txn[]>([]);
   const [txnTotal, setTxnTotal] = useState(0);
   const [merchants, setMerchants] = useState<MerchantOpt[]>([]);
@@ -222,7 +225,7 @@ export default function ReportsPage() {
       .catch(() => { if (!cancelled) setReport(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [range.start, range.end, appliedKey, filters]);
+  }, [range.start, range.end, appliedKey, filters, reloadKey]);
 
   // Load transactions for the bottom card (range + applied filters + focus + sort), a page at a time.
   const fetchTxnPage = useCallback((loaded: number, size?: number) => {
@@ -296,8 +299,95 @@ export default function ReportsPage() {
   const openFilters = () => { setDraft(filters); setFilterTab('Categories'); setFilterSearch(''); setFilterOpen(true); };
   const clearDraft = () => setDraft(EMPTY_FILTER);
 
-  if (loading && !report) return <div className="flex justify-center py-24"><Spinner /></div>;
-  if (!report || !sections) return <div className="pb-16"><div className="text-center py-24 text-content-3">Failed to load reports.</div></div>;
+  // CSV export of the current (filtered) transactions.
+  const exportCsv = async () => {
+    // The list only holds the pages loaded so far; export the whole range, in list order.
+    let all: Txn[];
+    try { all = await fetchAllPages((offset, size) => fetchTxnPage(offset, size)); } catch { addToast('Could not export your transactions. Please try again.', 'error'); return; }
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = ['Date', 'Merchant', 'Category', 'Account', 'Amount'];
+    const lines = [header.join(',')];
+    for (const t of all) {
+      lines.push([t.date, esc(t.merchant?.name || t.description || ''), esc(t.category?.displayName || ''), esc(t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : ''), t.amount.toFixed(2)].join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `reports-${range.start}_to_${range.end}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  const fCount = filterDraftCount(filters);
+
+  // Category groups for the shared filter popover.
+  const categoryGroups = (() => {
+    const groups: { group: string; subs: { id: number; sub: string }[] }[] = [];
+    const seen = new Set<string>();
+    for (const c of categories) {
+      if (!seen.has(c.group_name)) { seen.add(c.group_name); groups.push({ group: c.group_name, subs: categories.filter((x) => x.group_name === c.group_name).map((x) => ({ id: x.id, sub: x.sub_name })) }); }
+    }
+    return groups;
+  })();
+
+  const exportEl = (
+    <button onClick={exportCsv} title="Export CSV" className="tap-grow-sq w-10 h-10 shrink-0 flex items-center justify-center bg-surface border border-line-strong rounded-[11px] text-content-2 hover:bg-surface-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16" /></svg>
+          </button>
+  );
+
+  const header = (
+      <PageHeader title="Reports" subtitle={range.label} mobileActions={exportEl} right={<>
+          {/* Clear all — far left; shows whenever any filter is applied (matches Transactions). */}
+          {(fCount > 0 || preset !== 'YTD') && (
+            <button onClick={() => {
+              setFilters(EMPTY_FILTER); setDraft(EMPTY_FILTER);
+              setPreset('YTD');
+              setCustomStart(ymd(new Date(new Date().getFullYear(), 0, 1)));
+              setCustomEnd(ymd(new Date()));
+            }} className="tap-grow h-10 px-2.5 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
+          )}
+          {/* Date range (shared DateRangePopover) */}
+          <DateRangePopover
+            presets={PRESETS.map((p) => ({ value: p.id, label: p.name }))}
+            value={{ preset, start: preset === 'custom' ? customStart : '', end: preset === 'custom' ? customEnd : '' }}
+            label={range.label}
+            active={preset !== 'YTD'}
+            requireBoth
+            clearValue={{ preset: 'YTD', start: '', end: '' }}
+            onOpen={() => setFilterOpen(false)}
+            onApply={(v) => { setPreset(v.preset as Preset); setCustomStart(v.start); setCustomEnd(v.end); }}
+          />
+          {/* Filters */}
+          <div className="relative">
+            <button onClick={() => (filterOpen ? setFilterOpen(false) : openFilters())} className="tap-grow flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface text-sm font-semibold text-content" style={{ border: `2px solid ${filterOpen ? 'var(--primary)' : 'var(--line-strong)'}` }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+              Filters
+              {fCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold flex items-center justify-center">{fCount}</span>}
+            </button>
+            {filterOpen && (
+              <FilterPopover
+                draft={draft} setDraft={setDraft}
+                categoryGroups={categoryGroups} accounts={accounts} merchants={merchants} categories={categories}
+                search={filterSearch} setSearch={setFilterSearch} tab={filterTab} setTab={setFilterTab}
+                onClear={clearDraft} onCancel={() => setFilterOpen(false)} onApply={applyFilters}
+              />
+            )}
+          </div>
+          {!isMobile && exportEl}
+        </>} />
+  );
+
+  const state = loadState({ hasData: !!report && !!sections, failed: !loading && !report });
+  if (state !== 'loaded' || !report || !sections) {
+    return (
+      <div className="pb-16">
+        {header}
+        {state === 'failed'
+          ? <LoadError title="Couldn’t load your reports" message="Check your connection, then try again. You can also change the date range or filters above." onRetry={() => setReloadKey((n) => n + 1)} />
+          : <Spinner />}
+      </div>
+    );
+  }
 
   const k = report.kpis;
   const months = Math.max(1, report.range.months);
@@ -513,86 +603,13 @@ export default function ReportsPage() {
     { id: 'amt_desc', label: 'Amount · high to low' }, { id: 'amt_asc', label: 'Amount · low to high' },
   ];
 
-  // CSV export of the current (filtered) transactions.
-  const exportCsv = async () => {
-    // The list only holds the pages loaded so far; export the whole range, in list order.
-    let all: Txn[];
-    try { all = await fetchAllPages((offset, size) => fetchTxnPage(offset, size)); } catch { addToast('Could not export your transactions. Please try again.', 'error'); return; }
-    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header = ['Date', 'Merchant', 'Category', 'Account', 'Amount'];
-    const lines = [header.join(',')];
-    for (const t of all) {
-      lines.push([t.date, esc(t.merchant?.name || t.description || ''), esc(t.category?.displayName || ''), esc(t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : ''), t.amount.toFixed(2)].join(','));
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `reports-${range.start}_to_${range.end}.csv`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  };
-
-  const fCount = filterDraftCount(filters);
   const catHint = focusObj ? `Sub-categories of ${focusObj.group.groupName}` : (catView === 'timeline' ? `Totals by ${nB > 0 && buckets[0].label.startsWith('Wk') ? 'week' : 'month'} · click a category to drill in` : 'Click a category to drill into sub-categories');
   const txnHint = pagingHint(txns.length, txnTotal) ?? (focusGroup ? `Activity in ${focusGroup} · ${txnTotal} transaction${txnTotal === 1 ? '' : 's'}` : 'Recent activity across all categories');
-
-  // Category groups for the shared filter popover.
-  const categoryGroups = (() => {
-    const groups: { group: string; subs: { id: number; sub: string }[] }[] = [];
-    const seen = new Set<string>();
-    for (const c of categories) {
-      if (!seen.has(c.group_name)) { seen.add(c.group_name); groups.push({ group: c.group_name, subs: categories.filter((x) => x.group_name === c.group_name).map((x) => ({ id: x.id, sub: x.sub_name })) }); }
-    }
-    return groups;
-  })();
-
-  const exportEl = (
-    <button onClick={exportCsv} title="Export CSV" className="tap-grow-sq w-10 h-10 shrink-0 flex items-center justify-center bg-surface border border-line-strong rounded-[11px] text-content-2 hover:bg-surface-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16" /></svg>
-          </button>
-  );
 
   return (
     <div className="pb-16">
       {/* Hero */}
-      <PageHeader title="Reports" subtitle={range.label} mobileActions={exportEl} right={<>
-          {/* Clear all — far left; shows whenever any filter is applied (matches Transactions). */}
-          {(fCount > 0 || preset !== 'YTD') && (
-            <button onClick={() => {
-              setFilters(EMPTY_FILTER); setDraft(EMPTY_FILTER);
-              setPreset('YTD');
-              setCustomStart(ymd(new Date(new Date().getFullYear(), 0, 1)));
-              setCustomEnd(ymd(new Date()));
-            }} className="tap-grow h-10 px-2.5 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
-          )}
-          {/* Date range (shared DateRangePopover) */}
-          <DateRangePopover
-            presets={PRESETS.map((p) => ({ value: p.id, label: p.name }))}
-            value={{ preset, start: preset === 'custom' ? customStart : '', end: preset === 'custom' ? customEnd : '' }}
-            label={range.label}
-            active={preset !== 'YTD'}
-            requireBoth
-            clearValue={{ preset: 'YTD', start: '', end: '' }}
-            onOpen={() => setFilterOpen(false)}
-            onApply={(v) => { setPreset(v.preset as Preset); setCustomStart(v.start); setCustomEnd(v.end); }}
-          />
-          {/* Filters */}
-          <div className="relative">
-            <button onClick={() => (filterOpen ? setFilterOpen(false) : openFilters())} className="tap-grow flex items-center gap-2 h-10 px-3.5 rounded-[11px] bg-surface text-sm font-semibold text-content" style={{ border: `2px solid ${filterOpen ? 'var(--primary)' : 'var(--line-strong)'}` }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-              Filters
-              {fCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold flex items-center justify-center">{fCount}</span>}
-            </button>
-            {filterOpen && (
-              <FilterPopover
-                draft={draft} setDraft={setDraft}
-                categoryGroups={categoryGroups} accounts={accounts} merchants={merchants} categories={categories}
-                search={filterSearch} setSearch={setFilterSearch} tab={filterTab} setTab={setFilterTab}
-                onClear={clearDraft} onCancel={() => setFilterOpen(false)} onApply={applyFilters}
-              />
-            )}
-          </div>
-          {!isMobile && exportEl}
-        </>} />
+      {header}
 
       {/* KPI ROW */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-[22px]">
