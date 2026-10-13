@@ -354,7 +354,7 @@ function AccountDetail() {
           <div className="text-[15px] font-semibold text-content mb-1.5">Couldn’t load this account</div>
           <div className="text-sm text-content-3 mb-4">Check your connection, then try again.</div>
           <div className="flex justify-center gap-2">
-            <Button variant="secondary" onClick={() => { setMetaLoaded(false); setMetaError(false); loadMeta(); }}>Try again</Button>
+            <Button variant="secondary" onClick={() => { setMetaLoaded(false); setMetaError(false); loadMeta(); loadHistory(); }}>Try again</Button>
             <Link to="/accounts" className="inline-flex items-center h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">Back to accounts</Link>
           </div>
         </div>
@@ -604,7 +604,7 @@ function AccountDetail() {
               <label htmlFor="new-balance" className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
               <CurrencyInput id="new-balance" ref={balanceRef} value={balanceInput} onChange={(v) => { setBalanceInput(v); setBalanceError(false); }} autoFocus={!isMobile} allowNegative
                 invalid={balanceError} describedBy={balanceError ? 'new-balance-error' : undefined}
-                className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
+                className={`w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border text-content text-sm outline-none ${balanceError ? 'border-negative' : 'border-line'}`} />
               {balanceError && <div id="new-balance-error" role="alert" className="text-negative text-[13px] font-semibold mt-1.5">Enter a valid balance.</div>}
               <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number. Enter a negative amount if the card is in credit.</p>
             </div>

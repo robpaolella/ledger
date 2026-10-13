@@ -46,9 +46,12 @@ describe('distinctAxisLabels', () => {
     expect(labels.some((l) => l === '$8k')).toBe(false);
   });
 
-  it('gives a flat series distinct labels', () => {
-    const labels = distinctAxisLabels(spread(7920, 8080), fmts);
+  // The chart widens a flat series by 1% of its value (or $1 at zero) before drawing gridlines.
+  it.each([8000, 0, 123.45, -250])('gives a flat series of %d distinct labels', (value) => {
+    const d = Math.abs(value) * 0.01 || 1;
+    const labels = distinctAxisLabels(spread(value - d, value + d), fmts);
     expect(new Set(labels).size).toBe(5);
+    expect(labels.every((l) => l !== '')).toBe(true);
   });
 
   it('goes to cents when whole dollars still repeat', () => {
