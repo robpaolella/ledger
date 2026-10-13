@@ -5,6 +5,7 @@ import type { ImpCsvRow } from './types';
 import { ListRow } from '../ListRow';
 import { Money } from '../Money';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { csvImportCounts, needCategoryText } from '../../lib/csvImportable';
 
 export default function CsvReview({
   rows, setRows, selected, setSelected, categories, vendorOptions, merchantLogos, onBack, onImport, importing,
@@ -22,9 +23,8 @@ export default function CsvReview({
 }) {
   const isMobile = useIsMobile();
   const selectedCount = selected.size;
-  const importable = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.amount != null).length;
-  const dupCount = rows.filter((r, i) => selected.has(i) && r.categoryId != null && r.amount != null && r.duplicateStatus !== 'none').length;
-  const unreadableCount = rows.filter((r) => r.amount == null).length;
+  const { importable, duplicates: dupCount, needCategory, unreadable: unreadableCount } = csvImportCounts(rows, selected);
+  const needsCategory = (i: number) => selected.has(i) && rows[i].categoryId == null && rows[i].amount != null;
   // Rows with an unreadable amount can never be selected.
   const selectable = rows.flatMap((r, i) => (r.amount != null ? [i] : []));
   const allOn = selectable.length > 0 && selected.size === selectable.length;
@@ -92,7 +92,10 @@ export default function CsvReview({
                 }
                 title={r.description}
                 titleExtra={r.duplicateStatus !== 'none' ? <DuplicateIcon status={r.duplicateStatus} /> : undefined}
-                subtitle={<CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />}
+                subtitle={<div className="flex flex-col items-start">
+                  <CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />
+                  {needsCategory(i) && <span className="text-xs" style={{ color: 'var(--warning)' }}>Choose a category to import this row</span>}
+                </div>}
                 amount={unreadable ? <UnreadableAmount className="" /> : <Money amount={r.amount!} showZero />}
                 meta={r.date}
               />
@@ -109,9 +112,12 @@ export default function CsvReview({
                 logoSrc={logoFor(r.description)}
                 dupIcon={r.duplicateStatus !== 'none' ? <DuplicateIcon status={r.duplicateStatus} /> : undefined}
               />
-              <div className="w-[300px] flex-none flex items-center gap-2">
-                <CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />
-                <ConfidenceLabel confidence={r.confidence} variant="csv" />
+              <div className="w-[300px] flex-none">
+                <div className="flex items-center gap-2">
+                  <CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />
+                  <ConfidenceLabel confidence={r.confidence} variant="csv" />
+                </div>
+                {needsCategory(i) && <div className="mt-1 text-xs" style={{ color: 'var(--warning)' }}>Choose a category to import this row</div>}
               </div>
               {r.amount == null ? <UnreadableAmount /> : <AmountText amount={r.amount} />}
             </div>
@@ -121,7 +127,7 @@ export default function CsvReview({
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 mt-5 px-5 py-4 border border-line rounded-[16px] bg-surface shadow-sm sticky bottom-4">
-        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} {importable === 1 ? 'transaction' : 'transactions'}</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.{unreadableCount > 0 ? ` ${unreadableCount} ${unreadableCount === 1 ? 'row' : 'rows'} skipped: amount unreadable.` : ''}</div>
+        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} {importable === 1 ? 'transaction' : 'transactions'}</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.{needCategory > 0 ? ` ${needCategoryText(needCategory)}` : ''}{unreadableCount > 0 ? ` ${unreadableCount} ${unreadableCount === 1 ? 'row' : 'rows'} skipped: amount unreadable.` : ''}</div>
         <div className="flex gap-2.5 [&>button:last-child]:flex-1 md:[&>button:last-child]:flex-none">
           <button onClick={onBack} className="h-12 px-5 border border-line-strong rounded-[11px] bg-surface-2 text-content font-sans font-semibold text-sm cursor-pointer">Back</button>
           <button onClick={onImport} disabled={importable === 0 || importing}
