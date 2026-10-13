@@ -44,7 +44,7 @@ Settings page, the notifications pop-up on phones, and a set of leftover sub-44p
   `319-transactions-review-strip`; then the app as it is today. Money and colours: Settings shows
   money only in the notification text ("$23.18"), which uses the shared formatter; no inline hex
   colours were found anywhere; `npm run lint:tokens` is part of the repo checks.
-- Data changed through the real UI during the audit, all restored except where noted: Display name
+- Data changed through the real UI during the audit (two launches of the sample data), all restored except where noted: Display name
   (owner, admin, member: changed to "Sample Edited", then set back); Over-budget alerts switch (off,
   reloaded, on again); Daily sync switch (off for the "Paused" capture, on again); Sample Member's
   access (Everyday → Custom → View only → Everyday, to see the restricted views); a duplicate-username
@@ -140,20 +140,27 @@ Accounts and account detail (sheets owned by parts A and B are checked here only
 
 ### Other states checked
 
-| State | Roles | Themes × widths | Result |
-|---|---|---|---|
-| Panel load failure: Merchants, Rules, Users, Optional extras (network offline, then back online) | owner (all four), member (Merchants, Rules) | light and dark × 390 and 1440 | ok: "Couldn't load your settings. Check your connection and try again." with **Try again**; after reconnecting Try again loads the panel. Low L5 (wording) |
-| Panel load failure: Accounts, Categories, Bank sync (that panel's request refused) | owner; member for Bank sync | light and dark × 390 and 1440 | ok: same message and a working Try again |
-| Notifications empty ("You're all caught up") and after Mark all read / Clear all | owner, admin, member | light, 390 and 1440 | ok (member's list was already empty from the start) |
-| Notifications switch (Over-budget alerts) saves and survives a reload | owner, admin, member | light, 1440 | ok |
-| Profile → Save changes: "Profile updated" toast, name persists after reload and shows in the sidebar | owner, admin, member | light, 1440 | ok |
-| Add user with a taken username | owner | light and dark × 390 and 1440 | ok: "Username already exists" inline, nothing created |
-| Security password mismatch ("Passwords do not match") | owner, admin, member | both × both | ok (row in the table above) |
-| Preset change while Custom shows "This replaces Sample's custom switches with View only." with Cancel / Confirm | owner | light × 390 and 1440 | ok |
-| Member set to **View only** | member | light and dark × 390 and 1440 | ok: Settings menu shows only Profile, Security, Notifications; Bank sync, Merchants and Rules links land on that menu (phone) or Profile (desktop); Transactions has no Select and its Add is dimmed, Import says "You don't have permission to use this. Contact an admin to request access." |
-| Bank sync with Daily sync switched off ("Paused") | owner | light × 390 and 1440 | ok: "Daily sync is off. Sync now still works." on each connection and in the card |
-| Escape and focus in a dialog (Person window) | owner, admin | 390 and 1440 | ok: focus moves in on open, Escape closes, focus returns to the row. The bell pop-up fails the focus part (F5) |
-| Server permission probes (read-only requests as each role) | member, admin, owner | n/a | ok: a member gets 403 for `/users/:id/delete-preview`, `/amazon/status`, `/llm/config`, `/llm/status` and `/benchmarks/status`; sees only shared connections; the user list for a member holds only names and usernames, no roles or 2FA state |
+Each row below was run at every role it applies to, in light and dark, at 390 and 1440 (12
+combinations for all three roles, 8 for owner and admin only, 4 for one role), unless the row says
+otherwise. They were captured on a second launch of the sample data (same code, same commit),
+because some of them (notifications, the paused daily sync) can only be reached once on a
+given launch and are shown in every theme and width after that.
+
+| State | Roles | Result |
+|---|---|---|
+| Panel load failure: Merchants, Rules, Users, Optional extras (network offline, then back online) | owner, admin: all four panels; member: Merchants and Rules (the only ones the member can see) | ok: "Couldn't load your settings. Check your connection and try again." with **Try again**; once the network is back, Try again loads the panel. Low L5 (wording) |
+| Panel load failure: Accounts, Categories, Bank sync (that panel's request refused) | owner, admin: all three; member: Bank sync | ok: same message and a working Try again |
+| Notifications pop-up, **read** state (after Mark all read) | owner, admin (8 combinations); member has no notifications, so nothing to mark read | ok: unread rows move under "Read"; the bell dot clears |
+| Notifications pop-up, **empty** state ("You're all caught up") | owner, admin, member | ok (F5's focus point applies to it as well) |
+| Notifications switch (Over-budget alerts) saves and survives a reload | owner, admin, member | ok |
+| Profile → Save changes: "Profile updated" toast, name persists after reload | owner, admin, member | ok |
+| Add user with a taken username | owner, admin (member: hidden ✓) | ok: "Username already exists" inline, nothing created |
+| Security password mismatch ("Passwords do not match") | owner, admin, member | ok (also a row in the table above) |
+| Person window → Customize → flip a switch → "Custom" label; then pick a preset: "This replaces Sample's custom switches with View only." with Cancel / Confirm; Confirm applies it | owner, admin (member: hidden ✓) | ok |
+| Member set to **View only** (owner changed it, then restored Everyday) | member; light and dark × 390 and 1440 | ok: the Settings menu shows only Profile, Security, Notifications; direct links to Bank sync, Merchants and Rules land on that menu (phone) or Profile (desktop); Transactions has no Select and its Add is dimmed; Import says "You don't have permission to use this. Contact an admin to request access." |
+| Bank sync with the Daily sync switch off ("Paused") | owner, admin (with the switch), member (text only, no switch) | ok: "Daily sync is off. Sync now still works." on each connection and in the card; Next sync reads "Off. Switch daily sync on to sync each morning." |
+| Escape and focus in a dialog (Person window); focus and Escape on the bell pop-up | owner, admin, member (bell) at 390 and 1440, light (behaviour doesn't change with theme) | Dialog ok: focus moves in on open, Escape closes, focus returns to the row. The bell pop-up fails the focus part (F5) |
+| Server permission probes (read-only requests as each role) | member, admin, owner | ok: a member gets 403 for `/users/:id/delete-preview`, `/amazon/status`, `/llm/config`, `/llm/status` and `/benchmarks/status`; sees only shared connections; the user list for a member holds only names and usernames, no roles or 2FA state |
 
 ## Findings
 
