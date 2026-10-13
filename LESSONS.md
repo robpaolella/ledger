@@ -132,8 +132,11 @@ new logic.
 **Problem:** One global connection can't serve a household where each person has their own
 bank login, and per-user-only can't share one.
 **Rule going forward:** A connection is either shared (`user_id` NULL, usable by everyone)
-or personal. Always scope queries to shared connections plus the current user's own; never
-expose one user's personal connection to another.
+or personal. Always scope connection queries (list, labels, credentials, linked accounts,
+sync status) to shared connections plus the current user's own; never expose one user's
+personal connection to another. This scopes the connection, not its data: investment
+holdings and performance are household-visible (#325), so investment queries must not
+filter by `simplefin_connections.user_id`.
 
 ### SimpleFIN sign conventions (2026-02-20)
 **Problem:** SimpleFIN reports amounts in each bank's own convention, which differs from
