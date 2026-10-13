@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { sqlite } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
-import { flagReview, resolveReview, assignReview, setReviewNote, reopenReview, isUncategorized } from '../services/reviews.js';
+import { flagReview, resolveReview, assignReview, setReviewNote, reopenReview, isUncategorized, isUncategorizedSql } from '../services/reviews.js';
 import { recordCategoryFeedback } from '../services/feedback.js';
 
 /** Resolving a review on a categorized txn = confirming its category — a
@@ -28,6 +28,7 @@ interface QueueRow {
   account_avatar: string | null; account_inst_logo: string | null; account_inst_color: string | null;
   category_id: number | null; category_group_name: string | null; category_sub_name: string | null;
   category_display_name: string | null; category_type: string | null;
+  needs_category: number;
 }
 
 const mapRow = (r: QueueRow) => ({
@@ -38,6 +39,7 @@ const mapRow = (r: QueueRow) => ({
   createdAt: r.created_at,
   resolvedAt: r.resolved_at,
   assignee: r.assignee_id != null ? { id: r.assignee_id, displayName: r.assignee_name } : null,
+  needsCategory: r.needs_category === 1,
   flaggedBy: r.flagged_by != null ? { id: r.flagged_by, displayName: r.flagged_by_name } : null,
   transaction: {
     id: r.txn_id, date: r.date, description: r.description, amount: r.amount,
@@ -96,7 +98,8 @@ router.get('/', (req: Request, res: Response) => {
              a.id AS account_id, a.name AS account_name, a.last_four AS account_last_four,
              a.avatar_url AS account_avatar, afi.logo_url AS account_inst_logo, afi.color AS account_inst_color,
              c.id AS category_id, c.group_name AS category_group_name, c.sub_name AS category_sub_name,
-             c.display_name AS category_display_name, c.type AS category_type
+             c.display_name AS category_display_name, c.type AS category_type,
+             ${isUncategorizedSql('t')} AS needs_category
       ${base}
       ORDER BY (r.status = 'open') DESC, t.date DESC, r.id DESC
       LIMIT ? OFFSET ?
@@ -131,7 +134,8 @@ const selectReview = (txnId: number) => {
            a.id AS account_id, a.name AS account_name, a.last_four AS account_last_four,
            a.avatar_url AS account_avatar, afi.logo_url AS account_inst_logo, afi.color AS account_inst_color,
            c.id AS category_id, c.group_name AS category_group_name, c.sub_name AS category_sub_name,
-           c.display_name AS category_display_name, c.type AS category_type
+           c.display_name AS category_display_name, c.type AS category_type,
+             ${isUncategorizedSql('t')} AS needs_category
     FROM transaction_reviews r
     JOIN transactions t ON r.transaction_id = t.id
     JOIN accounts a ON t.account_id = a.id

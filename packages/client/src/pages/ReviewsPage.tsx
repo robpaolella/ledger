@@ -26,6 +26,8 @@ interface Txn {
 }
 interface ReviewRow {
   reviewId: number; reason: string; note: string | null;
+  /** Server's own verdict (no category, splits or linked transfer): Approve all leaves these open. */
+  needsCategory: boolean;
   assignee: { id: number; displayName: string } | null;
   transaction: Txn;
 }
@@ -160,7 +162,7 @@ export default function ReviewsPage() {
 
   const shown = rows.filter((r) => passDate(r.transaction.date) && passUser(r) && passSearch(r));
   const anyFilter = period !== null || dateFilter !== 'all' || selUsers.size > 0 || q !== '';
-  const approveText = approveAllText(shown.map((r) => ({ categorized: r.transaction.category != null })));
+  const approveText = approveAllText(shown.map((r) => ({ categorized: !r.needsCategory })));
   const shownTotal = shown.reduce((s, r) => s + Math.abs(r.transaction.amount), 0);
   const userCount = useMemo(() => { const m = new Map<number, number>(); for (const r of rows) { const k = r.assignee?.id ?? UNASSIGNED; m.set(k, (m.get(k) ?? 0) + 1); } return m; }, [rows]);
   const unassignedCount = userCount.get(UNASSIGNED) ?? 0;
