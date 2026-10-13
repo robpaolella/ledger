@@ -84,6 +84,7 @@ function CategoryForm({ category, groups, initialGroupId, onSave, onDelete, onCl
   const [excludeFromBudget, setExcludeFromBudget] = useState(category?.exclude_from_budget === 1);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Transfers move money between the user's own accounts, so they are never
   // spending: budget exclusion is an invariant of the section, not a preference.
   const isTransfer = groups.find((g) => g.id === groupId)?.type === 'transfer';
@@ -121,11 +122,11 @@ function CategoryForm({ category, groups, initialGroupId, onSave, onDelete, onCl
     <ResponsiveModal isOpen onClose={onClose} title={category ? 'Edit category' : 'New category'} maxWidth="460px"
       footer={(
         <div className="flex items-center gap-2.5">
-          {category && onDelete && <ConfirmDeleteButton onConfirm={async () => { const err = await onDelete(); if (err) setError(err); }} />}
-          <div className="ml-auto flex items-center gap-2.5">
+          {category && onDelete && <ConfirmDeleteButton onConfirmingChange={setConfirmingDelete} onConfirm={async () => { const err = await onDelete(); if (err) setError(err); }} />}
+          {!confirmingDelete && <div className="ml-auto flex items-center gap-2.5">
             <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
             <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>{saving ? 'Saving…' : category ? 'Save changes' : 'Create category'}</button>
-          </div>
+          </div>}
         </div>
       )}>
       {error && <InlineNotification type="error" message={error} dismissible onDismiss={() => setError(null)} className="mb-4" />}
@@ -198,6 +199,7 @@ function GroupForm({ mode, type, name: initialName, color: initialColor, canDele
   const [color, setColor] = useState(initialColor && GROUP_COLORS.includes(initialColor) ? initialColor : GROUP_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   useEffect(() => { if (error) { const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t); } }, [error]);
 
   const submit = async () => {
@@ -212,11 +214,11 @@ function GroupForm({ mode, type, name: initialName, color: initialColor, canDele
     <ResponsiveModal isOpen onClose={onClose} title={mode === 'new' ? 'New group' : 'Edit group'} description={`${SECTION_LABEL[type]} section`} maxWidth="440px"
       footer={(
         <div className="flex items-center gap-2.5">
-          {mode === 'edit' && onDelete && canDelete && <ConfirmDeleteButton onConfirm={async () => { const err = await onDelete(); if (err) setError(err); }} />}
-          <div className="ml-auto flex items-center gap-2.5">
+          {mode === 'edit' && onDelete && canDelete && <ConfirmDeleteButton onConfirmingChange={setConfirmingDelete} onConfirm={async () => { const err = await onDelete(); if (err) setError(err); }} />}
+          {!confirmingDelete && <div className="ml-auto flex items-center gap-2.5">
             <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
             <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>{saving ? 'Saving…' : mode === 'new' ? 'Create group' : 'Save changes'}</button>
-          </div>
+          </div>}
         </div>
       )}>
       {error && <InlineNotification type="error" message={error} dismissible onDismiss={() => setError(null)} className="mb-4" />}
