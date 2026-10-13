@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
+import LoadError from '../components/LoadError';
 import ResponsiveModal from '../components/ResponsiveModal';
 import CurrencyInput from '../components/CurrencyInput';
 import Dropdown from '../components/Dropdown';
@@ -83,6 +84,7 @@ export default function AccountsPage() {
   const { hasPermission } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<NetWorthData | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false); // first load failed: the page shows its own "Try again" card
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [range, setRange] = useState('1m');
   const isMobile = useIsMobile();
@@ -109,11 +111,18 @@ export default function AccountsPage() {
   const [syncSel, setSyncSel] = useState<Set<number>>(new Set());
   const [syncLoading, setSyncLoading] = useState(false);
 
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const loadData = useCallback(async () => {
     try {
       const res = await apiFetch<{ data: NetWorthData }>('/networth/summary');
       setData(res.data);
-    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load accounts', 'error'); }
+      setLoadFailed(false);
+    } catch (e) {
+      // With nothing to show, the "Try again" card says it; otherwise a toast does.
+      if (dataRef.current) addToast(e instanceof Error ? e.message : 'Failed to load accounts', 'error');
+      else setLoadFailed(true);
+    }
   }, [addToast]);
   const loadHistory = useCallback(async (r: string, sel: Set<number> | null) => {
     const q = sel ? `&accountIds=${Array.from(sel).join(',')}` : '';
@@ -162,13 +171,11 @@ export default function AccountsPage() {
   const rangeLabel = RANGES.find((r) => r.key === range)?.label.toLowerCase() ?? range;
   const chartPoints: ChartPoint[] = history.map((p) => ({ date: p.date, value: p[perf] }));
 
-  if (!data) return <Spinner />;
-
   // ---- filter popover handlers ----
   const openFilter = () => { setFilterDraft({ ...EMPTY_FILTER, account: selected ? [...selected].map(String) : [] }); setFilterSearch(''); setFilterOpen(true); };
   const applyFilter = () => {
     const ids = filterDraft.account.map(Number);
-    setSelected(ids.length === 0 || ids.length === data.accounts.length ? null : new Set(ids)); // nothing ticked = every account
+    setSelected(ids.length === 0 || ids.length === (data?.accounts.length ?? 0) ? null : new Set(ids)); // nothing ticked = every account
     setFilterOpen(false);
   };
   const clearFilter = () => setFilterDraft(EMPTY_FILTER);
@@ -239,7 +246,7 @@ export default function AccountsPage() {
 
   const headerControls = (<>
           {/* Filters */}
-          <div className="relative">
+          {data && <div className="relative">
             <button onClick={openFilter} aria-label={filterActive ? `Filters, ${filterCount} active` : 'Filters'} aria-haspopup="dialog" aria-expanded={filterOpen}
               className="relative flex items-center gap-2 h-10 px-2.5 md:px-4 rounded-[11px] bg-surface-2 border-2 text-sm font-semibold text-content"
               style={{ borderColor: filterOpen || filterActive ? 'var(--primary)' : 'var(--line-strong)' }}>
@@ -256,7 +263,7 @@ export default function AccountsPage() {
                 onClear={clearFilter} onCancel={() => setFilterOpen(false)} onApply={applyFilter}
               />
             )}
-          </div>
+          </div>}
           {hasSimplefin && (
             <button onClick={openRefresh} aria-label="Refresh all" className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
@@ -271,10 +278,23 @@ export default function AccountsPage() {
           )}
   </>);
 
+  const header = <PageHeader stackRight={false} title="Accounts" right={isMobile ? undefined : headerControls} mobileActions={headerControls} />;
+
+  if (!data) {
+    return (
+      <div className="pb-16">
+        {header}
+        {loadFailed
+          ? <LoadError title="Couldn’t load your accounts" message="Check your connection, then try again. Nothing in your accounts was lost." onRetry={() => { setLoadFailed(false); loadData(); }} />
+          : <Spinner />}
+      </div>
+    );
+  }
+
   return (
     <div className="pb-16">
       {/* top bar */}
-      <PageHeader stackRight={false} title="Accounts" right={isMobile ? undefined : headerControls} mobileActions={headerControls} />
+      {header}
 
       {/* net worth card */}
       <div className="bg-surface border border-line rounded-card shadow-sm p-4 md:p-6 mb-5">
