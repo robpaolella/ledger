@@ -252,8 +252,9 @@ export interface DailySyncInfo {
   lastRun: {
     at: string;
     transactionsImported: number;
-    connections: number;
-    connectionsWithProblems: number;
+    // Only the connections the viewer can see; null for a run stored before per-connection results.
+    connections: number | null;
+    connectionsWithProblems: number | null;
   } | null;
   nextRun: { at: string; reason: 'scheduled' | 'retry' | 'gave_up' } | null; // null while off
 }
