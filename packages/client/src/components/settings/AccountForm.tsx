@@ -175,10 +175,10 @@ export default function AccountForm({
             {account ? (
               <div className="flex items-center gap-3">
                 <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = ''; }} />
-                <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-[13px] font-semibold text-primary disabled:opacity-60">
+                <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="tap-area text-[13px] font-semibold text-primary disabled:opacity-60">
                   {uploading ? 'Uploading…' : avatarUrl ? 'Change photo' : 'Upload photo'}
                 </button>
-                {avatarUrl && <button type="button" onClick={removeAvatar} className="text-[13px] font-semibold text-negative">Remove</button>}
+                {avatarUrl && <button type="button" onClick={removeAvatar} className="tap-area text-[13px] font-semibold text-negative">Remove</button>}
               </div>
             ) : null}
             <div className="text-[13px] text-content-3 leading-snug mt-0.5">

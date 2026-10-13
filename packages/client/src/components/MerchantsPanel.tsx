@@ -241,8 +241,8 @@ export default function MerchantsPanel() {
               <Avatar m={edit} size={56} />
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => fileRef.current?.click()} className="text-[13px] font-semibold text-primary">{edit.logo_url ? 'Change logo' : 'Upload logo'}</button>
-                  {edit.logo_url && <button type="button" onClick={removeLogo} className="text-[13px] font-semibold text-negative">Remove</button>}
+                  <button type="button" onClick={() => fileRef.current?.click()} className="tap-area text-[13px] font-semibold text-primary">{edit.logo_url ? 'Change logo' : 'Upload logo'}</button>
+                  {edit.logo_url && <button type="button" onClick={removeLogo} className="tap-area text-[13px] font-semibold text-negative">Remove</button>}
                   <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = ''; }} />
                 </div>
                 <div className="text-[13px] text-content-3 mt-0.5">Shown wherever this merchant appears.</div>
@@ -277,7 +277,7 @@ export default function MerchantsPanel() {
               </div>
             </Field>
             <button type="button" role="checkbox" aria-checked={edit.suppress_rule_suggest === 1} disabled={!canEdit} onClick={() => void toggleSuppress(edit.suppress_rule_suggest !== 1)}
-              className="flex items-center gap-3 text-left disabled:opacity-60">
+              className="max-md:min-h-11 flex items-center gap-3 text-left disabled:opacity-60">
               <CheckBox checked={edit.suppress_rule_suggest === 1} />
               <span className="text-sm text-content-2">Don’t ask about this merchant when I change a category</span>
             </button>

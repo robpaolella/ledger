@@ -77,7 +77,7 @@ function ConnectionModal({ connection, onSave, onClose }: {
           label={(
             <span className="flex items-center justify-between">
               <span>{mode === 'token' ? 'Setup token' : 'Access URL'}{connection ? ' (optional)' : ''}</span>
-              <button type="button" onClick={() => setMode(mode === 'token' ? 'url' : 'token')} className="text-[12.5px] font-semibold text-primary">{mode === 'token' ? 'I have an access URL' : 'I have a setup token'}</button>
+              <button type="button" onClick={() => setMode(mode === 'token' ? 'url' : 'token')} className="max-md:min-h-11 text-[12.5px] font-semibold text-primary">{mode === 'token' ? 'I have an access URL' : 'I have a setup token'}</button>
             </span>
           )}
           hint={connection ? 'Paste a new token or URL only if the bank connection needs re-authorizing.' : undefined}
