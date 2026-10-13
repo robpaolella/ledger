@@ -36,8 +36,9 @@ function MoversStrip() {
 export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps) {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
-  // Only people who can open Settings → Bank Sync are pointed at linking an account.
-  const canBankSync = hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
+  // Only people who can link accounts (Settings → Bank Sync) are told to; running a
+  // sync alone doesn't allow it (Bank Sync tells them an admin manages connections).
+  const canLink = hasPermission('simplefin.manage');
   const { data: res, error } = useCachedApi<{ data: Movers }>('/investments/movers');
   const data = res?.data ?? null;
 
@@ -75,7 +76,7 @@ export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps)
       ) : !data ? (
         <CardSkeleton lines={4} />
       ) : data.asOf == null ? (
-        <CardError message={canBankSync ? 'Link an investment account to track holdings here.' : 'No investment holdings to show yet.'} />
+        <CardError message={canLink ? 'Link an investment account to track holdings here.' : 'No investment holdings to show yet.'} />
       ) : data.movers.length === 0 ? (
         <>
           <MoversStrip />
