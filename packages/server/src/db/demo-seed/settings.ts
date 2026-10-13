@@ -55,10 +55,13 @@ export function seedSettings({ db, rel, today, now }: Helpers, { johnId }: Peopl
     // Connected, but with nothing linked yet.
     insertConnection.run(null, 'demo://settings-4', 'Sample new feed', 'working', null, null, at);
 
-    const connectionCount = (db.prepare('SELECT COUNT(*) AS n FROM simplefin_connections').get() as { n: number }).n;
+    // Every connection's result on the last run: the not-working ones had problems.
+    const results = (db.prepare('SELECT id, sync_status FROM simplefin_connections ORDER BY id').all() as { id: number; sync_status: string }[])
+      .map((c) => ({ connectionId: c.id, problem: c.sync_status !== 'working' }));
     // Daily sync stays on (no enabled key). last_success stays today, set by seedInvestments, so the scheduler is idle.
     db.prepare("INSERT OR REPLACE INTO app_config (key, value) VALUES ('daily_sync.last_run', ?)").run(JSON.stringify({
-      day: localDay(run), at, transactionsImported: 7, connections: connectionCount, connectionsWithProblems: connections.length,
+      day: localDay(run), at, transactionsImported: 7, connections: results.length,
+      connectionsWithProblems: results.filter((r) => r.problem).length, results,
     }));
 
     // More rules, taken from the busiest merchants that have none: merchant rules

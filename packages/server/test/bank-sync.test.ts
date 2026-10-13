@@ -244,6 +244,57 @@ describe('last run and next run', () => {
   });
 });
 
+describe('last run as each person sees it', () => {
+  const lastRunFor = (ids: number[]) => daily.dailySyncInfo(db, ids, sched.getRetrySnapshot()).lastRun;
+  const stored = () => JSON.parse((db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_run'").get() as { value: string }).value);
+  beforeEach(() => {
+    // John's personal card feed, which only John sees.
+    db.exec(`INSERT INTO users (id, username, password_hash, display_name, role) VALUES (3, 'sample-member', 'x', 'Member', 'member');
+      INSERT INTO simplefin_connections (id, user_id, access_url, label) VALUES (4, 1, 'https://john:john-pass@bridge.example/simplefin', 'John card');`);
+  });
+
+  it('counts only the connections the viewer can see, and keeps the totals for older code', async () => {
+    sf.behaviour.set(CARD, 'rate_limit');
+    sf.behaviour.set('https://john:john-pass@bridge.example/simplefin', 'auth');
+    await tickAt(at(10, 6));
+    expect(lastRunFor([1, 2, 3, 4])).toMatchObject({ connections: 4, connectionsWithProblems: 2 });
+    expect(lastRunFor([1, 2, 3])).toMatchObject({ connections: 3, connectionsWithProblems: 1 });
+    expect(lastRunFor([1, 3])).toMatchObject({ connections: 2, connectionsWithProblems: 0 });
+    expect(stored()).toMatchObject({ connections: 4, connectionsWithProblems: 2 });
+    // Deleted since the run: not counted. Added since: not counted.
+    db.exec(`DELETE FROM simplefin_links WHERE simplefin_connection_id = 2; DELETE FROM simplefin_connections WHERE id = 2;
+      INSERT INTO simplefin_connections (id, user_id, access_url, label) VALUES (5, NULL, 'https://new@bridge.example/simplefin', 'New');`);
+    const ids = (db.prepare('SELECT id FROM simplefin_connections WHERE user_id IS NULL OR user_id = 3').all() as { id: number }[]).map((r) => r.id);
+    expect(lastRunFor(ids)).toMatchObject({ connections: 2, connectionsWithProblems: 0 });
+  });
+
+  it('a same-day retry updates only the retried results; an auth failure stays a problem', async () => {
+    sf.behaviour.set(CARD, 'rate_limit');
+    sf.behaviour.set('https://john:john-pass@bridge.example/simplefin', 'auth');
+    await tickAt(at(10, 6));
+    sf.behaviour.set(CARD, 'ok');
+    await tickAt(at(10, 6, 15));
+    expect(sf.calls.filter((u) => u === CU)).toHaveLength(1); // the retry fetched only the card
+    expect(lastRunFor([1, 2, 3, 4])).toMatchObject({ connections: 4, connectionsWithProblems: 1 });
+    expect(lastRunFor([1, 2, 3])).toMatchObject({ connections: 3, connectionsWithProblems: 0 });
+    expect(stored()).toMatchObject({ connections: 4, connectionsWithProblems: 1 });
+    expect(stored().results).toHaveLength(4);
+  });
+
+  it('reads a record from before per-connection results without counts, and does not rewrite it', async () => {
+    const old = JSON.stringify({ day: '2026-03-10', at: iso(at(10, 5, 31)), transactionsImported: 7, connections: 10, connectionsWithProblems: 3 });
+    db.prepare("INSERT OR REPLACE INTO app_config (key, value) VALUES ('daily_sync.last_run', ?)").run(old);
+    expect(lastRunFor([1, 2, 3])).toEqual({ at: iso(at(10, 5, 31)), transactionsImported: 7, connections: null, connectionsWithProblems: null });
+    expect(db.prepare("SELECT value FROM app_config WHERE key = 'daily_sync.last_run'").get()).toEqual({ value: old });
+    // A same-day retry after an upgrade can't know the rest of the day, so it stays without counts until the next day's run.
+    await sched.runDailySyncNow();
+    expect(lastRunFor([1, 2, 3])).toMatchObject({ transactionsImported: 9, connections: null, connectionsWithProblems: null });
+    vi.setSystemTime(at(11, 6));
+    await sched.runDailySyncNow();
+    expect(lastRunFor([1, 2, 3])).toMatchObject({ connections: 3, connectionsWithProblems: 0 });
+  });
+});
+
 describe('API', () => {
   async function withServer(fn: (call: (user: string, method: string, url: string, body?: unknown) => Promise<{ status: number; text: string }>) => Promise<void>) {
     const { default: router } = await import('../src/routes/simplefin.js');

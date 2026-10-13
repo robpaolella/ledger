@@ -45,25 +45,46 @@ export interface RetrySnapshot {
   authFailed: Set<number>;
 }
 
-type DailyRun = NonNullable<DailySyncInfo['lastRun']> & { day: string };
+/** One connection's outcome in the last daily run. */
+export interface DailyRunResult { connectionId: number; problem: boolean }
+
+/**
+ * Stored as JSON. The totals cover every connection and stay for older code;
+ * `results` lets each viewer count only their own. Records written before
+ * per-connection results existed have none.
+ */
+interface DailyRun {
+  day: string;
+  at: string;
+  transactionsImported: number;
+  connections: number;
+  connectionsWithProblems: number;
+  results?: DailyRunResult[];
+}
 
 /**
  * Record a finished daily try. Retries re-fetch only the failed connections,
- * so a same-day retry adds its imports and updates the problem count but keeps
- * the day's connection total.
+ * so a same-day retry adds its imports, updates the results of the connections
+ * it fetched and keeps the rest, along with the day's connection total.
  */
 export function recordDailyRun(
   sqlite: Database.Database,
-  run: { day: string; transactionsImported: number; connections: number; connectionsWithProblems: number },
+  run: { day: string; transactionsImported: number; connections: number; results: DailyRunResult[] },
 ): void {
   const prev = readLastRun(sqlite);
   const sameDay = prev?.day === run.day;
+  // A same-day record without results came from older code: adding only the
+  // retried connections would undercount, so it stays without results until tomorrow.
+  const byId = new Map(sameDay ? (prev.results ?? []).map((r) => [r.connectionId, r.problem]) : []);
+  for (const r of run.results) byId.set(r.connectionId, r.problem);
+  const results = [...byId].map(([connectionId, problem]) => ({ connectionId, problem }));
   const next: DailyRun = {
     day: run.day,
     at: new Date().toISOString(),
     transactionsImported: run.transactionsImported + (sameDay ? prev.transactionsImported : 0),
     connections: sameDay ? prev.connections : run.connections,
-    connectionsWithProblems: run.connectionsWithProblems,
+    connectionsWithProblems: results.filter((r) => r.problem).length,
+    ...(sameDay && !prev.results ? {} : { results }),
   };
   setConfig(sqlite, LAST_RUN_KEY, JSON.stringify(next));
 }
@@ -74,6 +95,19 @@ function readLastRun(sqlite: Database.Database): DailyRun | null {
   } catch {
     return null;
   }
+}
+
+/** The last run as `connectionIds` see it: counts only, and none for a record without results. */
+function lastRunFor(lastRun: DailyRun | null, connectionIds: number[]): DailySyncInfo['lastRun'] {
+  if (!lastRun) return null;
+  const visible = new Set(connectionIds);
+  const seen = Array.isArray(lastRun.results) ? lastRun.results.filter((r) => visible.has(r.connectionId)) : null;
+  return {
+    at: lastRun.at,
+    transactionsImported: lastRun.transactionsImported,
+    connections: seen ? seen.length : null,
+    connectionsWithProblems: seen ? seen.filter((r) => r.problem).length : null,
+  };
 }
 
 /** Is this connection waiting on one of today's scheduler retries? */
@@ -130,17 +164,11 @@ export function dailySyncInfo(
   now = new Date(),
 ): DailySyncInfo {
   const { hour, minute } = runTime();
-  const lastRun = readLastRun(sqlite);
   const info: DailySyncInfo = {
     enabled: savedEnabled(sqlite),
     forcedOff: dailySyncForcedOff(),
     runTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-    lastRun: lastRun && {
-      at: lastRun.at,
-      transactionsImported: lastRun.transactionsImported,
-      connections: lastRun.connections,
-      connectionsWithProblems: lastRun.connectionsWithProblems,
-    },
+    lastRun: lastRunFor(readLastRun(sqlite), connectionIds),
     nextRun: null,
   };
   if (!dailySyncOn(sqlite)) return info;

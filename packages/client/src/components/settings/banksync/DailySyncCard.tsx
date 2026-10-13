@@ -23,7 +23,8 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 function lastSyncText(last: DailySyncInfo['lastRun']): string {
   if (!last) return 'Not run yet';
-  const result = last.connectionsWithProblems > 0
+  // Counts are the viewer's own connections; a run from before they were kept has none.
+  const result = last.connectionsWithProblems && last.connections
     ? `${last.connectionsWithProblems} of ${plural(last.connections, 'connection', 'connections')} had problems`
     : `${plural(last.transactionsImported, 'new transaction', 'new transactions')}`;
   return `${dayTime(last.at)} · ${result}`;
