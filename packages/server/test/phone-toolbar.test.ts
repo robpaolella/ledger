@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phoneToolbarMode, reviewChipLabel, showClearAll } from '../../client/src/lib/toolbar';
+import { filtersButtonLabel, phoneToolbarMode, showClearAll } from '../../client/src/lib/toolbar';
 
 describe('phone toolbar rules', () => {
   it('is one row unless searching or selecting', () => {
@@ -19,8 +19,8 @@ describe('phone toolbar rules', () => {
     expect(showClearAll(false, true)).toBe(false);
   });
 
-  it('keeps the full wording as the chip name, with thousands separators', () => {
-    expect(reviewChipLabel(45)).toBe('45 to review');
-    expect(reviewChipLabel(1234)).toBe('1,234 to review');
+  it('names the Filters button with the applied count', () => {
+    expect(filtersButtonLabel(0)).toBe('Filters');
+    expect(filtersButtonLabel(2)).toBe('Filters, 2 applied');
   });
 });

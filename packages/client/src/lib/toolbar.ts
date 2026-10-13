@@ -9,5 +9,15 @@ export const phoneToolbarMode = (bulkMode: boolean, searchOpen: boolean): PhoneT
 /** The "Clear all" line shows only while something is active, and never in Select mode. */
 export const showClearAll = (anyActive: boolean, bulkMode: boolean) => anyActive && !bulkMode;
 
-/** Full wording of the review chip; on phones it shows only the count, so this is its accessible name. */
-export const reviewChipLabel = (count: number) => `${count.toLocaleString('en-US')} to review`;
+/** The strip shows only with something to review, and never while selecting (tapping it would leave the page). */
+export const showReviewStrip = (count: number, bulkMode: boolean) => count > 0 && !bulkMode;
+
+/** Wording of the phone review strip: the bold lead, the rest of the line, and the link's accessible name. */
+export function reviewStripText(count: number) {
+  const lead = `${count.toLocaleString('en-US')} ${count === 1 ? 'transaction' : 'transactions'}`;
+  const rest = count === 1 ? ' needs review' : ' need review';
+  return { lead, rest, label: `${lead}${rest}. Review` };
+}
+
+/** Accessible name of the phone Filters button. */
+export const filtersButtonLabel = (applied: number) => (applied > 0 ? `Filters, ${applied} applied` : 'Filters');
