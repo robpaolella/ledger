@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import Spinner from '../components/Spinner';
+import LoadError from '../components/LoadError';
+import { loadState } from '../lib/loadState';
 import { formatMoney } from '@ledger/shared';
 import { Money } from '../components/Money';
 import { getCategoryEmoji, getCategoryColorHex, useCategoryEmojis } from '../lib/categoryMeta';
@@ -102,7 +104,6 @@ function cadenceLabel(it: { freq_kind: Kind; interval: number | null; months_jso
 
 export default function RecurringPage() {
   const isMobile = useIsMobile();
-  const { addToast } = useToast();
   const { hasPermission } = useAuth();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   const canEdit = hasPermission('budgets.edit');
@@ -118,7 +119,9 @@ export default function RecurringPage() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [accts, setAccts] = useState<Acct[]>([]);
   const [merchants, setMerchants] = useState<MerchantOption[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
+  const [itemsFailed, setItemsFailed] = useState(false);
+  const [monthFailed, setMonthFailed] = useState(false);
 
   const [panel, setPanel] = useState<RItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -126,13 +129,14 @@ export default function RecurringPage() {
   const [editTarget, setEditTarget] = useState<RItem | null>(null);
 
   const loadItems = useCallback(async () => {
-    try { const r = await apiFetch<{ data: RItem[] }>('/recurring'); setItems(r.data); }
-    catch { addToast('Failed to load recurring items', 'error'); }
-  }, [addToast]);
+    // A failed load is shown by the page's own "Try again" card, not a toast.
+    try { const r = await apiFetch<{ data: RItem[] }>('/recurring'); setItems(r.data); setItemsLoaded(true); setItemsFailed(false); }
+    catch { setItemsFailed(true); }
+  }, []);
   const loadMonth = useCallback(async (alive: () => boolean = () => true) => {
-    try { const r = await apiFetch<{ data: MonthView }>(`/recurring/occurrences?month=${month}`); if (alive()) setMonthView(r.data); }
-    catch { if (alive()) addToast('Failed to load occurrences', 'error'); }
-  }, [month, addToast]);
+    try { const r = await apiFetch<{ data: MonthView }>(`/recurring/occurrences?month=${month}`); if (alive()) { setMonthView(r.data); setMonthFailed(false); } }
+    catch { if (alive()) setMonthFailed(true); }
+  }, [month]);
   const loadMeta = useCallback(async () => {
     try {
       const [c, a, m] = await Promise.all([
@@ -152,16 +156,20 @@ export default function RecurringPage() {
   useEffect(() => {
     let cancelled = false;
     const alive = () => !cancelled;
-    setLoading(true); setMonthView(null);
-    loadMonth(alive).finally(() => { if (alive()) setLoading(false); });
+    setMonthView(null); setMonthFailed(false);
+    loadMonth(alive);
     return () => { cancelled = true; };
   }, [loadMonth]);
 
   const refresh = async () => { await Promise.all([loadItems(), loadMonth()]); };
 
   // ----- summary strip -----
+  const monthState = loadState({ hasData: !!monthView, failed: monthFailed });
+  const itemsState = loadState({ hasData: itemsLoaded, failed: itemsFailed });
+  const known = monthState === 'loaded'; // totals stay a dash, never $0.00, while unknown
   const inc = monthView?.income ?? { total: 0, paid: 0, remaining: 0 };
   const exp = monthView?.expense ?? { total: 0, paid: 0, remaining: 0 };
+  const DASH = '–';
 
   const occByDay = useMemo(() => {
     const map = new Map<number, ROcc[]>();
@@ -282,19 +290,21 @@ export default function RecurringPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 border-t border-line">
               <div className="px-4 md:px-6 py-4 sm:border-r border-line">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span><Money amount={-inc.total} showZero className="text-[15px] font-extrabold" /></div>
-                {bar(inc.paid, inc.total, 'var(--positive)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(inc.paid)} due date passed</span><span>{plain(inc.remaining)} remaining</span></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Income</span>{known ? <Money amount={-inc.total} showZero className="text-[15px] font-extrabold" /> : <span className="text-[15px] font-extrabold text-content-3">{DASH}</span>}</div>
+                {bar(known ? inc.paid : 0, known ? inc.total : 0, 'var(--positive)')}
+                <div className="flex justify-between text-[12px] text-content-3"><span>{known ? plain(inc.paid) : DASH} due date passed</span><span>{known ? plain(inc.remaining) : DASH} remaining</span></div>
               </div>
               <div className="px-4 md:px-6 py-4 border-line border-t sm:border-t-0">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Bills</span><Money amount={exp.total} showZero className="text-[15px] font-extrabold" /></div>
-                {bar(exp.paid, exp.total, 'var(--primary)')}
-                <div className="flex justify-between text-[12px] text-content-3"><span>{plain(exp.paid)} due date passed</span><span>{plain(exp.remaining)} remaining</span></div>
+                <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-content-2">Bills</span>{known ? <Money amount={exp.total} showZero className="text-[15px] font-extrabold" /> : <span className="text-[15px] font-extrabold text-content-3">{DASH}</span>}</div>
+                {bar(known ? exp.paid : 0, known ? exp.total : 0, 'var(--primary)')}
+                <div className="flex justify-between text-[12px] text-content-3"><span>{known ? plain(exp.paid) : DASH} due date passed</span><span>{known ? plain(exp.remaining) : DASH} remaining</span></div>
               </div>
             </div>
           </div>
 
-          {loading ? (
+          {monthState === 'failed' ? (
+            <LoadError title="Couldn’t load this month’s recurring items" message="Check your connection, then try again. Nothing was changed." onRetry={() => loadMonth()} />
+          ) : monthState === 'loading' ? (
             <div className="bg-surface rounded-card border border-line shadow-sm"><Spinner /></div>
           ) : view === 'list' ? (
             groups.length === 0 ? (
@@ -324,6 +334,10 @@ export default function RecurringPage() {
             <CalendarGrid key={month} month={month} today={today} occByDay={occByDay} isMobile={isMobile} onOcc={(o) => { const it = items.find((i) => i.id === o.itemId); if (it) setPanel(it); }} />
           )}
         </>
+      ) : itemsState === 'failed' ? (
+        <LoadError title="Couldn’t load your recurring items" message="Check your connection, then try again. Nothing was changed." onRetry={loadItems} />
+      ) : itemsState === 'loading' ? (
+        <div className="bg-surface rounded-card border border-line shadow-sm"><Spinner /></div>
       ) : (
         <AllRecurring items={items} annual={annual} canEdit={canEdit} onOpen={setPanel}
           onEdit={(it) => { setEditTarget(it); setModalOpen(true); }} />

@@ -13,6 +13,8 @@ import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { formatMoney } from '@ledger/shared';
 import { Money } from '../components/Money';
+import LoadError from '../components/LoadError';
+import { loadState } from '../lib/loadState';
 import { approveAllText } from '../lib/approveAll';
 import { getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
@@ -83,7 +85,8 @@ export default function ReviewsPage() {
   const [openTotal, setOpenTotal] = useState(0); // server-side open count (the list itself is capped)
   const [users, setUsers] = useState<HUser[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true); // only ever set on first mount
+  const [loaded, setLoaded] = useState(false); // the list on screen is a real answer for the current period
+  const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -126,14 +129,20 @@ export default function ReviewsPage() {
   }, [closeAll, detail]);
 
   const loadSeqRef = useRef(0);
+  const loadedRef = useRef(false);
+  loadedRef.current = loaded;
   const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setInitialLoading(true); else setRefreshing(true);
+    if (!opts?.silent) { setLoaded(false); setFailed(false); } else setRefreshing(true);
     const seq = ++loadSeqRef.current; // drop out-of-order responses so a stale list can't resurrect removed rows
     try {
       const res = await apiFetch<{ data: ReviewRow[]; total: number }>(`/reviews?status=open&limit=500${periodFrom && periodTo ? `&from=${periodFrom}&to=${periodTo}` : ''}`);
-      if (seq === loadSeqRef.current) { setRows(res.data); setOpenTotal(res.total ?? res.data.length); }
-    } catch { addToast('Failed to load reviews', 'error'); }
-    finally { setInitialLoading(false); setRefreshing(false); }
+      if (seq === loadSeqRef.current) { setRows(res.data); setOpenTotal(res.total ?? res.data.length); setLoaded(true); setFailed(false); }
+    } catch {
+      if (seq !== loadSeqRef.current) return;
+      // With nothing to show, the page's own "Try again" card says it; a refresh behind a list gets a toast.
+      if (opts?.silent && loadedRef.current) addToast('Failed to load reviews', 'error'); else setFailed(true);
+    }
+    finally { setRefreshing(false); }
   }, [addToast, periodFrom, periodTo]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -270,13 +279,15 @@ export default function ReviewsPage() {
   const ctrl = 'tap-grow h-10 flex items-center gap-2 rounded-[11px] bg-surface border text-sm font-semibold whitespace-nowrap';
   const anyOverlay = menu !== null || editAssign !== null || editCat !== null;
 
+  const state = loadState({ hasData: loaded, failed });
+
   return (
     <div>
       {/* top bar */}
       <PageHeader className="!mb-0" title="Review" left={!isMobile && (
           <span className="inline-flex items-center gap-1.5 h-[26px] px-[11px] rounded-full text-[12px] font-bold" style={{ background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
-            {openTotal} to review
+            {loaded ? openTotal : '–'} to review
           </span>
         )} right={<ToolbarRow phone={isMobile}>
           {searchOpen ? (
@@ -370,14 +381,16 @@ export default function ReviewsPage() {
         <div className="border border-line rounded-[18px] bg-surface shadow-sm" style={{ overflow: 'visible' }}>
           <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-4 md:py-[18px]">
             <div className="flex items-baseline gap-2.5">
-              <span className="text-[15px] font-bold tabular-nums text-content">{shown.length} to review</span>
+              <span className="text-[15px] font-bold tabular-nums text-content">{loaded ? shown.length : '–'} to review</span>
               {anyFilter && <span onClick={resetFilters} className="text-[13px] font-semibold text-primary cursor-pointer">Clear</span>}
               {refreshing && <span className="text-[12px] text-content-3 animate-pulse">Refreshing…</span>}
             </div>
-            <span className="font-mono text-[13px] text-content-2 tabular-nums">{formatMoney(shownTotal, { kind: 'balance', showZero: true }).text} pending</span>
+            <span className="font-mono text-[13px] text-content-2 tabular-nums">{loaded ? formatMoney(shownTotal, { kind: 'balance', showZero: true }).text : '–'} pending</span>
           </div>
 
-          {initialLoading ? (
+          {state === 'failed' ? (
+            <div className="border-t border-line p-4 md:p-6"><LoadError title="Couldn’t load your reviews" message="Check your connection, then try again. Nothing was approved or changed." onRetry={() => load()} /></div>
+          ) : state === 'loading' ? (
             <div className="border-t border-line"><Spinner /></div>
           ) : groups.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3.5 px-6 pt-16 pb-[72px] text-center">
