@@ -1,3 +1,5 @@
+import { networkErrorMessage } from './networkError';
+
 const BASE_URL = '/api';
 
 /** Thrown for every non-2xx response so callers can branch on `status`. */
@@ -33,10 +35,17 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
     }
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      ...fetchOptions,
+      headers,
+    });
+  } catch (err) {
+    const message = networkErrorMessage(err);
+    if (message === null) throw err; // a deliberate abort stays an abort
+    throw new ApiError(message, 0);
+  }
 
   if (response.status === 401 && !skipAuth) {
     localStorage.removeItem('token');

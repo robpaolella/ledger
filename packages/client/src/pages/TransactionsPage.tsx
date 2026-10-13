@@ -918,7 +918,9 @@ export default function TransactionsPage() {
     } catch { /* non-critical — assignee picker just shows nobody */ }
   }, []);
 
+  const metaSeq = useRef(0);
   const loadMeta = useCallback(async () => {
+    const seq = ++metaSeq.current;
     try {
       const [acctRes, catRes, merchRes] = await Promise.all([
         apiFetch<{ data: Account[] }>('/accounts'),
@@ -928,7 +930,10 @@ export default function TransactionsPage() {
       setAccounts(acctRes.data);
       setCategories(catRes.data);
       setMerchants(merchRes.data);
-    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load accounts and categories', 'error'); }
+    } catch (e) {
+      // Only the latest call speaks, so a remount's repeat request can't toast twice.
+      if (seq === metaSeq.current) addToast(e instanceof Error ? e.message : 'Failed to load accounts and categories', 'error');
+    }
   }, [addToast]);
 
   const applySort = (by: string, order: 'asc' | 'desc') => {
