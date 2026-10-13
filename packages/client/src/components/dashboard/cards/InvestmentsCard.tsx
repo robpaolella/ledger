@@ -1,11 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { formatMoney } from '@ledger/shared';
+import { useAuth } from '../../../context/AuthContext';
 import { useCachedApi } from '../useCachedApi';
 import DashboardCard, { CardSkeleton, CardError } from '../DashboardCard';
 import type { DashboardCardProps } from '../cardRegistry';
 
 interface Movers {
   asOf: string | null;
+  /** Household investment total, the same figure as Accounts; null with no investment accounts. */
+  investmentTotal: number | null;
   portfolio: { value: number; dayChangeValue: number; dayChangePct: number } | null;
   movers: { symbol: string; name: string; price: number; dayChangePct: number; dayChangeValue: number }[];
 }
@@ -32,10 +35,14 @@ function MoversStrip() {
 
 export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps) {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  // Only people who can open Settings → Bank Sync are pointed at linking an account.
+  const canBankSync = hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
   const { data: res, error } = useCachedApi<{ data: Movers }>('/investments/movers');
   const data = res?.data ?? null;
 
   const portfolio = data?.portfolio ?? null;
+  const total = data?.investmentTotal ?? null;
   // A day change: real minus when down; zero keeps today's green "$0.00".
   const dayChange = formatMoney(portfolio?.dayChangeValue ?? 0, { kind: 'total', showZero: true, zeroTone: 'positive' });
   const up = dayChange.tone !== 'negative';
@@ -45,7 +52,7 @@ export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps)
       headline={
         <>
           <span className="text-[22px] font-extrabold tracking-[-0.01em] tabular-nums">
-            {portfolio ? `${whole(portfolio.value)} investments` : 'Investments'}
+            {total != null ? `${whole(total)} investments` : 'Investments'}
           </span>
           {portfolio && (
             <>
@@ -68,7 +75,7 @@ export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps)
       ) : !data ? (
         <CardSkeleton lines={4} />
       ) : data.asOf == null ? (
-        <CardError message="Link an investment account to track holdings here." />
+        <CardError message={canBankSync ? 'Link an investment account to track holdings here.' : 'No investment holdings to show yet.'} />
       ) : data.movers.length === 0 ? (
         <>
           <MoversStrip />
