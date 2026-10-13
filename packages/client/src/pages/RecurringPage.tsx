@@ -104,7 +104,6 @@ function cadenceLabel(it: { freq_kind: Kind; interval: number | null; months_jso
 
 export default function RecurringPage() {
   const isMobile = useIsMobile();
-  const { addToast } = useToast();
   const { hasPermission } = useAuth();
   useCategoryEmojis(); // re-render when stored category emojis load/change
   const canEdit = hasPermission('budgets.edit');
