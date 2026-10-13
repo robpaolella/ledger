@@ -11,7 +11,8 @@ const router = Router();
  *    benchmarks (Tiingo adjusted closes in benchmark_prices).
  *  - /holdings-blended: ONE row per symbol summed across accounts, grouped by
  *    asset class (symbol_meta), with range/today % from benchmark_prices.
- *  - /movers: day-over-day per-symbol change from holdings_history snapshots.
+ *  - /movers: day-over-day per-symbol change from holdings_history snapshots,
+ *    plus the household investment total the Accounts page shows.
  *  - PATCH /symbols/:symbol: set a symbol's asset class.
  */
 
@@ -267,10 +268,25 @@ router.get('/holdings-blended', (req: Request, res: Response) => {
   }
 });
 
+/** Sum of every active investment account's latest balance — the same figure
+ *  as the Accounts Investments group (/networth/summary), so the Dashboard
+ *  headline always agrees with it. Null when the household has no such account. */
+function householdInvestmentTotal(): number | null {
+  const row = sqlite.prepare(`
+    SELECT COUNT(*) AS n, COALESCE(SUM((
+      SELECT bs.balance FROM balance_snapshots bs
+      WHERE bs.account_id = a.id ORDER BY bs.date DESC, bs.id DESC LIMIT 1
+    )), 0) AS total
+    FROM accounts a WHERE a.classification = 'investment' AND a.is_active = 1
+  `).get() as { n: number; total: number };
+  return row.n > 0 ? round2(row.total) : null;
+}
+
 // GET /api/investments/movers?limit=4 — day change from holdings_history
 router.get('/movers', (req: Request, res: Response) => {
   try {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '4'), 10) || 4, 1), 20);
+    const investmentTotal = householdInvestmentTotal();
 
     // PER-LINK snapshot pairs: each link contributes its own two latest dates,
     // so a connection that hasn't synced today still compares its last two
@@ -288,7 +304,7 @@ router.get('/movers', (req: Request, res: Response) => {
 
     const asOf = linkPairs.reduce<string | null>((m, p) => (m == null || p.d0 > m ? p.d0 : m), null);
     if (linkPairs.length === 0 || !linkPairs.some((p) => p.d1 != null)) {
-      res.json({ data: { portfolio: null, movers: [], asOf } });
+      res.json({ data: { investmentTotal, portfolio: null, movers: [], asOf } });
       return;
     }
 
@@ -349,6 +365,7 @@ router.get('/movers', (req: Request, res: Response) => {
     res.json({
       data: {
         asOf,
+        investmentTotal,
         portfolio: changeBase > 0
           ? {
               value: round2(total0),
