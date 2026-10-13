@@ -7,6 +7,8 @@ import PageHeader from '../components/PageHeader';
 import BenchmarkStrip, { type BenchmarkId } from '../components/investments/BenchmarkStrip';
 import PerformanceChart, { type PerfSeries } from '../components/investments/PerformanceChart';
 import AllocationView from '../components/investments/AllocationView';
+import { holdingsEmpty, type HoldingsEmptyCopy } from '../components/investments/emptyState';
+import { useAuth } from '../context/AuthContext';
 import HoldingsTable, { type HoldingsGroup } from '../components/investments/HoldingsTable';
 
 type RangeKey = '1M' | '3M' | '6M' | '1Y' | 'YTD';
@@ -53,9 +55,19 @@ const chkbox = (checked: boolean) => (
   </span>
 );
 
+const EmptyCard = ({ copy }: { copy: HoldingsEmptyCopy }) => (
+  <div className="bg-surface border border-line rounded-card shadow-sm p-12 text-center">
+    <div className="text-[15px] font-semibold mb-1">{copy.title}</div>
+    <p className="text-content-3 text-sm max-w-md mx-auto">
+      {copy.before}{copy.link && <span className="font-semibold text-content-2">{copy.link}</span>}{copy.after}
+    </p>
+  </div>
+);
+
 const csvCell = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 export default function InvestmentsPage() {
+  const { isAdmin, hasPermission } = useAuth();
   const [range, setRange] = useState<RangeKey>('3M');
   const [tab, setTab] = useState<'market' | 'allocation'>('market');
   const [benchmark, setBenchmark] = useState<BenchmarkId>('sp500');
@@ -132,7 +144,8 @@ export default function InvestmentsPage() {
 
   if (perf === undefined || holdings === undefined) return <Spinner />;
 
-  const empty = holdings != null && holdings.groups.length === 0 && selectedIds.size === 0;
+  const canBankSync = isAdmin() || hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
+  const emptyState = holdings != null ? holdingsEmpty(holdings.groups.length, selectedIds.size, canBankSync) : null;
 
   return (
     <div className="pb-16">
@@ -166,11 +179,8 @@ export default function InvestmentsPage() {
           </div>
         )} />
 
-      {empty ? (
-        <div className="bg-surface border border-line rounded-card shadow-sm p-12 text-center">
-          <div className="text-[15px] font-semibold mb-1">No holdings yet</div>
-          <p className="text-content-3 text-sm max-w-md mx-auto">Link an investment or retirement account in <span className="font-semibold text-content-2">Settings → Bank Sync</span>. Holdings sync automatically and appear here.</p>
-        </div>
+      {emptyState?.scope === 'page' ? (
+        <EmptyCard copy={emptyState.copy} />
       ) : (
         <>
           {/* performance / allocation card */}
@@ -219,6 +229,8 @@ export default function InvestmentsPage() {
             <div className="bg-surface border border-line rounded-card shadow-sm p-6">
               <Notice>Holdings data unavailable.</Notice>
             </div>
+          ) : emptyState ? (
+            <EmptyCard copy={emptyState.copy} />
           ) : (
             <HoldingsTable
               groups={holdings.groups}
