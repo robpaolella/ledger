@@ -131,7 +131,7 @@ Accounts and account detail (sheets owned by parts A and B are checked here only
 | Accounts → Filters | F6 | ok | F6 | ok | F6 | ok | F6 | ok | F6 | ok | F6 | ok |
 | Update balance window (account detail) | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 | Add asset window | F6 | ok | F6 | ok | F6 | ok | F6 | ok | hidden ✓ | hidden ✓ | hidden ✓ | hidden ✓ |
-| Edit depreciation window | F6 | ok | F6 | ok | F6 | ok | F6 | ok | hidden ✓ | hidden ✓ | hidden ✓ | hidden ✓ |
+| Edit depreciation window (its Delete deletes at once with no confirmation: filed by part A as #341) | F6 | ok | F6 | ok | F6 | ok | F6 | ok | hidden ✓ | hidden ✓ | hidden ✓ | hidden ✓ |
 | Review detail (sheet on phone, panel on desktop) | F6 | ok | F6 | ok | F6 | ok | F6 | ok | F6 | ok | F6 | ok |
 | Approve all confirmation | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 | Recurring item detail | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
@@ -172,6 +172,8 @@ given launch and are shown in every theme and width after that.
 | F4 | Every Settings page, even Profile, makes a live SimpleFIN request for each connection the person can see (`POST /api/simplefin/connections/:id/accounts`). SimpleFIN's daily request limit is small and the Bank sync panel itself reports "daily request limit was reached"; severity is a judgement call (conductor may lower it) | every role; any theme and width | medium | #338 | none (network log: member, Profile: `GET /connections` then `POST /connections/7/accounts`, `/9/accounts`, `/10/accounts`) |
 | F5 | Notifications pop-up: the clear (×) button is 22px and invisible until hover, so on phones it can't be seen or tapped; Mark all read / Clear all are 20px tall and "View budget" 32px; opening the bell does not move keyboard focus into the pop-up | every role; both themes; mainly 390 (focus part both widths) | medium (Phone checklist 1, Popover rule) | #339 | `owner-light-390-notif-bell`, `owner-dark-390-notif-bell`, `owner-light-1440-notif-bell`, `member-light-390-notif-bell` |
 | F6 | Leftover controls under 44px at 390 in Settings and shared sheets: Profile Theme Light/Dark 34px; Rules search 38px; "Upload photo" / "Upload logo" 20px; Shared/Personal 34px and "I have an access URL" 19px; Institutions Add 40, Fetch missing logos 32, Done 40; Delete and Confirm 40px; Declining/Straight segmented 34px; Filters rows 36–37px; Manual import chips 36px; Date range calendar buttons 40px; Review sheet Mark reviewed 32px and "Open in Transactions" 17px; Open splits 36px, Split 20px, "Split across categories" 20px | owner, admin, member where visible; both themes; 390 | medium (Phone checklist 1, design 226) | #340 | `owner-light-390-settings-profile`, `owner-light-390-settings-rules`, `owner-light-390-tx-filters`, `owner-light-390-tx-manual-import`, `owner-light-390-review-detail`, `owner-light-390-bank-add`, `owner-light-390-asset-add`, `owner-light-390-inst-manager` |
+
+Overlap with part A (not repeated here): #341 (asset Delete has no confirmation, seen in the Edit depreciation window) and #349 (Add account and Update balance sheets autofocus on phones) concern sheets this part also lists.
 
 All screenshots are in `work/112-final-audit/screenshots/part-c/` (`<role>-<theme>-<width>-<state>.png`).
 Besides the finding evidence it holds one or two passing captures for each page and window, the
