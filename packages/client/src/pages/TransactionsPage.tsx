@@ -263,6 +263,7 @@ function TransactionForm({
   // Refs for focusing first invalid field
   const dateRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const accountRef = useRef<HTMLSelectElement>(null);
   const descRef = useRef<HTMLInputElement>(null);
   const categoryRef = useRef<HTMLSelectElement>(null);
@@ -431,14 +432,14 @@ function TransactionForm({
       maxWidth="32rem"
       footer={(
         <div className="flex items-center gap-2.5">
-          {transaction && onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
-          <div className="ml-auto flex items-center gap-2.5">
+          {transaction && onDelete && <ConfirmDeleteButton onConfirmingChange={setConfirmingDelete} onConfirm={onDelete} />}
+          {!confirmingDelete && <div className="ml-auto flex items-center gap-2.5">
             <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
             <button type="button" onClick={handleSaveClick} aria-disabled={!isValid}
               className={`${btnPrimary} ${!isValid ? 'opacity-50' : ''} ${duplicateMatch && isValid ? 'bg-warning hover:bg-warning' : ''}`}>
               {duplicateMatch ? 'Save anyway' : transaction ? 'Save changes' : 'Add transaction'}
             </button>
-          </div>
+          </div>}
         </div>
       )}
     >
