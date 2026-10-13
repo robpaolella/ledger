@@ -760,7 +760,7 @@ export default function ReportsPage() {
           <div className="border-t border-line">
             {summarySecs.map((sec) => (
               <div key={sec.label}>
-                <div onClick={sec.toggle} className="flex items-center gap-2.5 bg-surface-2 border-b border-line cursor-pointer" style={{ padding: '12px 26px' }}>
+                <div onClick={sec.toggle} className="flex items-center gap-2.5 bg-surface-2 border-b border-line cursor-pointer" style={{ padding: isMobile ? '12px 16px' : '12px 26px' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sec.collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
                   <span className="flex-1 text-xs font-bold uppercase text-content-2" style={{ letterSpacing: '.05em' }}>{sec.label}</span>
                   <span className="text-[15px] font-extrabold tabular-nums">{dollars(sec.total)}</span>
@@ -770,7 +770,7 @@ export default function ReportsPage() {
                   const open = canExpand && !!expandedGroups[r.gkey];
                   return (
                   <div key={r.key}>
-                    <div onClick={() => r.drill && drillTo(r.drill)} className="flex items-center gap-3 border-b border-line" style={{ padding: '15px 26px', cursor: r.drill ? 'pointer' : 'default' }}>
+                    <div onClick={() => r.drill && drillTo(r.drill)} className="flex items-center gap-3 border-b border-line" style={{ padding: isMobile ? '15px 16px' : '15px 26px', cursor: r.drill ? 'pointer' : 'default' }}>
                       {canExpand ? (
                         <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(r.gkey); }} aria-label={open ? 'Collapse' : 'Expand'} className="tap-area shrink-0 w-6 h-6 -ml-1 flex items-center justify-center rounded-full text-content-3 hover:text-content hover:bg-surface-2">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><path d="m9 6 6 6-6 6" /></svg>
@@ -779,19 +779,23 @@ export default function ReportsPage() {
                       {r.leaf
                         ? <span className="shrink-0 text-base leading-none">{r.emoji}</span>
                         : <span className="shrink-0 w-3.5 h-3.5 rounded-[4px]" style={{ background: r.color }} />}
-                      <span className="w-[172px] shrink-0 font-semibold text-[15px] truncate">{r.name}</span>
-                      <div className="flex-1 h-2 rounded-full bg-surface-2 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(r.pct * 100).toFixed(1)}%`, background: r.color }} /></div>
-                      <span className="w-14 shrink-0 text-right text-[13px] text-content-3 tabular-nums">{(r.pct * 100).toFixed(0)}%</span>
-                      <span className="w-24 shrink-0 text-right font-bold text-[15px] tabular-nums">{dollars(r.amount)}</span>
+                      <div className={isMobile ? 'flex-1 min-w-0 flex flex-col gap-1.5' : 'contents'}>
+                      <span className={`${isMobile ? 'min-w-0' : 'w-[172px] shrink-0'} font-semibold text-[15px] truncate`}>{r.name}</span>
+                      <div className={`${isMobile ? 'w-full' : 'flex-1'} h-2 rounded-full bg-surface-2 overflow-hidden`}><div className="h-full rounded-full" style={{ width: `${(r.pct * 100).toFixed(1)}%`, background: r.color }} /></div>
+                      </div>
+                      <span className={`${isMobile ? 'w-10' : 'w-14'} shrink-0 text-right text-[13px] text-content-3 tabular-nums`}>{(r.pct * 100).toFixed(0)}%</span>
+                      <span className={`${isMobile ? 'min-w-[72px]' : 'w-24'} shrink-0 text-right font-bold text-[15px] tabular-nums`}>{dollars(r.amount)}</span>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={r.drill ? 'var(--text-3)' : 'transparent'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
                     </div>
                     {open && r.subs.map((sub) => (
-                      <div key={sub.key} className="flex items-center gap-3 border-b border-line bg-surface-2/40" style={{ padding: '11px 26px 11px 64px' }}>
+                      <div key={sub.key} className="flex items-center gap-3 border-b border-line bg-surface-2/40" style={{ padding: isMobile ? '11px 16px 11px 40px' : '11px 26px 11px 64px' }}>
                         <span className="shrink-0 text-sm leading-none">{sub.emoji}</span>
-                        <span className="w-[150px] shrink-0 text-sm text-content-2 truncate">{sub.name}</span>
-                        <div className="flex-1 h-1.5 rounded-full bg-surface overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(sub.pct * 100).toFixed(1)}%`, background: sub.color }} /></div>
-                        <span className="w-14 shrink-0 text-right text-[13px] text-content-3 tabular-nums">{(sub.pct * 100).toFixed(0)}%</span>
-                        <span className="w-24 shrink-0 text-right font-semibold text-sm tabular-nums">{dollars(sub.amount)}</span>
+                        <div className={isMobile ? 'flex-1 min-w-0 flex flex-col gap-1.5' : 'contents'}>
+                        <span className={`${isMobile ? 'min-w-0' : 'w-[150px] shrink-0'} text-sm text-content-2 truncate`}>{sub.name}</span>
+                        <div className={`${isMobile ? 'w-full' : 'flex-1'} h-1.5 rounded-full bg-surface overflow-hidden`}><div className="h-full rounded-full" style={{ width: `${(sub.pct * 100).toFixed(1)}%`, background: sub.color }} /></div>
+                        </div>
+                        <span className={`${isMobile ? 'w-10' : 'w-14'} shrink-0 text-right text-[13px] text-content-3 tabular-nums`}>{(sub.pct * 100).toFixed(0)}%</span>
+                        <span className={`${isMobile ? 'min-w-[72px]' : 'w-24'} shrink-0 text-right font-semibold text-sm tabular-nums`}>{dollars(sub.amount)}</span>
                         <span className="shrink-0 w-4" />
                       </div>
                     ))}
