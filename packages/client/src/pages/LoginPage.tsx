@@ -105,10 +105,10 @@ export default function LoginPage() {
             {loading ? <><Spinner inline size={16} className="border-on-primary/40 border-t-on-primary" /> Verifying…</> : 'Verify'}
           </button>
           <div className="flex items-center justify-between">
-            <button type="button" onClick={() => { setUseBackupCode(!useBackupCode); setError(''); setTotpCode(''); setBackupCode(''); }} className="text-[13px] font-semibold text-primary">
+            <button type="button" onClick={() => { setUseBackupCode(!useBackupCode); setError(''); setTotpCode(''); setBackupCode(''); }} className="tap-area text-[13px] font-semibold text-primary">
               {useBackupCode ? 'Use authenticator app' : 'Use a backup code'}
             </button>
-            <button type="button" onClick={backToLogin} className="text-[13px] font-semibold text-content-3 hover:text-content">Back to sign in</button>
+            <button type="button" onClick={backToLogin} className="tap-area text-[13px] font-semibold text-content-3 hover:text-content">Back to sign in</button>
           </div>
         </form>
       </AuthShell>
