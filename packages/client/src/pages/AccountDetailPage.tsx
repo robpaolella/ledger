@@ -19,6 +19,7 @@ import { Money } from '../components/Money';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ListRow } from '../components/ListRow';
 import PageHeader from '../components/PageHeader';
+import { resolveAccountLoad, resolveAccountLoadError } from '../lib/accountLoad';
 import { getCategoryEmoji, getCategoryColorHex } from '../lib/categoryMeta';
 
 // ---- types ----
@@ -174,6 +175,7 @@ function AccountDetail() {
 
   const [meta, setMeta] = useState<AccountMeta | null>(null);
   const [metaLoaded, setMetaLoaded] = useState(false);
+  const [metaError, setMetaError] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [matchTotal, setMatchTotal] = useState(0); // transactions matching the filters
@@ -197,6 +199,8 @@ function AccountDetail() {
   // manual balance entry (moved from AccountsPage — rows there now navigate here)
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
+  const [balanceError, setBalanceError] = useState(false);
+  const balanceRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
   // Each loader takes an `alive` probe so a response for a previous account id
@@ -205,8 +209,14 @@ function AccountDetail() {
     try {
       const res = await apiFetch<{ data: { accounts: AccountMeta[] } }>('/networth/summary');
       if (!alive()) return;
-      setMeta(res.data.accounts.find((a) => a.accountId === id) ?? null);
-    } catch { if (alive()) setMeta(null); }
+      const result = resolveAccountLoad(res.data.accounts.find((a) => a.accountId === id));
+      setMeta(result.state === 'found' ? result.account : null);
+      setMetaError(false);
+    } catch (err) {
+      if (!alive()) return;
+      setMeta(null);
+      setMetaError(resolveAccountLoadError(err).state === 'error');
+    }
     finally { if (alive()) setMetaLoaded(true); }
   }, [id]);
   const loadHistory = useCallback(async (alive: () => boolean = () => true) => {
@@ -219,7 +229,7 @@ function AccountDetail() {
   useEffect(() => {
     let cancelled = false;
     const alive = () => !cancelled;
-    setMetaLoaded(false); loadMeta(alive); loadHistory(alive);
+    setMetaLoaded(false); setMetaError(false); loadMeta(alive); loadHistory(alive);
     return () => { cancelled = true; };
   }, [loadMeta, loadHistory]);
 
@@ -310,7 +320,7 @@ function AccountDetail() {
   const saveBalance = async () => {
     if (!meta) return;
     const entered = parseFloat(balanceInput);
-    if (isNaN(entered)) { addToast('Enter a valid balance', 'error'); return; }
+    if (isNaN(entered)) { setBalanceError(true); if (!isMobile) balanceRef.current?.focus(); return; }
     // Liabilities are typed as the amount owed and stored negative (owed lowers net worth).
     const balance = isLiability && entered !== 0 ? -entered : entered;
     try {
@@ -335,6 +345,22 @@ function AccountDetail() {
   );
 
   if (!metaLoaded) return <Spinner />;
+
+  if (!meta && metaError) {
+    return (
+      <div className="pb-16">
+        {topBar(<span className="text-[20px] font-extrabold tracking-tight truncate">Account</span>, undefined, 'Account')}
+        <div className="bg-surface border border-line rounded-card shadow-sm p-8 text-center">
+          <div className="text-[15px] font-semibold text-content mb-1.5">Couldn’t load this account</div>
+          <div className="text-sm text-content-3 mb-4">Check your connection, then try again.</div>
+          <div className="flex justify-center gap-2">
+            <Button variant="secondary" onClick={() => { setMetaLoaded(false); setMetaError(false); loadMeta(); loadHistory(); }}>Try again</Button>
+            <Link to="/accounts" className="inline-flex items-center h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-sm font-semibold text-content">Back to accounts</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!meta) {
     return (
@@ -455,16 +481,16 @@ function AccountDetail() {
           </div>
           {hasTxns && isMobile && (
             <div className="px-4 pb-3 flex flex-col gap-2">
-              <div className="flex items-center h-11 rounded-[12px] bg-surface border border-line-strong pl-3 pr-1 gap-2">
+              <div className="flex items-center h-[46px] rounded-[12px] bg-surface border border-line-strong pl-3 pr-0 gap-2">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" autoCapitalize="off" aria-label="Search this account's transactions"
-                  className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
+                  className="flex-1 min-w-0 h-full bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
                 {search && (
-                  <button onClick={() => setSearch('')} aria-label="Clear search" className="w-8 h-8 flex items-center justify-center text-content-3">
+                  <button onClick={() => setSearch('')} aria-label="Clear search" className="w-11 h-11 flex items-center justify-center text-content-3">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
                   </button>
                 )}
-                <button onClick={openFilters} aria-label="Filters" aria-haspopup="dialog" aria-expanded={filterOpen} className={`relative w-9 h-9 rounded-[9px] flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
+                <button onClick={openFilters} aria-label="Filters" aria-haspopup="dialog" aria-expanded={filterOpen} className={`relative w-11 h-11 rounded-[9px] flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
                   {filterCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{filterCount}</span>}
                 </button>
@@ -484,7 +510,7 @@ function AccountDetail() {
                   </>
                 )}
               </span>
-              <button onClick={clearAll} className="shrink-0 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
+              <button onClick={clearAll} className="tap-area shrink-0 text-primary hover:text-primary-hover font-semibold text-sm">Clear</button>
             </div>
           )}
           {listState === 'loading' ? (
@@ -562,7 +588,7 @@ function AccountDetail() {
           {summaryRow('Total transactions', txnTotal == null ? '—' : txnTotal.toLocaleString())}
           {summaryRow('Last update', timeAgo(meta.lastUpdated) || '—', true)}
           {canBalance && (
-            <button onClick={() => { setBalanceInput(meta.balance ? String(isLiability ? -meta.balance : meta.balance) : ''); setBalanceOpen(true); }}
+            <button onClick={() => { setBalanceInput(meta.balance ? String(isLiability ? -meta.balance : meta.balance) : ''); setBalanceError(false); setBalanceOpen(true); }}
               className="w-full h-11 mt-1.5 mb-1.5 rounded-[11px] bg-surface-2 border border-line-strong font-semibold text-sm text-content hover:bg-elevated">
               Update balance
             </button>
@@ -575,8 +601,11 @@ function AccountDetail() {
         <ResponsiveModal isOpen onClose={() => setBalanceOpen(false)} title={`Update balance — ${meta.name}`}>
           <div className="flex flex-col gap-4 p-1">
             <div>
-              <label className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
-              <CurrencyInput value={balanceInput} onChange={setBalanceInput} autoFocus allowNegative className="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none" />
+              <label htmlFor="new-balance" className="block text-[13px] font-semibold text-content-2 mb-1.5">New balance (as of today)</label>
+              <CurrencyInput id="new-balance" ref={balanceRef} value={balanceInput} onChange={(v) => { setBalanceInput(v); setBalanceError(false); }} autoFocus={!isMobile} allowNegative
+                invalid={balanceError} describedBy={balanceError ? 'new-balance-error' : undefined}
+                className={`w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border text-content text-sm outline-none ${balanceError ? 'border-negative' : 'border-line'}`} />
+              {balanceError && <div id="new-balance-error" role="alert" className="text-negative text-[13px] font-semibold mt-1.5">Enter a valid balance.</div>}
               <p className="text-[12px] text-content-3 mt-1.5">Records a balance snapshot dated today. For liabilities, enter the amount owed as a positive number. Enter a negative amount if the card is in credit.</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">

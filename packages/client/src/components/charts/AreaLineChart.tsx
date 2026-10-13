@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { formatMoney } from '@ledger/shared';
+import { distinctAxisLabels } from '../../lib/chartLabels';
 
 export interface ChartPoint {
   date: string;   // 'YYYY-MM-DD' (or any label)
@@ -33,6 +34,10 @@ const defaultValue = (n: number) => formatMoney(n, { kind: 'balance', precision:
 const compact = (n: number) =>
   formatMoney(n, { kind: 'balance', precision: 'compact', showZero: true }).text.replace(/\.0(?=[kMB]$)/, '');
 // Liability points are amount owed, so the stored value is the flipped one.
+const whole = (n: number) => formatMoney(n, { kind: 'balance', precision: 'whole', showZero: true }).text;
+const full = (n: number) => formatMoney(n, { kind: 'balance', precision: 'full', showZero: true }).text;
+const liabilityWhole = (n: number) => formatMoney(-n, { kind: 'balance', precision: 'whole', showZero: true, liability: true }).text;
+const liabilityFull = (n: number) => formatMoney(-n, { kind: 'balance', precision: 'full', showZero: true, liability: true }).text;
 const liabilityValue = (n: number) => formatMoney(-n, { kind: 'balance', precision: 'axis', liability: true }).text;
 const liabilityCompact = (n: number) =>
   formatMoney(-n, { kind: 'balance', precision: 'compact', showZero: true, liability: true }).text.replace(/\.0(?=[kMB]$)/, '');
@@ -99,11 +104,10 @@ export default function AreaLineChart({
 
   const ticks = Array.from({ length: yTicks }, (_, i) => min + (i / (yTicks - 1)) * (max - min));
   // A narrow range (a balance moving $24.2k to $24.9k) can round two gridlines to the
-  // same axis label; then show one decimal so each line stays distinct.
-  const axisLabels = ticks.map(formatValue);
-  const tickLabels = formatValue === defaultFormat && new Set(axisLabels).size < axisLabels.length
-    ? ticks.map(compactFormat)
-    : axisLabels;
+  // same axis label; then add precision (one decimal, whole dollars, cents) until each line is distinct.
+  const tickLabels = formatValue === defaultFormat
+    ? distinctAxisLabels(ticks, [formatValue, compactFormat, liability ? liabilityWhole : whole, liability ? liabilityFull : full])
+    : ticks.map(formatValue);
   const gid = 'nw-area-grad';
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {

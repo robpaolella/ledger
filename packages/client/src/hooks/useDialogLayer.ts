@@ -30,8 +30,10 @@ export function useDialogLayer(ref: RefObject<HTMLElement | null>, active: boole
     const id = Symbol('dialog');
     layers.push(id);
     const focused = document.activeElement as HTMLElement | null;
-    const opener = focused && focused !== document.body ? focused : (lastPressed && Date.now() - lastPressed.at < PRESS_WINDOW_MS ? lastPressed.el : focused);
     const el = ref.current;
+    const pressed = lastPressed && Date.now() - lastPressed.at < PRESS_WINDOW_MS ? lastPressed.el : null;
+    // A field that took autoFocus already holds focus by now, so it isn't the opener: go back to what was pressed.
+    const opener = focused && focused !== document.body && !el?.contains(focused) ? focused : (pressed ?? (el?.contains(focused) ? null : focused));
     if (el && !el.contains(document.activeElement)) el.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
 
     const handler = (e: KeyboardEvent) => {
