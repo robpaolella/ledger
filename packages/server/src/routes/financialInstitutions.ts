@@ -152,7 +152,7 @@ router.post('/:id/refresh-logo', requirePermission('accounts.edit'), async (req:
   const id = Number(req.params.id);
   const row = sqlite.prepare('SELECT id, domain, logo_url FROM financial_institutions WHERE id = ?').get(id) as { id: number; domain: string | null; logo_url: string | null } | undefined;
   if (!row) { res.status(404).json({ error: 'Institution not found' }); return; }
-  if (!logoDevConfigured()) { res.status(400).json({ error: 'Logo service not configured (set LOGODEV_TOKEN)' }); return; }
+  if (!logoDevConfigured()) { res.status(400).json({ error: "Logo fetching isn't set up. See Ledger's documentation for setup steps." }); return; }
   if (!row.domain) { res.status(400).json({ error: 'Institution has no domain to look up' }); return; }
   const result = await fetchInstitutionLogo(id, row.domain);
   if (result.keyRejected) { res.status(502).json({ error: LOGO_KEY_REJECTED_MESSAGE }); return; }
@@ -163,7 +163,7 @@ router.post('/:id/refresh-logo', requirePermission('accounts.edit'), async (req:
 
 // POST /api/financial-institutions/hydrate-logos — fetch every missing logo from logo.dev
 router.post('/hydrate-logos', requirePermission('accounts.edit'), async (_req: Request, res: Response): Promise<void> => {
-  if (!logoDevConfigured()) { res.status(400).json({ error: 'Logo service not configured (set LOGODEV_TOKEN)' }); return; }
+  if (!logoDevConfigured()) { res.status(400).json({ error: "Logo fetching isn't set up. See Ledger's documentation for setup steps." }); return; }
   const rows = sqlite.prepare(
     "SELECT id, domain FROM financial_institutions WHERE logo_url IS NULL AND domain IS NOT NULL AND TRIM(domain) <> ''"
   ).all() as { id: number; domain: string }[];
