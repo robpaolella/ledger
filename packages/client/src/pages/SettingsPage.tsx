@@ -52,10 +52,43 @@ export default function SettingsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null | 'new'>(null);
   const [showInstitutions, setShowInstitutions] = useState(false);
-  const sf = useSimpleFin();
-
   const rawPanel = searchParams.get('panel');
   const legacyTab = searchParams.get('tab');
+
+  // Show only what the person can use.
+  const canAny = (prefix: string) => ['create', 'edit', 'delete'].some((a) => hasPermission(`${prefix}.${a}`));
+  const admin = isAdmin();
+  const canBankSync = admin || hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
+  const allSections: { title: string; items: { id: PanelId; label: string; show: boolean }[] }[] = [
+    { title: 'You', items: [{ id: 'profile', label: 'Profile', show: true }, { id: 'security', label: 'Security', show: true }, { id: 'notifications', label: 'Notifications', show: true }] },
+    { title: 'Household', items: [
+      { id: 'accounts', label: 'Accounts', show: canAny('accounts') },
+      { id: 'bank', label: 'Bank sync', show: canBankSync },
+      { id: 'categories', label: 'Categories', show: canAny('categories') },
+      { id: 'merchants', label: 'Merchants', show: hasPermission('transactions.edit') },
+      { id: 'rules', label: 'Rules', show: hasPermission('transactions.edit') },
+    ] },
+    { title: 'Admin', items: [
+      { id: 'users', label: 'Users & permissions', show: admin },
+      { id: 'extras', label: 'Optional extras', show: admin },
+    ] },
+  ];
+  const navSections = allSections
+    .map((sec) => ({ title: sec.title, items: sec.items.filter((it) => it.show) }))
+    .filter((sec) => sec.items.length > 0);
+  const visibleIds = navSections.flatMap((sec) => sec.items.map((it) => it.id));
+
+  // A panel the person can't see behaves like no panel: Profile on desktop, the index on phones.
+  // ?panel=ai is kept for Amazon alerts already stored in notification bells.
+  const requested = rawPanel
+    ? (rawPanel === 'ai' ? 'extras' : rawPanel)
+    : legacyTab === 'preferences' ? 'profile' : legacyTab === 'banksync' ? 'bank' : legacyTab ? 'accounts' : null;
+  const requestedOk = visibleIds.includes(requested as PanelId);
+  const panel: PanelId = requestedOk ? (requested as PanelId) : 'profile';
+  // The bank account list comes from the SimpleFIN bridge, so only the panels that
+  // show it (Accounts, Bank sync, and the account edit window on Accounts) ask for it.
+  const sf = useSimpleFin({ loadAccounts: panel === 'accounts' || panel === 'bank' });
+
   const setPanel = (p: PanelId) => setSearchParams({ panel: p });
 
   const loadData = useCallback(async (): Promise<boolean> => {
@@ -128,36 +161,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Show only what the person can use.
-  const canAny = (prefix: string) => ['create', 'edit', 'delete'].some((a) => hasPermission(`${prefix}.${a}`));
-  const admin = isAdmin();
-  const canBankSync = admin || hasPermission('simplefin.manage') || hasPermission('import.bank_sync');
-  const allSections: { title: string; items: { id: PanelId; label: string; show: boolean }[] }[] = [
-    { title: 'You', items: [{ id: 'profile', label: 'Profile', show: true }, { id: 'security', label: 'Security', show: true }, { id: 'notifications', label: 'Notifications', show: true }] },
-    { title: 'Household', items: [
-      { id: 'accounts', label: 'Accounts', show: canAny('accounts') },
-      { id: 'bank', label: 'Bank sync', show: canBankSync },
-      { id: 'categories', label: 'Categories', show: canAny('categories') },
-      { id: 'merchants', label: 'Merchants', show: hasPermission('transactions.edit') },
-      { id: 'rules', label: 'Rules', show: hasPermission('transactions.edit') },
-    ] },
-    { title: 'Admin', items: [
-      { id: 'users', label: 'Users & permissions', show: admin },
-      { id: 'extras', label: 'Optional extras', show: admin },
-    ] },
-  ];
-  const navSections = allSections
-    .map((sec) => ({ title: sec.title, items: sec.items.filter((it) => it.show) }))
-    .filter((sec) => sec.items.length > 0);
-  const visibleIds = navSections.flatMap((sec) => sec.items.map((it) => it.id));
-
-  // A panel the person can't see behaves like no panel: Profile on desktop, the index on phones.
-  // ?panel=ai is kept for Amazon alerts already stored in notification bells.
-  const requested = rawPanel
-    ? (rawPanel === 'ai' ? 'extras' : rawPanel)
-    : legacyTab === 'preferences' ? 'profile' : legacyTab === 'banksync' ? 'bank' : legacyTab ? 'accounts' : null;
-  const requestedOk = visibleIds.includes(requested as PanelId);
-  const panel: PanelId = requestedOk ? (requested as PanelId) : 'profile';
   // Phones: /settings is an index of sections; picking one shows that panel
   // full-width with a back link. Desktop keeps the two-column layout.
   const isMobile = useIsMobile();
