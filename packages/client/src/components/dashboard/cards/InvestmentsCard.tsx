@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { formatMoney } from '@ledger/shared';
 import { useAuth } from '../../../context/AuthContext';
+import { canLinkAccounts } from '../../investments/emptyState';
 import { useCachedApi } from '../useCachedApi';
 import DashboardCard, { CardSkeleton, CardError } from '../DashboardCard';
 import type { DashboardCardProps } from '../cardRegistry';
@@ -35,10 +36,8 @@ function MoversStrip() {
 
 export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps) {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
-  // Only people who can link accounts (Settings → Bank Sync) are told to; running a
-  // sync alone doesn't allow it (Bank Sync tells them an admin manages connections).
-  const canLink = hasPermission('simplefin.manage');
+  const { user } = useAuth();
+  const canLink = canLinkAccounts(user);
   const { data: res, error } = useCachedApi<{ data: Movers }>('/investments/movers');
   const data = res?.data ?? null;
 
