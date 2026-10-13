@@ -76,7 +76,7 @@ export default function InvestmentsCard({ dragHandleProps }: DashboardCardProps)
       ) : !data ? (
         <CardSkeleton lines={4} />
       ) : data.asOf == null ? (
-        <CardError message={canLink ? 'Connect an investment account to see its holdings here.' : 'No holdings to show yet.'} />
+        <CardError message={canLink ? 'Connect an investment account in Settings → Bank sync to see its holdings here.' : 'No holdings to show yet.'} />
       ) : data.movers.length === 0 ? (
         <>
           <MoversStrip />
