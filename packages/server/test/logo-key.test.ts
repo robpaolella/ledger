@@ -105,6 +105,17 @@ describe('logo hydration', () => {
 });
 
 describe('institution logo routes', () => {
+  it('refuses logo fetching in plain words when logos are not set up', async () => {
+    mocks.configured.mockReturnValue(false);
+    for (const path of ['/7/refresh-logo', '/hydrate-logos']) {
+      const response = await routeRequest(path);
+      expect(response.status).toBe(400);
+      const { error } = await response.json() as { error: string };
+      expect(error).not.toMatch(/LOGODEV|logo\.dev|token/i);
+    }
+    expect(mocks.fetchLogo).not.toHaveBeenCalled();
+  });
+
   it('reports a rejected key and stops the bulk request after the first attempt', async () => {
     const key = 'pk_test_key_that_must_not_escape';
     mocks.rows = [
