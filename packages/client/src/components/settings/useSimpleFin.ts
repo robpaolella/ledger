@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../../lib/api';
 import { sfKey, type Connection, type SfAccount } from './simplefin';
 
@@ -15,8 +15,14 @@ interface RawSfAccount {
  * Every SimpleFIN connection this user can see, plus the accounts each one
  * exposes (fetched from the SimpleFIN bridge, so a connection can fail on its
  * own without hiding the others).
+ *
+ * Listing accounts contacts SimpleFIN once per connection, so callers that only
+ * sometimes show them pass `loadAccounts: false` until they do; connections
+ * (read from Ledger's own database) always load. Default is eager.
  */
-export function useSimpleFin() {
+export function useSimpleFin({ loadAccounts = true }: { loadAccounts?: boolean } = {}) {
+  const loadAccountsRef = useRef(loadAccounts);
+  loadAccountsRef.current = loadAccounts;
   const [connections, setConnections] = useState<Connection[]>([]);
   const [sfAccounts, setSfAccounts] = useState<SfAccount[]>([]);
   const [failures, setFailures] = useState<{ connectionId: number; label: string; error: string }[]>([]);
@@ -28,6 +34,9 @@ export function useSimpleFin() {
   const reload = useCallback(async (opts?: { quiet?: boolean }) => {
     const quiet = opts?.quiet === true;
     if (!quiet) setLoading(true);
+    const wantAccounts = loadAccountsRef.current;
+    // Set before the connections request so the panel never flashes "no accounts" in between.
+    if (wantAccounts) setAccountsLoading(true);
     let conns: Connection[] = [];
     try {
       const res = await apiFetch<{ data: Connection[] }>('/simplefin/connections');
@@ -35,14 +44,15 @@ export function useSimpleFin() {
       setConnections(conns);
       setLoadFailed(false);
     } catch {
+      if (wantAccounts) setAccountsLoading(false);
       if (quiet) return;
       setConnections([]);
       setLoadFailed(true);
     } finally {
       setLoading(false);
     }
-    if (conns.length === 0) { setSfAccounts([]); setFailures([]); return; }
-    setAccountsLoading(true);
+    if (!wantAccounts) return;
+    if (conns.length === 0) { setSfAccounts([]); setFailures([]); setAccountsLoading(false); return; }
     const results = await Promise.all(conns.map(async (c) => {
       try {
         const res = await apiFetch<{ data: RawSfAccount[] }>(`/simplefin/connections/${c.id}/accounts`, { method: 'POST' });
@@ -66,7 +76,12 @@ export function useSimpleFin() {
     setAccountsLoading(false);
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  // Load on mount; when accounts become wanted later, refresh in place to fetch them.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; reload(); return; }
+    if (loadAccounts) reload({ quiet: true });
+  }, [reload, loadAccounts]);
 
   return { connections, sfAccounts, failures, loading, accountsLoading, loadFailed, reload };
 }
