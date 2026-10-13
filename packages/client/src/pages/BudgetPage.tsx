@@ -13,6 +13,8 @@ import ResponsiveModal from '../components/ResponsiveModal';
 import Button from '../components/Button';
 import UncategorizedNotice from '../components/UncategorizedNotice';
 import BudgetHistory from '../components/budget/BudgetHistory';
+import LoadError from '../components/LoadError';
+import { loadState } from '../lib/loadState';
 import MonthSwitcher from '../components/MonthSwitcher';
 import { isUnbudgetedYear, yearLine, sectionYearLine } from '../lib/budgetYear';
 import { useToast } from '../context/ToastContext';
@@ -54,6 +56,11 @@ interface Totals {
   actualExpenses: number;
   leftToBudget: number;
 }
+
+const EMPTY_SUMMARY: BudgetSummary = {
+  income: [], expenseGroups: [], uncategorized: { count: 0, moneyOut: 0, moneyIn: 0 },
+  totals: { budgetedIncome: 0, actualIncome: 0, budgetedExpenses: 0, actualExpenses: 0, leftToBudget: 0 },
+};
 
 interface BudgetSummary {
   income: IncomeRow[];
@@ -144,6 +151,7 @@ export default function BudgetPage() {
   const [data, setData] = useState<BudgetSummary | null>(null);
   const [annualData, setAnnualData] = useState<AnnualSummary | null>(null);
   const [annualYear, setAnnualYear] = useState<number | null>(null); // year annualData was loaded for
+  const [monthError, setMonthError] = useState(false);
   const [annualError, setAnnualError] = useState(false);
   const annualReq = useRef(0); // latest request wins when the year changes quickly
   const shownYear = useRef<number | null>(null); // same as annualYear, readable inside loadAnnual
@@ -155,14 +163,17 @@ export default function BudgetPage() {
   const [editScope, setEditScope] = useState<'month' | 'forward'>('month');
   const [editOverride, setEditOverride] = useState(false); // per-month sub-floor override
 
+  const monthReq = useRef(0); // latest request wins when the month changes quickly
   const loadData = useCallback(async () => {
+    const req = ++monthReq.current;
+    setMonthError(false);
     try {
       const res = await apiFetch<{ data: BudgetSummary }>(
         `/budgets/summary?month=${monthStr(month)}`
       );
-      setData(res.data);
-    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to load budget', 'error'); }
-  }, [month, addToast]);
+      if (req === monthReq.current) setData(res.data);
+    } catch { if (req === monthReq.current) setMonthError(true); } // the page shows its own "Try again" card
+  }, [month]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -226,13 +237,10 @@ export default function BudgetPage() {
     if (view === 'year') await loadAnnual();
   };
 
-  if (!data) {
-    return <Spinner />;
-  }
-
-  const { income, expenseGroups, totals, uncategorized } = data;
+  const { income, expenseGroups, totals, uncategorized } = data ?? EMPTY_SUMMARY;
 
   const isMonth = view === 'month';
+  const monthState = loadState({ hasData: !!data, failed: monthError });
   const now = new Date();
   const periodLabel = isMonth ? `${shortMonth(month)} ${month.getFullYear()}` : String(month.getFullYear());
   const subtitle = isMonth ? monthLabel(month) : String(month.getFullYear());
@@ -323,11 +331,7 @@ export default function BudgetPage() {
     </div>
   );
   const yearError = (
-    <div className="bg-surface border border-line rounded-card shadow-sm p-6 md:p-10 flex flex-col items-center text-center gap-3">
-      <div className="text-[17px] font-extrabold text-content">Couldn’t load your budget</div>
-      <p className="text-sm text-content-3 m-0 max-w-[360px]">Check your connection, then try again. Nothing you planned was lost.</p>
-      <Button variant="secondary" onClick={loadAnnual}>Try again</Button>
-    </div>
+    <LoadError title="Couldn’t load your budget" message="Check your connection, then try again. Nothing you planned was lost." onRetry={loadAnnual} />
   );
 
   return (
@@ -354,10 +358,14 @@ export default function BudgetPage() {
         </>} />
 
       {/* Money with no category is already inside the totals; this says so. Year view shows plans only. */}
-      {isMonth && !isMobile && <UncategorizedNotice totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} className="mb-5" />}
+      {isMonth && !isMobile && monthState === 'loaded' && <UncategorizedNotice totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} className="mb-5" />}
 
       {/* ===== MONTH VIEW ===== */}
-      {isMonth && isMobile ? (
+      {isMonth && monthState !== 'loaded' ? (
+        monthState === 'failed'
+          ? <LoadError title="Couldn’t load your budget" message="Check your connection, then try again. Nothing you planned was lost." onRetry={loadData} />
+          : <Spinner />
+      ) : isMonth && isMobile ? (
       /* ===== MONTH VIEW · PHONE ===== planned / remaining grid, one card per group */
       <div>
         <UncategorizedNotice strip totals={uncategorized} {...monthPeriod(month.getFullYear(), month.getMonth())} />
