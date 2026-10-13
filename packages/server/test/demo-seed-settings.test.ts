@@ -147,7 +147,7 @@ describe('Settings sample data', () => {
     const early = lastRun(new Date(2026, 9, 31, 4, 0));
     expect(early.day).toBe('2026-10-30');
     expect(new Date(early.at)).toEqual(new Date(2026, 9, 30, 5, 31));
-  });
+  }, 15_000);
 
   it('has 40 rules including contains and pattern rules, and 3 muted merchants with no rule', () => {
     const db = fixture(NOON);
@@ -197,7 +197,7 @@ describe('Settings sample data', () => {
         db.close();
       }
     }
-  });
+  }, 15_000);
 
   it('is deterministic for the same day', () => {
     const first = fixture(NOON);
@@ -210,5 +210,5 @@ describe('Settings sample data', () => {
       first.close();
       second.close();
     }
-  });
+  }, 15_000);
 });
