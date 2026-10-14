@@ -76,4 +76,4 @@ Ledger v2.0.0 is a full retheme. Every page now looks and behaves the same way, 
 
 ## Known items
 
-- **Investments returns:** the return figure on the Market card and the chart can count money you put in as gain. A fix will come after v2.0.0. Until then, treat that figure as an estimate if you make regular contributions.
+- **Investments returns:** the return figure on the Market card and the chart can count money you put in as gain. This is not fixed in v2.0.0. Until then, treat that figure as an estimate if you make regular contributions.
