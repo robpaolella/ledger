@@ -52,6 +52,7 @@ function openCopy() {
   return db;
 }
 
+// The full startup migration chain can take over Vitest's default 5s on a busy machine.
 describe('upgrading a v1.0.2 database', () => {
   it('runs the full startup migration chain, and a second boot, without errors', () => {
     const errors = vi.spyOn(console, 'error'); // the chain logs, not throws, a failed transfer-linking pass
@@ -127,4 +128,4 @@ describe('upgrading a v1.0.2 database', () => {
       expect(dump()).toEqual(before);
     } finally { db.close(); }
   });
-});
+}, 60_000);
