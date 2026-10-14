@@ -928,13 +928,12 @@ export default function TransactionsPage() {
   const loadMeta = useCallback(async () => {
     const seq = ++metaSeq.current;
     try {
-      const [acctRes, catRes, merchRes] = await Promise.all([
-        apiFetch<{ data: Account[] }>('/accounts'),
+      const [, catRes, merchRes] = await Promise.all([
+        // Accounts answer on their own, so a failed categories or merchants load can't hide the no-accounts pointer.
+        apiFetch<{ data: Account[] }>('/accounts').then((r) => { setAccounts(r.data); setAccountsLoaded(true); return r; }),
         apiFetch<{ data: Category[] }>('/categories'),
         apiFetch<{ data: Merchant[] }>('/merchants'),
       ]);
-      setAccounts(acctRes.data);
-      setAccountsLoaded(true);
       setCategories(catRes.data);
       setMerchants(merchRes.data);
     } catch (e) {
