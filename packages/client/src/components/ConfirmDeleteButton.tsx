@@ -34,7 +34,12 @@ export default function ConfirmDeleteButton({
 }: ConfirmDeleteButtonProps) {
   const [confirming, setConfirming] = useState(false);
 
-  useEffect(() => { onConfirmingChange?.(confirming); }, [confirming, onConfirmingChange]);
+  // The cleanup also reports "not confirming" when the button unmounts, so a footer that
+  // hid its buttons never stays hidden after the window closes mid-confirmation.
+  useEffect(() => {
+    onConfirmingChange?.(confirming);
+    return () => onConfirmingChange?.(false);
+  }, [confirming, onConfirmingChange]);
 
   useEffect(() => {
     if (!confirming) return;
