@@ -53,7 +53,7 @@ Ledger v2.0.0 is a full retheme. Every page now looks and behaves the same way, 
 - Member access comes in clear levels, with honestly named switches. Each person opens in a pop-up window or bottom sheet.
 - Sign-in, first-time setup and two-step screens follow your theme. On a phone, two-step setup leads with the setup key.
 - Sync-failure alerts go only to people who can see Bank sync.
-- Favicons, a home-screen icon and an app manifest.
+- A proper browser tab icon and a home-screen icon.
 
 ## Improved
 
@@ -69,11 +69,11 @@ Ledger v2.0.0 is a full retheme. Every page now looks and behaves the same way, 
 ## Upgrading
 
 - **Your data upgrades itself.** Start v2.0.0 on an existing v1.0.x database and it updates the database on first start. This was tested against a v1.0.2 database with every row checked afterwards.
-- **Back up first.** Stop Ledger, then copy the whole data folder (the one mounted at `./data` in the default Docker setup) somewhere safe. Copy everything in it, including the files ending in `-wal` and `-shm`, because the newest changes live there. Don't rely on the `db:backup` command, which misses them.
-- **Docker:** the default `docker-compose.yml` uses `robpaolella/ledger:latest`, so pull and restart. To pin a version, use the `v2.0.0` tag on Docker Hub or GHCR.
+- **Back up first.** Stop Ledger, then copy the whole folder where Ledger keeps its data (the one your Docker setup shares with the container) somewhere safe. Copy everything in it, including the files ending in `-wal` and `-shm`, because the newest changes live there. Don't rely on the built-in backup command, which misses them.
+- **Docker:** the standard Docker setup uses `robpaolella/ledger:latest`, so pull and restart. To pin a version, use the `v2.0.0` tag on Docker Hub or GHCR.
 - **Nothing else to change.** No new settings or environment variables are required, and your sign-ins and your two-step setup carry over.
 - To go back, stop Ledger, restore your copy of the data folder and start the older image.
 
 ## Known items
 
-- **Investments returns:** the return figure on the Market card and the chart can count money you put in as gain. A fix is planned shortly after v2.0.0. Until then, treat that figure as an estimate if you make regular contributions.
+- **Investments returns:** the return figure on the Market card and the chart can count money you put in as gain. A fix will come after v2.0.0. Until then, treat that figure as an estimate if you make regular contributions.
