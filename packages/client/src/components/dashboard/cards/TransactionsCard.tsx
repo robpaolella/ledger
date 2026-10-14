@@ -5,6 +5,7 @@ import { getCategoryColorHex } from '../../../lib/categoryMeta';
 import { Money } from '../../Money';
 import DashboardCard, { CardSkeleton, CardError, CardHeaderLink } from '../DashboardCard';
 import type { DashboardCardProps } from '../cardRegistry';
+import NoAccountsPointer from '../../NoAccountsPointer';
 
 interface RecentTxn {
   id: number;
@@ -31,6 +32,7 @@ export default function TransactionsCard({ dragHandleProps }: DashboardCardProps
   const navigate = useNavigate();
   const { data, error } = useCachedApi<{ data: RecentTxn[] }>('/dashboard/recent-transactions?limit=5');
   const txns = data?.data ?? null;
+  const { data: acctRes } = useCachedApi<{ data: unknown[] }>('/accounts');
 
   return (
     <DashboardCard
@@ -50,7 +52,7 @@ export default function TransactionsCard({ dragHandleProps }: DashboardCardProps
       ) : !txns ? (
         <CardSkeleton lines={4} />
       ) : txns.length === 0 ? (
-        <CardError message="No recent transactions." />
+        <CardError message={<>No recent transactions.<NoAccountsPointer loaded={acctRes != null} count={acctRes?.data.length ?? 0} place="empty" className="mt-1" /></>} />
       ) : (
         txns.map((t) => {
           const cat = categoryOf(t);

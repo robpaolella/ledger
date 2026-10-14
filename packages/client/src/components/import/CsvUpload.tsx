@@ -1,13 +1,15 @@
 /** CSV Import · Step 1 — Upload File (docs/Import Flow §CSV IMPORT step 1). */
 import { useRef, useState } from 'react';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import NoAccountsPointer from '../NoAccountsPointer';
 
 interface AccountOpt { id: number; name: string; last_four: string | null }
 
 export default function CsvUpload({
-  accounts, accountId, onAccountChange, onFile,
+  accounts, accountsLoaded, accountId, onAccountChange, onFile,
 }: {
   accounts: AccountOpt[];
+  accountsLoaded: boolean;
   accountId: number | '';
   onAccountChange: (id: number | '') => void;
   onFile: (file: File) => void;
@@ -48,6 +50,7 @@ export default function CsvUpload({
         </select>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-[15px] top-1/2 -translate-y-1/2 pointer-events-none"><path d="m6 9 6 6 6-6" /></svg>
       </div>
+      <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="import" className="-mt-3 mb-[22px]" />
 
       {isMobile ? (
         <div className="rounded-[18px] border border-line bg-surface shadow-sm flex flex-col items-center gap-1.5 text-center px-5 py-8">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { accountShortName } from '../lib/accounts';
+import NoAccountsPointer from '../components/NoAccountsPointer';
 import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
 import { buildReportsCsv } from '../lib/reportsCsv';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
@@ -186,6 +187,7 @@ export default function ReportsPage() {
   const [txnTotal, setTxnTotal] = useState(0);
   const [merchants, setMerchants] = useState<MerchantOpt[]>([]);
   const [accounts, setAccounts] = useState<AccountOpt[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false); // true once /accounts answered, even with none
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [groupMeta, setGroupMeta] = useState<{ name: string; type: string; color: string | null }[]>([]);
 
@@ -197,7 +199,7 @@ export default function ReportsPage() {
   // Load filter option lists once.
   useEffect(() => {
     apiFetch<{ data: MerchantOpt[] }>('/merchants').then((r) => setMerchants(r.data)).catch(() => {});
-    apiFetch<{ data: AccountOpt[] }>('/accounts').then((r) => setAccounts(r.data)).catch(() => {});
+    apiFetch<{ data: AccountOpt[] }>('/accounts').then((r) => { setAccounts(r.data); setAccountsLoaded(true); }).catch(() => {});
     apiFetch<{ data: CategoryRow[] }>('/categories').then((r) => setCategories(r.data)).catch(() => {});
     apiFetch<{ data: { name: string; type: string; color: string | null }[] }>('/categories/groups').then((r) => setGroupMeta(r.data)).catch(() => {});
   }, []);
@@ -638,7 +640,10 @@ export default function ReportsPage() {
 
         {view === 'breakdown' ? (
           !showFlow ? (
-            <div className="text-center text-content-3 text-sm" style={{ padding: '28px 0' }}>No spending in this period.</div>
+            <div className="text-center text-content-3 text-sm" style={{ padding: '28px 0' }}>
+              No spending in this period.
+              <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="empty" className="mt-1" />
+            </div>
           ) : (
           <div>
             {/* Widths + gap are whole device pixels (see flowWidthsCss) so every gap
