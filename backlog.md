@@ -35,3 +35,54 @@
 - Liabilities group change figure on Accounts still shows red, and other places that print a liability balance (Dashboard, reports) weren't checked for the amount-owed display (found in #274).
 - Reports' own Sort menu (four choices) and Review's small Date menu are still pop-ups on phones; give them bottom sheets like Transactions Sort and the shared Filters/Date pickers (found in #288; they were not in the approved design).
 - Phone Budget names that are one long word (e.g. "Entertainment" in a group header) break mid-word at 390px under the two-line wrap from #314; prefer wrapping only at spaces and "/" (found in #309).
+- Final audit low (part A): Phone search fields on Transactions and Account detail show a square focus outline inside the rounded field (#112).
+- Final audit low (part A): Desktop Transactions search field has no accessible name (placeholder only) (#112).
+- Final audit low (part A): An empty search says it twice ("Nothing matches “zzqqxx”" and "No transactions" / "0 transactions" under it) (#112).
+- Final audit low (part A): Phone Add transaction: the Account select text is cut ("Jane's Checking (…") at 390 (#112).
+- Final audit low (part A): Add transaction opens with Account set to the first account in the list (Jane's Checking for John), not an account of the signed-in person (#112).
+- Final audit low (part A): Add / Edit asset: "Acquired" uses the browser's own date input while every other date field uses the app's calendar; "Annual rate" slider is 17px tall on phones (#112).
+- Final audit low (part A): Transaction detail on phones: "Copy statement" is 32px (not on #340's list) (#112).
+- Final audit low (part A): Category detail for a category with no data, or only refunds, draws the y-axis as "$1 $1 $0 $0" (#112).
+- Final audit low (part A): Category detail for a category that doesn't exist says "Failed to load category" instead of "Category not found" (the not-found wording exists in code but is never reached) (#112).
+- Final audit low (part A): Phone liability chart (Jane's Visa): x-axis labels touch ("Sep 12Sep 18") (#112).
+- Final audit low (part A): Category detail on desktop truncates the account name ("John's Mastercard (…") with room to spare (#112).
+- Final audit low (part A): Add account and Update balance windows return focus to the page, not the button that opened them, after Escape (desktop) (#112).
+- Final audit low (part A): On desktop, toasts cover the top-right header buttons (Filters, Refresh all, Add account) until they time out (#112).
+- Final audit low (part A): Add account fires four failing `/api/simplefin/connections/N/accounts` calls (500) on the sample's demo connections each time it opens; nothing shows on screen (#112).
+- Final audit low (part B): Budget phone: "Entertainment" breaks mid-word as "Entertainm / ent" (known; design 309 left it to a follow-up) (#112).
+- Final audit low (part B): Budget phone: a month with no budget (for example January 2026) is 20 rows of dashes under a green "Left to budget —" band, with no hint to plan something; the way forward is "Show N unbudgeted" (#112).
+- Final audit low (part B): Budget with a View-only member: the planned-amount boxes are disabled but look the same as editable ones, so tapping does nothing and nothing says why (#112).
+- Final audit low (part B): Investments: the last x-axis label of the chart is clipped ("Oct ·") at both widths (#112).
+- Final audit low (part B): Reviews phone: the row subtitle clips the note ("· C…", "Check thi…") (#112).
+- Final audit low (part B): Import Bank Sync phone: account names truncate beside the owner badge ("John's Masterc…") (#112).
+- Final audit low (part B): Recurring phone: the account name truncates ("John's Chec…") (#112).
+- Final audit low (part B): Reports phone drill-down: the sticky pill truncates the category ("Dail…") and covers the last visible row (#112).
+- Final audit low (part B): Reports empty range: Net $0 still reads "▲ saved" in green; with a custom range the phone toolbar wraps to two rows (#112).
+- Final audit low (part B): Reviews "No matches" reuses the green check icon from "all caught up" (#112).
+- Final audit low (part B): Every sheet and dialog opens with a focus ring on the close X (phone and desktop) (#112).
+- Final audit low (part B): Reviews phone search field shows a double focus ring (outline plus box) (#112).
+- Final audit low (part B): Import CSV review: the duplicate warning icon is explained only by a hover tooltip ("Likely Duplicate"), so phone users can't read it (#112).
+- Final audit low (part B): Recurring empty ("No recurring items yet.") doesn't point to the Add button (the + in the phone app bar) (#112).
+- Final audit low (part B): Investments failed load: "Performance data unavailable." and "Holdings data unavailable." have no Try again and don't say the problem is temporary. Rated low, not medium, by re-check C (the page does not look healthy when it fails, unlike the old Reviews "all caught up"; Reviews and Recurring got a retry card in #371) (#112).
+- Final audit low (part B): Import Bank Sync phone: row check boxes are 20×20 and the search field's inner input measures 81×20 (the surrounding row and field are 44px; the box itself is the small target) (#112).
+- Final audit low (part B): Sample data has no genuine "all caught up" Reviews state (26 uncategorized rows can't be bulk-approved); it can only be seen by failing the load (B6) (#112).
+- Final audit low (part B): Budget category detail desktop: the account label truncates ("John's Mastercard (…..") (#112).
+- Final audit low (part B): Budget Year: "planned in 2026" totals count carried-forward future months (11 months of 9 seeded), which is correct for the plan but unexplained (#112).
+- Final audit low (part B): Import: the page opens on the Bank Sync tab although CSV Import is listed first (#112).
+- Final audit low (part C): Merchants (phone): each row's Edit button is held at 60% opacity because it brightens on hover, and phones have no hover, so Edit always looks disabled (#112).
+- Final audit low (part C): Rules: rules that match by pattern read "Description matches the pattern ^Chewy\b", raw regular-expression text a household can't read. Only the sample data's rules do this (rules made in the app use a merchant or "contains") (#112).
+- Final audit low (part C): Profile: the owner and admin see "Used to sign in. Ask an admin to change it." under Username, but they are the admin; the line should differ for them (#112).
+- Final audit low (part C): Edit account and Edit category windows open with keyboard focus on the Close (×) button, drawing a focus ring on it, where Add account focuses the Name field (#112).
+- Final audit low (part C): The panel load error says "Couldn't load your settings" on Merchants, Rules, Users and Optional extras; it names settings for a list of merchants, rules or people (#112).
+- Final audit low (part C): Phone form fields use 14px text; iOS zooms the page when a field under 16px is focused (Add user, Add account, SimpleFIN, Security) (#112).
+- Final audit low (part C): Optional extras → AI categorizing: **Test connection** saves the address before testing and says nothing, so a failed address stays saved (#112).
+- Final audit low (part C): Delete user: the confirmation button says "Continue" for a permanent delete; it could name the action (#112).
+- Final audit low (re-check): Phone Account detail: the "Clear" button inside the "Nothing matches “…”" card is 40px tall, under the 44px rule; it was not on #353's list (re-check A) (#112).
+- Final audit low (re-check): Investments phone holdings cards (390): the right-hand "… of portfolio" line looks cut at the screen edge (re-check B, O2) (#112).
+- Final audit low (re-check): A sign-in that expires while using the app drops the person on the Sign in page with no message (#112).
+- Final audit low (re-check): `/budget/category` without a category titles the page "Ledger" instead of a page name (#112).
+- Final audit low (re-check): Inline "SimpleFIN" link inside the Connect SimpleFIN instructions is 18px tall (a link inside a sentence; not counted against the 44px rule) (#112).
+- Final audit low (re-check): Edit group window: Delete exists only for an empty group, so the Delete confirmation in a group window could not be exercised on the sample data (every group has categories) (#112).
+- Final audit low (re-check): Settings → Merchants (phone): the search field is 42px tall inside its 44px frame (the 1px border takes the other 2px), so a tap exactly on the border does not focus it (re-check D, #391) (#112).
+- The Edit transaction window's edit and delete path is unreachable: the Transactions page opens it only for "Add transaction" (editing happens in the detail panel), as #390's worker found (PR #396); decide later whether to remove the dead path (found in the #112 final audit).
+- Account detail's "Couldn't load this account" card (`AccountDetailPage`) could reuse the shared `LoadError` component from #360, as the other pages do (found in the #112 final audit).
