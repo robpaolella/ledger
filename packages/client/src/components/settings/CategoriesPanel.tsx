@@ -10,6 +10,7 @@ import { getCategoryEmoji, getCategoryColorVar } from '../../lib/categoryMeta';
 import ConfirmDeleteButton from '../ConfirmDeleteButton';
 import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
 import { Field, PanelHeader, SelectShell, inputCls, selectCls, btnPrimary, btnSecondary, ICON } from './ui';
@@ -74,6 +75,7 @@ function CategoryForm({ category, groups, initialGroupId, onSave, onDelete, onCl
   onDelete?: () => Promise<string | null>;
   onClose: () => void;
 }) {
+  const isMobile = useIsMobile();
   const [emoji, setEmoji] = useState(category?.emoji || '🏷️');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPos, setPickerPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
@@ -146,7 +148,7 @@ function CategoryForm({ category, groups, initialGroupId, onSave, onDelete, onCl
               </div>,
               document.body,
             )}
-            <input value={subName} onChange={(e) => setSubName(e.target.value)} placeholder="Category name" autoFocus={!category} className={inputCls}
+            <input value={subName} onChange={(e) => setSubName(e.target.value)} placeholder="Category name" autoFocus={!category && !isMobile} className={inputCls}
               onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
           </div>
         </Field>
@@ -195,6 +197,7 @@ function GroupForm({ mode, type, name: initialName, color: initialColor, canDele
   onDelete?: () => Promise<string | null>;
   onClose: () => void;
 }) {
+  const isMobile = useIsMobile();
   const [name, setName] = useState(initialName ?? '');
   const [color, setColor] = useState(initialColor && GROUP_COLORS.includes(initialColor) ? initialColor : GROUP_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +229,7 @@ function GroupForm({ mode, type, name: initialName, color: initialColor, canDele
         <Field label="Name">
           <div className="flex items-center gap-2.5">
             <span className="w-11 h-11 flex-none rounded-[11px] border border-line-strong" style={{ background: `var(--${color})` }} />
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name" autoFocus className={inputCls} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name" autoFocus={!isMobile} className={inputCls} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
           </div>
         </Field>
         <Field label="Color">

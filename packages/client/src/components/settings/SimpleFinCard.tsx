@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import ConfirmDeleteButton from '../ConfirmDeleteButton';
 import InlineNotification from '../InlineNotification';
 import ResponsiveModal from '../ResponsiveModal';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import Spinner from '../Spinner';
 import InstitutionPicker from '../InstitutionPicker';
 import { SegmentedControl } from '../primitives';
@@ -20,6 +21,7 @@ function ConnectionModal({ connection, onSave, onClose }: {
   onSave: (data: { label: string; shared: boolean; setupToken?: string; accessUrl?: string }) => Promise<void>;
   onClose: () => void;
 }) {
+  const isMobile = useIsMobile();
   const [label, setLabel] = useState(connection?.label ?? '');
   const [shared, setShared] = useState(connection?.isShared ?? true);
   const [mode, setMode] = useState<'token' | 'url'>('token');
@@ -67,7 +69,7 @@ function ConnectionModal({ connection, onSave, onClose }: {
           </ol>
         )}
         <Field label="Label" hint="How this connection appears in Ledger, e.g. “Household banks”.">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household banks" autoFocus className={inputCls} />
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household banks" autoFocus={!isMobile} className={inputCls} />
         </Field>
         <Field label="Who can use it" hint={connection ? 'Scope can’t change after the connection is created.' : shared ? 'Any household user can sync from this connection.' : 'Only you can see and sync from this connection.'}>
           <SegmentedControl value={shared ? 'shared' : 'personal'} onChange={(v) => { if (!connection) setShared(v === 'shared'); }} className="w-full"
@@ -99,6 +101,7 @@ function CreateAndLinkModal({ sf, users, currentUserId, onSave, onClose }: {
   onSave: (data: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
+  const isMobile = useIsMobile();
   const parsed = parseNameAndLastFour(sf.name);
   const guessedType = guessAccountType(sf.name, sf.balance);
   const [name, setName] = useState(parsed.name);
@@ -129,7 +132,7 @@ function CreateAndLinkModal({ sf, users, currentUserId, onSave, onClose }: {
       )}>
       {error && <InlineNotification type="error" message={error} className="mb-4" />}
       <div className="flex flex-col gap-5">
-        <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} autoFocus className={inputCls} /></Field>
+        <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} autoFocus={!isMobile} className={inputCls} /></Field>
         <Field label="Institution"><InstitutionPicker value={institutionId} onChange={(id) => setInstitutionId(id)} /></Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Type">
