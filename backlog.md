@@ -34,7 +34,7 @@
 - The shared `Calendar` month arrows and month/year selects are 40px, under the 44px phone tap minimum, wherever it opens on phones (Add/Edit transaction, transaction detail, bulk Edit sheet); found in #261 review.
 - Liabilities group change figure on Accounts still shows red, and other places that print a liability balance (Dashboard, reports) weren't checked for the amount-owed display (found in #274).
 - Reports' own Sort menu (four choices) and Review's small Date menu are still pop-ups on phones; give them bottom sheets like Transactions Sort and the shared Filters/Date pickers (found in #288; they were not in the approved design).
-- Phone Budget names that are one long word (e.g. "Entertainment" in a group header) break mid-word at 390px under the two-line wrap from #314; prefer wrapping only at spaces and "/" (found in #309).
+- Phone Budget names that are one long word (e.g. "Entertainment" in a group header) break mid-word at 390px under the two-line wrap from #314; prefer wrapping only at spaces and "/" (found in #309; also Part B L1 of the #112 final audit).
 - Final audit low (part A): Phone search fields on Transactions and Account detail show a square focus outline inside the rounded field (#112).
 - Final audit low (part A): Desktop Transactions search field has no accessible name (placeholder only) (#112).
 - Final audit low (part A): An empty search says it twice ("Nothing matches “zzqqxx”" and "No transactions" / "0 transactions" under it) (#112).
@@ -49,7 +49,6 @@
 - Final audit low (part A): Add account and Update balance windows return focus to the page, not the button that opened them, after Escape (desktop) (#112).
 - Final audit low (part A): On desktop, toasts cover the top-right header buttons (Filters, Refresh all, Add account) until they time out (#112).
 - Final audit low (part A): Add account fires four failing `/api/simplefin/connections/N/accounts` calls (500) on the sample's demo connections each time it opens; nothing shows on screen (#112).
-- Final audit low (part B): Budget phone: "Entertainment" breaks mid-word as "Entertainm / ent" (known; design 309 left it to a follow-up) (#112).
 - Final audit low (part B): Budget phone: a month with no budget (for example January 2026) is 20 rows of dashes under a green "Left to budget —" band, with no hint to plan something; the way forward is "Show N unbudgeted" (#112).
 - Final audit low (part B): Budget with a View-only member: the planned-amount boxes are disabled but look the same as editable ones, so tapping does nothing and nothing says why (#112).
 - Final audit low (part B): Investments: the last x-axis label of the chart is clipped ("Oct ·") at both widths (#112).

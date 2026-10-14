@@ -9,7 +9,7 @@ The release-bar audit of every Ledger page, compiled from the three audit parts 
 - The audit (parts A, B and C) found **2 high and 28 medium** problems, and re-check C found **3 more medium** (#390, #391, #392): **33 in all** (2 high, 31 medium), each filed as its own issue. Every one of those 33 issues is closed by a merged pull request into `feature/platform-retheme`, and every one was re-checked on fresh sample data and passed. One further issue, #385 (a follow-up to #332 that Robert's rule on household-visible Investments data called for), is also closed by a merged pull request and was re-checked with #332.
 - Nothing failed a re-check at the end. Re-check C's one partial failure (#340, plus the three new issues) was fixed and re-checked in re-check D, which supersedes re-check C's "open" status for #390–#392. No re-check found a new high or medium problem after D.
 - **Run against:** the audit ran on `b51a8e6` (2026-10-12). Re-checks A, B and C ran on `6501ea8` and re-check D on `0b7967a` (all 2026-10-13, all on `feature/platform-retheme`). This report was compiled against `a605f9a`, the head of `feature/platform-retheme` on 2026-10-13. Between `0b7967a` and `a605f9a` only the `v102-upgrade` test timeout (#401, a test-only change) and re-check D's report changed, so the app's code at the compile commit is the code re-check D ran on.
-- **Low findings** are not fixed here: **49** are copied into `backlog.md`, one line each (see Low findings).
+- **Low findings** are not fixed here: **49** are in `backlog.md`, one line each (48 new lines; part B L1 was already there from #309 and is marked "also Part B L1") (see Low findings).
 - **Known, filed outside the audit:** #379 is open (see that section). It is not an audit finding.
 
 ## Severity
@@ -975,7 +975,7 @@ Issues filed outside the audit that touch audited pages. They are not audit find
 
 ## Low findings
 
-Not fixed in this audit and not re-checked. Each has one line in `backlog.md`. The part's own file keeps the full list; counts are part A 14, part B 20, part C 8, plus 7 new lows the re-checks recorded.
+Not fixed in this audit and not re-checked. Each has one line in `backlog.md` (L1 of part B shares its existing #309 line). The part's own file keeps the full list; counts are part A 14, part B 20, part C 8, plus 7 new lows the re-checks recorded.
 
 
 **Part A (14)**
@@ -1039,7 +1039,7 @@ Not fixed in this audit and not re-checked. Each has one line in `backlog.md`. T
 - Edit group window: Delete exists only for an empty group, so the Delete confirmation in a group window could not be exercised on the sample data (every group has categories).
 - Settings → Merchants (phone): the search field is 42px tall inside its 44px frame (the 1px border takes the other 2px), so a tap exactly on the border does not focus it (re-check D, #391).
 
-Notes: part B L1 ("Entertainment" breaks mid-word on the phone Budget) also appears earlier in `backlog.md` (found in #309), so it is there twice. Re-check A's observation that the Edit asset confirmation still showed Save changes and a second Cancel is not listed: it was filed as #390 (C-N1) and re-checked in re-check D. Two more backlog lines come from conductor notes (not audit lows): the Edit transaction window's unreachable edit and delete path (found by #390's worker, PR #396), and Account detail's "Couldn't load this account" card, which could reuse the shared `LoadError` from #360.
+Notes: part B L1 ("Entertainment" breaks mid-word on the phone Budget) was already a line in `backlog.md` (found in #309), so that line now also says "Part B L1" instead of adding a second one. Re-check A's observation that the Edit asset confirmation still showed Save changes and a second Cancel is not listed: it was filed as #390 (C-N1) and re-checked in re-check D. Two more backlog lines come from conductor notes (not audit lows): the Edit transaction window's unreachable edit and delete path (found by #390's worker, PR #396), and Account detail's "Couldn't load this account" card, which could reuse the shared `LoadError` from #360.
 
 ## Sources
 
