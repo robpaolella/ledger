@@ -112,6 +112,6 @@ export function CardSkeleton({ lines = 3 }: { lines?: number }) {
 }
 
 /** Inline fetch-failure line. */
-export function CardError({ message }: { message: string }) {
+export function CardError({ message }: { message: ReactNode }) {
   return <CardSection className="px-6 py-[22px] text-sm text-content-3">{message}</CardSection>;
 }

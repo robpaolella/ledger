@@ -85,3 +85,8 @@
 - Final audit low (re-check): Settings → Merchants (phone): the search field is 42px tall inside its 44px frame (the 1px border takes the other 2px), so a tap exactly on the border does not focus it (re-check D, #391) (#112).
 - The Edit transaction window's edit and delete path is unreachable: the Transactions page opens it only for "Add transaction" (editing happens in the detail panel), as #390's worker found (PR #396); decide later whether to remove the dead path (found in the #112 final audit).
 - Account detail's "Couldn't load this account" card (`AccountDetailPage`) could reuse the shared `LoadError` component from #360, as the other pages do (found in the #112 final audit).
+- Review on a brand-new app says "You're all caught up. Every transaction has been reviewed. Nice work." with no transactions yet, which is misleading (pre-release check, L1, #405).
+- With every figure at zero the charts draw odd axes: net worth runs from -$1.00 to $1.00 on Dashboard and Accounts, and Spending shows "$1 $1 $1 $0 $0" (pre-release check, L2, #405).
+- Accounts on an empty app has a blank area where the account list goes, with no "No accounts yet" line (pre-release check, L3, #405).
+- At sign-in an expired two-step code and a wrong one both read "Invalid verification code"; the setup window's "Try the newest one" hint would help here too (pre-release check, L4, #405).
+- Setup two-step window keeps the old digits after a failed attempt, so typing over them does nothing until Backspace; Settings → Security and the sign-in step say "Two-factor authentication" where the rest of the app says "two-step" (pre-release check, L5, #405).
