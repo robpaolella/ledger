@@ -7,6 +7,7 @@ import { Money } from '../components/Money';
 import { getCategoryColorHex, getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import NoAccountsPointer from '../components/NoAccountsPointer';
 import Button from '../components/Button';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
@@ -211,6 +212,7 @@ function Field({
 function TransactionForm({
   transaction,
   accounts,
+  accountsLoaded,
   categories,
   merchants,
   onSave,
@@ -220,6 +222,7 @@ function TransactionForm({
 }: {
   transaction?: Transaction;
   accounts: Account[];
+  accountsLoaded: boolean;
   categories: Category[];
   merchants: Merchant[];
   onSave: (data: Record<string, unknown>) => void;
@@ -444,6 +447,7 @@ function TransactionForm({
       )}
     >
       <div className="flex flex-col gap-5">
+        {!transaction && <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="add" />}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Date" required error={errDate}>
             <div className="relative">
@@ -619,6 +623,7 @@ export default function TransactionsPage() {
   // loading until the first answer; error keeps the toolbar and shows a Try again card (see `listFailed`)
   const [listStatus, setListStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false); // true once /accounts answered, even with none
   const [categories, setCategories] = useState<Category[]>([]);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const categoryGroups = useMemo(() => {
@@ -923,12 +928,12 @@ export default function TransactionsPage() {
   const loadMeta = useCallback(async () => {
     const seq = ++metaSeq.current;
     try {
-      const [acctRes, catRes, merchRes] = await Promise.all([
-        apiFetch<{ data: Account[] }>('/accounts'),
+      const [, catRes, merchRes] = await Promise.all([
+        // Accounts answer on their own, so a failed categories or merchants load can't hide the no-accounts pointer.
+        apiFetch<{ data: Account[] }>('/accounts').then((r) => { setAccounts(r.data); setAccountsLoaded(true); return r; }),
         apiFetch<{ data: Category[] }>('/categories'),
         apiFetch<{ data: Merchant[] }>('/merchants'),
       ]);
-      setAccounts(acctRes.data);
       setCategories(catRes.data);
       setMerchants(merchRes.data);
     } catch (e) {
@@ -2076,7 +2081,10 @@ export default function TransactionsPage() {
           ))}
           {listLoading && listSkeleton}
           {listSettled && transactions.length === 0 && (
-            <p className="text-center py-10 text-content-3 text-sm m-0 truncate px-4">{emptyText}</p>
+            <>
+              <p className="text-center pt-10 pb-2 text-content-3 text-sm m-0 truncate px-4">{emptyText}</p>
+              <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="empty" className="text-center pb-10 px-4" />
+            </>
           )}
         </div>
         {bulkMode && (
@@ -2171,7 +2179,12 @@ export default function TransactionsPage() {
           </div>
         ))}
         {listLoading && listSkeleton}
-        {listSettled && transactions.length === 0 && <div className="text-center py-10 text-content-3 text-sm truncate px-4">{emptyText}</div>}
+        {listSettled && transactions.length === 0 && (
+          <>
+            <div className="text-center pt-10 pb-2 text-content-3 text-sm truncate px-4">{emptyText}</div>
+            <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="empty" className="text-center pb-10 px-4" />
+          </>
+        )}
       </div>
       )}
       {(editCell || reviewPopId != null) && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); setReviewPopId(null); }} />}
@@ -2655,6 +2668,7 @@ export default function TransactionsPage() {
         <TransactionForm
           transaction={editing === 'new' ? undefined : editing}
           accounts={accounts}
+          accountsLoaded={accountsLoaded}
           categories={categories}
           merchants={merchants}
           onSave={handleSave}
