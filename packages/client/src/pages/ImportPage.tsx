@@ -96,6 +96,7 @@ export default function ImportPage() {
 
   // shared data
   const [accounts, setAccounts] = useState<EnrichedAccount[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false); // true once /accounts answered, even with none
   const [categories, setCategories] = useState<ImpCategory[]>([]);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [linkedGroups, setLinkedGroups] = useState<LinkedAccountGroup[]>([]);
@@ -123,7 +124,7 @@ export default function ImportPage() {
 
   useEffect(() => {
     apiFetch<{ data: { id: number }[] }>('/users').then((r) => initOwnerSlots(r.data.map((u) => u.id))).catch(() => {});
-    apiFetch<{ data: EnrichedAccount[] }>('/accounts').then((r) => setAccounts(r.data)).catch(() => {});
+    apiFetch<{ data: EnrichedAccount[] }>('/accounts').then((r) => { setAccounts(r.data); setAccountsLoaded(true); }).catch(() => {});
     apiFetch<{ data: ImpCategory[] }>('/categories').then((r) => setCategories(r.data)).catch(() => {});
     apiFetch<{ data: Merchant[] }>('/merchants').then((r) => setMerchants(r.data)).catch(() => {});
     apiFetch<{ data: LinkedAccountGroup[] }>('/simplefin/linked-accounts').then((r) => setLinkedGroups(r.data)).catch(() => {});
@@ -504,7 +505,7 @@ export default function ImportPage() {
       {mode === 'csv' && (!csvOk ? permMsg : (
         <>
           {csvStep === 1 && (
-            <CsvUpload accounts={accounts} accountId={csvAccountId} onAccountChange={onCsvAccountChange} onFile={handleCsvFile} />
+            <CsvUpload accounts={accounts} accountsLoaded={accountsLoaded} accountId={csvAccountId} onAccountChange={onCsvAccountChange} onFile={handleCsvFile} />
           )}
           {csvStep === 2 && parseResult && (
             <CsvMap
