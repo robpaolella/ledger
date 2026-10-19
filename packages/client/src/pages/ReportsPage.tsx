@@ -400,7 +400,7 @@ export default function ReportsPage() {
 
   // ── FLOW BAR (where the period's income went: Saved, top expense groups, Other) ──
   const expGroups = sections.expenses.groups;
-  const flowSegs: { name: string; color: string; emoji: string; amount: number; pct: number; drill: string | null; striped?: boolean }[] = [];
+  const flowSegs: { name: string; color: string; emoji: string; amount: number; pct: number; drill: string | null; striped?: boolean; saved?: boolean }[] = [];
   // Focused: shares of the group total. Unfocused: where the period's income went —
   // Saved (the Net card's figure) first, then the expense groups. With nothing saved
   // (rounded Net not above $0) there is no Saved segment and the bar is expenses only,
@@ -413,7 +413,7 @@ export default function ReportsPage() {
     if (focusObj) {
       focusObj.group.subs.forEach((s, i) => flowSegs.push({ name: s.subName, color: subColor(i), emoji: getCategoryEmoji(s.subName, focusObj.group.groupName), amount: s.total, pct: s.total / flowDenom, drill: null }));
     } else {
-      if (savedAmt > 0) flowSegs.push({ name: 'Saved', color: 'var(--positive)', emoji: '💰', amount: savedAmt, pct: savedAmt / flowDenom, drill: null });
+      if (savedAmt > 0) flowSegs.push({ name: 'Saved', color: 'var(--positive)', emoji: '💰', amount: savedAmt, pct: savedAmt / flowDenom, drill: null, saved: true });
       const top = expGroups.slice(0, 6);
       top.forEach((g) => flowSegs.push({ name: g.groupName, color: groupColorVar('expense', g.groupName), emoji: getCategoryEmoji(g.groupName), amount: g.total, pct: g.total / flowDenom, drill: g.groupName }));
       const otherAmt = expGroups.slice(6).reduce((s, g) => s + g.total, 0);
@@ -650,10 +650,10 @@ export default function ReportsPage() {
                 renders at an identical device-pixel width — no anti-alias unevenness. */}
             <div ref={flowBarRef} className="relative flex mb-4" style={{ height: 22, columnGap: flowGapCss }}>
               {flowSegs.map((s, i) => (
-                <div key={i} onClick={() => s.drill && drillTo(s.drill)} onMouseEnter={() => setFlowHover(i)} onMouseLeave={() => setFlowHover((h) => (h === i ? null : h))} className={`relative${s.striped ? ' uncategorized-hatch-bar' : ''}`}
-                  style={{ ...(flowWidthsCss.length ? { width: flowWidthsCss[i], flex: 'none' } : { flexGrow: Math.max(0, s.pct), flexBasis: 0, minWidth: 0 }), ...(s.striped ? {} : { background: s.color }), borderRadius: i === 0 ? '6px 0 0 6px' : i === flowSegs.length - 1 ? '0 6px 6px 0' : '0', cursor: s.drill ? 'pointer' : 'default', filter: flowHover === i ? 'brightness(1.12)' : 'none', transform: flowHover === i ? 'scaleY(1.28)' : 'scaleY(1)', zIndex: flowHover === i ? 3 : 1, transition: 'transform .12s ease, filter .12s ease' }}>
+                <div key={i} onClick={() => s.drill && drillTo(s.drill)} onMouseEnter={() => setFlowHover(i)} onMouseLeave={() => setFlowHover((h) => (h === i ? null : h))} className={`relative${s.striped ? ' uncategorized-hatch-bar' : ''}${s.saved ? ' saved-bar' : ''}`}
+                  style={{ ...(flowWidthsCss.length ? { width: flowWidthsCss[i], flex: 'none' } : { flexGrow: Math.max(0, s.pct), flexBasis: 0, minWidth: 0 }), ...(s.striped || s.saved ? {} : { background: s.color }), borderRadius: i === 0 ? '6px 0 0 6px' : i === flowSegs.length - 1 ? '0 6px 6px 0' : '0', cursor: s.drill ? 'pointer' : 'default', filter: flowHover === i ? 'brightness(1.12)' : 'none', marginTop: flowHover === i ? -3 : 0, marginBottom: flowHover === i ? -3 : 0, zIndex: flowHover === i ? 3 : 1, transition: 'margin .12s ease, filter .12s ease' }}>
                   {flowHover === i && (
-                    <div className="absolute whitespace-nowrap bg-elevated border border-line-strong rounded-[10px] shadow-md" style={{ bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%) scaleY(0.781)', transformOrigin: 'bottom center', pointerEvents: 'none', padding: '8px 11px', zIndex: 10 }}>
+                    <div className="absolute whitespace-nowrap bg-elevated border border-line-strong rounded-[10px] shadow-md" style={{ bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none', padding: '8px 11px', zIndex: 10 }}>
                       <div className="flex items-center gap-2 text-[13px] font-bold mb-0.5">{s.striped ? <span className="uncategorized-hatch w-3.5 h-3.5 rounded-[4px] border border-line-strong" aria-hidden="true" /> : <span className="text-sm leading-none">{s.emoji}</span>}{s.name}</div>
                       <div className="text-[13px] text-content-2 tabular-nums">{dollars(s.amount)} · {(s.pct * 100).toFixed(1)}%</div>
                     </div>
