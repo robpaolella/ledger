@@ -61,6 +61,7 @@ Themes: light and dark. Widths: 390×844 and 1440×900. Every state in every the
 | reports-none | Reports, range with no tracked activity | Section absent; page exactly as today | — |
 | settings-list | Settings → Contributions, owner | Four contributions, long names, several accounts, an inactive account, "An account not in Ledger" | Row opens edit |
 | settings-empty | Settings → Contributions, nothing tracked | Empty state that explains the feature | Add contribution |
+| settings-index | Settings menu, owner (phone: the menu; desktop: the menu beside Profile) | Contributions after Categories in Household, own icon (decision 6) | Opens the panel |
 | settings-add | Add window, existing category picked | Category picker, account checklist | Add contribution |
 | settings-add-new | Add window, creating a new category | Icon & name field (Group picker only with more than one Transfers group) | — |
 | settings-add-error | Add window, no account chosen | "Choose at least one account." by the action | — |
@@ -127,6 +128,21 @@ new loading state: the section arrives with the page's existing data.
 Versions differ on: (A) Reports placement — a section inside the Category breakdown
 table vs its own card below it; (B) the Settings list — compact rows in one card vs one
 card per contribution with its accounts listed.
+
+## Versions
+- `versions/a.html` and `versions/b.html`, 18 states × light/dark, built from the light captures of
+  reports, reports-timeline, settings-index, settings-categories and category-form (one shared stylesheet;
+  dark adds `class="dark"` and swaps the theme controls). The `reports-drill` host isn't used: the drill
+  state is drawn on the Reports summary page with the captured pill and Transactions card patterns.
+- Generator and sources live outside the repo (`/git/ledger-worktrees/d415-build/`: `build.mjs`, `proto.js`,
+  `proto.css`); the committed versions are its output.
+- Phone adaptations: Summary rows put the two figures on their own line under the name and accounts; the
+  drill pill shows "Contributions › name" over the figures on two lines.
+- Offline recheck (2026-10-19, session `d415-offline2`): network emulated Offline, a fetch to an owned local
+  server failed ("Failed to fetch"); both versions' states rendered with all 6 fonts loaded, and the state
+  menu, theme buttons, row drill-in, pill ✕, checklist, add → error, Stop tracking two-tap, "Manage in
+  Contributions" and "New category…" all worked. All 72 version × state × width loads set `data-state`
+  with no script errors. **PASS.**
 
 ## Real-site experiment
 None.
