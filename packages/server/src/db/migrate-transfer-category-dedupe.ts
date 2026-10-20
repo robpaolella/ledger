@@ -16,6 +16,28 @@ import Database from 'better-sqlite3';
  * with zero or one match it does nothing, so it also self-heals a fresh install
  * where someone re-creates the twin by hand.
  */
+/**
+ * A tracked twin keeps being tracked: its setup moves onto the canonical row, or,
+ * when the canonical row is tracked too, its destinations join that setup.
+ */
+function foldContributionSetup(sqlite: Database.Database, fromId: number, toId: number): void {
+  const setupOf = (categoryId: number) =>
+    sqlite.prepare('SELECT id, includes_external FROM contribution_setups WHERE category_id = ?').get(categoryId) as
+      { id: number; includes_external: number } | undefined;
+  const from = setupOf(fromId);
+  if (!from) return;
+  const to = setupOf(toId);
+  if (!to) {
+    sqlite.prepare('UPDATE contribution_setups SET category_id = ? WHERE id = ?').run(toId, from.id);
+    return;
+  }
+  sqlite.prepare(`INSERT OR IGNORE INTO contribution_setup_accounts (setup_id, account_id)
+    SELECT ?, account_id FROM contribution_setup_accounts WHERE setup_id = ?`).run(to.id, from.id);
+  if (from.includes_external) sqlite.prepare('UPDATE contribution_setups SET includes_external = 1 WHERE id = ?').run(to.id);
+  sqlite.prepare('DELETE FROM contribution_setup_accounts WHERE setup_id = ?').run(from.id);
+  sqlite.prepare('DELETE FROM contribution_setups WHERE id = ?').run(from.id);
+}
+
 export function migrateTransferCategoryDedupe(sqlite: Database.Database): void {
   const hasTable = (name: string): boolean =>
     (sqlite.prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?").get(name) as { cnt: number }).cnt > 0;
@@ -80,6 +102,7 @@ export function migrateTransferCategoryDedupe(sqlite: Database.Database): void {
         sqlite.prepare(`UPDATE OR IGNORE ${table} SET ${col} = ? WHERE ${col} = ?`).run(canonical.id, d.id);
         sqlite.prepare(`DELETE FROM ${table} WHERE ${col} = ?`).run(d.id);
       }
+      if (hasTable('contribution_setups')) foldContributionSetup(sqlite, d.id, canonical.id);
       sqlite.prepare('DELETE FROM categories WHERE id = ?').run(d.id);
     }
     // A group left with no categories is dead weight — but only drop it if this

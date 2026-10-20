@@ -64,6 +64,9 @@ describe('upgrading a v1.0.2 database', () => {
       expect(db.prepare("SELECT emoji, exclude_from_budget FROM categories WHERE type = 'transfer'").all())
         .toEqual([{ emoji: '🔁', exclude_from_budget: 1 }]);
       expect(db.prepare('SELECT COUNT(*) AS n FROM transactions').get()).toEqual({ n: 91 });
+      // Contributions start empty: every category is untracked.
+      expect(db.prepare('SELECT COUNT(*) AS n FROM contribution_setups').get()).toEqual({ n: 0 });
+      expect(db.prepare('SELECT COUNT(*) AS n FROM contribution_setup_accounts').get()).toEqual({ n: 0 });
       expect(db.pragma('foreign_key_check')).toEqual([]);
       expect(db.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
     } finally { db.close(); }

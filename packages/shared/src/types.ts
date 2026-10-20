@@ -70,6 +70,39 @@ export interface Category {
   type: CategoryType;
   is_deductible: number;
   sort_order: number;
+  /** GET /categories: the category is tracked in Contributions. */
+  contribution_tracked?: boolean;
+}
+
+// === Contributions ===
+// A Transfers category tracked as a contribution, and the accounts it pays into.
+
+export interface ContributionSetupAccount {
+  id: number;
+  name: string;
+  type: AccountType;
+  /** Deactivated accounts stay in a setup and read as inactive. */
+  isActive: boolean;
+}
+
+export interface ContributionSetup {
+  id: number;
+  category: { id: number; groupId: number | null; groupName: string; name: string; emoji: string | null };
+  accounts: ContributionSetupAccount[];
+  /** "An account not in Ledger" is one of the destinations. */
+  external: boolean;
+}
+
+/** POST /contributions/setups: an existing Transfers category, or a new one in a Transfers group. */
+export type ContributionSetupCreate = ContributionDestinations & (
+  | { categoryId: number; newCategory?: undefined }
+  | { categoryId?: undefined; newCategory: { groupId: number; subName: string; emoji?: string | null } }
+);
+
+/** PUT /contributions/setups/:id, and part of create. At least one destination. */
+export interface ContributionDestinations {
+  accountIds: number[];
+  external: boolean;
 }
 
 export interface Merchant {
