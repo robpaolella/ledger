@@ -106,7 +106,15 @@ new loading state: the section arrives with the page's existing data.
   `Transactions`); Settings nav (`aria-label="Settings sections"`, Household card), panel `PanelHeader` (`h2`
   Categories), category rows (`group/row`); category form dialog (`role=dialog`, "Exclude from budget" row, footer
   with Delete/Cancel/Save changes).
-- Offline proof: **not done yet** (next step).
+- Offline proof (2026-10-19, design tab): source app already stopped (Cleanup PASS). Fresh browser session
+  `d415-offline`, network emulated Offline and confirmed by a request to an owned local test server failing with
+  `net::ERR_INTERNET_DISCONNECTED`. All six `hosts/*.html` opened at 390×844 and 1440×900 in light and dark (24 views,
+  `/tmp/d415-offline/off-<page>-<theme>-<w>.png`, side-by-side with the live captures in `cmp-<page>-<w>.png`).
+  Only `file:` and `data:` requests loaded. Typography, fonts, logos, cards, tables, the drill pill, the bottom sheet
+  and the dialog match the live pages; the only difference is the live capture's transient focus ring on the
+  dialog close button. Phone Reports scrolls inside `.overflow-y-auto` (live full-page shots are viewport-height),
+  so below the fold was checked in the per-variant capture by scrolling that container: breakdown rows and the
+  Transactions card with merchant logos render offline. **PASS.**
 
 ## Confirmed decisions
 1. **Names (Q1):** Contributions; figures "Put in" and "Taken out". Robert: "Agreed." (2026-10-19, design tab)
