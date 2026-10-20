@@ -130,6 +130,8 @@ table vs its own card below it; (B) the Settings list — compact rows in one ca
 card per contribution with its accounts listed.
 
 ## Versions
+- **Approved (2026-10-19): `index.html`**, the combined version: Reports from B, Settings from A (decisions.md,
+  Choice and approval). `versions/` was removed at freeze; every version's states are kept in `screenshots/all/`.
 - `versions/a.html` and `versions/b.html`, 18 states × light/dark, built from the light captures of
   reports, reports-timeline, reports-filtered, settings-index, settings-categories and category-form (one shared stylesheet;
   dark adds `class="dark"` and swaps the theme controls). The `reports-drill` host isn't used: the drill
@@ -139,7 +141,7 @@ card per contribution with its accounts listed.
   capture loop and copied into the capture folder; launch cleaned up (`cleaned.json` PASS, scratch removed).
   The version adds the three brokerage contribution rows to its Transactions list.
 - Generator and sources live outside the repo (`/git/ledger-worktrees/d415-build/`: `build.mjs`, `proto.js`,
-  `proto.css`); the committed versions are its output.
+  `proto.css`); `index.html` is its output for the combined version.
 - Phone adaptations: Summary rows put the two figures on their own line under the name and accounts; the
   drill pill shows "Contributions › name" over the figures on two lines.
 - Offline recheck (2026-10-19, session `d415-offline2`): network emulated Offline, a fetch to an owned local
@@ -154,4 +156,4 @@ None.
 Brief confirmed by Robert: "Confirmed." (2026-10-19, design tab).
 
 ## Open decisions
-None beyond the version choices and the draft wording above.
+None. Robert picked per decision and approved the combined version, including the wording it shows (decisions.md, 2026-10-19).

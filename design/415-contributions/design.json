@@ -1,0 +1,35 @@
+{
+  "design_issue": 415,
+  "covers": [
+    419,
+    420
+  ],
+  "revision": 1,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "reports-deposits",
+    "reports-withdrawal",
+    "reports-reversal",
+    "reports-several",
+    "reports-timeline",
+    "reports-filtered",
+    "reports-drill",
+    "reports-none",
+    "settings-list",
+    "settings-empty",
+    "settings-index",
+    "settings-add",
+    "settings-add-new",
+    "settings-add-error",
+    "settings-edit",
+    "settings-member",
+    "category-tracked",
+    "category-refused"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}
