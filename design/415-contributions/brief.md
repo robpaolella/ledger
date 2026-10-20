@@ -131,9 +131,13 @@ card per contribution with its accounts listed.
 
 ## Versions
 - `versions/a.html` and `versions/b.html`, 18 states × light/dark, built from the light captures of
-  reports, reports-timeline, settings-index, settings-categories and category-form (one shared stylesheet;
+  reports, reports-timeline, reports-filtered, settings-index, settings-categories and category-form (one shared stylesheet;
   dark adds `class="dark"` and swaps the theme controls). The `reports-drill` host isn't used: the drill
   state is drawn on the Reports summary page with the captured pill and Transactions card patterns.
+- `reports-filtered` host: added after critique run 1. A fresh sample-data launch (`/tmp/ledger-evidence-LFnipD`,
+  owner john, Reports → Filters → Accounts → Jane's Brokerage → Apply), captured at light × 390/1440 with the same
+  capture loop and copied into the capture folder; launch cleaned up (`cleaned.json` PASS, scratch removed).
+  The version adds the three brokerage contribution rows to its Transactions list.
 - Generator and sources live outside the repo (`/git/ledger-worktrees/d415-build/`: `build.mjs`, `proto.js`,
   `proto.css`); the committed versions are its output.
 - Phone adaptations: Summary rows put the two figures on their own line under the name and accounts; the
