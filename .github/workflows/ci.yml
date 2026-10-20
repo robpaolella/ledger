@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, feature/platform-retheme]
+    branches: [main, feature/platform-retheme, "package/**"]
   pull_request:
-    branches: [main, feature/platform-retheme]
+    branches: [main, feature/platform-retheme, "package/**"]
 
 jobs:
   validate-and-build:
