@@ -485,6 +485,24 @@ export const symbolMeta = sqliteTable('symbol_meta', {
   asset_class: text('asset_class'),
 });
 
+// === Contribution Setups ===
+// A Transfers category tracked as a contribution, and the accounts it pays
+// into. "An account not in Ledger" is includes_external, never an empty list.
+export const contributionSetups = sqliteTable('contribution_setups', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category_id: integer('category_id').notNull().unique().references(() => categories.id),
+  includes_external: integer('includes_external').notNull().default(0),
+  created_at: text('created_at').default('CURRENT_TIMESTAMP'),
+  updated_at: text('updated_at').default('CURRENT_TIMESTAMP'),
+});
+
+export const contributionSetupAccounts = sqliteTable('contribution_setup_accounts', {
+  setup_id: integer('setup_id').notNull().references(() => contributionSetups.id, { onDelete: 'cascade' }),
+  account_id: integer('account_id').notNull().references(() => accounts.id),
+}, (table) => [
+  primaryKey({ columns: [table.setup_id, table.account_id] }),
+]);
+
 // === Budget Alerts ===
 // Crossing-state ledger for budget-exceeded notifications: one row per
 // (category, month) = "already alerted" — later overage growth updates the

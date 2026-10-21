@@ -6,9 +6,9 @@ import { requirePermission } from '../middleware/permissions.js';
 
 const router = Router();
 
-type GroupRow = { id: number; type: string; name: string; color: string | null; sort_order: number };
+export type GroupRow = { id: number; type: string; name: string; color: string | null; sort_order: number };
 
-function getGroup(id: number): GroupRow | undefined {
+export function getGroup(id: number): GroupRow | undefined {
   return sqlite.prepare('SELECT id, type, name, color, sort_order FROM category_groups WHERE id = ?').get(id) as GroupRow | undefined;
 }
 
@@ -23,12 +23,38 @@ function findOrCreateGroup(type: string, name: string): GroupRow {
 const displayFor = (type: string, groupName: string, subName: string) =>
   type === 'income' ? subName : `${groupName}: ${subName}`;
 
-// GET /api/categories
+/** Inserts a category at the end of its group. Transfers are never budgeted. */
+export function insertCategory(group: GroupRow, subName: string, opts: { isDeductible?: unknown; emoji?: string | null; excludeFromBudget?: unknown } = {}): number {
+  // Append after existing siblings; drag-reorder handles ordering afterward.
+  const nextOrder = (sqlite.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE group_id = ?').get(group.id) as { n: number }).n;
+  const result = db.insert(categories).values({
+    group_id: group.id,
+    group_name: group.name,
+    sub_name: subName,
+    display_name: displayFor(group.type, group.name, subName),
+    type: group.type,
+    is_deductible: opts.isDeductible ? 1 : 0,
+    sort_order: nextOrder,
+    emoji: opts.emoji ?? null,
+    // Transfers are money moving between the user's own accounts — never
+    // spending. Their budget exclusion is an invariant of the section, not a
+    // per-category preference, so the request's value is ignored.
+    exclude_from_budget: group.type === 'transfer' || opts.excludeFromBudget ? 1 : 0,
+  }).run();
+  return Number(result.lastInsertRowid);
+}
+
+const isTracked = (categoryId: number): boolean =>
+  !!sqlite.prepare('SELECT 1 FROM contribution_setups WHERE category_id = ?').get(categoryId);
+
+// GET /api/categories — contribution_tracked: the category has a Contributions setup
 router.get('/', (_req: Request, res: Response): void => {
   const rows = db.select().from(categories)
     .orderBy(asc(categories.type), asc(categories.sort_order), asc(categories.group_name), asc(categories.sub_name))
     .all();
-  res.json({ data: rows });
+  const tracked = new Set((sqlite.prepare('SELECT category_id FROM contribution_setups').all() as { category_id: number }[])
+    .map((r) => r.category_id));
+  res.json({ data: rows.map((r) => ({ ...r, contribution_tracked: tracked.has(r.id) })) });
 });
 
 // GET /api/categories/groups — first-class groups with member counts
@@ -144,25 +170,8 @@ router.post('/', requirePermission('categories.create'), (req: Request, res: Res
     return;
   }
 
-  const displayName = displayFor(group.type, group.name, subName);
-  // Append after existing siblings; drag-reorder handles ordering afterward.
-  const nextOrder = (sqlite.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE group_id = ?').get(group.id) as { n: number }).n;
-
-  const result = db.insert(categories).values({
-    group_id: group.id,
-    group_name: group.name,
-    sub_name: subName,
-    display_name: displayName,
-    type: group.type,
-    is_deductible: isDeductible ? 1 : 0,
-    sort_order: nextOrder,
-    emoji: emoji ?? null,
-    // Transfers are money moving between the user's own accounts — never
-    // spending. Their budget exclusion is an invariant of the section, not a
-    // per-category preference, so the request's value is ignored.
-    exclude_from_budget: group.type === 'transfer' || excludeFromBudget ? 1 : 0,
-  }).run();
-  const created = db.select().from(categories).where(eq(categories.id, Number(result.lastInsertRowid))).get();
+  const id = insertCategory(group, subName, { isDeductible, emoji, excludeFromBudget });
+  const created = db.select().from(categories).where(eq(categories.id, id)).get();
   res.status(201).json({ data: created });
 });
 
@@ -204,6 +213,10 @@ router.put('/:id', requirePermission('categories.edit'), (req: Request, res: Res
     }
   }
   const newType = group ? group.type : existing.type;
+  if (newType !== 'transfer' && isTracked(id)) {
+    res.status(400).json({ error: 'Stop tracking this category in Contributions before you move it out of Transfers.' });
+    return;
+  }
   const newGroupName = group ? group.name : existing.group_name;
   const newGroupId = group ? group.id : existing.group_id;
   const newSub = subName ?? existing.sub_name;
@@ -233,6 +246,10 @@ router.delete('/:id', requirePermission('categories.delete'), (req: Request, res
   const existing = db.select().from(categories).where(eq(categories.id, id)).get();
   if (!existing) {
     res.status(404).json({ error: 'Category not found' });
+    return;
+  }
+  if (isTracked(id)) {
+    res.status(400).json({ error: 'Stop tracking this category in Contributions before you delete it.' });
     return;
   }
   // Anything that would still point at the category blocks the delete with a

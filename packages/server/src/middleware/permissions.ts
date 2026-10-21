@@ -74,6 +74,12 @@ function loadPermissions(userId: number): Map<string, boolean> {
   return perms;
 }
 
+/** For checks a route makes itself, e.g. a second permission only some requests need. */
+export function hasPermission(user: { userId: number; role: string }, permission: string): boolean {
+  if (user.role === 'owner' || user.role === 'admin') return true;
+  return loadPermissions(user.userId).get(permission) === true;
+}
+
 /** Role hierarchy levels for comparison */
 const ROLE_LEVEL: Record<string, number> = { owner: 3, admin: 2, member: 1 };
 

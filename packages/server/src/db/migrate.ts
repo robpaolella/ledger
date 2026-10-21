@@ -45,6 +45,7 @@ import { migrateAmazon } from './migrate-amazon.js';
 import { migrateDailySync } from './migrate-daily-sync.js';
 import { migrateNotificationPrefs } from './migrate-notification-prefs.js';
 import { migrateUncategorizedReviews } from './migrate-uncategorized-reviews.js';
+import { migrateContributions } from './migrate-contributions.js';
 
 export function runMigrations(sqlite: Database.Database): void {
   migrateAccountOwners(sqlite);
@@ -83,6 +84,7 @@ export function runMigrations(sqlite: Database.Database): void {
   migrateTransferLinks(sqlite);         // transfer_links — the two legs of one money movement
   migrateDailySync(sqlite);             // simplefin_connections.sync_* (per-connection sync state)
   migrateNotificationPrefs(sqlite);     // users.over_budget_alerts (per-person alert choice)
+  migrateContributions(sqlite);         // contribution_setups (+ accounts): tracked Transfers categories; before the category folds below
 
   // Backfill/refresh transfer links on boot: cheap (bucketed by amount) and
   // self-healing, so history and anything imported outside a sync gets paired too.
