@@ -306,24 +306,24 @@ describe('learned rules and review-task fixtures', () => {
 });
 
 describe('synthetic sample catalog', () => {
-  it('preserves the original account references and links 20 accounts to eight existing institutions', () => {
+  it('preserves the original account references and links 21 accounts to eight existing institutions', () => {
     const db = fixture();
     try {
       const before = db.prepare('SELECT * FROM financial_institutions').all();
-      expect(seedPeopleAccounts(db)).toEqual({ johnId: 1, janeId: 2, jChecking: 1, jVisa: 2, jaChecking: 3, jaSavings: 4, jaAmex: 5, jointSav: 6, j401k: 7, jaIRA: 8 });
+      expect(seedPeopleAccounts(db)).toEqual({ college: 21, johnId: 1, janeId: 2, jChecking: 1, jVisa: 2, jaChecking: 3, jaSavings: 4, jaAmex: 5, jointSav: 6, j401k: 7, jaIRA: 8 });
       const accounts = db.prepare('SELECT name FROM accounts ORDER BY id').all();
       expect(accounts).toEqual([
         "John's Checking", "John's Visa", "Jane's Checking", "Jane's Savings", "Jane's Amex", 'Joint Savings', "John's 401(k)", "Jane's Roth IRA",
         "John's Savings", 'Joint Checking', "John's Brokerage", "Jane's Brokerage", "John's Roth IRA", "Jane's 401(k)", "John's Mastercard", "Jane's Visa",
-        "John's Travel Savings", "Jane's Emergency Savings", "John's Venmo", "Jane's Venmo",
+        "John's Travel Savings", "Jane's Emergency Savings", "John's Venmo", "Jane's Venmo", 'Joint College Savings',
       ].map(name => ({ name })));
       expect(db.prepare('SELECT * FROM financial_institutions').all()).toEqual(before);
       expect(db.prepare('SELECT DISTINCT institution FROM accounts ORDER BY institution').all()).toEqual([
         'Ally Bank', 'American Express National Bank', 'Bank of America', 'Capital One', 'Chase', 'Fidelity', 'Vanguard', 'Venmo',
       ].map(institution => ({ institution })));
       expect(db.prepare('SELECT a.id FROM accounts a LEFT JOIN financial_institutions f ON f.id = a.institution_id WHERE f.id IS NULL OR a.institution != f.name OR f.domain IS NULL').all()).toEqual([]);
-      expect(db.prepare('SELECT account_id FROM account_owners GROUP BY account_id HAVING COUNT(*) = 2').all()).toEqual([{ account_id: 6 }, { account_id: 10 }]);
-      expect(db.prepare('SELECT COUNT(*) AS count FROM account_owners').get()).toEqual({ count: 22 });
+      expect(db.prepare('SELECT account_id FROM account_owners GROUP BY account_id HAVING COUNT(*) = 2').all()).toEqual([{ account_id: 6 }, { account_id: 10 }, { account_id: 21 }]);
+      expect(db.prepare('SELECT COUNT(*) AS count FROM account_owners').get()).toEqual({ count: 24 });
     } finally { db.close(); }
   });
 

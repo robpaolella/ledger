@@ -4,12 +4,13 @@
  *
  * Creates:
  *  - 2 users (John = owner, Jane = admin)
- *  - 20 accounts across 8 catalog institutions
+ *  - 21 accounts across 8 catalog institutions
  *  - 35 national-brand and 150 invented merchants
  *  - ~150 transactions/month for nine months, through today
  *  - Monthly budgets
  *  - Balance snapshots for net worth
  *  - Depreciable assets
+ *  - Two tracked contributions (college savings, retirement) with sample transfers
  */
 
 import Database from 'better-sqlite3';
@@ -21,6 +22,7 @@ import { createCategories } from './demo-seed/categories.js';
 import { seedTransactions } from './demo-seed/transactions.js';
 import { seedAmazonOrders } from './demo-seed/amazon-orders.js';
 import { seedBudgetAlerts, seedBudgets, seedRecurring } from './demo-seed/budgets-recurring.js';
+import { seedContributions } from './demo-seed/contributions.js';
 import { seedNetWorth } from './demo-seed/net-worth.js';
 import { seedInvestments } from './demo-seed/investments.js';
 import { seedReviewsRules } from './demo-seed/reviews-rules.js';
@@ -75,6 +77,8 @@ seedReviewsRules(helpers, peopleAccounts);
 const budgetCount = seedBudgets(helpers, CAT);
 const investments = seedInvestments(helpers);
 seedSettings(helpers, peopleAccounts);
+// Before net worth, so balance snapshots include the contribution transfers.
+seedContributions(helpers, peopleAccounts);
 const { balances, assetDefs } = seedNetWorth(helpers, investments.balances, investments.days);
 seedRecurring(helpers, peopleAccounts, CAT);
 // Alerts depend on transactions, budgets, recurring floors, and all other
