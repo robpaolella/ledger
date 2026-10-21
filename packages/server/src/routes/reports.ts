@@ -3,7 +3,7 @@ import { db, sqlite } from '../db/index.js';
 import { transactions, categories } from '../db/schema.js';
 import { sql } from 'drizzle-orm';
 import { isUncategorizedSql } from '../services/reviews.js';
-import { CATEGORIZED_LEGS_SQL, joinWhere, legAccountFilters, legFilters, parseReportFilters } from '../services/reportLegs.js';
+import { CATEGORIZED_LEGS_SQL, contributionFigures, joinWhere, legAccountFilters, legFilters, parseReportFilters } from '../services/reportLegs.js';
 import type { UncategorizedBucketed } from '@ledger/shared/src/types.js';
 
 const router = Router();
@@ -30,7 +30,7 @@ router.get('/available-years', (_req: Request, res: Response) => {
 // Query: start, end (YYYY-MM-DD, required); owner; and the filter set —
 // accountIds, merchantIds, categoryIds, groupNames (comma-separated),
 // amountOp (gt|lt|eq|bt) + amountValue|amountMin|amountMax, txnType (debits|credits),
-// catType (income|expense).
+// catType (income|expense). Also returns `contributions` (ReportContribution[]).
 router.get('/period', (req: Request, res: Response) => {
   try {
     const f = parseReportFilters(req.query);
@@ -159,6 +159,10 @@ router.get('/period', (req: Request, res: Response) => {
     // Distinct calendar months the range touches (for avg/mo figures).
     const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
 
+    // Contributions: a separate view of tracked transfers. They never feed the
+    // figures above (Transfers stay excluded from every rollup).
+    const contributions = contributionFigures(sqlite, f, bucketOf, buckets.length);
+
     res.json({
       data: {
         range: { start, end, months },
@@ -166,6 +170,7 @@ router.get('/period', (req: Request, res: Response) => {
         categories: categoriesOut,
         kpis: { income, expenses, net, savingsRate, incomeSourceCount },
         uncategorized,
+        contributions,
       },
     });
   } catch (err) {

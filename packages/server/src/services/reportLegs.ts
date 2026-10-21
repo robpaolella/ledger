@@ -1,3 +1,6 @@
+import type Database from 'better-sqlite3';
+import type { ReportContribution } from '@ledger/shared/src/types.js';
+
 /**
  * Reports read "legs": an unsplit transaction, or one split leg of a
  * transaction with no category of its own. Columns: transaction_id, split_id
@@ -100,3 +103,78 @@ export const joinWhere = (...parts: Where[]): Where => ({
   conditions: parts.flatMap((p) => p.conditions),
   params: parts.flatMap((p) => p.params),
 });
+
+export interface ContributionLeg {
+  transaction_id: number;
+  split_id: number | null;
+  category_id: number;
+  account_id: number;
+  date: string;
+  amount: number;
+}
+
+/**
+ * The contribution eligibility rules: the one place that decides which legs
+ * count toward a tracked contribution, under the Reports filters.
+ *
+ * - A leg counts only when it is filed under a tracked category and sits on an
+ *   account that is NOT one of that setup's chosen accounts (the paying side).
+ *   A leg on a chosen account is the receiving copy, so it never counts; a move
+ *   between two chosen accounts counts nothing, and so does a movement Ledger
+ *   sees only on the receiving account.
+ * - Split legs count by their own amount; other legs of the transaction don't.
+ * - Untracked and uncategorized legs never count.
+ * - The income/expense category-type filter leaves no contributions.
+ *
+ * Callers split each leg by sign: positive (money out) is put in, negative
+ * (money in) is taken out.
+ */
+export function contributionLegs(sqlite: Database.Database, f: ReportFilters): ContributionLeg[] {
+  if (f.catType === 'income' || f.catType === 'expense') return [];
+  const w = joinWhere(
+    { conditions: ['l.date >= ?', 'l.date <= ?'], params: [f.start, f.end] },
+    // Paying side only for now. Matching the destination account and its
+    // owners (#421) belongs here, in place of this one line.
+    legAccountFilters(f),
+    legFilters(f),
+  );
+  return sqlite.prepare(`
+    WITH legs AS (${CATEGORIZED_LEGS_SQL})
+    SELECT l.transaction_id, l.split_id, l.category_id, l.account_id, l.date, l.amount
+    FROM legs l
+    JOIN contribution_setups s ON s.category_id = l.category_id
+    JOIN categories c ON c.id = l.category_id
+    WHERE NOT EXISTS (SELECT 1 FROM contribution_setup_accounts sa WHERE sa.setup_id = s.id AND sa.account_id = l.account_id)
+      AND ${w.conditions.join(' AND ')}
+    ORDER BY l.date, l.transaction_id, l.split_id
+  `).all(...w.params) as ContributionLeg[];
+}
+
+/** Put in and taken out per bucket for each tracked category with counted activity. */
+export function contributionFigures(
+  sqlite: Database.Database,
+  f: ReportFilters,
+  bucketOf: (date: string) => number,
+  bucketCount: number,
+): ReportContribution[] {
+  const byCategory = new Map<number, ReportContribution>();
+  const meta = sqlite.prepare('SELECT group_name, sub_name FROM categories WHERE id = ?');
+  for (const leg of contributionLegs(sqlite, f)) {
+    const bi = bucketOf(leg.date);
+    if (bi < 0 || leg.amount === 0) continue;
+    let entry = byCategory.get(leg.category_id);
+    if (!entry) {
+      const c = meta.get(leg.category_id) as { group_name: string; sub_name: string };
+      entry = {
+        categoryId: leg.category_id, groupName: c.group_name, name: c.sub_name,
+        putIn: new Array(bucketCount).fill(0), takenOut: new Array(bucketCount).fill(0),
+        totalPutIn: 0, totalTakenOut: 0,
+      };
+      byCategory.set(leg.category_id, entry);
+    }
+    if (leg.amount > 0) { entry.putIn[bi] += leg.amount; entry.totalPutIn += leg.amount; }
+    else { entry.takenOut[bi] -= leg.amount; entry.totalTakenOut -= leg.amount; }
+  }
+  return Array.from(byCategory.values())
+    .sort((a, b) => a.groupName.localeCompare(b.groupName) || a.name.localeCompare(b.name));
+}
