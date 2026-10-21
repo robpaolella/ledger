@@ -2,6 +2,9 @@
 import type Database from 'better-sqlite3';
 import bcrypt from 'bcrypt';
 
+/** Appended last and linked to no feed: it holds only the contribution sample, so older fixtures stay as they were. */
+export const COLLEGE_SAVINGS = 'Joint College Savings';
+
 export function seedPeopleAccounts(db: Database.Database) {
   // ---------------------------------------------------------------------------
   // 1. Users
@@ -70,8 +73,9 @@ export function seedPeopleAccounts(db: Database.Database) {
     { name: "Jane's Emergency Savings", last_four: '2435', type: 'savings', classification: 'liquid', owners: [janeId] },
     { name: "John's Venmo", last_four: '3546', type: 'checking', classification: 'liquid', owners: [johnId] },
     { name: "Jane's Venmo", last_four: '4657', type: 'checking', classification: 'liquid', owners: [janeId] },
+    { name: COLLEGE_SAVINGS, last_four: '5768', type: 'investment', classification: 'investment', owners: [johnId, janeId] },
   );
-  const institutionIndexes = [0, 0, 6, 3, 2, 3, 4, 5, 1, 6, 4, 5, 5, 4, 1, 6, 0, 3, 7, 7];
+  const institutionIndexes = [0, 0, 6, 3, 2, 3, 4, 5, 1, 6, 4, 5, 5, 4, 1, 6, 0, 3, 7, 7, 4];
   const acctIds: Record<string, number> = {};
 
   for (const [index, a] of accountDefs.entries()) {
@@ -99,7 +103,9 @@ export function seedPeopleAccounts(db: Database.Database) {
   const jaIRA      = acctIds["Jane's Roth IRA"];
 
 
-  return { johnId, janeId, jChecking, jVisa, jaChecking, jaSavings, jaAmex, jointSav, j401k, jaIRA };
+  const college = acctIds[COLLEGE_SAVINGS];
+
+  return { college, johnId, janeId, jChecking, jVisa, jaChecking, jaSavings, jaAmex, jointSav, j401k, jaIRA };
 }
 
 export type PeopleAccounts = ReturnType<typeof seedPeopleAccounts>;
