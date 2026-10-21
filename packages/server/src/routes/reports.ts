@@ -3,6 +3,7 @@ import { db, sqlite } from '../db/index.js';
 import { transactions, categories } from '../db/schema.js';
 import { sql } from 'drizzle-orm';
 import { isUncategorizedSql } from '../services/reviews.js';
+import { CATEGORIZED_LEGS_SQL, contributionFigures, joinWhere, legAccountFilters, legFilters, parseReportFilters } from '../services/reportLegs.js';
 import type { UncategorizedBucketed } from '@ledger/shared/src/types.js';
 
 const router = Router();
@@ -28,51 +29,19 @@ router.get('/available-years', (_req: Request, res: Response) => {
 // page (KPIs, flow bar, trends, category breakdown, timeline, drill-down).
 // Query: start, end (YYYY-MM-DD, required); owner; and the filter set —
 // accountIds, merchantIds, categoryIds, groupNames (comma-separated),
-// amountOp (gt|lt|eq|bt) + amountValue|amountMin|amountMax, txnType (debits|credits).
+// amountOp (gt|lt|eq|bt) + amountValue|amountMin|amountMax, txnType (debits|credits),
+// catType (income|expense). Also returns `contributions` (ReportContribution[]).
 router.get('/period', (req: Request, res: Response) => {
   try {
-    const start = req.query.start as string;
-    const end = req.query.end as string;
+    const f = parseReportFilters(req.query);
+    const { start, end, catType } = f;
     if (!start || !end) { res.status(400).json({ error: 'start and end are required' }); return; }
-    const owner = (req.query.owner as string) || 'all';
 
-    const csvInts = (v: unknown) => String(v ?? '').split(',').map((x) => parseInt(x, 10)).filter((n) => !Number.isNaN(n));
-    const csvStrs = (v: unknown) => String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-    const accountIds = req.query.accountIds ? csvInts(req.query.accountIds) : [];
-    const merchantIds = req.query.merchantIds ? csvInts(req.query.merchantIds) : [];
-    const categoryIds = req.query.categoryIds ? csvInts(req.query.categoryIds) : [];
-    const groupNames = req.query.groupNames ? csvStrs(req.query.groupNames) : [];
-    const amountOp = req.query.amountOp as string | undefined;
-    const txnType = req.query.txnType as string | undefined; // debits | credits (by sign)
-    const catType = req.query.catType as string | undefined; // income | expense (by category type)
-
-    const conditions: string[] = ['l.date >= ?', 'l.date <= ?'];
-    const params: (string | number)[] = [start, end];
-    if (owner !== 'all') {
-      conditions.push('EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id = l.account_id AND u.display_name = ?)');
-      params.push(owner);
-    }
-    if (accountIds.length) { conditions.push(`l.account_id IN (${accountIds.map(() => '?').join(',')})`); params.push(...accountIds); }
-    if (merchantIds.length) { conditions.push(`l.merchant_id IN (${merchantIds.map(() => '?').join(',')})`); params.push(...merchantIds); }
-    // Categories dimension: sub-category ids OR whole groups (OR-combined).
-    if (categoryIds.length || groupNames.length) {
-      const parts: string[] = [];
-      if (categoryIds.length) { parts.push(`l.category_id IN (${categoryIds.map(() => '?').join(',')})`); params.push(...categoryIds); }
-      if (groupNames.length) { parts.push(`c.group_name IN (${groupNames.map(() => '?').join(',')})`); params.push(...groupNames); }
-      conditions.push(`(${parts.join(' OR ')})`);
-    }
-    if (amountOp === 'bt') {
-      const min = parseFloat(req.query.amountMin as string);
-      const max = parseFloat(req.query.amountMax as string);
-      if (!Number.isNaN(min)) { conditions.push('ABS(l.amount) >= ?'); params.push(min); }
-      if (!Number.isNaN(max)) { conditions.push('ABS(l.amount) <= ?'); params.push(max); }
-    } else if (amountOp === 'gt' || amountOp === 'lt' || amountOp === 'eq') {
-      const val = parseFloat(req.query.amountValue as string);
-      if (!Number.isNaN(val)) { conditions.push(`ABS(l.amount) ${amountOp === 'gt' ? '>' : amountOp === 'lt' ? '<' : '='} ?`); params.push(val); }
-    }
-    // Sign convention: positive stored = money out (debit), negative = money in (credit).
-    if (txnType === 'debits') conditions.push('l.amount > 0');
-    else if (txnType === 'credits') conditions.push('l.amount < 0');
+    const { conditions, params } = joinWhere(
+      { conditions: ['l.date >= ?', 'l.date <= ?'], params: [start, end] },
+      legAccountFilters(f),
+      legFilters(f),
+    );
     // Uncategorized legs (category_id NULL) take their side from direction, and
     // drop out under any category filter above (NULL never matches IN).
     if (catType === 'income' || catType === 'expense') {
@@ -86,17 +55,9 @@ router.get('/period', (req: Request, res: Response) => {
     conditions.push('COALESCE(c.exclude_from_budget, 0) = 0');
 
     const rows = sqlite.prepare(`
-      WITH legs AS (
-        SELECT t.category_id AS category_id, t.merchant_id AS merchant_id, t.account_id AS account_id, t.date AS date, t.amount AS amount
-        FROM transactions t
-        WHERE t.category_id IS NOT NULL
+      WITH legs AS (${CATEGORIZED_LEGS_SQL}
         UNION ALL
-        SELECT ts.category_id AS category_id, COALESCE(ts.merchant_id, t.merchant_id) AS merchant_id, t.account_id AS account_id, t.date AS date, ts.amount AS amount
-        FROM transaction_splits ts
-        JOIN transactions t ON ts.transaction_id = t.id
-        WHERE t.category_id IS NULL
-        UNION ALL
-        SELECT NULL AS category_id, t.merchant_id AS merchant_id, t.account_id AS account_id, t.date AS date, t.amount AS amount
+        SELECT t.id AS transaction_id, NULL AS split_id, NULL AS category_id, t.merchant_id AS merchant_id, t.account_id AS account_id, t.date AS date, t.amount AS amount
         FROM transactions t
         WHERE ${isUncategorizedSql('t')}
       )
@@ -198,6 +159,10 @@ router.get('/period', (req: Request, res: Response) => {
     // Distinct calendar months the range touches (for avg/mo figures).
     const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
 
+    // Contributions: a separate view of tracked transfers. They never feed the
+    // figures above (Transfers stay excluded from every rollup).
+    const contributions = contributionFigures(sqlite, f, bucketOf, buckets.length);
+
     res.json({
       data: {
         range: { start, end, months },
@@ -205,6 +170,7 @@ router.get('/period', (req: Request, res: Response) => {
         categories: categoriesOut,
         kpis: { income, expenses, net, savingsRate, incomeSourceCount },
         uncategorized,
+        contributions,
       },
     });
   } catch (err) {

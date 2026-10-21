@@ -105,6 +105,21 @@ export interface ContributionDestinations {
   external: boolean;
 }
 
+/**
+ * GET /reports/period `contributions`: one entry per tracked category with
+ * counted activity. Put in (money out of the paying account) and taken out
+ * (money back in) are positive magnitudes, per bucket and in total, never netted.
+ */
+export interface ReportContribution {
+  categoryId: number;
+  groupName: string;
+  name: string;
+  putIn: number[];
+  takenOut: number[];
+  totalPutIn: number;
+  totalTakenOut: number;
+}
+
 export interface Merchant {
   id: number;
   name: string;
