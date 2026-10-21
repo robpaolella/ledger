@@ -3,6 +3,7 @@ import type { Helpers } from './helpers.js';
 import type { PeopleAccounts } from './people-accounts.js';
 import type { Categories } from './categories.js';
 import { brandMerchants, inventedMerchants } from './merchants.js';
+import { COLLEGE_SAVINGS } from './people-accounts.js';
 
 /** Fixtures #60 uses to create Amazon orders that match seeded card charges. */
 export const SAMPLE_AMAZON_MATCH_FIXTURES = {
@@ -42,7 +43,7 @@ export function seedTransactions(
   if (!mastercard) throw new Error('Sample Mastercard missing');
   const cards = [jVisa, jaAmex, mastercard.id];
   const liquid = accounts.filter(a => ['checking', 'savings'].includes(a.type)).map(a => a.id);
-  const investments = accounts.filter(a => ['investment', 'retirement'].includes(a.type)).map(a => a.id);
+  const investments = accounts.filter(a => ['investment', 'retirement'].includes(a.type) && a.name !== COLLEGE_SAVINGS).map(a => a.id);
   const savings = accounts.filter(a => a.type === 'savings' && a.id !== jointSav).map(a => a.id);
   const popular = ['Costco', 'Target', "Trader Joe's", 'Whole Foods', 'Publix', 'Shell', 'Starbucks', 'Chipotle', 'Walmart', 'Panera'];
   // Reserve the last 100 invented merchants for exactly one appearance each.

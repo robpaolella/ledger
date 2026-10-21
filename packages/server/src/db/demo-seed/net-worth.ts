@@ -18,7 +18,7 @@ export function seedNetWorth(
 
   db.transaction(() => {
     for (const [index, account] of accounts.entries()) {
-      const isInvestment = ['investment', 'retirement'].includes(account.type);
+      const isInvestment = investmentBalances.has(account.id);
       // Later-added sample accounts appear during the fixture window, rather
       // than making every account look like it has nine months of history.
       const startDay = index >= 14 ? 60 : index >= 8 ? 30 : 0;

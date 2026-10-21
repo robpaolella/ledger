@@ -1,5 +1,6 @@
 /** Seeds deterministic, offline investment positions, prices, and daily history. */
 import type { Helpers } from './helpers.js';
+import { COLLEGE_SAVINGS } from './people-accounts.js';
 
 export type DailyBalances = Map<number, Map<string, number>>;
 
@@ -40,8 +41,8 @@ function price(base: number, day: number, symbolIndex: number) {
 
 export function seedInvestments({ db, rel, today }: Helpers) {
   console.log('Creating investment positions and price history...');
-  const accounts = db.prepare("SELECT id, name, type, owner FROM accounts WHERE type IN ('investment', 'retirement') ORDER BY id")
-    .all() as Array<{ id: number; name: string; type: string; owner: string }>;
+  const accounts = db.prepare("SELECT id, name, type, owner FROM accounts WHERE type IN ('investment', 'retirement') AND name != ? ORDER BY id")
+    .all(COLLEGE_SAVINGS) as Array<{ id: number; name: string; type: string; owner: string }>;
   const users = db.prepare('SELECT id, display_name FROM users').all() as Array<{ id: number; display_name: string }>;
   const userId = (owner: string) => users.find(user => owner.includes(user.display_name))?.id;
   const days = fixtureDays(rel, today);
