@@ -57,8 +57,8 @@ type Where = { conditions: string[]; params: (string | number)[] };
 const marks = (n: number) => new Array(n).fill('?').join(',');
 
 /**
- * Owner and account filters on the account a leg sits on (alias `l`). For a
- * contribution that is the paying side.
+ * Owner and account filters on the account a leg sits on (alias `l`).
+ * Contributions use contributionAccountFilters instead.
  */
 export function legAccountFilters(f: ReportFilters): Where {
   const w: Where = { conditions: [], params: [] };
@@ -109,8 +109,43 @@ export interface ContributionLeg {
   split_id: number | null;
   category_id: number;
   account_id: number;
+  /** The account the money went to or came from, when Ledger knows it (see contributionLegs). */
+  destination_account_id: number | null;
   date: string;
   amount: number;
+}
+
+/**
+ * A counted leg's destination (alias `l` for the leg, `s` for its setup): the
+ * account of its linked transfer partner (either side of the link), or else,
+ * when only its side is in Ledger, the setup's one Ledger account if it names
+ * exactly one and not "an account not in Ledger". A rejected link is no link.
+ */
+const DESTINATION_SQL = `COALESCE(
+  (SELECT p.account_id FROM transfer_links tl
+     JOIN transactions p ON p.id = CASE WHEN tl.from_transaction_id = l.transaction_id THEN tl.to_transaction_id ELSE tl.from_transaction_id END
+   WHERE tl.status = 'linked' AND (tl.from_transaction_id = l.transaction_id OR tl.to_transaction_id = l.transaction_id)
+   ORDER BY tl.id LIMIT 1),
+  CASE WHEN s.includes_external = 0 AND (SELECT COUNT(*) FROM contribution_setup_accounts sa WHERE sa.setup_id = s.id) = 1
+    THEN (SELECT sa.account_id FROM contribution_setup_accounts sa WHERE sa.setup_id = s.id) END
+)`;
+
+/**
+ * Owner and account filters for a counted contribution leg, like a card
+ * payment: it matches on the account it sits on or its destination, and on
+ * either account's owners. One row per leg, so it still counts once.
+ */
+function contributionAccountFilters(f: ReportFilters): Where {
+  const w: Where = { conditions: [], params: [] };
+  if (f.owner !== 'all') {
+    w.conditions.push('EXISTS (SELECT 1 FROM account_owners ao JOIN users u ON ao.user_id = u.id WHERE ao.account_id IN (l.account_id, l.destination_account_id) AND u.display_name = ?)');
+    w.params.push(f.owner);
+  }
+  if (f.accountIds.length) {
+    w.conditions.push(`(l.account_id IN (${marks(f.accountIds.length)}) OR l.destination_account_id IN (${marks(f.accountIds.length)}))`);
+    w.params.push(...f.accountIds, ...f.accountIds);
+  }
+  return w;
 }
 
 /**
@@ -125,6 +160,8 @@ export interface ContributionLeg {
  * - Split legs count by their own amount; other legs of the transaction don't.
  * - Untracked and uncategorized legs never count.
  * - The income/expense category-type filter leaves no contributions.
+ * - The account and person filters find a leg under its paying account or its
+ *   destination (DESTINATION_SQL), and that account's owners.
  *
  * Callers split each leg by sign: positive (money out) is put in, negative
  * (money in) is taken out.
@@ -133,19 +170,21 @@ export function contributionLegs(sqlite: Database.Database, f: ReportFilters): C
   if (f.catType === 'income' || f.catType === 'expense') return [];
   const w = joinWhere(
     { conditions: ['l.date >= ?', 'l.date <= ?'], params: [f.start, f.end] },
-    // Paying side only for now. Matching the destination account and its
-    // owners (#421) belongs here, in place of this one line.
-    legAccountFilters(f),
+    contributionAccountFilters(f),
     legFilters(f),
   );
   return sqlite.prepare(`
-    WITH legs AS (${CATEGORIZED_LEGS_SQL})
-    SELECT l.transaction_id, l.split_id, l.category_id, l.account_id, l.date, l.amount
-    FROM legs l
-    JOIN contribution_setups s ON s.category_id = l.category_id
+    WITH legs AS (${CATEGORIZED_LEGS_SQL}),
+    counted AS (
+      SELECT l.*, ${DESTINATION_SQL} AS destination_account_id
+      FROM legs l
+      JOIN contribution_setups s ON s.category_id = l.category_id
+      WHERE NOT EXISTS (SELECT 1 FROM contribution_setup_accounts sa WHERE sa.setup_id = s.id AND sa.account_id = l.account_id)
+    )
+    SELECT l.transaction_id, l.split_id, l.category_id, l.account_id, l.destination_account_id, l.date, l.amount
+    FROM counted l
     JOIN categories c ON c.id = l.category_id
-    WHERE NOT EXISTS (SELECT 1 FROM contribution_setup_accounts sa WHERE sa.setup_id = s.id AND sa.account_id = l.account_id)
-      AND ${w.conditions.join(' AND ')}
+    WHERE ${w.conditions.join(' AND ')}
     ORDER BY l.date, l.transaction_id, l.split_id
   `).all(...w.params) as ContributionLeg[];
 }

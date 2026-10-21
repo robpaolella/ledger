@@ -252,7 +252,7 @@ describe('filters', () => {
       one(college, [0, 0, 30], [0, 0, 0]), one(investing, [0, 50, 0], [0, 0, 0]),
     ]);
     expect(await figures({ owner: 'John' })).toEqual([one(investing, [500, 0, 0], [0, 120, 0])]);
-    // A chosen (receiving) account as the filter counts nothing, for now (#421).
+    // Unlinked into a setup with several accounts: found only under the paying account.
     expect(await figures({ accountIds: String(BROKERAGE) })).toEqual([]);
   });
 });
@@ -264,6 +264,8 @@ describe('existing figures', () => {
       {}, { start: '2026-01-01', end: '2026-01-31' }, { owner: 'Jane' }, { accountIds: `${CHECKING},${CARD}` },
       { groupNames: 'Test Transfers,Test Food' }, { txnType: 'debits' }, { txnType: 'credits' },
       { catType: 'income' }, { catType: 'expense' }, { amountOp: 'gt', amountValue: '60' },
+      { owner: 'John' }, { accountIds: String(BROKERAGE) }, { accountIds: `${BROKERAGE},${ROTH}` },
+      { owner: 'Jane', accountIds: `${CHECKING},${BROKERAGE}` },
     ];
     const strip = ({ contributions: _c, ...rest }: Period) => rest;
     const before = await Promise.all(queries.map((q) => period(q).then(strip)));
