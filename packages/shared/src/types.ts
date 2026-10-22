@@ -118,6 +118,9 @@ export interface ReportContribution {
   takenOut: number[];
   totalPutIn: number;
   totalTakenOut: number;
+  /** The accounts it pays into (as the setup lists them) and whether "an account not in Ledger" is one too. */
+  accounts: ContributionSetupAccount[];
+  external: boolean;
 }
 
 /**

@@ -282,3 +282,20 @@ describe('sorting and paging', () => {
     expect((await list(college, { limit: 'x', offset: '-5' })).data).toHaveLength(5);
   });
 });
+
+describe('accounts on the figures (also serves the Reports card)', () => {
+  it('names each category\'s accounts, inactive flagged, and whether an outside account is included', async () => {
+    txn(JOHN_CHECKING, '2026-01-10', 100, investing);
+    txn(JANE_CHECKING, '2026-01-10', 60, health);
+    sql.prepare('UPDATE accounts SET is_active = 0 WHERE id = ?').run(ROTH);
+    const fig = (await call('period')).body.data.contributions as ReportContribution[];
+    const by = (n: string) => fig.find((c) => c.name === n)!;
+    expect(by('Investing').accounts).toEqual([
+      { id: BROKERAGE, name: 'Brokerage', type: 'investment', isActive: true },
+      { id: ROTH, name: 'Roth IRA', type: 'retirement', isActive: false },
+    ]);
+    expect(by('Investing').external).toBe(false);
+    expect(by('Health').accounts).toEqual([{ id: HSA, name: 'HSA', type: 'investment', isActive: true }]);
+    expect(by('Health').external).toBe(true);
+  });
+});

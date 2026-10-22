@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { ReportContribution, ReportContributionTransaction } from '@ledger/shared/src/types.js';
+import type { ContributionSetupAccount, ReportContribution, ReportContributionTransaction } from '@ledger/shared/src/types.js';
 
 /**
  * Reports read "legs": an unsplit transaction, or one split leg of a
@@ -198,16 +198,25 @@ export function contributionFigures(
 ): ReportContribution[] {
   const byCategory = new Map<number, ReportContribution>();
   const meta = sqlite.prepare('SELECT group_name, sub_name FROM categories WHERE id = ?');
+  const setup = sqlite.prepare('SELECT id, includes_external FROM contribution_setups WHERE category_id = ?');
+  const setupAccounts = sqlite.prepare(`
+    SELECT a.id, a.name, a.type, a.is_active
+    FROM contribution_setup_accounts sa JOIN accounts a ON a.id = sa.account_id
+    WHERE sa.setup_id = ? ORDER BY a.name, a.id`);
   for (const leg of contributionLegs(sqlite, f)) {
     const bi = bucketOf(leg.date);
     if (bi < 0 || leg.amount === 0) continue;
     let entry = byCategory.get(leg.category_id);
     if (!entry) {
       const c = meta.get(leg.category_id) as { group_name: string; sub_name: string };
+      const st = setup.get(leg.category_id) as { id: number; includes_external: number };
+      const accounts = (setupAccounts.all(st.id) as { id: number; name: string; type: ContributionSetupAccount['type']; is_active: number | null }[])
+        .map((a) => ({ id: a.id, name: a.name, type: a.type, isActive: a.is_active !== 0 }));
       entry = {
         categoryId: leg.category_id, groupName: c.group_name, name: c.sub_name,
         putIn: new Array(bucketCount).fill(0), takenOut: new Array(bucketCount).fill(0),
         totalPutIn: 0, totalTakenOut: 0,
+        accounts, external: st.includes_external === 1,
       };
       byCategory.set(leg.category_id, entry);
     }
