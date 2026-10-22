@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
 import path from 'path';
 import fs from 'fs';
+import { markCategorySortOrderSet } from './migrate-category-sort-order.js';
 
 const dbPath = process.env.DATABASE_PATH || path.join(path.resolve(process.cwd(), 'data'), 'ledger.db');
 const dataDir = path.dirname(dbPath);
@@ -220,6 +221,9 @@ if (catCount.count === 0) {
       }).run();
     }
   }
+
+  // The seed's order is deliberate: keep it from the one-time alphabetical backfill.
+  markCategorySortOrderSet(sqlite);
 
   const seeded = sqlite.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
   console.log(`  Seeded ${seeded.count} categories.`);
