@@ -196,7 +196,7 @@ describe('counting cases', () => {
 
   it('gives a plain-English 404 for an untracked or unknown category', async () => {
     const plain = Number(sql.prepare("INSERT INTO categories (group_name, sub_name, display_name, type) VALUES ('Food', 'Groceries', 'Food: Groceries', 'expense')").run().lastInsertRowid);
-    for (const id of [String(plain), '99999', 'abc']) {
+    for (const id of [String(plain), '99999', 'abc', `${college}junk`, `${college}.5`]) {
       const r = await call(`contributions/${id}/transactions`);
       expect(r.status).toBe(404);
       expect(r.body.error).toMatch(/not set up/);

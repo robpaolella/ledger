@@ -186,7 +186,8 @@ router.get('/period', (req: Request, res: Response) => {
 // (sortBy date|amount, thenBy=absAmount); returns { data, total }.
 router.get('/contributions/:categoryId/transactions', (req: Request, res: Response) => {
   try {
-    const categoryId = parseInt(req.params.categoryId as string, 10);
+    const rawId = req.params.categoryId as string;
+    const categoryId = /^\d+$/.test(rawId) ? Number(rawId) : NaN;
     if (Number.isNaN(categoryId) || !isTrackedCategory(sqlite, categoryId)) {
       return res.status(404).json({ error: 'This category is not set up for contribution tracking.' });
     }
