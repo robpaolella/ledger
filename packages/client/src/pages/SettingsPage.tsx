@@ -18,6 +18,7 @@ import { useSaveAccount } from '../components/accounts/useSaveAccount';
 import CategoriesPanel, { type Category, type Group } from '../components/settings/CategoriesPanel';
 import ProfilePanel from '../components/settings/ProfilePanel';
 import SecurityPanel from '../components/settings/SecurityPanel';
+import ContributionsPanel from '../components/settings/ContributionsPanel';
 import RulesPanel from '../components/settings/RulesPanel';
 import NotificationsPanel from '../components/settings/NotificationsPanel';
 import UsersPanel from '../components/settings/UsersPanel';
@@ -25,7 +26,7 @@ import AiPanel from '../components/settings/AiPanel';
 import { Card, CardHeader, LoadError, PanelHeader, btnPrimarySm, btnRow, ICON } from '../components/settings/ui';
 import { TYPE_LABEL, sfLabel } from '../components/settings/simplefin';
 
-type PanelId = 'profile' | 'security' | 'notifications' | 'accounts' | 'bank' | 'categories' | 'merchants' | 'rules' | 'users' | 'extras';
+type PanelId = 'profile' | 'security' | 'notifications' | 'accounts' | 'bank' | 'categories' | 'contributions' | 'merchants' | 'rules' | 'users' | 'extras';
 
 const NAV_ICON: Record<PanelId, ReactNode> = {
   profile: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>,
@@ -34,6 +35,7 @@ const NAV_ICON: Record<PanelId, ReactNode> = {
   accounts: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4Z" /></svg>,
   bank: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18M12 3l9 5H3l9-5Z" /></svg>,
   categories: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>,
+  contributions: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.2 3.2 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z" /><path d="M16 10h.01M2 8v1a2 2 0 0 0 2 2h1" /></svg>,
   merchants: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6" /></svg>,
   rules: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></svg>,
   users: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>,
@@ -65,6 +67,7 @@ export default function SettingsPage() {
       { id: 'accounts', label: 'Accounts', show: canAny('accounts') },
       { id: 'bank', label: 'Bank sync', show: canBankSync },
       { id: 'categories', label: 'Categories', show: canAny('categories') },
+      { id: 'contributions', label: 'Contributions', show: hasPermission('categories.edit') },
       { id: 'merchants', label: 'Merchants', show: hasPermission('transactions.edit') },
       { id: 'rules', label: 'Rules', show: hasPermission('transactions.edit') },
     ] },
@@ -224,6 +227,13 @@ export default function SettingsPage() {
               <LoadError onRetry={retryLoad} />
             </div>
           ) : loaded ? <CategoriesPanel categories={categories} groups={groups} onChanged={() => { loadData(); }} /> : <Spinner />)}
+
+          {panel === 'contributions' && (loadFailed ? (
+            <div className="flex flex-col gap-[22px]">
+              <PanelHeader title="Contributions" />
+              <LoadError onRetry={retryLoad} />
+            </div>
+          ) : loaded ? <ContributionsPanel categories={categories} groups={groups} accounts={accounts} onChanged={() => { loadData(); }} /> : <Spinner />)}
 
           {panel === 'bank' && (
             <BankSyncPanel sf={sf} accounts={accounts} users={userList} onAccountsChanged={() => { loadData(); }}
