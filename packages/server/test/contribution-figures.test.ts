@@ -125,7 +125,7 @@ describe('which transactions count', () => {
     const data = await period();
     expect(data.buckets.map((b) => b.label)).toEqual(['Jan', 'Feb', 'Mar']);
     expect(data.contributions).toEqual([
-      { categoryId: college, groupName: 'Test Transfers', name: 'College', putIn: [0, 250, 0], takenOut: [0, 0, 0], totalPutIn: 250, totalTakenOut: 0, accounts: expect.any(Array), external: false },
+      { categoryId: college, groupName: 'Test Transfers', name: 'College', putIn: [0, 250, 0], takenOut: [0, 0, 0], totalPutIn: 250, totalTakenOut: 0, accounts: [], external: true },
       { categoryId: investing, groupName: 'Test Transfers', name: 'Investing', putIn: [500, 0, 0], takenOut: [0, 0, 0], totalPutIn: 500, totalTakenOut: 0, accounts: expect.any(Array), external: false },
     ]);
   });
