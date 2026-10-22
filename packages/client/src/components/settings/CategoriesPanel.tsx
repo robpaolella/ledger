@@ -13,6 +13,7 @@ import ResponsiveModal from '../ResponsiveModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import Spinner from '../Spinner';
 import { Switch } from '../primitives';
+import TrackedInContributions from './categories/TrackedInContributions';
 import { Field, PanelHeader, SelectShell, inputCls, selectCls, btnPrimary, btnSecondary, ICON } from './ui';
 
 const EmojiPickerPopover = lazy(() => import('../EmojiPickerPopover'));
@@ -28,6 +29,7 @@ export interface Category {
   emoji?: string | null;
   exclude_from_budget?: number;
   group_id?: number | null;
+  contribution_tracked?: boolean;
 }
 
 export interface Group {
@@ -179,6 +181,7 @@ function CategoryForm({ category, groups, initialGroupId, onSave, onDelete, onCl
             <Switch checked={excludeFromBudget} onChange={setExcludeFromBudget} title="Exclude from budget" />
           )}
         </div>
+        {category?.contribution_tracked && <TrackedInContributions categoryId={category.id} />}
       </div>
     </ResponsiveModal>
   );
