@@ -7,13 +7,14 @@
   person is one row; clicking it opens their view (pop-up window on desktop, bottom sheet
   on phones) with Role, Access (presets and Customize), Sign-in (can sign in, Reset
   two-step), and Edit name or password / Delete user, which open on top of it.
+- Contributions: choose which Transfers categories to track and which accounts they pay into.
 - Bank Sync empty/configuration-denied states (no real external connection).
 
 ## How to get to it (user POV)
 
 Desktop sidebar Settings; phone More → Settings. The menu shows only what the person
 can use, in groups: You (Profile, Security), Household (Accounts, Categories,
-Merchants) and Admin (Users & permissions, Optional extras, John/Jane only). A group
+Contributions, Merchants) and Admin (Users & permissions, Optional extras, John/Jane only). A group
 with no entries is not drawn. Desktop opens on Profile; phones open the index.
 `/settings?tab=preferences` opens Profile; `?panel=ai` opens Optional extras
 (`?panel=extras`). A `?panel=` the person can't see behaves like no panel (Profile on
@@ -34,8 +35,15 @@ desktop, the index on phones). There is no "Restricted setting" card.
   Users & permissions and Optional extras never show. Controls the member can't use
   (Add account, Add category) are hidden, not dimmed. Capture this and the owner view
   at both widths.
+- Contributions (needs `categories.edit`; hidden otherwise; `?panel=contributions`): the
+  empty state reads "No contributions tracked yet". Add contribution picks a Transfers
+  category (or creates one with `categories.create`) and its destination accounts or "An
+  account not in Ledger"; rows read "Pays into …"; Edit changes destinations; "Stop
+  tracking" (two taps) removes tracking, not the category. A tracked category's form in
+  Categories shows "Tracked in Contributions" with a "Manage in Contributions" link, and
+  refuses delete/move. Check Reports reflects each change.
 - Panel load failure: set the network offline (`emulate --network Offline`), open
-  Users, Categories, Accounts, Merchants or Optional extras: the error message and
+  Users, Categories, Accounts, Contributions, Merchants or Optional extras: the error message and
   "Try again" show; back online, "Try again" loads the panel.
 - For 2FA work use only this throwaway user's generated secret, exercise setup,
   verification and recovery via the real UI, and never publish secrets/recovery codes.
