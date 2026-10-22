@@ -5,7 +5,8 @@ import NoAccountsPointer from '../components/NoAccountsPointer';
 import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
 import { buildReportsCsv } from '../lib/reportsCsv';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
-import { formatMoney, type UncategorizedBucketed } from '@ledger/shared';
+import { formatMoney, type UncategorizedBucketed, type ReportContribution } from '@ledger/shared';
+import ContributionsCard from '../components/reports/ContributionsCard';
 import { Money } from '../components/Money';
 import UncategorizedNotice from '../components/UncategorizedNotice';
 import { getCategoryEmoji, getCategoryColorVar, useCategoryEmojis } from '../lib/categoryMeta';
@@ -27,7 +28,7 @@ import { type FilterDraft, EMPTY_FILTER, filterDraftCount } from '../components/
 interface Bucket { label: string; start: string; end: string }
 interface PeriodCat { categoryId: number; groupName: string; subName: string; type: string; sortOrder: number; total: number; buckets: number[] }
 interface PeriodKpis { income: number; expenses: number; net: number; savingsRate: number; incomeSourceCount: number }
-interface PeriodData { range: { start: string; end: string; months: number }; buckets: Bucket[]; categories: PeriodCat[]; kpis: PeriodKpis; uncategorized: UncategorizedBucketed }
+interface PeriodData { range: { start: string; end: string; months: number }; buckets: Bucket[]; categories: PeriodCat[]; kpis: PeriodKpis; uncategorized: UncategorizedBucketed; contributions: ReportContribution[] }
 interface Txn {
   id: number; date: string; description: string | null; amount: number;
   merchant: { id: number; name: string; logoUrl?: string | null } | null;
@@ -879,6 +880,10 @@ export default function ReportsPage() {
           </div>
         )}
       </div>
+
+      {/* CONTRIBUTIONS (not part of any total) */}
+      <ContributionsCard contributions={report?.contributions ?? []} isMobile={isMobile}
+        timeline={{ buckets, index: tlIdx, title: tlTitle, subtitle: `${tlIdx + 1} of ${nB} · ${tlRangeLabel}`, weekly: tlWeekly, colMin: trendColMin, onPrev: () => setTlPick(tlIdx - 1), onNext: () => setTlPick(tlIdx + 1) }} />
 
       {/* TRANSACTIONS */}
       <div className="mt-[22px] border border-line rounded-card bg-surface overflow-hidden shadow-sm">
