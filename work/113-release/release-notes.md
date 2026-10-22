@@ -46,6 +46,7 @@ Ledger v2.0.0 is a full retheme. Every page now looks and behaves the same way, 
 **Investments**
 - Holdings are grouped rows on a phone.
 - Everyone in the household sees every household investment account, and empty selections say so honestly instead of showing $0.00.
+- The Market card's return, its Today figure and the chart's portfolio line now come from your holdings' prices, so money you put in or take out no longer counts as gain or loss. They match the Holdings Total.
 
 **Settings, people and sign-in**
 - A grouped Settings menu that shows only what you can use.
@@ -73,7 +74,3 @@ Ledger v2.0.0 is a full retheme. Every page now looks and behaves the same way, 
 - **Docker:** the standard Docker setup uses `robpaolella/ledger:latest`, so pull and restart. To pin a version, use the `v2.0.0` tag on Docker Hub or GHCR.
 - **Nothing else to change.** No new settings or environment variables are required, and your sign-ins and your two-step setup carry over.
 - To go back, stop Ledger, restore your copy of the data folder and start the older image.
-
-## Known items
-
-- **Investments returns:** the return figure on the Market card and the chart can count money you put in as gain. This is not fixed in v2.0.0. If you make regular contributions, treat that figure as an estimate.
