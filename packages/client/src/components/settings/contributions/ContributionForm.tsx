@@ -83,10 +83,13 @@ export default function ContributionForm({ setup, trackedIds, categories, groups
   };
 
   // Active accounts, investment and retirement first; a deactivated one only while already chosen.
-  const shown = accounts.filter((a) => a.is_active || picked.has(a.id));
+  // /accounts leaves deactivated accounts out, so one already in this setup comes from the setup itself.
+  const known = new Set(accounts.map((a) => a.id));
+  const kept = (setup?.accounts ?? []).filter((a) => !known.has(a.id)).map((a) => ({ id: a.id, name: a.name, type: a.type, is_active: 0 }) as Account);
+  const shown = [...accounts, ...kept].filter((a) => a.is_active || picked.has(a.id));
   const isInvest = (a: Account) => a.type === 'investment' || a.type === 'retirement';
   const rank = (a: Account) => (a.type === 'investment' ? 0 : a.type === 'retirement' ? 1 : 2);
-  const sorted = [...shown].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const sorted = [...shown].sort((a, b) => (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0) || rank(a) - rank(b) || a.name.localeCompare(b.name));
   const toggle = (id: number) => setPicked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const row = (a: Account) => (
     <CheckRow key={a.id} name={a.name} type={TYPE_LABEL[a.type] ?? a.type} checked={picked.has(a.id)} inactive={!a.is_active} onToggle={() => toggle(a.id)} />
