@@ -3,7 +3,8 @@ import { db, sqlite } from '../db/index.js';
 import { transactions, categories } from '../db/schema.js';
 import { sql } from 'drizzle-orm';
 import { isUncategorizedSql } from '../services/reviews.js';
-import { CATEGORIZED_LEGS_SQL, contributionFigures, joinWhere, legAccountFilters, legFilters, parseReportFilters } from '../services/reportLegs.js';
+import { CATEGORIZED_LEGS_SQL, contributionFigures, contributionTransactions, isTrackedCategory, joinWhere, legAccountFilters, legFilters, parseReportFilters } from '../services/reportLegs.js';
+import { clampInt, isValidYmd } from '../utils/validate.js';
 import type { UncategorizedBucketed } from '@ledger/shared/src/types.js';
 
 const router = Router();
@@ -176,6 +177,35 @@ router.get('/period', (req: Request, res: Response) => {
   } catch (err) {
     console.error('GET /reports/period error:', err);
     res.status(500).json({ error: 'Failed to fetch period report' });
+  }
+});
+
+// GET /api/reports/contributions/:categoryId/transactions
+// The transactions behind one tracked category's contribution figures, under
+// the same filters as /period. Paging and sort like GET /api/transactions
+// (sortBy date|amount, thenBy=absAmount); returns { data, total }.
+router.get('/contributions/:categoryId/transactions', (req: Request, res: Response) => {
+  try {
+    const categoryId = parseInt(req.params.categoryId as string, 10);
+    if (Number.isNaN(categoryId) || !isTrackedCategory(sqlite, categoryId)) {
+      return res.status(404).json({ error: 'This category is not set up for contribution tracking.' });
+    }
+    const f = parseReportFilters(req.query);
+    if (!isValidYmd(f.start) || !isValidYmd(f.end)) {
+      return res.status(400).json({ error: 'Choose a start and end date.' });
+    }
+    const q = req.query;
+    res.json(contributionTransactions(sqlite, f, categoryId, {
+      sortBy: q.sortBy as string | undefined,
+      sortOrder: q.sortOrder as string | undefined,
+      thenBy: q.thenBy as string | undefined,
+      thenOrder: q.thenOrder as string | undefined,
+      limit: clampInt(q.limit as string | undefined, 50, 1, 1000),
+      offset: clampInt(q.offset as string | undefined, 0, 0, 1_000_000),
+    }));
+  } catch (err) {
+    console.error('GET /reports/contributions transactions error:', err);
+    res.status(500).json({ error: 'Failed to fetch contribution transactions' });
   }
 });
 
