@@ -118,6 +118,28 @@ export interface ReportContribution {
   takenOut: number[];
   totalPutIn: number;
   totalTakenOut: number;
+  /** The accounts it pays into (as the setup lists them) and whether "an account not in Ledger" is one too. */
+  accounts: ContributionSetupAccount[];
+  external: boolean;
+}
+
+/**
+ * One transaction (or split leg) counted in a contribution's figures, as
+ * GET /api/reports/contributions/:categoryId/transactions lists it.
+ * `amount` is the counted magnitude; `direction` says which figure it feeds.
+ */
+export interface ReportContributionTransaction {
+  transactionId: number;
+  splitId: number | null;
+  date: string;
+  merchant: string | null;
+  description: string;
+  accountId: number;
+  accountName: string;
+  destinationAccountId: number | null;
+  destinationAccountName: string | null;
+  amount: number;
+  direction: 'putIn' | 'takenOut';
 }
 
 export interface Merchant {

@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { ReportContribution } from '@ledger/shared/src/types.js';
+import type { ContributionSetupAccount, ReportContribution, ReportContributionTransaction } from '@ledger/shared/src/types.js';
 
 /**
  * Reports read "legs": an unsplit transaction, or one split leg of a
@@ -198,16 +198,25 @@ export function contributionFigures(
 ): ReportContribution[] {
   const byCategory = new Map<number, ReportContribution>();
   const meta = sqlite.prepare('SELECT group_name, sub_name FROM categories WHERE id = ?');
+  const setup = sqlite.prepare('SELECT id, includes_external FROM contribution_setups WHERE category_id = ?');
+  const setupAccounts = sqlite.prepare(`
+    SELECT a.id, a.name, a.type, a.is_active
+    FROM contribution_setup_accounts sa JOIN accounts a ON a.id = sa.account_id
+    WHERE sa.setup_id = ? ORDER BY a.name, a.id`);
   for (const leg of contributionLegs(sqlite, f)) {
     const bi = bucketOf(leg.date);
     if (bi < 0 || leg.amount === 0) continue;
     let entry = byCategory.get(leg.category_id);
     if (!entry) {
       const c = meta.get(leg.category_id) as { group_name: string; sub_name: string };
+      const st = setup.get(leg.category_id) as { id: number; includes_external: number };
+      const accounts = (setupAccounts.all(st.id) as { id: number; name: string; type: ContributionSetupAccount['type']; is_active: number | null }[])
+        .map((a) => ({ id: a.id, name: a.name, type: a.type, isActive: a.is_active !== 0 }));
       entry = {
         categoryId: leg.category_id, groupName: c.group_name, name: c.sub_name,
         putIn: new Array(bucketCount).fill(0), takenOut: new Array(bucketCount).fill(0),
         totalPutIn: 0, totalTakenOut: 0,
+        accounts, external: st.includes_external === 1,
       };
       byCategory.set(leg.category_id, entry);
     }
@@ -216,4 +225,69 @@ export function contributionFigures(
   }
   return Array.from(byCategory.values())
     .sort((a, b) => a.groupName.localeCompare(b.groupName) || a.name.localeCompare(b.name));
+}
+
+export interface ContributionListOptions {
+  sortBy?: string; // date | amount
+  sortOrder?: string; // asc | desc
+  thenBy?: string; // absAmount
+  thenOrder?: string; // asc | desc
+  limit: number;
+  offset: number;
+}
+
+/** Whether a category has a contribution setup (is tracked). */
+export function isTrackedCategory(sqlite: Database.Database, categoryId: number): boolean {
+  return !!sqlite.prepare('SELECT 1 FROM contribution_setups WHERE category_id = ?').get(categoryId);
+}
+
+/**
+ * The transactions behind one tracked category's figures: exactly the legs
+ * contributionFigures counts (same contributionLegs call, zero-amount legs
+ * skipped), with display fields added. `amount` is the counted magnitude, so
+ * sorting by amount orders by it; ties keep transaction then split id order.
+ */
+export function contributionTransactions(
+  sqlite: Database.Database,
+  f: ReportFilters,
+  categoryId: number,
+  o: ContributionListOptions,
+): { data: ReportContributionTransaction[]; total: number } {
+  const legs = contributionLegs(sqlite, f).filter((l) => l.category_id === categoryId && l.amount !== 0);
+  const dir = (order: string | undefined) => (order === 'asc' ? 1 : -1);
+  const primary = o.sortBy === 'amount'
+    ? (a: ContributionLeg, b: ContributionLeg) => (Math.abs(a.amount) - Math.abs(b.amount)) * dir(o.sortOrder)
+    : (a: ContributionLeg, b: ContributionLeg) => a.date.localeCompare(b.date) * dir(o.sortOrder);
+  const secondary = o.thenBy === 'absAmount'
+    ? (a: ContributionLeg, b: ContributionLeg) => (Math.abs(a.amount) - Math.abs(b.amount)) * dir(o.thenOrder)
+    : () => 0;
+  legs.sort((a, b) => primary(a, b) || secondary(a, b)
+    || a.transaction_id - b.transaction_id || (a.split_id ?? 0) - (b.split_id ?? 0));
+
+  const detail = sqlite.prepare(`
+    SELECT t.description AS description, m.name AS merchant, a.name AS accountName
+    FROM transactions t
+    JOIN accounts a ON a.id = t.account_id
+    LEFT JOIN transaction_splits ts ON ts.id = ?
+    LEFT JOIN merchants m ON m.id = COALESCE(ts.merchant_id, t.merchant_id)
+    WHERE t.id = ?`);
+  const accountName = sqlite.prepare('SELECT name FROM accounts WHERE id = ?');
+  const data = legs.slice(o.offset, o.offset + o.limit).map((l) => {
+    const d = detail.get(l.split_id, l.transaction_id) as { description: string; merchant: string | null; accountName: string };
+    const dest = l.destination_account_id == null ? null : (accountName.get(l.destination_account_id) as { name: string }).name;
+    return {
+      transactionId: l.transaction_id,
+      splitId: l.split_id,
+      date: l.date,
+      merchant: d.merchant,
+      description: d.description,
+      accountId: l.account_id,
+      accountName: d.accountName,
+      destinationAccountId: l.destination_account_id,
+      destinationAccountName: dest,
+      amount: Math.abs(l.amount),
+      direction: l.amount > 0 ? 'putIn' : 'takenOut',
+    } as ReportContributionTransaction;
+  });
+  return { data, total: legs.length };
 }
