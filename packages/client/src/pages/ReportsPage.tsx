@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { accountShortName } from '../lib/accounts';
 import NoAccountsPointer from '../components/NoAccountsPointer';
-import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
+import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, txnListState, type ReportsSort } from '../lib/reportsPaging';
 import { buildReportsCsv, contributionDrillTxn } from '../lib/reportsCsv';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
 import { formatMoney, type UncategorizedBucketed, type ReportContribution, type ReportContributionTransaction } from '@ledger/shared';
@@ -617,6 +617,7 @@ export default function ReportsPage() {
     });
   })();
 
+  const listState = txnListState(txnFailed, dayGroups.length, contribObj ? 'contribution' : focusGroup ? 'category' : null);
   const sortLabelMap: Record<SortId, string> = { date_desc: 'Newest', date_asc: 'Oldest', amt_desc: 'Highest', amt_asc: 'Lowest' };
   const sortOptions: { id: SortId; label: string }[] = [
     { id: 'date_desc', label: 'Date · new to old' }, { id: 'date_asc', label: 'Date · old to new' },
@@ -936,13 +937,13 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="border-t border-line">
-          {txnFailed ? (
+          {listState.kind === 'error' ? (
             <div role="alert" className="flex flex-col items-center gap-3 text-center text-content-3 text-sm" style={{ padding: '36px' }}>
               <span>Couldn’t load these transactions. Check your connection, then try again.</span>
               <Button variant="secondary" onClick={() => setTxnReload((n) => n + 1)}>Try again</Button>
             </div>
-          ) : dayGroups.length === 0 ? (
-            <div className="text-center text-content-3 text-sm" style={{ padding: '36px' }}>No transactions in this {contribObj ? 'contribution' : focusGroup ? 'category' : 'period'}.</div>
+          ) : listState.kind === 'empty' ? (
+            <div className="text-center text-content-3 text-sm" style={{ padding: '36px' }}>{listState.text}</div>
           ) : dayGroups.map((g) => (
             <div key={g.key}>
               <div className="flex items-center justify-between bg-surface-2 border-b border-line" style={{ padding: '9px 26px' }}>

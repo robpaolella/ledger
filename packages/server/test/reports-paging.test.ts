@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { TXN_PAGE, fetchAllPages, hasMoreTxns, pageQuery, pagingHint, sortQuery } from '../../client/src/lib/reportsPaging';
+import { TXN_PAGE, fetchAllPages, hasMoreTxns, pageQuery, pagingHint, sortQuery, txnListState } from '../../client/src/lib/reportsPaging';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-reports-paging-'));
 process.env.DATABASE_PATH = path.join(scratch, 'test.db');
@@ -147,5 +147,19 @@ describe('GET /transactions as Reports pages it', () => {
   it('reports the full total with a short page and none for an empty range', async () => {
     expect((await load({ limit: '2' })).total).toBe(9);
     expect(await load({ startDate: '2020-01-01', endDate: '2020-01-31' })).toEqual({ rows: [], total: 0 });
+  });
+});
+
+describe('Transactions card state', () => {
+  it('shows the load error, not an empty card, when the list failed', () => {
+    expect(txnListState(true, 0, 'contribution')).toEqual({ kind: 'error' });
+  });
+  it('shows the usual empty note, naming what is drilled into', () => {
+    expect(txnListState(false, 0, 'contribution')).toEqual({ kind: 'empty', text: 'No transactions in this contribution.' });
+    expect(txnListState(false, 0, 'category')).toEqual({ kind: 'empty', text: 'No transactions in this category.' });
+    expect(txnListState(false, 0, null)).toEqual({ kind: 'empty', text: 'No transactions in this period.' });
+  });
+  it('shows rows when there are any', () => {
+    expect(txnListState(false, 3, 'contribution')).toEqual({ kind: 'rows' });
   });
 });
