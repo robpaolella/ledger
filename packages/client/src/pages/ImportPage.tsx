@@ -1,44 +1,45 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { apiFetch } from '../lib/api';
-import { fmt } from '../lib/formatters';
-import { getCategoryColor } from '../lib/categoryColors';
+import { apiFetch, ApiError } from '../lib/api';
+import { readCsv, readAmount } from '@ledger/shared';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import DuplicateComparison from '../components/DuplicateComparison';
-import BankSyncPanel from '../components/BankSyncPanel';
-import SortableHeader from '../components/SortableHeader';
-import InlineNotification from '../components/InlineNotification';
-import ResponsiveModal from '../components/ResponsiveModal';
-import SplitEditor from '../components/SplitEditor';
-import type { SplitRow } from '../components/SplitEditor';
+import { initOwnerSlots } from '../components/badges';
+import { Stepper, vendorColor, type ImpCategory } from '../components/import/cells';
+import { SegmentedControl } from '../components/primitives';
+import { MobileBar } from '../components/PageHeader';
 import { useIsMobile } from '../hooks/useIsMobile';
+import BankSyncSelect from '../components/import/BankSyncSelect';
+import SyncReview from '../components/import/SyncReview';
+import CsvUpload from '../components/import/CsvUpload';
+import CsvMap, { type CsvPreviewRow } from '../components/import/CsvMap';
+import CsvReview from '../components/import/CsvReview';
+import type { SyncAccount, ImpSyncRow, ImpCsvRow, AccountMeta } from '../components/import/types';
 
-const TRANSFER_ICON_PATH = "M32 176h370.8l-57.38 57.38c-12.5 12.5-12.5 32.75 0 45.25C351.6 284.9 359.8 288 368 288s16.38-3.125 22.62-9.375l112-112c12.5-12.5 12.5-32.75 0-45.25l-112-112c-12.5-12.5-32.75-12.5-45.25 0s-12.5 32.75 0 45.25L402.8 112H32c-17.69 0-32 14.31-32 32S14.31 176 32 176zM480 336H109.3l57.38-57.38c12.5-12.5 12.5-32.75 0-45.25s-32.75-12.5-45.25 0l-112 112c-12.5 12.5-12.5 32.75 0 45.25l112 112C127.6 508.9 135.8 512 144 512s16.38-3.125 22.62-9.375c12.5-12.5 12.5-32.75 0-45.25L109.3 400H480c17.69 0 32-14.31 32-32S497.7 336 480 336z";
-const TransferIcon = ({ size = 10, inline = true }: { size?: number; inline?: boolean }) => (
-  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" style={{ display: 'inline-block', verticalAlign: '-1px', marginRight: inline ? 4 : 0, flexShrink: 0 }}>
-    <path d={TRANSFER_ICON_PATH} />
-  </svg>
-);
-
-interface Account {
+// ── Data shapes ─────────────────────────────────────────────────────────────
+interface EnrichedAccount {
   id: number;
   name: string;
   last_four: string | null;
-  owner: string;
-  owners?: { id: number; displayName: string }[];
-  isShared?: boolean;
   type: string;
+  classification: 'liquid' | 'investment' | 'liability';
+  avatar_url: string | null;
+  institutionRef: { id: number; name: string; logo_url: string | null; color: string | null } | null;
+  owners: { id: number; displayName: string }[];
+  isShared: boolean;
 }
-
-interface Category {
-  id: number;
-  group_name: string;
-  sub_name: string;
-  display_name: string;
-  type: string;
+interface Merchant { id: number; name: string; logo_url: string | null }
+interface LinkedAccountGroup {
+  connectionId: number;
+  connectionLabel: string;
+  accounts: {
+    account_id: number;
+    simplefin_account_name: string;
+    simplefin_org_name: string | null;
+    last_synced_at: string | null;
+    auto_import: number;
+  }[];
 }
-
 interface ParseResult {
   headers: string[];
   sampleRows: string[][];
@@ -48,1324 +49,483 @@ interface ParseResult {
   headerRowIndex: number;
 }
 
-interface CategorizedRow {
-  date: string;
-  description: string;
-  note?: string;
-  amount: number;
-  suggestedCategoryId: number | null;
-  suggestedGroupName: string | null;
-  suggestedSubName: string | null;
-  confidence: number;
-  // User overrides
-  categoryId: number | null;
-  groupName: string | null;
-  subName: string | null;
-  // Split support
-  splits: SplitRow[] | null;
-  // Duplicate detection
-  duplicateStatus: 'exact' | 'possible' | 'none';
-  duplicateMatch: {
-    id: number;
-    date: string;
-    description: string;
-    amount: number;
-    accountName: string | null;
-    category: string | null;
-  } | null;
-  // Transfer detection
-  isLikelyTransfer: boolean;
-  isDismissedTransfer: boolean;
-  transferTooltip?: string;
+// ── CSV helpers (ported from the previous ImportPage) ────────────────────────
+function parseDate(s: string): string {
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
 }
-
-const STEPS = ['Upload File', 'Map Columns', 'Review & Categorize'];
-
-function normalizeAmount(raw: string): number {
-  let s = raw.trim().replace(/"/g, '');
-  const isParenthesized = /^\(.*\)$/.test(s);
-  s = s.replace(/[($,+\s)]/g, '');
-  const val = parseFloat(s);
-  if (isNaN(val)) return 0;
-  return isParenthesized ? -val : val;
-}
-
 function isImportableVenmoRow(type: string, status: string, from: string, to: string): boolean {
-  const normalizedType = type.trim().toLowerCase();
-  const normalizedStatus = status.trim().toLowerCase();
-
-  if (normalizedStatus && /incomplete|declined|expired|cancelled/.test(normalizedStatus)) return false;
-  if (/transfer|add funds/.test(normalizedType)) return false;
+  const t = type.trim().toLowerCase();
+  const st = status.trim().toLowerCase();
+  if (st && /incomplete|declined|expired|cancelled/.test(st)) return false;
+  if (/transfer|add funds/.test(t)) return false;
   if (!from.trim() && !to.trim()) return false;
-
-  return normalizedType === 'payment' || normalizedType === 'charge';
+  return t === 'payment' || t === 'charge';
 }
-
-function buildVenmoDescription(type: string, from: string, to: string, note: string, amount: number): string {
-  const normalizedType = type.trim().toLowerCase();
-  const isMoneyIn = amount >= 0;
-
-  const counterparty = normalizedType === 'charge'
-    ? (isMoneyIn ? to : from)
-    : (isMoneyIn ? from : to);
-
-  const fallbackCounterparty = counterparty || from || to || 'Venmo';
-  const prefix = `${isMoneyIn ? 'From' : 'To'} ${fallbackCounterparty}`;
-
+function buildVenmoDescription(type: string, from: string, to: string, note: string, amount: number | null): string {
+  // Unreadable amount: the direction is unknown, so no "From"/"To" prefix.
+  if (amount == null) return note || from || to || 'Venmo';
+  const t = type.trim().toLowerCase();
+  const moneyIn = amount >= 0;
+  const cp = t === 'charge' ? (moneyIn ? to : from) : (moneyIn ? from : to);
+  const prefix = `${moneyIn ? 'From' : 'To'} ${cp || from || to || 'Venmo'}`;
   return note ? `${prefix}: ${note}` : prefix;
 }
 
+/** Phones: a progress bar and one line, "Step 2 of 3 · Map columns", in place of the three-label stepper. */
+function PhoneStepLine({ labels, activeIndex }: { labels: string[]; activeIndex: number }) {
+  const label = labels[activeIndex].charAt(0) + labels[activeIndex].slice(1).toLowerCase();
+  return (
+    <div className="mb-5">
+      <div className="h-1 rounded-full bg-surface-2 overflow-hidden mb-3">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${((activeIndex + 1) / labels.length) * 100}%`, transition: 'width .3s' }} />
+      </div>
+      <div className="text-[14px] font-bold text-content">Step {activeIndex + 1} of {labels.length} · <span className="text-primary">{label}</span></div>
+    </div>
+  );
+}
+
 export default function ImportPage() {
+  const isMobile = useIsMobile();
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
-  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<'csv' | 'sync'>(searchParams.get('tab') === 'csv' ? 'csv' : searchParams.get('tab') === 'sync' ? 'sync' : 'csv');
-  const [mobileFlowActive, setMobileFlowActive] = useState(false);
-  const [hasConnections, setHasConnections] = useState<boolean | null>(null);
-  const [step, setStep] = useState(0);
-  const [dragOver, setDragOver] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
+
+  const [mode, setMode] = useState<'csv' | 'sync'>(searchParams.get('tab') === 'csv' ? 'csv' : 'sync');
+
+  // shared data
+  const [accounts, setAccounts] = useState<EnrichedAccount[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false); // true once /accounts answered, even with none
+  const [categories, setCategories] = useState<ImpCategory[]>([]);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [linkedGroups, setLinkedGroups] = useState<LinkedAccountGroup[]>([]);
+
+  // csv state
+  const [csvStep, setCsvStep] = useState(1);
+  const [csvAccountId, setCsvAccountId] = useState<number | ''>('');
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [allRows, setAllRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState({ date: 0, description: 1, amount: 2 });
   const [venmoMapping, setVenmoMapping] = useState({ from: -1, to: -1, note: -1 });
-  const [categorizedRows, setCategorizedRows] = useState<CategorizedRow[]>([]);
-  const [importing, setImporting] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
-  const [selectedImportRows, setSelectedImportRows] = useState<Set<number>>(new Set());
-  const [signConvention, setSignConvention] = useState<'bank' | 'credit'>('bank');
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [showAccountModal, setShowAccountModal] = useState(false);
-  const [modalAccountId, setModalAccountId] = useState<number | ''>('');
-  const [expandedDupeRow, setExpandedDupeRow] = useState<number | null>(null);
-  const [csvSortBy, setCsvSortBy] = useState('date');
-  const [csvSortDir, setCsvSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sign, setSign] = useState<'bank' | 'credit'>('bank');
+  const [csvRows, setCsvRows] = useState<ImpCsvRow[]>([]);
+  const [csvSelected, setCsvSelected] = useState<Set<number>>(new Set());
+  const [csvImporting, setCsvImporting] = useState(false);
+
+  // sync state
+  const [syncStep, setSyncStep] = useState(1);
+  const [syncRows, setSyncRows] = useState<ImpSyncRow[]>([]);
+  const [syncSelected, setSyncSelected] = useState<Set<number>>(new Set());
+  const [fetching, setFetching] = useState(false);
+  const [syncImporting, setSyncImporting] = useState(false);
+  const [fetchedRange, setFetchedRange] = useState<{ startDate: string; endDate: string } | null>(null);
 
   useEffect(() => {
-    if (notification) { const t = setTimeout(() => setNotification(null), 5000); return () => clearTimeout(t); }
-  }, [notification]);
-
-  useEffect(() => {
-    apiFetch<{ data: Account[] }>('/accounts').then((r) => setAccounts(r.data));
-    apiFetch<{ data: Category[] }>('/categories').then((r) => setCategories(r.data));
-    // Check if SimpleFIN connections exist to set default tab
-    apiFetch<{ data: { id: number }[] }>('/simplefin/connections').then((r) => {
-      const has = r.data.length > 0;
-      setHasConnections(has);
-      // Set default tab if not specified in URL
-      if (!searchParams.get('tab') && has) setActiveTab('sync');
-    }).catch(() => setHasConnections(false));
+    apiFetch<{ data: { id: number }[] }>('/users').then((r) => initOwnerSlots(r.data.map((u) => u.id))).catch(() => {});
+    apiFetch<{ data: EnrichedAccount[] }>('/accounts').then((r) => { setAccounts(r.data); setAccountsLoaded(true); }).catch(() => {});
+    apiFetch<{ data: ImpCategory[] }>('/categories').then((r) => setCategories(r.data)).catch(() => {});
+    apiFetch<{ data: Merchant[] }>('/merchants').then((r) => setMerchants(r.data)).catch(() => {});
+    apiFetch<{ data: LinkedAccountGroup[] }>('/simplefin/linked-accounts').then((r) => setLinkedGroups(r.data)).catch(() => {});
+    // Default tab: Bank Sync when the user has linked accounts, unless ?tab set.
+    if (!searchParams.get('tab')) {
+      apiFetch<{ data: { id: number }[] }>('/simplefin/connections')
+        .then((r) => { if (r.data.length === 0) setMode('csv'); })
+        .catch(() => setMode('csv'));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCsvSort = (key: string) => {
-    if (key === csvSortBy) setCsvSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setCsvSortBy(key); setCsvSortDir('asc'); }
+  const switchMode = (m: 'csv' | 'sync') => {
+    setMode(m);
+    setSearchParams(m === 'csv' ? { tab: 'csv' } : {}, { replace: true });
   };
 
-  const sortedCsvIndices = React.useMemo(() => {
-    const indices = categorizedRows.map((_, i) => i);
-    const dir = csvSortDir === 'asc' ? 1 : -1;
-    indices.sort((a, b) => {
-      const ra = categorizedRows[a], rb = categorizedRows[b];
-      switch (csvSortBy) {
-        case 'date': return dir * ra.date.localeCompare(rb.date);
-        case 'description': return dir * ra.description.localeCompare(rb.description);
-        case 'amount': return dir * (ra.amount - rb.amount);
-        case 'category': {
-          const ca = categories.find(c => c.id === ra.categoryId)?.display_name || '';
-          const cb = categories.find(c => c.id === rb.categoryId)?.display_name || '';
-          return dir * ca.localeCompare(cb);
-        }
-        case 'confidence': return dir * ((ra.confidence || 0) - (rb.confidence || 0));
-        default: return 0;
-      }
-    });
-    return indices;
-  }, [categorizedRows, csvSortBy, csvSortDir, categories]);
-
-  // Split into main rows and dismissed transfer rows
-  const mainCsvIndices = React.useMemo(() =>
-    sortedCsvIndices.filter(i => !categorizedRows[i].isDismissedTransfer),
-    [sortedCsvIndices, categorizedRows]);
-  const dismissedCsvIndices = React.useMemo(() =>
-    sortedCsvIndices.filter(i => categorizedRows[i].isDismissedTransfer),
-    [sortedCsvIndices, categorizedRows]);
-
-  const handleFile = async (f: File) => {
-    if (!selectedAccountId) {
-      setPendingFile(f);
-      setModalAccountId('');
-      setShowAccountModal(true);
-      return;
-    }
-    await processFile(f);
-  };
-
-  const handleAccountModalContinue = async () => {
-    if (!modalAccountId || !pendingFile) return;
-    setSelectedAccountId(modalAccountId);
-    const acct = accounts.find(a => a.id === modalAccountId);
-    setSignConvention(acct?.type === 'credit' ? 'credit' : 'bank');
-    setShowAccountModal(false);
-    await processFile(pendingFile);
-    setPendingFile(null);
-  };
-
-  const handleAccountModalCancel = () => {
-    setShowAccountModal(false);
-    setPendingFile(null);
-    setModalAccountId('');
-  };
-
-  const processFile = async (f: File) => {
-    setFile(f);
-    const formData = new FormData();
-    formData.append('file', f);
-
-    try {
-      const res = await apiFetch<{ data: ParseResult }>('/import/parse', {
-        method: 'POST',
-        body: formData,
+  // ── Derived lookups ──────────────────────────────────────────────────────────
+  const accountsById = useMemo(() => {
+    const m = new Map<number, AccountMeta>();
+    for (const a of accounts) {
+      m.set(a.id, {
+        name: a.name,
+        lastFour: a.last_four,
+        logoSrc: a.avatar_url || a.institutionRef?.logo_url || undefined,
+        color: a.institutionRef?.color || vendorColor(a.name),
       });
+    }
+    return m;
+  }, [accounts]);
 
+  const syncAccounts: SyncAccount[] = useMemo(() => {
+    const linked = new Map<number, LinkedAccountGroup['accounts'][number]>();
+    for (const g of linkedGroups) for (const a of g.accounts) linked.set(a.account_id, a);
+    return accounts.filter((a) => linked.has(a.id)).map((a) => {
+      const l = linked.get(a.id)!;
+      return {
+        id: a.id,
+        name: a.name,
+        lastFour: a.last_four,
+        bucket: (['liquid', 'investment', 'liability'].includes(a.classification) ? a.classification : 'liquid') as SyncAccount['bucket'],
+        owners: a.owners,
+        isShared: a.isShared,
+        logoSrc: a.avatar_url || a.institutionRef?.logo_url || undefined,
+        color: a.institutionRef?.color || vendorColor(a.institutionRef?.name || a.name),
+        institutionName: a.institutionRef?.name || l.simplefin_org_name || '',
+        sfinName: l.simplefin_account_name,
+        syncedAt: l.last_synced_at,
+        autoImport: l.auto_import === 1,
+      };
+    });
+  }, [accounts, linkedGroups]);
+
+  const vendorOptions = useMemo(() => [...new Set(merchants.map((m) => m.name))].sort((a, b) => a.localeCompare(b)), [merchants]);
+  const merchantLogos = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of merchants) if (x.logo_url) m.set(x.name.trim().toLowerCase(), x.logo_url);
+    return m;
+  }, [merchants]);
+
+  // ── CSV: preview (recomputed on mapping/sign/account) ────────────────────────
+  const csvPreview: CsvPreviewRow[] = useMemo(() => {
+    if (!parseResult) return [];
+    const acct = accounts.find((a) => a.id === csvAccountId);
+    const acctLabel = acct ? `${acct.name}${acct.last_four ? ` ····${acct.last_four}` : ''}` : '—';
+    const ownerLabel = acct ? (acct.isShared ? 'Shared' : acct.owners[0]?.displayName ?? '—') : '—';
+    return allRows.slice(0, 5).map((row) => {
+      const amt = readAmount(row[mapping.amount]);
+      return {
+        date: parseDate(row[mapping.date] || ''),
+        merchant: row[mapping.description] || '',
+        category: '—',
+        account: acctLabel,
+        stmt: row[mapping.description] || '',
+        amount: amt == null ? null : sign === 'bank' ? -amt : amt,
+        owner: ownerLabel,
+      };
+    });
+  }, [parseResult, allRows, mapping, sign, csvAccountId, accounts]);
+
+  // ── CSV handlers ─────────────────────────────────────────────────────────────
+  const handleCsvFile = async (f: File) => {
+    if (!csvAccountId) { addToast('Select an account before uploading.', 'error'); return; }
+    setFile(f);
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+      const res = await apiFetch<{ data: ParseResult }>('/import/parse', { method: 'POST', body: fd });
       setParseResult(res.data);
       setMapping(res.data.suggestedMapping);
-
-      // Auto-map Venmo columns
       if (res.data.detectedFormat === 'venmo') {
-        const h = res.data.headers.map(x => x.toLowerCase());
-        setVenmoMapping({
-          from: h.findIndex(x => /^from$/i.test(x)),
-          to: h.findIndex(x => /^to$/i.test(x)),
-          note: h.findIndex(x => /note/i.test(x)),
-        });
+        const h = res.data.headers.map((x) => x.toLowerCase());
+        setVenmoMapping({ from: h.findIndex((x) => /^from$/i.test(x)), to: h.findIndex((x) => /^to$/i.test(x)), note: h.findIndex((x) => /note/i.test(x)) });
+      } else {
+        setVenmoMapping({ from: -1, to: -1, note: -1 });
       }
-
-      // Store all rows (we'll need them for step 3)
-      // Re-parse locally to get all rows, using headerRowIndex from server
+      // Re-parse locally to hold all rows.
       const text = await f.text();
-      const lines = text.split(/\r?\n/).filter((l) => l.trim());
       const hri = res.data.headerRowIndex ?? 0;
-      let parsedRows = lines.slice(hri + 1).map((line: string) => {
-        const result: string[] = [];
-        let current = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const ch = line[i];
-          if (ch === '"') {
-            if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-            else inQuotes = !inQuotes;
-          } else if (ch === ',' && !inQuotes) {
-            result.push(current.trim());
-            current = '';
-          } else {
-            current += ch;
-          }
-        }
-        result.push(current.trim());
-        return result;
-      }).filter((r: string[]) => r.some((c) => c.trim()));
-
-      // For Venmo: keep person-to-person transactions and skip funding/transfer rows.
+      let rows = readCsv(text).records.slice(hri + 1);
       if (res.data.detectedFormat === 'venmo') {
-        const hLower = res.data.headers.map(x => x.toLowerCase());
-        const typeIdx = hLower.findIndex(x => /^type$/i.test(x));
-        const statusIdx = hLower.findIndex(x => /^status$/i.test(x));
-        const dateIdx = hLower.findIndex(x => /datetime|date/i.test(x));
-        const fromIdx = hLower.findIndex(x => /^from$/i.test(x));
-        const toIdx = hLower.findIndex(x => /^to$/i.test(x));
-        parsedRows = parsedRows.filter((row: string[]) => {
+        const hLower = res.data.headers.map((x) => x.toLowerCase());
+        const typeIdx = hLower.findIndex((x) => /^type$/i.test(x));
+        const statusIdx = hLower.findIndex((x) => /^status$/i.test(x));
+        const dateIdx = hLower.findIndex((x) => /datetime|date/i.test(x));
+        const fromIdx = hLower.findIndex((x) => /^from$/i.test(x));
+        const toIdx = hLower.findIndex((x) => /^to$/i.test(x));
+        rows = rows.filter((row) => {
           const type = typeIdx >= 0 ? row[typeIdx]?.trim() || '' : '';
           const status = statusIdx >= 0 ? row[statusIdx]?.trim() || '' : '';
           const from = fromIdx >= 0 ? row[fromIdx]?.trim() || '' : '';
           const to = toIdx >= 0 ? row[toIdx]?.trim() || '' : '';
-
           if (!isImportableVenmoRow(type, status, from, to)) return false;
-
-          if (dateIdx >= 0) {
-            const dateVal = row[dateIdx]?.trim() || '';
-            if (!dateVal || isNaN(new Date(dateVal).getTime())) return false;
-          }
+          if (dateIdx >= 0) { const dv = row[dateIdx]?.trim() || ''; if (!dv || isNaN(new Date(dv).getTime())) return false; }
           return true;
         });
       }
-
-      setAllRows(parsedRows);
-      setStep(1);
+      setAllRows(rows);
+      setCsvStep(2);
     } catch (err) {
-      console.error('Failed to parse CSV:', err);
-      setNotification({ type: 'error', message: 'Failed to parse CSV file. Check console for details.' });
+      console.error('CSV parse failed', err);
+      addToast(err instanceof ApiError && err.status === 400 ? err.message : 'Failed to parse CSV file.', 'error');
       setFile(null);
-      return;
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
-  };
-
   const handleAutoCategorize = async () => {
-    if (!parseResult) return;
+    if (!parseResult || !csvAccountId) return;
+    const acct = accounts.find((a) => a.id === csvAccountId);
+    const isVenmo = parseResult.detectedFormat === 'venmo' || acct?.type === 'venmo';
+    const hLower = parseResult.headers.map((x) => x.toLowerCase());
+    const venmoTypeIdx = hLower.findIndex((x) => /^type$/i.test(x));
 
-    const acct = accounts.find(a => a.id === selectedAccountId);
-    const isVenmo = parseResult?.detectedFormat === 'venmo' || acct?.type === 'venmo';
-    const hLower = parseResult.headers.map(x => x.toLowerCase());
-    const venmoTypeIdx = hLower.findIndex(x => /^type$/i.test(x));
-
-    const items = allRows.map((row) => {
+    const items = allRows.map((row, rowIdx) => {
       let description = row[mapping.description] || '';
       let venmoNote: string | undefined;
-      // Build Venmo description from From/To + Note, using amount sign for direction
+      const rawAmt = readAmount(row[mapping.amount]);
       if (isVenmo && venmoMapping.from >= 0 && venmoMapping.to >= 0) {
         const from = row[venmoMapping.from]?.trim() || '';
         const to = row[venmoMapping.to]?.trim() || '';
         const note = venmoMapping.note >= 0 ? row[venmoMapping.note]?.trim() || '' : '';
         venmoNote = note || undefined;
-        const rawAmt = normalizeAmount(row[mapping.amount] || '0');
         const type = venmoTypeIdx >= 0 ? row[venmoTypeIdx]?.trim() || '' : '';
         description = buildVenmoDescription(type, from, to, note, rawAmt);
       }
-      return {
-        description,
-        amount: normalizeAmount(row[mapping.amount] || '0'),
-        venmoNote,
-      };
-    }).filter((item) => item.description.trim());
+      // Ledger sign (positive = money out), matching what the row will be imported as.
+      const amount = rawAmt == null ? null : sign === 'bank' ? -rawAmt : rawAmt;
+      return { description, amount, venmoNote, rowIdx };
+    }).filter((it) => it.description.trim());
+    // Rows with an unreadable amount are not categorized; they are shown flagged and never imported.
+    const readable = items.flatMap((it) => (it.amount != null ? [{ ...it, amount: it.amount }] : []));
 
-    const res = await apiFetch<{ data: CategorizedRow[] }>('/import/categorize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
-    });
-
-    // Merge with row data (date + amount + note)
-    const merged = res.data.map((cat, i) => {
-      const row = allRows[i];
-      const dateStr = row?.[mapping.date] || '';
-      const rawAmt = row?.[mapping.amount] || '0';
-      const amt = normalizeAmount(rawAmt);
-
-      // Parse date
-      let date = dateStr;
-      const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        date = parsed.toISOString().slice(0, 10);
-      }
-
-      // Convert amount based on sign convention
-      // Bank: positive CSV = money in (income) = negative stored; negative CSV = money out (expense) = positive stored
-      // Credit: positive CSV = charge (expense) = positive stored; negative CSV = credit (refund) = negative stored
-      const amount = signConvention === 'bank' ? -amt : amt;
-
-      return {
-        date,
-        description: cat.description,
-        note: items[i]?.venmoNote,
-        amount,
-        suggestedCategoryId: cat.suggestedCategoryId,
-        suggestedGroupName: cat.suggestedGroupName,
-        suggestedSubName: cat.suggestedSubName,
-        confidence: cat.confidence,
-        categoryId: cat.suggestedCategoryId,
-        groupName: cat.suggestedGroupName,
-        subName: cat.suggestedSubName,
-        duplicateStatus: 'none' as CategorizedRow['duplicateStatus'],
-        duplicateMatch: null as CategorizedRow['duplicateMatch'],
-        isLikelyTransfer: false,
-        isDismissedTransfer: false,
-        splits: null,
-      };
-    });
-
-    // Run duplicate detection in batch
     try {
-      const dupeCheckItems = merged.map((r) => ({ date: r.date, amount: r.amount, description: r.description }));
-      const dupeRes = await apiFetch<{ data: { index: number; status: 'exact' | 'possible' | 'none'; matchId: number | null; matchDescription?: string; matchDate?: string; matchAmount?: number; matchAccountName?: string }[] }>(
-        '/import/check-duplicates',
-        { method: 'POST', body: JSON.stringify({ items: dupeCheckItems }) }
+      const res = await apiFetch<{ data: { description: string; suggestedCategoryId: number | null; confidence: number; source?: string }[] }>(
+        '/import/categorize',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            accountId: csvAccountId,
+            // Ledger sign: the resolver reads direction to tell a card payment
+            // from a card refund, so an unflipped amount would mislead it.
+            items: readable.map((it) => ({ description: it.description, amount: it.amount, venmoNote: it.venmoNote })),
+          }),
+        },
       );
-      for (const d of dupeRes.data) {
-        if (d.status !== 'none' && merged[d.index]) {
-          merged[d.index].duplicateStatus = d.status;
-          if (d.matchId) {
-            merged[d.index].duplicateMatch = {
-              id: d.matchId,
-              date: d.matchDate || '',
-              description: d.matchDescription || '',
-              amount: d.matchAmount ?? merged[d.index].amount,
-              accountName: d.matchAccountName || null,
-              category: null,
-            };
-          }
-        }
-      }
-    } catch {
-      // Duplicate detection failed — continue without it
-    }
-
-    // Run transfer detection in batch
-    try {
-      const transferItems = merged.map((r) => ({ description: r.description, amount: r.amount }));
-      const transferRes = await apiFetch<{ data: boolean[] }>(
-        '/import/check-transfers',
-        { method: 'POST', body: JSON.stringify({ items: transferItems }) }
-      );
-      transferRes.data.forEach((isTransfer, i) => {
-        if (isTransfer && merged[i]) {
-          merged[i].isLikelyTransfer = true;
-        }
+      const suggestions = new Map(readable.map((it, i) => [it.rowIdx, res.data[i]]));
+      const rows: ImpCsvRow[] = items.map((src) => {
+        const row = allRows[src.rowIdx];
+        const cat = suggestions.get(src.rowIdx);
+        return {
+          date: parseDate(row[mapping.date] || ''),
+          description: cat?.description ?? src.description,
+          note: src.venmoNote,
+          amount: src.amount,
+          confidence: cat?.confidence ?? 0,
+          categoryId: cat?.suggestedCategoryId ?? null,
+          source: cat?.source ?? null,
+          duplicateStatus: 'none',
+          isLikelyTransfer: false,
+          isDismissedTransfer: false,
+        };
       });
-    } catch {
-      // Transfer detection failed — continue without it
-    }
+      // Duplicate and transfer checks only see rows with a real amount.
+      const checkIdx = rows.flatMap((r, i) => (r.amount != null ? [i] : []));
+      const checkItems = checkIdx.map((i) => ({ date: rows[i].date, amount: rows[i].amount, description: rows[i].description }));
 
-    // Check ALL rows against dismissed list (catches both auto-detected and previously manually-flagged transfers)
-    if (merged.length > 0 && selectedAccountId) {
+      // Duplicate detection (batch).
       try {
-        const allItems = merged.map(r => ({ date: r.date, amount: r.amount, description: r.description }));
-        const dismissRes = await apiFetch<{ data: boolean[] }>(
-          '/import/check-dismissed-transfers',
-          { method: 'POST', body: JSON.stringify({ accountId: selectedAccountId, items: allItems }) }
+        const dupRes = await apiFetch<{ data: { index: number; status: 'exact' | 'possible' | 'none' }[] }>(
+          '/import/check-duplicates',
+          { method: 'POST', body: JSON.stringify({ items: checkItems }) },
         );
-        dismissRes.data.forEach((isDismissed, i) => {
-          if (isDismissed) {
-            merged[i].isLikelyTransfer = true;
-            merged[i].isDismissedTransfer = true;
-          }
-        });
-      } catch {
-        // Dismissed check failed — continue without it
-      }
-    }
+        for (const d of dupRes.data) { const r = rows[checkIdx[d.index]]; if (d.status !== 'none' && r) r.duplicateStatus = d.status; }
+      } catch { /* ignore */ }
 
-    setCategorizedRows(merged);
-    // Auto-uncheck exact duplicates and dismissed transfers
-    const selected = new Set(merged.map((_, i) => i));
-    merged.forEach((r, i) => {
-      if (r.duplicateStatus === 'exact' || !r.categoryId || r.isDismissedTransfer) selected.delete(i);
-    });
-    setSelectedImportRows(selected);
-    setStep(2);
+      // Previously-dismissed transfers → auto-unselect.
+      try {
+        const dis = await apiFetch<{ data: boolean[] }>(
+          '/import/check-dismissed-transfers',
+          { method: 'POST', body: JSON.stringify({ accountId: csvAccountId, items: checkItems }) },
+        );
+        dis.data.forEach((d, j) => { const r = rows[checkIdx[j]]; if (d && r) { r.isLikelyTransfer = true; r.isDismissedTransfer = true; } });
+      } catch { /* ignore */ }
+
+      const sel = new Set(rows.map((_, i) => i));
+      rows.forEach((r, i) => { if (r.amount == null || r.duplicateStatus === 'exact' || r.categoryId == null || r.isDismissedTransfer) sel.delete(i); });
+      setCsvRows(rows);
+      setCsvSelected(sel);
+      setCsvStep(3);
+    } catch (err) {
+      console.error('Auto-categorize failed', err);
+      addToast('Failed to categorize transactions.', 'error');
+    }
   };
 
-  const handleImport = async () => {
-    if (!selectedAccountId) return;
-    const validRows = categorizedRows.filter((r, i) => selectedImportRows.has(i) && (r.categoryId != null || (r.splits && r.splits.length >= 2)));
-    if (validRows.length === 0) { setNotification({ type: 'error', message: 'No transactions with assigned categories to import.' }); return; }
-
-    setImporting(true);
+  const handleCsvImport = async () => {
+    if (!csvAccountId) return;
+    // A row whose amount is unreadable is never sent, even if it were somehow selected.
+    const valid = csvRows.filter((r, i): r is ImpCsvRow & { amount: number } => csvSelected.has(i) && r.categoryId != null && r.amount != null);
+    if (valid.length === 0) { addToast('No categorized transactions selected.', 'error'); return; }
+    setCsvImporting(true);
     try {
       await apiFetch('/import/commit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accountId: selectedAccountId,
-          transactions: validRows.map((r) => ({
-            date: r.date,
-            description: r.description,
-            note: r.note,
-            categoryId: r.splits ? null : r.categoryId,
-            amount: r.amount,
-            ...(r.splits ? { splits: r.splits } : {}),
+          accountId: csvAccountId,
+          // User-picked rows (source null) commit as manual — no confidence, no
+          // review flag; auto-suggested rows keep confidence/source so low ones
+          // land in the review queue (same contract as bank sync).
+          transactions: valid.map((r) => ({
+            date: r.date, description: r.description, note: r.note, categoryId: r.categoryId, amount: r.amount,
+            confidence: r.source ? r.confidence : null, source: r.source ?? null,
           })),
         }),
       });
-      addToast(`Import complete — ${validRows.length} transactions imported`);
+      addToast(`Import complete — ${valid.length} ${valid.length === 1 ? 'transaction' : 'transactions'} imported`);
+      navigate('/transactions');
+    } catch (err) {
+      // Show the server's own message (a refusal names the row) rather than a generic failure.
+      // apiFetch fills in "Request failed with status N" when the server sent no message.
+      const serverMsg = err instanceof ApiError && err.message && err.message !== `Request failed with status ${err.status}`;
+      addToast(serverMsg ? err.message : 'Import failed', 'error');
+    } finally {
+      setCsvImporting(false);
+    }
+  };
 
-      // Auto-dismiss unselected transfers for future imports
-      const unselectedTransfers = categorizedRows.filter((r, i) =>
-        r.isLikelyTransfer && !selectedImportRows.has(i)
+  const onCsvAccountChange = (id: number | '') => {
+    setCsvAccountId(id);
+    if (id) { const a = accounts.find((x) => x.id === id); setSign(a?.type === 'credit' ? 'credit' : 'bank'); }
+  };
+
+  // ── Bank Sync handlers ───────────────────────────────────────────────────────
+  const handleFetch = useCallback(async ({ accountIds, startDate, endDate }: { accountIds: number[]; startDate: string; endDate: string }) => {
+    setFetching(true);
+    setFetchedRange({ startDate, endDate });
+    try {
+      const res = await apiFetch<{ data: { transactions: (ImpSyncRow & { suggestedCategoryId: number | null; suggestedSource?: string })[] } }>(
+        '/simplefin/sync',
+        { method: 'POST', body: JSON.stringify({ accountIds, startDate, endDate }) },
       );
-      if (unselectedTransfers.length > 0 && selectedAccountId) {
-        try {
-          await apiFetch('/import/dismiss-transfers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              accountId: selectedAccountId,
-              items: unselectedTransfers.map(r => ({ date: r.date, amount: r.amount, description: r.description })),
-            }),
-          });
-        } catch {
-          // Dismiss failed silently — not critical
+      const rows: ImpSyncRow[] = res.data.transactions.map((t) => ({
+        simplefinId: t.simplefinId,
+        accountId: t.accountId,
+        accountName: t.accountName,
+        date: t.date,
+        description: t.description,
+        rawDescription: t.rawDescription,
+        amount: t.amount,
+        confidence: t.confidence,
+        categoryId: t.suggestedCategoryId,
+        source: t.suggestedSource ?? null,
+        duplicateStatus: t.duplicateStatus,
+        isLikelyTransfer: t.isLikelyTransfer,
+        isDismissedTransfer: false,
+      }));
+
+      // Previously-dismissed transfers → auto-unselect (per account). The check
+      // endpoint is gated by import.csv, so skip it for bank-sync-only users
+      // (avoids a spurious 403/permission toast).
+      if (hasPermission('import.csv')) {
+        const byAccount = new Map<number, number[]>();
+        rows.forEach((t, i) => { if (!byAccount.has(t.accountId)) byAccount.set(t.accountId, []); byAccount.get(t.accountId)!.push(i); });
+        for (const [accountId, idxs] of byAccount.entries()) {
+          try {
+            const check = await apiFetch<{ data: boolean[] }>('/import/check-dismissed-transfers', {
+              method: 'POST',
+              body: JSON.stringify({ accountId, items: idxs.map((i) => ({ date: rows[i].date, amount: rows[i].amount, description: rows[i].description })) }),
+            });
+            check.data.forEach((d, j) => { if (d) { rows[idxs[j]].isLikelyTransfer = true; rows[idxs[j]].isDismissedTransfer = true; } });
+          } catch { /* ignore */ }
         }
       }
 
-      navigate('/transactions');
-    } catch (_err) {
+      const sel = new Set(rows.map((_, i) => i));
+      rows.forEach((t, i) => { if (t.duplicateStatus === 'exact' || t.categoryId == null || t.isDismissedTransfer) sel.delete(i); });
+      setSyncRows(rows);
+      setSyncSelected(sel);
+      setSyncStep(2);
+    } catch {
+      addToast('Failed to fetch from SimpleFIN. Check your connection in Settings.', 'error');
+    } finally {
+      setFetching(false);
+    }
+  }, [addToast, hasPermission]);
+
+  const handleSyncImport = async () => {
+    const valid = syncRows.filter((r, i) => syncSelected.has(i) && r.categoryId != null);
+    if (valid.length === 0) return;
+    setSyncImporting(true);
+    try {
+      const res = await apiFetch<{ data: { transactionsImported: number } }>('/simplefin/commit', {
+        method: 'POST',
+        body: JSON.stringify({
+          transactions: valid.map((r) => ({
+            simplefinId: r.simplefinId, accountId: r.accountId, date: r.date,
+            description: r.description, rawDescription: r.rawDescription, amount: r.amount,
+            categoryId: r.categoryId, confidence: r.confidence ?? null, source: r.source ?? null,
+          })),
+          balanceUpdates: [],
+          holdingsUpdates: [],
+        }),
+      });
+      addToast(`Imported ${res.data.transactionsImported} ${res.data.transactionsImported === 1 ? 'transaction' : 'transactions'}`);
+      const r = fetchedRange;
+      navigate(r ? `/transactions?startDate=${r.startDate}&endDate=${r.endDate}` : '/transactions');
+    } catch {
       addToast('Import failed', 'error');
     } finally {
-      setImporting(false);
+      setSyncImporting(false);
     }
   };
 
-  const updateRowCategory = (idx: number, catId: number) => {
-    const cat = categories.find((c) => c.id === catId);
-    if (!cat) return;
-    setCategorizedRows((prev) => prev.map((r, i) => i === idx ? {
-      ...r,
-      categoryId: catId,
-      groupName: cat.group_name,
-      subName: cat.sub_name,
-      confidence: 1.0,
-    } : r));
-    setSelectedImportRows(prev => { const next = new Set(prev); next.add(idx); return next; });
-  };
+  // ── Render ───────────────────────────────────────────────────────────────────
+  const stepLabels = mode === 'csv' ? ['Upload File', 'Map Columns', 'Review & Categorize'] : ['Select & Fetch', 'Review & Import'];
+  const activeIndex = mode === 'csv' ? csvStep - 1 : syncStep - 1;
+  const subtitle = mode === 'csv' ? 'Import a CSV from your bank, credit card, or Venmo.' : 'Pull new transactions directly from your connected accounts.';
 
-  const toggleTransferFlag = (idx: number) => {
-    setCategorizedRows((prev) => prev.map((r, i) => {
-      if (i !== idx) return r;
-      const nowTransfer = !r.isLikelyTransfer;
-      return { ...r, isLikelyTransfer: nowTransfer, isDismissedTransfer: false };
-    }));
-    // Auto-select when un-flagging (moving back to main list)
-    const r = categorizedRows[idx];
-    if (r.isLikelyTransfer) {
-      setSelectedImportRows(prev => { const next = new Set(prev); next.add(idx); return next; });
-    }
-  };
+  const toggle = (
+    <SegmentedControl
+      className="flex-none"
+      value={mode}
+      onChange={(m) => switchMode(m)}
+      options={[{ value: 'csv', label: 'CSV Import' }, { value: 'sync', label: 'Bank Sync' }]}
+    />
+  );
 
-  const [dismissedExpanded, setDismissedExpanded] = useState(false);
-
-
-  // Group ALL categories for grouped dropdown
-  const expenseCats = categories.filter((c) => c.type === 'expense');
-  const incomeCats = categories.filter((c) => c.type === 'income');
-  const catGroups = new Map<string, Category[]>();
-  for (const c of expenseCats) {
-    if (!catGroups.has(c.group_name)) catGroups.set(c.group_name, []);
-    catGroups.get(c.group_name)!.push(c);
-  }
-
-  const allGroupNames = [...new Set(categories.map(c => c.group_name))];
-  const getSplitColors = (splits: SplitRow[]) =>
-    splits.map(s => {
-      const cat = categories.find(c => c.id === s.categoryId);
-      return getCategoryColor(cat?.group_name ?? '', allGroupNames);
-    });
-
-  const validImportCount = categorizedRows.filter((r, i) => selectedImportRows.has(i) && (r.categoryId != null || (r.splits && r.splits.length >= 2))).length;
-
-  // Split editor modal state for import rows
-  const [splitEditingIdx, setSplitEditingIdx] = useState<number | null>(null);
-
-  const handleSplitApply = (idx: number, appliedSplits: SplitRow[]) => {
-    setCategorizedRows((prev) => prev.map((r, i) => i === idx ? {
-      ...r,
-      categoryId: null,
-      groupName: null,
-      subName: null,
-      splits: appliedSplits,
-    } : r));
-    setSelectedImportRows(prev => { const next = new Set(prev); next.add(idx); return next; });
-    setSplitEditingIdx(null);
-    addToast(`Split applied across ${appliedSplits.length} categories`, 'success');
-  };
-
-  const handleSplitCancel = (idx: number) => {
-    // If there were already splits, keep them; otherwise just close modal
-    setSplitEditingIdx(null);
-    // If row has no category and no splits, keep it unchecked
-    const row = categorizedRows[idx];
-    if (!row.categoryId && (!row.splits || row.splits.length < 2)) {
-      setSelectedImportRows(prev => { const next = new Set(prev); next.delete(idx); return next; });
-    }
-  };
-
-  const switchTab = (tab: 'csv' | 'sync') => {
-    setActiveTab(tab);
-    setSearchParams(tab === 'csv' ? {} : { tab: 'sync' });
-  };
+  const csvOk = hasPermission('import.csv');
+  const syncOk = hasPermission('import.bank_sync');
+  const permMsg = (
+    <div className="bg-surface rounded-[16px] border border-line px-6 py-8 text-center text-content-3 text-[13px]">
+      You don't have permission to use this. Contact an admin to request access.
+    </div>
+  );
 
   return (
-    <div>
-      {isMobile && !mobileFlowActive ? (
-        /* Mobile: Two stacked action cards */
-        <div>
-          <div className="mb-4">
-            <h1 className="page-title text-[22px] font-bold text-[var(--text-primary)] m-0">Import</h1>
-          </div>
-
-          {/* Bank Sync Card */}
-          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] px-5 py-6 mb-4 text-center">
-            <div className="text-[32px] mb-2">🏦</div>
-            <div className="text-[15px] font-bold text-[var(--text-primary)] mb-1">Bank Sync</div>
-            <div className="text-[12px] text-[var(--text-secondary)] mb-4">Pull transactions from your connected bank accounts</div>
-            <button
-              onClick={() => { switchTab('sync'); setMobileFlowActive(true); }}
-              disabled={!hasPermission('import.bank_sync')}
-              className="w-full py-2.5 rounded-lg border-none cursor-pointer text-[13px] font-semibold bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] disabled:opacity-50 btn-primary"
-            >
-              Sync Now
-            </button>
-            {hasConnections && (
-              <div className="text-[10px] text-[var(--text-muted)] mt-2">
-                Bank accounts linked
-              </div>
-            )}
-          </div>
-
-          {/* CSV Import Card */}
-          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] px-5 py-6 text-center">
-            <div className="text-[32px] mb-2">📄</div>
-            <div className="text-[15px] font-bold text-[var(--text-primary)] mb-1">CSV Import</div>
-            <div className="text-[12px] text-[var(--text-secondary)] mb-4">Upload a CSV file from your bank or credit card</div>
-            <button
-              onClick={() => { switchTab('csv'); setMobileFlowActive(true); }}
-              disabled={!hasPermission('import.csv')}
-              className="w-full py-2.5 rounded-lg border-none cursor-pointer text-[13px] font-semibold bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] disabled:opacity-50 btn-secondary"
-            >
-              Upload File
-            </button>
-          </div>
+    <div className="font-sans">
+      <MobileBar title="Import" />
+      {/* header (phones: the title is in the app bar) */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-5 mb-5 md:mb-[22px]">
+        <div className="min-w-0">
+          <h1 className="hidden md:block text-[28px] font-extrabold tracking-[-0.02em] m-0 text-content">Import Transactions</h1>
+          <p className="text-sm text-content-3 md:mt-1.5 m-0">{subtitle}</p>
         </div>
-      ) : (
-      <div>
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="page-title text-[22px] font-bold text-[var(--text-primary)] m-0">Import Transactions</h1>
-        <p className="page-subtitle text-[var(--text-secondary)] text-[13px] mt-1">
-          {activeTab === 'csv' ? 'Import CSV from your bank, credit card, or Venmo' : 'Pull transactions directly from your connected bank accounts'}
-        </p>
+        {toggle}
       </div>
 
-      {/* Tab Navigation */}
-      <div className="inline-flex bg-[var(--btn-secondary-bg)] rounded-lg p-0.5 mb-6">
-        {[
-          { id: 'csv' as const, label: 'CSV Import' },
-          { id: 'sync' as const, label: 'Bank Sync' },
-        ].map((tab) => (
-          <button key={tab.id} onClick={() => switchTab(tab.id)}
-            className={`px-4 py-1.5 text-[13px] font-semibold rounded-md border-none cursor-pointer transition-all ${
-              activeTab === tab.id
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-xs'
-                : 'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
-            }`}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {isMobile
+        ? <PhoneStepLine labels={stepLabels} activeIndex={activeIndex} />
+        : <Stepper labels={stepLabels} activeIndex={activeIndex} />}
 
-      {/* Bank Sync Tab */}
-      {activeTab === 'sync' && (
-        hasPermission('import.bank_sync')
-          ? <BankSyncPanel categories={categories} />
-          : <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] px-6 py-8 text-center text-[var(--text-muted)] text-[13px]">You don't have permission to use Bank Sync. Contact an admin to request access.</div>
-      )}
+      {mode === 'sync' && (!syncOk ? permMsg : (
+        syncStep === 1
+          ? <BankSyncSelect accounts={syncAccounts} fetching={fetching} onFetch={handleFetch} />
+          : <SyncReview rows={syncRows} setRows={setSyncRows} selected={syncSelected} setSelected={setSyncSelected} categories={categories} accountsById={accountsById} vendorOptions={vendorOptions} merchantLogos={merchantLogos} onBack={() => setSyncStep(1)} onImport={handleSyncImport} importing={syncImporting} />
+      ))}
 
-      {/* CSV Import Tab */}
-      {activeTab === 'csv' && !hasPermission('import.csv') && (
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] px-6 py-8 text-center text-[var(--text-muted)] text-[13px]">You don't have permission to import CSV files. Contact an admin to request access.</div>
-      )}
-      {activeTab === 'csv' && hasPermission('import.csv') && (
+      {mode === 'csv' && (!csvOk ? permMsg : (
         <>
-      {/* Step Indicator */}
-      <div className="flex gap-1 mb-6">
-        {STEPS.map((s, i) => (
-          <div key={s} className="flex-1 text-center">
-            <div className={`h-[3px] rounded-sm mb-1.5 ${i <= step ? 'bg-[#3b82f6]' : 'bg-[var(--table-border)]'}`} />
-            <span className={`text-[11px] ${i === step ? 'text-[var(--badge-category-text)] font-bold' : i < step ? 'text-[var(--badge-category-text)]' : 'text-[var(--text-muted)]'}`}>
-              {s}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Inline notification banner */}
-      {notification && (
-        <InlineNotification
-          type={notification.type}
-          message={notification.message}
-          dismissible
-          onDismiss={() => setNotification(null)}
-          className="mb-4"
-        />
-      )}
-
-      {/* Step 1: Upload */}
-      {step === 0 && (
-        <div>
-          {/* Account selector */}
-          <div className="mb-4">
-            <label className="text-[12px] text-[var(--text-secondary)] font-medium block mb-1">Import to Account</label>
-            <select
-              value={selectedAccountId}
-              onChange={(e) => {
-                const id = e.target.value ? parseInt(e.target.value) : '';
-                setSelectedAccountId(id);
-                if (id) {
-                  const acct = accounts.find(a => a.id === id);
-                  setSignConvention(acct?.type === 'credit' ? 'credit' : 'bank');
-                }
-              }}
-              className="border border-[var(--table-border)] rounded-lg bg-[var(--bg-input)] px-3 py-2 text-[13px] outline-none w-[300px] text-[var(--text-body)]"
-            >
-              <option value="">Select an account...</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}{a.last_four ? ` (${a.last_four})` : ''} — {(a.owners || []).map(o => o.displayName).join(', ') || a.owner}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Drop zone */}
-          <div
-            className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] p-10 text-center shadow-[var(--bg-card-shadow)]"
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-          >
-            <div className={`border-2 border-dashed rounded-2xl py-12 px-6 ${dragOver ? 'border-[#3b82f6] bg-[var(--bg-inline-info)]' : 'border-[var(--text-muted)] bg-transparent'}`}>
-              <div className={`mb-3 ${dragOver ? 'text-[var(--badge-category-text)]' : 'text-[var(--text-muted)]'}`}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="mx-auto">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-              </div>
-              <p className="font-semibold text-[var(--btn-secondary-text)] text-[15px] mb-1">Drop your CSV file here</p>
-              <p className="text-[var(--text-muted)] text-[13px]">
-                or <span className="text-[var(--badge-category-text)] cursor-pointer font-medium" onClick={() => fileInputRef.current?.click()}>browse files</span>
-              </p>
-              <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }} />
-              <div className="flex gap-2 justify-center mt-4">
-                {['Chase', 'Venmo', 'Generic CSV'].map((t) => (
-                  <span key={t} className="text-[11px] px-2.5 py-0.5 bg-[var(--btn-secondary-bg)] rounded-full text-[var(--text-secondary)]">{t}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Map Columns */}
-      {step === 1 && parseResult && (
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] px-5 py-4 shadow-[var(--bg-card-shadow)]">
-          <div className={`flex justify-between items-center mb-2 ${isMobile ? 'flex-col gap-3 items-stretch' : ''}`}>
-            <button
-              onClick={() => setStep(0)}
-              className="text-[12px] text-[var(--badge-category-text)] bg-transparent border-none cursor-pointer btn-ghost hover:underline"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={handleAutoCategorize}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] rounded-lg text-[13px] font-semibold border-none cursor-pointer btn-primary"
-            >
-              Next →
-            </button>
-          </div>
-          <div className="mb-4">
-            <p className="font-semibold text-[var(--text-primary)] m-0">{file?.name}</p>
-            <p className="text-[12px] text-[var(--text-secondary)] mt-1 m-0">
-              Account: {accounts.find((a) => a.id === selectedAccountId)?.name} · {parseResult.totalRows} transactions · Format: {parseResult.detectedFormat}
-            </p>
-          </div>
-
-          {/* Column mapping */}
-          <div className="bg-[var(--bg-input)] rounded-lg p-4 mb-4">
-            <p className="text-[12px] font-medium text-[var(--text-body)] m-0 mb-2">Column Mapping</p>
-            <div className={isMobile ? 'flex flex-col gap-3' : 'flex gap-4'}>
-              {(['date', 'description', 'amount'] as const).map((field) => (
-                <div key={field} className="flex-1">
-                  <label className="text-[11px] text-[var(--text-secondary)] block mb-1 capitalize">{field}</label>
-                  <select
-                    value={mapping[field]}
-                    onChange={(e) => setMapping({ ...mapping, [field]: parseInt(e.target.value) })}
-                    className="w-full border border-[var(--table-border)] rounded-md bg-[var(--bg-card)] px-2 py-1.5 text-[12px] outline-none text-[var(--text-body)]"
-                  >
-                    {parseResult.headers.map((h, i) => (
-                      <option key={i} value={i}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Venmo-specific mapping */}
-          {(parseResult.detectedFormat === 'venmo' || accounts.find(a => a.id === selectedAccountId)?.type === 'venmo') && (
-            <div className="bg-[var(--bg-input)] rounded-lg p-4 mb-4">
-              <p className="text-[12px] font-medium text-[var(--text-body)] m-0 mb-2">Venmo Column Mapping</p>
-              <div className={isMobile ? 'flex flex-col gap-3' : 'flex gap-4'}>
-                {(['from', 'to', 'note'] as const).map((field) => (
-                  <div key={field} className="flex-1">
-                    <label className="text-[11px] text-[var(--text-secondary)] block mb-1 capitalize">{field === 'from' ? 'From' : field === 'to' ? 'To' : 'Note'}</label>
-                    <select
-                      value={venmoMapping[field]}
-                      onChange={(e) => setVenmoMapping({ ...venmoMapping, [field]: parseInt(e.target.value) })}
-                      className="w-full border border-[var(--table-border)] rounded-md bg-[var(--bg-card)] px-2 py-1.5 text-[12px] outline-none text-[var(--text-body)]"
-                    >
-                      <option value={-1}>— Not mapped —</option>
-                      {parseResult.headers.map((h, i) => (
-                        <option key={i} value={i}>{h}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {csvStep === 1 && (
+            <CsvUpload accounts={accounts} accountsLoaded={accountsLoaded} accountId={csvAccountId} onAccountChange={onCsvAccountChange} onFile={handleCsvFile} />
           )}
-
-          {/* Sign convention */}
-          <div className="bg-[var(--bg-input)] rounded-lg p-4 mb-4">
-            <p className="text-[12px] font-medium text-[var(--text-body)] m-0 mb-2">Amount Sign Convention</p>
-            <div className={`flex gap-2 ${isMobile ? 'flex-col' : ''}`}>
-              <button
-                onClick={() => setSignConvention('bank')}
-                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border cursor-pointer transition-colors ${signConvention === 'bank' ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] border-[var(--btn-primary-bg)] btn-primary' : 'bg-[var(--bg-card)] text-[var(--text-body)] border-[var(--table-border)] btn-secondary'}`}
-              >
-                Positive = money in, Negative = money out
-              </button>
-              <button
-                onClick={() => setSignConvention('credit')}
-                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border cursor-pointer transition-colors ${signConvention === 'credit' ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] border-[var(--btn-primary-bg)] btn-primary' : 'bg-[var(--bg-card)] text-[var(--text-body)] border-[var(--table-border)] btn-secondary'}`}
-              >
-                Positive = money out, Negative = money in
-              </button>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] m-0 mt-1.5">
-              {signConvention === 'bank' ? 'Standard for bank accounts (checking, savings)' : 'Standard for credit card statements'}
-            </p>
-          </div>
-
-          {/* Sample preview */}
-          <p className="text-[11px] text-[var(--text-muted)] m-0 mb-2">
-            {isMobile ? 'Preview (first 5 rows — mapped columns only)' : 'Preview (first 5 rows)'}
-          </p>
-          {isMobile ? (
-            <div className="flex flex-col gap-1.5">
-              {parseResult.sampleRows.map((row, i) => (
-                <div key={i} className="flex items-center gap-2 py-1.5" style={{ borderBottom: i < parseResult.sampleRows.length - 1 ? '1px solid var(--bg-card-border)' : 'none' }}>
-                  <span className="text-[11px] font-mono text-[var(--text-muted)] flex-shrink-0 w-[72px]">
-                    {row[mapping.date]}
-                  </span>
-                  <span className="text-[11px] text-[var(--text-body)] flex-1 min-w-0 truncate">
-                    {row[mapping.description]}
-                  </span>
-                  <span className="text-[11px] font-mono font-semibold flex-shrink-0 text-[var(--text-primary)]">
-                    {row[mapping.amount]}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-          <table className="w-full border-collapse text-[12px]">
-            <thead>
-              <tr>
-                {parseResult.headers.map((h, i) => (
-                  <th key={i} className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] px-2 py-1.5 border-b border-[var(--table-border)] text-left">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {parseResult.sampleRows.map((row, i) => (
-                <tr key={i} className="border-b border-[var(--table-row-border)]">
-                  {row.map((cell, j) => (
-                    <td key={j} className="px-2 py-1.5 text-[var(--text-body)] font-mono text-[11px]">{cell}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {csvStep === 2 && parseResult && (
+            <CsvMap
+              fileName={file?.name ?? 'Uploaded file'}
+              metaLine={`${accounts.find((a) => a.id === csvAccountId)?.name ?? ''} · ${allRows.length.toLocaleString()} ${allRows.length === 1 ? 'transaction' : 'transactions'} · Format: ${parseResult.detectedFormat}`}
+              headers={parseResult.headers}
+              mapping={mapping}
+              onMappingChange={(field, idx) => setMapping((m) => ({ ...m, [field]: idx }))}
+              sign={sign}
+              onSignChange={setSign}
+              preview={csvPreview}
+              onBack={() => setCsvStep(1)}
+              onNext={handleAutoCategorize}
+            />
           )}
-        </div>
-      )}
-
-      {/* Step 3: Review & Categorize */}
-      {step === 2 && (
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] px-5 py-4 shadow-[var(--bg-card-shadow)]">
-          <div className={`flex justify-between items-center mb-4 ${isMobile ? 'flex-col gap-3 items-stretch' : ''}`}>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setStep(1)}
-                className="text-[12px] text-[var(--badge-category-text)] bg-transparent border-none cursor-pointer btn-ghost hover:underline"
-              >
-                ← Back
-              </button>
-              <span className="flex items-center gap-1 px-2.5 py-1 bg-[var(--badge-category-bg)] rounded-lg text-[11px] text-[var(--badge-category-text)] font-semibold">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/>
-                </svg>
-                Auto-categorized
-              </span>
-              {!isMobile && <span className="text-[12px] text-[var(--text-secondary)]">Click any category to change it</span>}
-            </div>
-            <button
-              onClick={handleImport}
-              disabled={importing || validImportCount === 0}
-              className={`px-4 py-2 bg-[var(--color-positive)] text-white rounded-lg text-[13px] font-semibold border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed btn-success ${isMobile ? 'w-full' : ''}`}
-            >
-              {importing ? 'Importing...' : `Import ${validImportCount} of ${mainCsvIndices.length} Transactions`}
-            </button>
-          </div>
-
-          {isMobile ? (
-            /* Mobile: card-based layout */
-            <div className="flex flex-col gap-2">
-              {mainCsvIndices.map((i, visualIdx) => {
-                const r = categorizedRows[i];
-                return (
-                  <React.Fragment key={i}>
-                    <div className={`rounded-xl border px-3 py-2.5 transition-opacity ${
-                      !selectedImportRows.has(i) ? 'opacity-50 border-[var(--bg-card-border)]' :
-                      !r.categoryId && !(r.splits && r.splits.length >= 2) ? 'border-[var(--bg-card-border)] bg-[var(--bg-needs-attention)]' :
-                      'border-[var(--bg-card-border)]'
-                    }`} style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
-                      <div className="flex items-start gap-2.5">
-                        <input type="checkbox" checked={selectedImportRows.has(i)}
-                          onChange={() => {
-                            setSelectedImportRows(prev => {
-                              const next = new Set(prev);
-                              if (next.has(i)) next.delete(i); else next.add(i);
-                              return next;
-                            });
-                          }}
-                          className="cursor-pointer mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          {/* Description + Amount */}
-                          <div className="flex justify-between items-start gap-2">
-                            <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">
-                              {r.description}
-                            </span>
-                            <span className={`text-[13px] font-mono font-semibold flex-shrink-0 ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
-                              {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
-                            </span>
-                          </div>
-                          {/* Date + Confidence */}
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className="text-[11px] font-mono text-[var(--text-muted)]">{r.date}</span>
-                            <span className={`text-[10px] font-semibold font-mono ml-auto ${
-                              r.confidence > 0.9 ? 'text-[#10b981]' : r.confidence > 0.6 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
-                            }`}>
-                              {Math.round(r.confidence * 100)}%
-                            </span>
-                          </div>
-                          {/* Category dropdown */}
-                          <div className="mt-2">
-                            {r.splits && r.splits.length >= 2 ? (
-                              <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="inline-flex" style={{ gap: 0 }}>
-                                    {getSplitColors(r.splits).map((color, ci) => (
-                                      <span key={ci} style={{
-                                        width: 8, height: 8, borderRadius: '50%',
-                                        background: color,
-                                        border: '1.5px solid var(--bg-card)',
-                                        marginLeft: ci > 0 ? -3 : 0,
-                                        zIndex: r.splits!.length - ci,
-                                        display: 'inline-block',
-                                      }} />
-                                    ))}
-                                  </span>
-                                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Split ({r.splits.length})</span>
-                                </span>
-                                <button onClick={() => setSplitEditingIdx(i)}
-                                  className="text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">Edit</button>
-                              </div>
-                            ) : (
-                              <>
-                                {r.groupName && r.categoryId && (
-                                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{r.groupName}</div>
-                                )}
-                                <div className="flex items-center gap-1">
-                                  <select
-                                    className="flex-1 text-[12px] border border-[var(--table-border)] rounded-md px-2 py-1.5 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
-                                    value={r.categoryId || ''}
-                                    onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
-                                  >
-                                    <option value="">Select category...</option>
-                                    {Array.from(catGroups.entries()).map(([group, cats]) => (
-                                      <optgroup key={group} label={group}>
-                                        {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                      </optgroup>
-                                    ))}
-                                    <optgroup label="Income">
-                                      {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                    </optgroup>
-                                  </select>
-                                  <button onClick={() => setSplitEditingIdx(i)}
-                                    title="Split across categories"
-                                    className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                    <svg width="12" height="12" viewBox="0 0 512 512" fill="currentColor">
-                                      <path d="M246.6 150.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0l96 96c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L352 109.3 352 384c0 35.3 28.7 64 64 64l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-70.7 0-128-57.3-128-128c0-35.3-28.7-64-64-64l-114.7 0 41.4 41.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-96-96c-12.5-12.5-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L109.3 256 224 256c23.3 0 45.2 6.2 64 17.1l0-163.9-41.4 41.4z" />
-                                    </svg>
-                                  </button>
-                                  {!r.isLikelyTransfer && (
-                                    <button onClick={() => toggleTransferFlag(i)}
-                                      title="Mark as transfer"
-                                      className="flex-shrink-0 w-8 h-8 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                      <TransferIcon size={12} inline={false} />
-                                    </button>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                {r.duplicateStatus !== 'none' && (
-                                  <button
-                                    onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
-                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                    style={{
-                                      background: r.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
-                                      color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
-                                    }}>
-                                    ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
-                                  </button>
-                                )}
-                                {r.isLikelyTransfer && (
-                                  <button onClick={() => toggleTransferFlag(i)}
-                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
-                                )}
-                              </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {expandedDupeRow === i && r.duplicateMatch && (
-                      <div className="px-2 -mt-1 mb-1">
-                        <DuplicateComparison
-                          incoming={{ date: r.date, description: r.description, amount: r.amount,
-                            accountName: accounts.find(a => a.id === selectedAccountId)?.name || null }}
-                          existing={{ date: r.duplicateMatch.date, description: r.duplicateMatch.description,
-                            amount: r.duplicateMatch.amount, accountName: r.duplicateMatch.accountName,
-                            category: r.duplicateMatch.category }}
-                          onImportAnyway={() => {
-                            setSelectedImportRows(prev => { const next = new Set(prev); next.add(i); return next; });
-                            setExpandedDupeRow(null);
-                          }}
-                          onSkip={() => {
-                            setSelectedImportRows(prev => { const next = new Set(prev); next.delete(i); return next; });
-                            setExpandedDupeRow(null);
-                          }}
-                        />
-                      </div>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          ) : (
-            /* Desktop: table layout */
-            <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: '40px' }} />
-                <col style={{ width: '90px' }} />
-                <col />
-                <col style={{ width: '90px' }} />
-                <col style={{ width: '250px' }} />
-                <col style={{ width: '55px' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th className="px-2 py-2 border-b-2 border-[var(--table-border)]">
-                    <input type="checkbox"
-                      checked={selectedImportRows.size === categorizedRows.length && categorizedRows.length > 0}
-                      onChange={() => {
-                        if (selectedImportRows.size === categorizedRows.length) setSelectedImportRows(new Set());
-                        else setSelectedImportRows(new Set(categorizedRows.map((_, i) => i)));
-                      }}
-                      className="cursor-pointer" />
-                  </th>
-                  <SortableHeader label="Date" sortKey="date" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
-                  <SortableHeader label="Description" sortKey="description" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
-                  <SortableHeader label="Amount" sortKey="amount" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} align="right" />
-                  <SortableHeader label="Category" sortKey="category" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} />
-                  <SortableHeader label="Conf." sortKey="confidence" activeSortKey={csvSortBy} sortDir={csvSortDir} onSort={handleCsvSort} align="center" />
-                </tr>
-              </thead>
-              <tbody>
-                {mainCsvIndices.map((i, visualIdx) => {
-                  const r = categorizedRows[i];
-                  const hasCategory = r.categoryId || (r.splits && r.splits.length >= 2);
-                  return (
-                  <React.Fragment key={i}>
-                    <tr className={`border-b border-[var(--table-row-border)] ${!selectedImportRows.has(i) ? 'opacity-50' : ''} ${!hasCategory && selectedImportRows.has(i) ? 'bg-[var(--bg-needs-attention)]' : ''}`}
-                      style={visualIdx % 2 === 1 ? { backgroundColor: 'var(--bg-zebra)' } : undefined}>
-                      <td className="px-2 py-2 text-center">
-                        <input type="checkbox" checked={selectedImportRows.has(i)}
-                          onChange={() => {
-                            setSelectedImportRows(prev => {
-                              const next = new Set(prev);
-                              if (next.has(i)) next.delete(i); else next.add(i);
-                              return next;
-                            });
-                          }}
-                          className="cursor-pointer" />
-                      </td>
-                      <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-body)] truncate">{r.date}</td>
-                      <td className="px-2.5 py-2 font-medium text-[var(--text-primary)] truncate">{r.description}</td>
-                      <td className={`px-2.5 py-2 text-right font-mono font-semibold ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
-                        {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
-                      </td>
-                      <td className="px-2.5 py-1.5 overflow-hidden">
-                        {r.splits && r.splits.length >= 2 ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1">
-                              <span className="inline-flex" style={{ gap: 0 }}>
-                                {getSplitColors(r.splits).map((color, ci) => (
-                                  <span key={ci} style={{
-                                    width: 10, height: 10, borderRadius: '50%',
-                                    background: color,
-                                    border: '1.5px solid var(--bg-card)',
-                                    marginLeft: ci > 0 ? -3 : 0,
-                                    zIndex: r.splits!.length - ci,
-                                    display: 'inline-block',
-                                  }} />
-                                ))}
-                              </span>
-                              <span className="text-[10px] font-semibold text-[var(--text-secondary)] px-1.5 py-0.5 rounded bg-[var(--bg-hover)] whitespace-nowrap">Split ({r.splits.length})</span>
-                            </span>
-                            <button onClick={() => setSplitEditingIdx(i)}
-                              className="ml-1 text-[10px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">Edit</button>
-                          </div>
-                        ) : (
-                          <>
-                            {r.groupName && r.categoryId && (
-                              <div className="text-[10px] text-[var(--text-muted)] mb-0.5">{r.groupName}</div>
-                            )}
-                            <div className="flex items-center gap-1">
-                              <select
-                                className="flex-1 min-w-0 text-[11px] border border-[var(--table-border)] rounded-md px-1.5 py-1 outline-none bg-[var(--bg-card)] text-[var(--text-body)]"
-                                value={r.categoryId || ''}
-                                onChange={(e) => updateRowCategory(i, parseInt(e.target.value))}
-                              >
-                                <option value="">Select...</option>
-                                {Array.from(catGroups.entries()).map(([group, cats]) => (
-                                  <optgroup key={group} label={group}>
-                                    {cats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                  </optgroup>
-                                ))}
-                                <optgroup label="Income">
-                                  {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                                </optgroup>
-                              </select>
-                              <button onClick={() => setSplitEditingIdx(i)}
-                                title="Split across categories"
-                                className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                <svg width="11" height="11" viewBox="0 0 512 512" fill="currentColor">
-                                  <path d="M246.6 150.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0l96 96c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L352 109.3 352 384c0 35.3 28.7 64 64 64l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-70.7 0-128-57.3-128-128c0-35.3-28.7-64-64-64l-114.7 0 41.4 41.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-96-96c-12.5-12.5-12.5-32.8 0-45.3l96-96c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L109.3 256 224 256c23.3 0 45.2 6.2 64 17.1l0-163.9-41.4 41.4z" />
-                                </svg>
-                              </button>
-                              {!r.isLikelyTransfer && (
-                                <button onClick={() => toggleTransferFlag(i)}
-                                  title="Mark as transfer"
-                                  className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[var(--table-border)] bg-transparent text-[var(--text-muted)] cursor-pointer hover:text-[var(--color-accent)] hover:bg-[var(--bg-hover)]">
-                                  <TransferIcon size={11} inline={false} />
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        )}
-                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                            {r.duplicateStatus !== 'none' && (
-                              <button
-                                onClick={() => setExpandedDupeRow(expandedDupeRow === i ? null : i)}
-                                className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                style={{
-                                  background: r.duplicateStatus === 'exact' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
-                                  color: r.duplicateStatus === 'exact' ? 'var(--color-negative)' : 'var(--color-warning)',
-                                }}>
-                                ⚠ {r.duplicateStatus === 'exact' ? 'Likely Duplicate' : 'Possible Duplicate'}
-                              </button>
-                            )}
-                            {r.isLikelyTransfer && (
-                              <button onClick={() => toggleTransferFlag(i)}
-                                className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
-                            )}
-                          </div>
-                      </td>
-                      <td className="px-2.5 py-2 text-center">
-                        <span className={`text-[11px] font-semibold font-mono ${
-                          r.confidence > 0.9 ? 'text-[#10b981]' : r.confidence > 0.6 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
-                        }`}>
-                          {Math.round(r.confidence * 100)}%
-                        </span>
-                      </td>
-                    </tr>
-                    {expandedDupeRow === i && r.duplicateMatch && (
-                      <tr>
-                        <td colSpan={6} className="px-2.5 py-1">
-                          <DuplicateComparison
-                            incoming={{ date: r.date, description: r.description, amount: r.amount,
-                              accountName: accounts.find(a => a.id === selectedAccountId)?.name || null }}
-                            existing={{ date: r.duplicateMatch.date, description: r.duplicateMatch.description,
-                              amount: r.duplicateMatch.amount, accountName: r.duplicateMatch.accountName,
-                              category: r.duplicateMatch.category }}
-                            onImportAnyway={() => {
-                              setSelectedImportRows(prev => { const next = new Set(prev); next.add(i); return next; });
-                              setExpandedDupeRow(null);
-                            }}
-                            onSkip={() => {
-                              setSelectedImportRows(prev => { const next = new Set(prev); next.delete(i); return next; });
-                              setExpandedDupeRow(null);
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+          {csvStep === 3 && (
+            <CsvReview rows={csvRows} setRows={setCsvRows} selected={csvSelected} setSelected={setCsvSelected} categories={categories} vendorOptions={vendorOptions} merchantLogos={merchantLogos} onBack={() => setCsvStep(2)} onImport={handleCsvImport} importing={csvImporting} />
           )}
-
-          {/* Collapsible Previously Seen Transfers */}
-          {dismissedCsvIndices.length > 0 && (
-            <div className="mt-4 bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] overflow-hidden">
-              <button
-                onClick={() => setDismissedExpanded(!dismissedExpanded)}
-                className="w-full flex items-center justify-between px-5 py-3 bg-transparent border-none cursor-pointer text-left hover:bg-[var(--bg-hover)] transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="text-[13px] font-semibold" style={{ color: 'var(--badge-transfer-text)' }}>
-                    <TransferIcon />Previously Seen Transfers
-                  </span>
-                  <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded-full"
-                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}>
-                    {dismissedCsvIndices.length}
-                  </span>
-                </span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round"
-                  style={{ transform: dismissedExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease' }}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              {dismissedExpanded && (
-                <div className="border-t border-[var(--table-border)]">
-                  {isMobile ? (
-                    <div className="flex flex-col gap-2 p-3">
-                      {dismissedCsvIndices.map((i) => {
-                        const r = categorizedRows[i];
-                        return (
-                          <div key={i} className="rounded-xl border px-3 py-2.5 border-[var(--bg-card-border)]">
-                            <div className="flex items-start gap-2.5">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start gap-2">
-                                  <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">{r.description}</span>
-                                  <span className={`text-[13px] font-mono font-semibold flex-shrink-0 ${r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}`}>
-                                    {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{r.date}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                  <button onClick={() => toggleTransferFlag(i)}
-                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <table className="w-full border-collapse text-[13px]" style={{ tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: '110px' }} />
-                        <col />
-                        <col style={{ width: '100px' }} />
-                      </colgroup>
-                      <tbody>
-                        {dismissedCsvIndices.map((i) => {
-                          const r = categorizedRows[i];
-                          return (
-                            <tr key={i} className="border-b border-[var(--table-border)]">
-                              <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-muted)]">{r.date}</td>
-                              <td className="px-2.5 py-2">
-                                <span className="text-[var(--text-primary)]">{r.description}</span>
-                                <div className="mt-1">
-                                  <button onClick={() => toggleTransferFlag(i)}
-                                    className="text-[11px] font-medium border-none cursor-pointer px-2 py-0.5 rounded-full hover:opacity-80"
-                                    style={{ background: 'var(--badge-transfer-bg)', color: 'var(--badge-transfer-text)' }}><TransferIcon />Transfer ✕</button>
-                                </div>
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono">
-                                <span className={r.amount < 0 ? 'text-[#10b981]' : 'text-[var(--text-primary)]'}>
-                                  {r.amount < 0 ? '+' : ''}{fmt(Math.abs(r.amount))}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Account selection modal */}
-      <ResponsiveModal isOpen={showAccountModal} onClose={handleAccountModalCancel} maxWidth="420px">
-            <h2 className="text-[16px] font-bold text-[var(--text-primary)] m-0 mb-1">Select Account</h2>
-            <p className="text-[13px] text-[var(--text-secondary)] m-0 mb-4">Which account is this import for?</p>
-            <select
-              value={modalAccountId}
-              onChange={(e) => setModalAccountId(e.target.value ? parseInt(e.target.value) : '')}
-              className="w-full border border-[var(--table-border)] rounded-lg bg-[var(--bg-input)] px-3 py-2 text-[13px] outline-none mb-4 text-[var(--text-body)]"
-            >
-              <option value="">Select an account...</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}{a.last_four ? ` (${a.last_four})` : ''} — {(a.owners || []).map(o => o.displayName).join(', ') || a.owner}
-                </option>
-              ))}
-            </select>
-            <div className="flex justify-end gap-2">
-              <button onClick={handleAccountModalCancel} className="px-4 py-2 text-[13px] font-medium text-[var(--text-body)] bg-[var(--btn-secondary-bg)] rounded-lg border-none cursor-pointer btn-secondary">
-                Cancel
-              </button>
-              <button
-                onClick={handleAccountModalContinue}
-                disabled={!modalAccountId}
-                className="px-4 py-2 text-[13px] font-semibold text-[var(--btn-primary-text)] bg-[var(--btn-primary-bg)] rounded-lg border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed btn-primary"
-              >
-                Continue
-              </button>
-            </div>
-      </ResponsiveModal>
-      </>
-      )}
-
-      {/* Split Editor Modal */}
-      {splitEditingIdx !== null && (
-        <ResponsiveModal isOpen={true} onClose={() => handleSplitCancel(splitEditingIdx)} maxWidth="32rem">
-          <h3 className="text-[15px] font-bold text-[var(--text-primary)] mb-3">Split Transaction</h3>
-          <div className="text-[12px] text-[var(--text-muted)] mb-3 font-mono">
-            {categorizedRows[splitEditingIdx].description} — {fmt(Math.abs(categorizedRows[splitEditingIdx].amount))}
-          </div>
-          <SplitEditor
-            totalAmount={categorizedRows[splitEditingIdx].amount}
-            initialSplits={categorizedRows[splitEditingIdx].splits ?? undefined}
-            categories={categories}
-            onApply={(splits) => handleSplitApply(splitEditingIdx, splits)}
-            onCancel={() => handleSplitCancel(splitEditingIdx)}
-            compact
-          />
-        </ResponsiveModal>
-      )}
-    </div>
-    )}
+        </>
+      ))}
     </div>
   );
 }

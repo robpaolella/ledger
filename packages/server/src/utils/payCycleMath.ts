@@ -1,9 +1,4 @@
-import type {
-  PayFrequency,
-  PayCycleProjection,
-  PayCycleProjectionCycle,
-  PayCycleProjectionCategoryTotal,
-} from '@ledger/shared/src/types.js';
+import type { PayFrequency } from '@ledger/shared/src/types.js';
 
 /**
  * Pay-cycle schedule math. Single source of truth for how many paychecks fall
@@ -30,12 +25,16 @@ export interface PayCycleForMath {
   category_id: number;
   sub_name: string;
   group_name: string;
-  frequency: PayFrequency;
+  // Recurring items add 'every_n_months' and 'custom_months' on top of the four
+  // pay-cycle frequencies; the extra branches are purely additive.
+  frequency: PayFrequency | 'every_n_months' | 'custom_months';
   amount: number;
   anchor_date: string | null;
   day_of_month_1: number | null;
   day_of_month_2: number | null;
   day_of_month: number | null;
+  interval?: number | null; // every_n_months: repeat every N months from the anchor
+  months?: number[] | null; // custom_months: 1-based months it occurs in
   effective_start: string | null;
   effective_end: string | null;
   is_active: number;
@@ -98,77 +97,30 @@ export function computePaydaysInMonth(cycle: PayCycleForMath, year: number, mon:
     const d = resolveDay(cycle.day_of_month ?? 1, lastDay);
     const p = ymdToMs(year, mon, d);
     if (p >= startMs && p <= endMs) out.push(p);
+  } else if (cycle.frequency === 'every_n_months') {
+    // Repeat every N months from an anchor month (anchor_date, else effective_start).
+    // In phase when the whole-month delta from the anchor is a multiple of N — works
+    // across year boundaries and extrapolates backward (modulo is sign-safe).
+    const n = cycle.interval && cycle.interval > 0 ? cycle.interval : 1;
+    const anchor = cycle.anchor_date ?? cycle.effective_start;
+    if (anchor) {
+      const [ay, am] = anchor.split('-').map(Number);
+      const mDelta = (year - ay) * 12 + (mon - am);
+      if (((mDelta % n) + n) % n === 0) {
+        const d = resolveDay(cycle.day_of_month ?? 1, lastDay);
+        const p = ymdToMs(year, mon, d);
+        if (p >= startMs && p <= endMs) out.push(p);
+      }
+    }
+  } else if (cycle.frequency === 'custom_months') {
+    // Occurs only in a chosen set of 1-based months, on day_of_month.
+    if (cycle.months && cycle.months.includes(mon)) {
+      const d = resolveDay(cycle.day_of_month ?? 1, lastDay);
+      const p = ymdToMs(year, mon, d);
+      if (p >= startMs && p <= endMs) out.push(p);
+    }
   }
 
   return out.map(msToYmd);
 }
 
-/**
- * The typical full-month paycheck count for a cycle in `year` (2 for biweekly,
- * 4 for weekly, 2 for semi_monthly, 1 for monthly). Used to flag "this month has
- * an extra paycheck" (count > baseline). Computed against the UNBOUNDED schedule
- * so a partial boundary month created by effective_start/effective_end does not
- * deflate the baseline and wrongly flag ordinary months as extra. Returns 0 if
- * the cycle never pays.
- */
-export function yearlyBaseline(cycle: PayCycleForMath, year: number): number {
-  const canonical: PayCycleForMath = { ...cycle, effective_start: null, effective_end: null };
-  let min = Infinity;
-  for (let m = 1; m <= 12; m++) {
-    const c = computePaydaysInMonth(canonical, year, m).length;
-    if (c > 0 && c < min) min = c;
-  }
-  return min === Infinity ? 0 : min;
-}
-
-/**
- * Project expected income for `month` ('YYYY-MM') across a set of cycles.
- * Inactive cycles and cycles with zero paydays in the month are excluded.
- * Cycles targeting the same category are summed into one categoryTotal.
- */
-export function projectPayCycles(cycles: PayCycleForMath[], month: string): PayCycleProjection {
-  const { year, mon } = parseMonth(month);
-  const cycleOut: PayCycleProjectionCycle[] = [];
-  const byCat = new Map<number, PayCycleProjectionCategoryTotal>();
-
-  for (const c of cycles) {
-    if (!c.is_active) continue;
-    const paydays = computePaydaysInMonth(c, year, mon);
-    const paydayCount = paydays.length;
-    if (paydayCount === 0) continue;
-
-    const projectedAmount = c.amount * paydayCount;
-    cycleOut.push({
-      id: c.id,
-      label: c.label,
-      userId: c.user_id,
-      ownerName: c.ownerName,
-      categoryId: c.category_id,
-      subName: c.sub_name,
-      groupName: c.group_name,
-      frequency: c.frequency,
-      perPaycheckAmount: c.amount,
-      paydays,
-      paydayCount,
-      projectedAmount,
-    });
-
-    const exceedsBaseline = paydayCount > yearlyBaseline(c, year);
-    const cur = byCat.get(c.category_id) ?? {
-      categoryId: c.category_id,
-      subName: c.sub_name,
-      groupName: c.group_name,
-      projectedAmount: 0,
-      cycleIds: [] as number[],
-      paydayCount: 0,
-      hasExtraPaycheck: false,
-    };
-    cur.projectedAmount += projectedAmount;
-    cur.cycleIds.push(c.id);
-    cur.paydayCount += paydayCount;
-    if (exceedsBaseline) cur.hasExtraPaycheck = true;
-    byCat.set(c.category_id, cur);
-  }
-
-  return { month, cycles: cycleOut, categoryTotals: [...byCat.values()] };
-}

@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
 import path from 'path';
 import fs from 'fs';
+import { markCategorySortOrderSet } from './migrate-category-sort-order.js';
 
 const dbPath = process.env.DATABASE_PATH || path.join(path.resolve(process.cwd(), 'data'), 'ledger.db');
 const dataDir = path.dirname(dbPath);
@@ -47,13 +48,27 @@ sqlite.exec(`
     value TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS financial_institutions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    domain TEXT,
+    logo_url TEXT,
+    color TEXT,
+    is_system INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     last_four TEXT,
     type TEXT NOT NULL,
     classification TEXT NOT NULL,
+    institution TEXT,
+    institution_id INTEGER REFERENCES financial_institutions(id),
     owner TEXT NOT NULL,
+    avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
@@ -71,7 +86,26 @@ sqlite.exec(`
     display_name TEXT NOT NULL,
     type TEXT NOT NULL,
     is_deductible INTEGER DEFAULT 0,
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    recurring_budget_mode TEXT DEFAULT 'set',
+    emoji TEXT,
+    exclude_from_budget INTEGER DEFAULT 0,
+    group_id INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS merchants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS vendor_logos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    domain TEXT,
+    logo_url TEXT,
+    color TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS transactions (
@@ -81,7 +115,10 @@ sqlite.exec(`
     description TEXT NOT NULL,
     note TEXT,
     category_id INTEGER REFERENCES categories(id),
+    merchant_id INTEGER REFERENCES merchants(id),
     amount REAL NOT NULL,
+    categorize_confidence REAL,
+    needs_review INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -90,16 +127,22 @@ sqlite.exec(`
     transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
     category_id INTEGER NOT NULL REFERENCES categories(id),
     amount REAL NOT NULL,
+    merchant_id INTEGER REFERENCES merchants(id),
+    note TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
   CREATE INDEX IF NOT EXISTS idx_splits_txn ON transaction_splits(transaction_id);
   CREATE INDEX IF NOT EXISTS idx_splits_cat ON transaction_splits(category_id);
+  -- idx_splits_merchant is created in migrate-split-merchant.ts (AFTER the
+  -- merchant_id column is added), so this DDL — which runs before migrations —
+  -- never references a column that doesn't yet exist on an upgraded DB.
 
   CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     category_id INTEGER NOT NULL REFERENCES categories(id),
     month TEXT NOT NULL,
     amount REAL NOT NULL,
+    override INTEGER NOT NULL DEFAULT 0,
     UNIQUE(category_id, month)
   );
 
@@ -131,7 +174,7 @@ sqlite.exec(`
 `);
 
 export const db = drizzle(sqlite, { schema });
-export { sqlite };
+export { sqlite, dataDir };
 
 // Auto-seed categories on first run (empty database)
 const catCount = sqlite.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
@@ -178,6 +221,9 @@ if (catCount.count === 0) {
       }).run();
     }
   }
+
+  // The seed's order is deliberate: keep it from the one-time alphabetical backfill.
+  markCategorySortOrderSet(sqlite);
 
   const seeded = sqlite.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
   console.log(`  Seeded ${seeded.count} categories.`);

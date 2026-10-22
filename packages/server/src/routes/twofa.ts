@@ -105,13 +105,16 @@ router.post('/confirm', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Validate the TOTP token
+    let secretObj: Secret;
+    try { secretObj = Secret.fromBase32(secretBase32); }
+    catch { res.status(400).json({ error: 'Invalid setup secret — start the setup again' }); return; }
     const totp = new TOTP({
       issuer: ISSUER,
       label: user.username,
       algorithm: 'SHA1',
       digits: 6,
       period: 30,
-      secret: Secret.fromBase32(secretBase32),
+      secret: secretObj,
     });
 
     const delta = totp.validate({ token, window: 1 });

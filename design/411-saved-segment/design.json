@@ -1,0 +1,19 @@
+{
+  "design_issue": 411,
+  "covers": [
+    410
+  ],
+  "revision": 1,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "saved",
+    "saved-small",
+    "over-income"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

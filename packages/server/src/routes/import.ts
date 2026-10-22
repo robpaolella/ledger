@@ -1,38 +1,19 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { db, sqlite } from '../db/index.js';
-import { transactions, categories, transactionSplits, dismissedTransfers } from '../db/schema.js';
+import { dismissedTransfers } from '../db/schema.js';
+import { buildCategorizer } from '../services/categorize.js';
+import { llmConfig, llmCategorizeBatch, mergeLlmResult, type LlmTxnInput } from '../services/llmCategorize.js';
+import { normalizeMerchantName } from '../services/merchantNormalize.js';
 import { eq } from 'drizzle-orm';
+import { readCsv } from '@ledger/shared';
 import { requirePermission } from '../middleware/permissions.js';
 import { detectDuplicates } from '../services/duplicateDetector.js';
 import { detectTransfers } from '../services/transferDetector.js';
+import { commitImport, IMPORT_FAILED_MESSAGE, type ImportCommitInput } from '../services/importCommit.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-
-function parseLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
 
 const HEADER_PATTERNS = [
   /^date$/i, /datetime/i, /posting\s?date/i, /trans(action)?\s?date/i,
@@ -62,15 +43,15 @@ function findHeaderRow(parsedLines: string[][]): number {
   return bestIdx;
 }
 
-function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number } {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length === 0) return { headers: [], rows: [], headerRowIndex: 0 };
+// headerRowIndex counts non-blank records, so the browser's readCsv slice agrees with it.
+export function parseCSV(text: string): { headers: string[]; rows: string[][]; headerRowIndex: number; unclosedQuoteLine: number | null } {
+  const { records, unclosedQuoteLine } = readCsv(text);
+  if (records.length === 0) return { headers: [], rows: [], headerRowIndex: 0, unclosedQuoteLine };
 
-  const parsedLines = lines.map(parseLine);
-  const headerRowIndex = findHeaderRow(parsedLines);
-  const headers = parsedLines[headerRowIndex];
-  const rows = parsedLines.slice(headerRowIndex + 1).filter((r) => r.some((c) => c.trim()));
-  return { headers, rows, headerRowIndex };
+  const headerRowIndex = findHeaderRow(records);
+  const headers = records[headerRowIndex];
+  const rows = records.slice(headerRowIndex + 1);
+  return { headers, rows, headerRowIndex, unclosedQuoteLine };
 }
 
 function detectFormat(headers: string[]): 'chase' | 'venmo' | 'generic' {
@@ -101,10 +82,15 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
     }
 
     const text = req.file.buffer.toString('utf-8');
-    const { headers, rows, headerRowIndex } = parseCSV(text);
+    const { headers, rows, headerRowIndex, unclosedQuoteLine } = parseCSV(text);
+
+    if (unclosedQuoteLine !== null) {
+      res.status(400).json({ error: `This file has a quote mark on line ${unclosedQuoteLine} that is never closed, so it can't be read safely. Fix the file and upload it again.` });
+      return;
+    }
 
     if (headers.length === 0) {
-      res.status(400).json({ error: 'Could not parse CSV headers' });
+      res.status(400).json({ error: "We couldn't find any rows in this file. Check that it's a CSV export and try again." });
       return;
     }
 
@@ -128,197 +114,75 @@ router.post('/parse', requirePermission('import.csv'), upload.single('file'), (r
 });
 
 // POST /api/import/categorize
-router.post('/categorize', requirePermission('import.csv'), (req: Request, res: Response) => {
+router.post('/categorize', requirePermission('import.csv'), async (req: Request, res: Response) => {
   try {
-    const { items } = req.body as { items: { description: string; amount: number; payee?: string }[] };
+    const { items, accountId } = req.body as {
+      items: { description: string; amount: number; payee?: string }[];
+      accountId?: number;
+    };
     if (!items || !Array.isArray(items)) {
       res.status(400).json({ error: 'items array is required' });
       return;
     }
 
-    // Build pattern map from existing transaction history
-    const history = db.select({
-      description: transactions.description,
-      category_id: transactions.category_id,
-      group_name: categories.group_name,
-      sub_name: categories.sub_name,
-      type: categories.type,
-    }).from(transactions)
-      .innerJoin(categories, eq(transactions.category_id, categories.id))
-      .all();
+    // Account context is optional — the wizard sends it once the target account
+    // is chosen. Without it the transfer signal still reads the text; it just
+    // can't use direction, so a card payment stays a weak guess.
+    const account = accountId
+      ? sqlite.prepare('SELECT classification, type FROM accounts WHERE id = ?').get(accountId) as
+        { classification: string | null; type: string | null } | undefined
+      : undefined;
 
-    // Build category distribution map: description → { categoryId → info + count }
-    type CatInfo = { groupName: string; subName: string; type: string; count: number };
-    const descCatDist = new Map<string, Map<number, CatInfo>>();
-    for (const h of history) {
-      const key = h.description.toLowerCase().trim();
-      if (!descCatDist.has(key)) descCatDist.set(key, new Map());
-      const catMap = descCatDist.get(key)!;
-      const catId = h.category_id!;
-      const existing = catMap.get(catId);
-      if (existing) {
-        existing.count++;
-      } else {
-        catMap.set(catId, {
-          groupName: h.group_name,
-          subName: h.sub_name,
-          type: h.type,
-          count: 1,
-        });
-      }
-    }
-
-    // Returns the dominant category if one exists with sufficient consistency.
-    // With < 3 data points, always returns the most common (not enough data to measure variance).
-    // With >= 3 data points, requires >= 75% dominance to suggest.
-    const DOMINANCE_THRESHOLD = 0.75;
-    const MIN_HISTORY_FOR_VARIANCE = 3;
-
-    function getDominantCategory(catMap: Map<number, CatInfo>): { categoryId: number; groupName: string; subName: string; type: string } | null {
-      let total = 0;
-      let best: { categoryId: number; groupName: string; subName: string; type: string; count: number } | null = null;
-      for (const [catId, info] of catMap) {
-        total += info.count;
-        if (!best || info.count > best.count) {
-          best = { categoryId: catId, groupName: info.groupName, subName: info.subName, type: info.type, count: info.count };
-        }
-      }
-      if (!best) return null;
-      if (total < MIN_HISTORY_FOR_VARIANCE) return best;
-      if (best.count / total >= DOMINANCE_THRESHOLD) return best;
-      return null;
-    }
-
-    function getTotalCount(catMap: Map<number, CatInfo>): number {
-      let total = 0;
-      for (const info of catMap.values()) total += info.count;
-      return total;
-    }
-
-    // Keyword rules for common merchants
-    const RULES: { pattern: RegExp; groupName: string; subName: string }[] = [
-      { pattern: /shell|chevron|exxon|\bmobil\b|bp |sunoco|gas|fuel|wawa.*gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
-      { pattern: /costco gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
-      { pattern: /costco|giant|groceries|grocery|aldi|trader joe|whole foods|safeway|kroger|publix|wegmans|food lion|jimbo/i, groupName: 'Daily Living', subName: 'Groceries' },
-      { pattern: /amazon|amzn/i, groupName: 'Daily Living', subName: 'Online Shopping' },
-      { pattern: /walmart|target|dollar/i, groupName: 'Daily Living', subName: 'General Merchandise' },
-      { pattern: /netflix|hulu|disney|spotify|apple.*music|hbo|paramount|peacock/i, groupName: 'Dues/Subscriptions', subName: 'Streaming Services' },
-      { pattern: /restaurant|mcdonald|wendy|burger|chick-fil|chipotle|panera|starbucks|dunkin|coffee|pizza|taco bell|diner|jersey mike|in-n-out|del taco|subway|on the border|chili|peet/i, groupName: 'Daily Living', subName: 'Dining/Eating Out' },
-      { pattern: /uber eats|doordash|grubhub|postmates/i, groupName: 'Daily Living', subName: 'Dining/Eating Out' },
-      { pattern: /uber|lyft|taxi|cab/i, groupName: 'Auto/Transportation', subName: 'Ride Share' },
-      { pattern: /geico|progressive|allstate|state farm|insurance/i, groupName: 'Insurance', subName: 'Auto Insurance' },
-      { pattern: /at&t|verizon|t-mobile|sprint|comcast|xfinity|internet|wifi/i, groupName: 'Utilities', subName: 'Cellphone' },
-      { pattern: /electric|power|energy|ppl|duke energy|sd gas|sdge/i, groupName: 'Utilities', subName: 'Electric' },
-      { pattern: /water.*sewer|water bill|sewer/i, groupName: 'Utilities', subName: 'Water/Sewer' },
-      { pattern: /home depot|lowes|hardware/i, groupName: 'Household', subName: 'Improvements' },
-      { pattern: /cvs|walgreens|pharmacy|rx|doctor|dr\.|medical|hospital|urgent care/i, groupName: 'Health', subName: 'Medical' },
-      { pattern: /gym|fitness|planet fitness|equinox|yoga/i, groupName: 'Health', subName: 'Gym/Fitness' },
-      { pattern: /payroll|direct deposit|salary|wages/i, groupName: 'Income', subName: 'Take Home Pay' },
-      { pattern: /interest.*payment|interest.*earned|interest paid|interest$/i, groupName: 'Income', subName: 'Interest Income' },
-      { pattern: /cloudflare|github|namecheap|elevenlabs|steam/i, groupName: 'Dues/Subscriptions', subName: 'Online Services' },
-      { pattern: /southwest|american airlines|united airlines|delta|frontier/i, groupName: 'Discretionary', subName: 'Travel' },
-    ];
-
-    // Get all categories for ID lookup
-    const allCats = db.select().from(categories).all();
-    const catLookup = new Map(allCats.map((c) => [`${c.group_name}:${c.sub_name}`, c.id]));
-
-    const results = items.map((item) => {
-      // Use payee as primary match text when available (bank sync), fall back to description (CSV)
-      const primaryText = item.payee || item.description;
-      const primaryLower = primaryText.toLowerCase().trim();
-      const descLower = item.description.toLowerCase().trim();
-
-      const noSuggestion = {
+    // Unified resolver (shared with bank sync): user rules, strong transfer
+    // signal, per-merchant majority vote, text-history, skip-unresolved
+    // heuristic, weak transfer signal, none.
+    const categorizer = buildCategorizer(sqlite);
+    const priors = items.map((item) =>
+      categorizer.categorize({
         description: item.description,
         payee: item.payee,
-        suggestedCategoryId: null,
-        suggestedGroupName: null,
-        suggestedSubName: null,
-        confidence: 0.0,
-      };
+        amount: item.amount,
+        accountClassification: account?.classification,
+        accountType: account?.type,
+      }));
 
-      let highVarianceVendor = false;
-
-      // 1. Exact match from history — check payee first, then description
-      const exactPayeeDist = descCatDist.get(primaryLower);
-      if (exactPayeeDist) {
-        const dominant = getDominantCategory(exactPayeeDist);
-        if (dominant) {
-          return {
-            description: item.description,
-            payee: item.payee,
-            suggestedCategoryId: dominant.categoryId,
-            suggestedGroupName: dominant.groupName,
-            suggestedSubName: dominant.subName,
-            confidence: 1.0,
-          };
-        }
-        if (getTotalCount(exactPayeeDist) >= MIN_HISTORY_FOR_VARIANCE) highVarianceVendor = true;
+    // LLM second opinion on everything below rule-certainty (same stage as bank
+    // sync; no account context in the CSV wizard). Failure → priors stand.
+    const merged = [...priors];
+    try {
+      const idxs = priors.map((p, i) => (p.confidence < 1 ? i : -1)).filter((i) => i >= 0).slice(0, 200);
+      if (idxs.length > 0 && llmConfig(sqlite)) {
+        const llmItems: LlmTxnInput[] = idxs.map((i, k) => ({
+          key: k,
+          date: '',
+          amount: items[i].amount,
+          merchantName: normalizeMerchantName(items[i].payee || items[i].description) || null,
+          description: items[i].description,
+          prior: priors[i],
+        }));
+        const verdicts = await llmCategorizeBatch(sqlite, llmItems);
+        const catMeta = new Map((sqlite.prepare('SELECT id, group_name, sub_name FROM categories').all() as
+          { id: number; group_name: string; sub_name: string }[]).map((c) => [c.id, c]));
+        idxs.forEach((i, k) => {
+          const m = mergeLlmResult(priors[i], verdicts.get(k));
+          if (m === priors[i]) return;
+          const meta = m.categoryId != null ? catMeta.get(m.categoryId) : undefined;
+          merged[i] = { ...m, groupName: m.groupName ?? meta?.group_name ?? null, subName: m.subName ?? meta?.sub_name ?? null };
+        });
       }
+    } catch (err) {
+      console.error('[llm-categorize] CSV pass failed:', err instanceof Error ? err.message : err);
+    }
 
-      if (!highVarianceVendor && item.payee) {
-        const exactDescDist = descCatDist.get(descLower);
-        if (exactDescDist) {
-          const dominant = getDominantCategory(exactDescDist);
-          if (dominant) {
-            return {
-              description: item.description,
-              payee: item.payee,
-              suggestedCategoryId: dominant.categoryId,
-              suggestedGroupName: dominant.groupName,
-              suggestedSubName: dominant.subName,
-              confidence: 0.9,
-            };
-          }
-          if (getTotalCount(exactDescDist) >= MIN_HISTORY_FOR_VARIANCE) highVarianceVendor = true;
-        }
-      }
-
-      // 2. Partial match from history — check both payee and description
-      if (!highVarianceVendor) {
-        for (const [key, dist] of descCatDist.entries()) {
-          if (primaryLower.includes(key) || key.includes(primaryLower) ||
-              (item.payee && (descLower.includes(key) || key.includes(descLower)))) {
-            const dominant = getDominantCategory(dist);
-            if (dominant) {
-              return {
-                description: item.description,
-                payee: item.payee,
-                suggestedCategoryId: dominant.categoryId,
-                suggestedGroupName: dominant.groupName,
-                suggestedSubName: dominant.subName,
-                confidence: 0.7,
-              };
-            }
-            if (getTotalCount(dist) >= MIN_HISTORY_FOR_VARIANCE) {
-              highVarianceVendor = true;
-              break;
-            }
-          }
-        }
-      }
-
-      // 3. Rule-based matching — skip if vendor has varied history
-      if (!highVarianceVendor) {
-        for (const rule of RULES) {
-          if (rule.pattern.test(primaryText) || (item.payee && rule.pattern.test(item.description))) {
-            const catId = catLookup.get(`${rule.groupName}:${rule.subName}`);
-            return {
-              description: item.description,
-              payee: item.payee,
-              suggestedCategoryId: catId || null,
-              suggestedGroupName: rule.groupName,
-              suggestedSubName: rule.subName,
-              confidence: 0.7,
-            };
-          }
-        }
-      }
-
-      // 4. No match (or high-variance vendor)
-      return noSuggestion;
-    });
+    const results = items.map((item, i) => ({
+      description: item.description,
+      payee: item.payee,
+      suggestedCategoryId: merged[i].categoryId,
+      suggestedGroupName: merged[i].groupName,
+      suggestedSubName: merged[i].subName,
+      confidence: merged[i].confidence,
+      source: merged[i].source,
+    }));
 
     res.json({ data: results });
   } catch (err) {
@@ -327,72 +191,19 @@ router.post('/categorize', requirePermission('import.csv'), (req: Request, res: 
   }
 });
 
-// POST /api/import/commit
+// POST /api/import/commit — validation and the all-or-nothing write live in
+// services/importCommit.ts.
 router.post('/commit', requirePermission('import.csv'), (req: Request, res: Response) => {
   try {
-    const { accountId, transactions: txns } = req.body as {
-      accountId: number;
-      transactions: {
-        date: string; description: string; note?: string;
-        categoryId?: number; amount: number;
-        splits?: { categoryId: number; amount: number }[];
-      }[];
-    };
-
-    if (!accountId || !txns || !Array.isArray(txns) || txns.length === 0) {
-      res.status(400).json({ error: 'accountId and transactions array are required' });
+    const result = commitImport(sqlite, req.body as ImportCommitInput);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
       return;
     }
-
-    // Validate all required fields
-    for (const t of txns) {
-      if (!t.date || !t.description || t.amount == null) {
-        res.status(400).json({ error: 'Each transaction requires date, description, and amount' });
-        return;
-      }
-      if (!t.categoryId && (!t.splits || t.splits.length < 2)) {
-        res.status(400).json({ error: 'Each transaction requires categoryId or splits' });
-        return;
-      }
-      if (t.splits && t.splits.length >= 2) {
-        const splitSum = t.splits.reduce((s, r) => s + r.amount, 0);
-        if (Math.abs(splitSum - t.amount) > 0.01) {
-          res.status(400).json({ error: `Split amounts must equal transaction amount for "${t.description}"` });
-          return;
-        }
-      }
-    }
-
-    // Insert all transactions
-    let count = 0;
-    for (const t of txns) {
-      const hasSplits = t.splits && t.splits.length >= 2;
-      const result = db.insert(transactions).values({
-        account_id: accountId,
-        category_id: hasSplits ? null : t.categoryId!,
-        date: t.date,
-        description: t.description,
-        note: t.note || null,
-        amount: t.amount,
-      }).run();
-
-      if (hasSplits) {
-        const txnId = Number(result.lastInsertRowid);
-        for (const s of t.splits!) {
-          db.insert(transactionSplits).values({
-            transaction_id: txnId,
-            category_id: s.categoryId,
-            amount: s.amount,
-          }).run();
-        }
-      }
-      count++;
-    }
-
-    res.status(201).json({ data: { imported: count } });
+    res.status(201).json({ data: { imported: result.imported } });
   } catch (err) {
     console.error('POST /import/commit error:', err);
-    res.status(500).json({ error: 'Failed to import transactions' });
+    res.status(500).json({ error: IMPORT_FAILED_MESSAGE });
   }
 });
 

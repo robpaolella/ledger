@@ -1,0 +1,1164 @@
+{
+  "images": [
+    {
+      "image": "approved-menu-owner-light-390.png",
+      "version": "approved",
+      "state": "menu-owner",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 848
+    },
+    {
+      "image": "approved-menu-owner-light-1440.png",
+      "version": "approved",
+      "state": "menu-owner",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-menu-owner-dark-390.png",
+      "version": "approved",
+      "state": "menu-owner",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 848
+    },
+    {
+      "image": "approved-menu-owner-dark-1440.png",
+      "version": "approved",
+      "state": "menu-owner",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-menu-everyday-light-390.png",
+      "version": "approved",
+      "state": "menu-everyday",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-menu-everyday-light-1440.png",
+      "version": "approved",
+      "state": "menu-everyday",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-menu-everyday-dark-390.png",
+      "version": "approved",
+      "state": "menu-everyday",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-menu-everyday-dark-1440.png",
+      "version": "approved",
+      "state": "menu-everyday",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-menu-view-only-light-390.png",
+      "version": "approved",
+      "state": "menu-view-only",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-menu-view-only-light-1440.png",
+      "version": "approved",
+      "state": "menu-view-only",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-menu-view-only-dark-390.png",
+      "version": "approved",
+      "state": "menu-view-only",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-menu-view-only-dark-1440.png",
+      "version": "approved",
+      "state": "menu-view-only",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-users-owner-light-390.png",
+      "version": "approved",
+      "state": "users-owner",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1045
+    },
+    {
+      "image": "approved-users-owner-light-1440.png",
+      "version": "approved",
+      "state": "users-owner",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 978
+    },
+    {
+      "image": "approved-users-owner-dark-390.png",
+      "version": "approved",
+      "state": "users-owner",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1045
+    },
+    {
+      "image": "approved-users-owner-dark-1440.png",
+      "version": "approved",
+      "state": "users-owner",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 978
+    },
+    {
+      "image": "approved-users-admin-light-390.png",
+      "version": "approved",
+      "state": "users-admin",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-users-admin-light-1440.png",
+      "version": "approved",
+      "state": "users-admin",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-users-admin-dark-390.png",
+      "version": "approved",
+      "state": "users-admin",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-users-admin-dark-1440.png",
+      "version": "approved",
+      "state": "users-admin",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-detail-light-390.png",
+      "version": "approved",
+      "state": "user-detail",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-detail-light-1440.png",
+      "version": "approved",
+      "state": "user-detail",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-detail-dark-390.png",
+      "version": "approved",
+      "state": "user-detail",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-detail-dark-1440.png",
+      "version": "approved",
+      "state": "user-detail",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-switches-light-390.png",
+      "version": "approved",
+      "state": "user-switches",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-switches-light-1440.png",
+      "version": "approved",
+      "state": "user-switches",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-switches-dark-390.png",
+      "version": "approved",
+      "state": "user-switches",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-switches-dark-1440.png",
+      "version": "approved",
+      "state": "user-switches",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-switches-more-light-390.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-switches-more-light-1440.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-switches-more-dark-390.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-switches-more-dark-1440.png",
+      "version": "approved",
+      "state": "user-switches-more",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-everyday-switches-light-390.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-everyday-switches-light-1440.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-everyday-switches-dark-390.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-everyday-switches-dark-1440.png",
+      "version": "approved",
+      "state": "user-everyday-switches",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-actions-light-390.png",
+      "version": "approved",
+      "state": "user-actions",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-actions-light-1440.png",
+      "version": "approved",
+      "state": "user-actions",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-user-actions-dark-390.png",
+      "version": "approved",
+      "state": "user-actions",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-user-actions-dark-1440.png",
+      "version": "approved",
+      "state": "user-actions",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-accounts-light-390.png",
+      "version": "approved",
+      "state": "accounts",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1198
+    },
+    {
+      "image": "approved-accounts-light-1440.png",
+      "version": "approved",
+      "state": "accounts",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 955
+    },
+    {
+      "image": "approved-accounts-dark-390.png",
+      "version": "approved",
+      "state": "accounts",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1198
+    },
+    {
+      "image": "approved-accounts-dark-1440.png",
+      "version": "approved",
+      "state": "accounts",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 955
+    },
+    {
+      "image": "approved-bank-working-light-390.png",
+      "version": "approved",
+      "state": "bank-working",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1130
+    },
+    {
+      "image": "approved-bank-working-light-1440.png",
+      "version": "approved",
+      "state": "bank-working",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-bank-working-dark-390.png",
+      "version": "approved",
+      "state": "bank-working",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1130
+    },
+    {
+      "image": "approved-bank-working-dark-1440.png",
+      "version": "approved",
+      "state": "bank-working",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-bank-problems-light-390.png",
+      "version": "approved",
+      "state": "bank-problems",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1464
+    },
+    {
+      "image": "approved-bank-problems-light-1440.png",
+      "version": "approved",
+      "state": "bank-problems",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1110
+    },
+    {
+      "image": "approved-bank-problems-dark-390.png",
+      "version": "approved",
+      "state": "bank-problems",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1464
+    },
+    {
+      "image": "approved-bank-problems-dark-1440.png",
+      "version": "approved",
+      "state": "bank-problems",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1110
+    },
+    {
+      "image": "approved-bank-member-light-390.png",
+      "version": "approved",
+      "state": "bank-member",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1165
+    },
+    {
+      "image": "approved-bank-member-light-1440.png",
+      "version": "approved",
+      "state": "bank-member",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 995
+    },
+    {
+      "image": "approved-bank-member-dark-390.png",
+      "version": "approved",
+      "state": "bank-member",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1165
+    },
+    {
+      "image": "approved-bank-member-dark-1440.png",
+      "version": "approved",
+      "state": "bank-member",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 995
+    },
+    {
+      "image": "approved-bank-paused-light-390.png",
+      "version": "approved",
+      "state": "bank-paused",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1149
+    },
+    {
+      "image": "approved-bank-paused-light-1440.png",
+      "version": "approved",
+      "state": "bank-paused",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-bank-paused-dark-390.png",
+      "version": "approved",
+      "state": "bank-paused",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1149
+    },
+    {
+      "image": "approved-bank-paused-dark-1440.png",
+      "version": "approved",
+      "state": "bank-paused",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-bank-empty-light-390.png",
+      "version": "approved",
+      "state": "bank-empty",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-bank-empty-light-1440.png",
+      "version": "approved",
+      "state": "bank-empty",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-bank-empty-dark-390.png",
+      "version": "approved",
+      "state": "bank-empty",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-bank-empty-dark-1440.png",
+      "version": "approved",
+      "state": "bank-empty",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-daily-problems-light-390.png",
+      "version": "approved",
+      "state": "daily-problems",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1464
+    },
+    {
+      "image": "approved-daily-problems-light-1440.png",
+      "version": "approved",
+      "state": "daily-problems",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1110
+    },
+    {
+      "image": "approved-daily-problems-dark-390.png",
+      "version": "approved",
+      "state": "daily-problems",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1464
+    },
+    {
+      "image": "approved-daily-problems-dark-1440.png",
+      "version": "approved",
+      "state": "daily-problems",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1110
+    },
+    {
+      "image": "approved-daily-member-light-390.png",
+      "version": "approved",
+      "state": "daily-member",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1165
+    },
+    {
+      "image": "approved-daily-member-light-1440.png",
+      "version": "approved",
+      "state": "daily-member",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 995
+    },
+    {
+      "image": "approved-daily-member-dark-390.png",
+      "version": "approved",
+      "state": "daily-member",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1165
+    },
+    {
+      "image": "approved-daily-member-dark-1440.png",
+      "version": "approved",
+      "state": "daily-member",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 995
+    },
+    {
+      "image": "approved-daily-paused-light-390.png",
+      "version": "approved",
+      "state": "daily-paused",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1149
+    },
+    {
+      "image": "approved-daily-paused-light-1440.png",
+      "version": "approved",
+      "state": "daily-paused",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-paused-dark-390.png",
+      "version": "approved",
+      "state": "daily-paused",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1149
+    },
+    {
+      "image": "approved-daily-paused-dark-1440.png",
+      "version": "approved",
+      "state": "daily-paused",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-gave-up-light-390.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1148
+    },
+    {
+      "image": "approved-daily-gave-up-light-1440.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-gave-up-dark-390.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1148
+    },
+    {
+      "image": "approved-daily-gave-up-dark-1440.png",
+      "version": "approved",
+      "state": "daily-gave-up",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 905
+    },
+    {
+      "image": "approved-daily-off-failing-light-390.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1500
+    },
+    {
+      "image": "approved-daily-off-failing-light-1440.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1111
+    },
+    {
+      "image": "approved-daily-off-failing-dark-390.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1500
+    },
+    {
+      "image": "approved-daily-off-failing-dark-1440.png",
+      "version": "approved",
+      "state": "daily-off-failing",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 1111
+    },
+    {
+      "image": "approved-rules-light-390.png",
+      "version": "approved",
+      "state": "rules",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 2565
+    },
+    {
+      "image": "approved-rules-light-1440.png",
+      "version": "approved",
+      "state": "rules",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 2361
+    },
+    {
+      "image": "approved-rules-dark-390.png",
+      "version": "approved",
+      "state": "rules",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 2565
+    },
+    {
+      "image": "approved-rules-dark-1440.png",
+      "version": "approved",
+      "state": "rules",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 2361
+    },
+    {
+      "image": "approved-rules-search-light-390.png",
+      "version": "approved",
+      "state": "rules-search",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 849
+    },
+    {
+      "image": "approved-rules-search-light-1440.png",
+      "version": "approved",
+      "state": "rules-search",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-rules-search-dark-390.png",
+      "version": "approved",
+      "state": "rules-search",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 849
+    },
+    {
+      "image": "approved-rules-search-dark-1440.png",
+      "version": "approved",
+      "state": "rules-search",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-rules-empty-light-390.png",
+      "version": "approved",
+      "state": "rules-empty",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-rules-empty-light-1440.png",
+      "version": "approved",
+      "state": "rules-empty",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-rules-empty-dark-390.png",
+      "version": "approved",
+      "state": "rules-empty",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-rules-empty-dark-1440.png",
+      "version": "approved",
+      "state": "rules-empty",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-notifications-light-390.png",
+      "version": "approved",
+      "state": "notifications",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-notifications-light-1440.png",
+      "version": "approved",
+      "state": "notifications",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-notifications-dark-390.png",
+      "version": "approved",
+      "state": "notifications",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-notifications-dark-1440.png",
+      "version": "approved",
+      "state": "notifications",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-extras-light-390.png",
+      "version": "approved",
+      "state": "extras",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 967
+    },
+    {
+      "image": "approved-extras-light-1440.png",
+      "version": "approved",
+      "state": "extras",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-extras-dark-390.png",
+      "version": "approved",
+      "state": "extras",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 967
+    },
+    {
+      "image": "approved-extras-dark-1440.png",
+      "version": "approved",
+      "state": "extras",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-extras-on-light-390.png",
+      "version": "approved",
+      "state": "extras-on",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1013
+    },
+    {
+      "image": "approved-extras-on-light-1440.png",
+      "version": "approved",
+      "state": "extras-on",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-extras-on-dark-390.png",
+      "version": "approved",
+      "state": "extras-on",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 1013
+    },
+    {
+      "image": "approved-extras-on-dark-1440.png",
+      "version": "approved",
+      "state": "extras-on",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-loading-light-390.png",
+      "version": "approved",
+      "state": "loading",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-loading-light-1440.png",
+      "version": "approved",
+      "state": "loading",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-loading-dark-390.png",
+      "version": "approved",
+      "state": "loading",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-loading-dark-1440.png",
+      "version": "approved",
+      "state": "loading",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-error-light-390.png",
+      "version": "approved",
+      "state": "error",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-error-light-1440.png",
+      "version": "approved",
+      "state": "error",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    },
+    {
+      "image": "approved-error-dark-390.png",
+      "version": "approved",
+      "state": "error",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 844
+    },
+    {
+      "image": "approved-error-dark-1440.png",
+      "version": "approved",
+      "state": "error",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 900
+    }
+  ]
+}

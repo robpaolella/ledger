@@ -6,6 +6,8 @@ import { users, userPermissions } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '../middleware/permissions.js';
 import { invalidatePermissionCache, ALL_PERMISSIONS } from '../middleware/permissions.js';
+import { invalidateLiveUser } from '../middleware/auth.js';
+import { deleteLinksCascade, linkIdsForConnection } from '../services/simplefinLinks.js';
 import { DEFAULT_MEMBER_PERMISSIONS } from '../db/migrate-roles-permissions.js';
 import { sanitize } from '../utils/sanitize.js';
 
@@ -228,6 +230,7 @@ router.put('/:id', requireRole('admin'), (req: Request, res: Response): void => 
       if (targetRole === 'member' && role === 'admin') {
         db.delete(userPermissions).where(eq(userPermissions.user_id, id)).run();
         invalidatePermissionCache(id);
+    invalidateLiveUser(id);
       }
     }
 
@@ -315,6 +318,7 @@ router.put('/:id/permissions', requireRole('admin'), (req: Request, res: Respons
     txn();
 
     invalidatePermissionCache(id);
+    invalidateLiveUser(id);
 
     res.json({ data: { message: 'Permissions updated' } });
   } catch (err) {
@@ -390,11 +394,6 @@ router.get('/:id/delete-preview', requireRole('admin'), (req: Request, res: Resp
       'SELECT COUNT(*) as cnt FROM simplefin_connections WHERE user_id = ?'
     ).get(id) as { cnt: number };
 
-    // Owned pay cycles (will be unassigned, not deleted, on permanent delete)
-    const payCyclesOwnedCount = sqlite.prepare(
-      'SELECT COUNT(*) as cnt FROM pay_cycles WHERE user_id = ?'
-    ).get(id) as { cnt: number };
-
     // Available owners (all active users except the one being deleted)
     const available = sqlite.prepare(
       'SELECT id, display_name FROM users WHERE is_active = 1 AND id != ? ORDER BY display_name'
@@ -417,7 +416,6 @@ router.get('/:id/delete-preview', requireRole('admin'), (req: Request, res: Resp
         })),
         coOwnedAccounts: coOwnedWithOwners,
         personalConnections: personalConnCount.cnt,
-        payCyclesOwned: payCyclesOwnedCount.cnt,
         availableOwners: available.map(u => ({ id: u.id, displayName: u.display_name })),
       },
     });
@@ -458,6 +456,7 @@ router.delete('/:id', requireRole('admin'), (req: Request, res: Response): void 
 
     sqlite.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
     invalidatePermissionCache(id);
+    invalidateLiveUser(id);
 
     res.json({ data: { message: 'User deactivated' } });
   } catch (err) {
@@ -521,7 +520,11 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
         AND (SELECT COUNT(*) FROM account_owners ao2 WHERE ao2.account_id = ao.account_id) = 1
     `).all(id) as { account_id: number }[]).map(r => r.account_id);
 
-    const reassignMap = new Map((reassignments || []).map(r => [r.accountId, r.newOwnerId]));
+    if (reassignments !== undefined && !Array.isArray(reassignments)) {
+      res.status(400).json({ error: 'reassignments must be an array' });
+      return;
+    }
+    const reassignMap = new Map((reassignments || []).map(r => [Number(r.accountId), Number(r.newOwnerId)]));
 
     for (const acctId of soleOwnedIds) {
       if (!reassignMap.has(acctId)) {
@@ -530,8 +533,12 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
       }
     }
 
-    // Validate all new owners are active users
+    // Validate all new owners are active users — and not the user being deleted
     for (const newOwnerId of reassignMap.values()) {
+      if (newOwnerId === id) {
+        res.status(400).json({ error: 'Accounts cannot be reassigned to the user being deleted' });
+        return;
+      }
       const owner = sqlite.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(newOwnerId) as { id: number } | undefined;
       if (!owner) {
         res.status(400).json({ error: `Invalid new owner ID: ${newOwnerId}` });
@@ -567,7 +574,7 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
       ).all(id) as { id: number }[];
       let connectionsRemoved = 0;
       for (const conn of personalConns) {
-        sqlite.prepare('DELETE FROM simplefin_links WHERE simplefin_connection_id = ?').run(conn.id);
+        deleteLinksCascade(sqlite, linkIdsForConnection(sqlite, conn.id));
         sqlite.prepare('DELETE FROM simplefin_connections WHERE id = ?').run(conn.id);
         connectionsRemoved++;
       }
@@ -578,6 +585,18 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
       ).get(id) as { cnt: number }).cnt;
       sqlite.prepare('UPDATE pay_cycles SET user_id = NULL WHERE user_id = ?').run(id);
 
+      // 4c. Notifications (no FK cascade) would block the user delete — remove them.
+      // Review rows keep their history: assignee/flagged_by/resolved_by are ON DELETE SET NULL.
+      sqlite.prepare('DELETE FROM notifications WHERE user_id = ?').run(id);
+
+      // 4d. Orphan owned recurring items — the FK is RESTRICT (no cascade), so
+      // preserve the projection + drop attribution, mirroring pay_cycles above.
+      sqlite.prepare('UPDATE recurring_items SET user_id = NULL WHERE user_id = ?').run(id);
+
+      // 4e. Categorization feedback keeps its rows (they train the resolver) but
+      // loses the author — the FK has no cascade.
+      sqlite.prepare('UPDATE category_feedback SET user_id = NULL WHERE user_id = ?').run(id);
+
       // 5. Delete the user row
       sqlite.prepare('DELETE FROM users WHERE id = ?').run(id);
 
@@ -586,6 +605,7 @@ router.delete('/:id/permanent', requireRole('admin'), permanentDeleteLimiter, (r
 
     const result = txn();
     invalidatePermissionCache(id);
+    invalidateLiveUser(id);
 
     console.log(`User ${req.user!.username} permanently deleted user ${user.username} (id: ${id})`);
 

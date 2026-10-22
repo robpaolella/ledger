@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --conditions=development src/index.ts",
     "build": "tsc",
     "seed": "tsx src/db/seed.ts",
     "seed:prod": "node dist/db/seed.js",
+    "logos": "tsx src/db/hydrate-institution-logos.ts",
+    "logos:prod": "node dist/db/hydrate-institution-logos.js",
     "migrate:income": "tsx src/db/migrate-income-categories.ts",
     "migrate:income:prod": "node dist/db/migrate-income-categories.js",
     "test": "vitest run"

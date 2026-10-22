@@ -225,6 +225,14 @@ function check2FARequired(role: string, twofaEnabled: boolean): boolean {
 
 // Track 2FA verify attempts per temp token
 const twofaAttempts = new Map<string, number>();
+// Temp tokens live 5 minutes; sweep counters for tokens that can no longer be used.
+const twofaAttemptsSeen = new Map<string, number>();
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60_000;
+  for (const [tok, at] of twofaAttemptsSeen) {
+    if (at < cutoff) { twofaAttemptsSeen.delete(tok); twofaAttempts.delete(tok); }
+  }
+}, 5 * 60_000).unref();
 
 // POST /api/auth/2fa/verify — verify TOTP code during login (uses temp token)
 router.post('/2fa/verify', async (req: Request, res: Response): Promise<void> => {
@@ -306,6 +314,7 @@ router.post('/2fa/verify', async (req: Request, res: Response): Promise<void> =>
 
     if (!verified) {
       twofaAttempts.set(tempToken, attempts + 1);
+      twofaAttemptsSeen.set(tempToken, Date.now());
       const remaining = 4 - attempts;
       res.status(400).json({
         error: 'Invalid verification code',

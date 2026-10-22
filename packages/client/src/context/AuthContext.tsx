@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 
 interface User {
   id: number;
@@ -50,11 +50,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     fetchMe()
-      .catch(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setToken(null);
-        setUser(null);
+      .catch((err: unknown) => {
+        // Only an actual rejection of the token signs the user out. A network
+        // blip or a 500 keeps the session so a refresh recovers it.
+        if (err instanceof ApiError && err.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken(null);
+          setUser(null);
+          return;
+        }
+        const cached = localStorage.getItem('user');
+        if (cached) { try { setUser(JSON.parse(cached) as User); } catch { /* ignore */ } }
       })
       .finally(() => setIsLoading(false));
   }, [token, fetchMe]);

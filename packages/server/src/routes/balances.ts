@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/index.js';
+import { db, sqlite } from '../db/index.js';
 import { balanceSnapshots, accounts } from '../db/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import { requirePermission } from '../middleware/permissions.js';
+import { isValidYmd, toFinite, toId } from '../utils/validate.js';
 
 const router = Router();
 
@@ -45,11 +46,15 @@ router.get('/latest', (_req: Request, res: Response) => {
 // POST /api/balances — create new snapshot
 router.post('/', requirePermission('balances.update'), (req: Request, res: Response) => {
   try {
-    const { accountId, date, balance, note } = req.body;
+    const accountId = toId(req.body.accountId);
+    const { date, note } = req.body;
+    const balance = toFinite(req.body.balance);
     if (!accountId || !date || balance == null) {
-      res.status(400).json({ error: 'accountId, date, and balance are required' });
+      res.status(400).json({ error: 'accountId, date (YYYY-MM-DD), and a numeric balance are required' });
       return;
     }
+    if (!isValidYmd(date)) { res.status(400).json({ error: 'date must be YYYY-MM-DD' }); return; }
+    if (!sqlite.prepare('SELECT 1 FROM accounts WHERE id = ?').get(accountId)) { res.status(400).json({ error: 'accountId does not exist' }); return; }
 
     const result = db.insert(balanceSnapshots)
       .values({ account_id: accountId, date, balance, note: note || null })

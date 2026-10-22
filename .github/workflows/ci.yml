@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/platform-retheme, "package/**"]
   pull_request:
-    branches: [main]
+    branches: [main, feature/platform-retheme, "package/**"]
 
 jobs:
   validate-and-build:
@@ -28,6 +28,9 @@ jobs:
 
       - name: ESLint linting
         run: npm run lint
+
+      - name: Old-token migration ratchet
+        run: npm run lint:tokens
 
       - name: Unit tests
         run: npm test

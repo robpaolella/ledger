@@ -13,12 +13,27 @@ image.
 - Package manager: npm workspaces (`packages/shared`, `packages/server`, `packages/client`)
 - Node 20+, npm 9+
 
+## Precedence
+When sources disagree, the higher one wins:
+1. Robert's decisions as written in the rulebook: `PRODUCT.md`, `DESIGN.md`, `AGENTS.md`.
+2. An approved `design/<issue>-<name>/` folder, for its own feature only.
+3. The app as it is today.
+4. Archived private design notes, only to fill gaps, and never copied into the repo.
+5. Version-1 material (old mockups, the old design system, older docs) carries no weight.
+
+## Branches
+`feature/platform-retheme` is the single integration branch until v2.0.0. Work branches
+from it and merges into it, never into `main`. Anything that must land on `main` is
+merged into it the same day, so the two don't drift (see "Finished retheme" in
+`PRODUCT.md`).
+
 ## Checks
-Run in this order before any PR (same as CI and the `.githooks/pre-push` hook, which runs
-`npm run validate`):
+`npm run validate` is the one command CI and the `.githooks/pre-push` hook run. Run it
+before any PR. It runs these in order (typecheck, lint, lint:tokens, test, build):
 ```
 npm run typecheck
 npm run lint
+npm run lint:tokens
 npm run test
 npm run build
 ```
@@ -37,6 +52,14 @@ recipe saves editable offline HTML in both themes, and its state recipes map app
 designs to real app states. Visible changes also follow Maestro's shared `design-check`
 skill. After building, run the helper's safety/lifecycle tests with
 `node --test .pi/skills/verify-ledger/*.test.mjs`.
+
+## Previews
+
+Robert answered “A.” to “Do you want each Ledger PR's preview kept running until you merge it?” on 2026-10-11.
+
+```
+Previews: keep until merge
+```
 
 ## Setup after clone
 ```
@@ -63,8 +86,6 @@ packages/server/src/
                        except migrate-income-categories.ts — run by hand via `npm run migrate:income`)
 packages/server/test/  Vitest tests
 packages/shared/src/   types.ts — shared TypeScript types
-.github/mockups/, .github/*.jsx   design mockups, served at /mockup in dev (import.meta.env.DEV only)
-.github/qa/, QAPage                manual QA checklist, served at /qa in dev
 scripts/                db-backup, db-restore, db-reset, deploy, docker-*, build
 e2e/                    manual Puppeteer e2e script (not wired into CI)
 ```
@@ -86,13 +107,15 @@ wired to any actual server without checking with Robert first.
   only `ledger.db` and misses recent data, so ask Robert before any backup or restore.
 - Amount sign convention is not intuitive: positive = money out, negative = money in, for
   every category type. Never infer income/expense from the amount sign — check
-  `categories.type` instead, and use `fmtTransaction()` (`packages/client/src/lib/formatters.ts`)
-  for display. Card CSVs and bank CSVs use opposite signs, and some institutions write
-  negatives as `(123.45)`. Full rule in `.github/copilot-instructions.md` under "Project Learnings".
-- All visual/styling values (colors, spacing, component patterns) are defined in
-  `.github/design-system.jsx`, the single source of truth (`.github/mobile-prototype.jsx` for
-  mobile layouts). Never hardcode hex colors or category colors — use CSS custom properties
-  and `getCategoryColor()`.
+  `categories.type` instead. Display every amount with `formatMoney()`
+  (`packages/shared/src/money.ts`) through the `Money` and `Change` components
+  (`packages/client/src/components/Money.tsx`), never a local formatter. Card CSVs and
+  bank CSVs use opposite signs, and some institutions write negatives as `(123.45)`.
+  Full rule in `PRODUCT.md` ("Money rules") and `LESSONS.md`.
+- Visual values (colors, spacing, component patterns) come from
+  `packages/client/src/index.css` and `DESIGN.md`. Never hardcode hex colors or category
+  colors — use CSS custom properties and the helpers in
+  `packages/client/src/lib/categoryMeta.ts` (`getCategoryColorVar()`).
 - Permission checks: admin/owner bypass DB lookups entirely; member permissions are
   cached for 60s (`CACHE_TTL_MS` in `permissions.ts`) and must be invalidated via
   `invalidatePermissionCache(userId)` on change.
@@ -101,27 +124,52 @@ wired to any actual server without checking with Robert first.
 - No `alert()`/`confirm()` in product UI — destructive actions use `ConfirmDeleteButton`.
 - `.npmrc` sets `legacy-peer-deps=true`. Keep it when changing dependencies.
 
+## Personal live instance
+
+When Robert asks, agents may run `bash scripts/live.sh start [offline-source-folder]`,
+`stop`, `status`, or `update`. First start copies only the database/WAL/SHM, uploads and JWT
+secret from a **stopped, immutable source**; it never overwrites an existing working
+folder. Each start backs up before the app can migrate data; the newest 30 backups
+are retained. The dedicated checkout builds once; updating it is separate work.
+Defaults: `~/ledger-live/live`, sibling `backups/` and `logodev-token/token.txt`,
+`/git/ledger-worktrees/live-instance`, port 3001. Overrides: `LEDGER_LIVE_DIR`,
+`LEDGER_LIVE_CHECKOUT`, `LEDGER_LIVE_PORT` (use isolated paths for testing).
+`LEDGER_LIVE_BRANCH` selects the tracked branch (default `feature/platform-retheme`).
+New checkouts fetch that branch; existing checkouts use its local origin ref without
+fetching. The launcher works from the live checkout itself or another worktree of
+this repository. Checkout validation and any needed build finish before first-start
+copying, so those failures can be retried with the same source folder.
+`update` fetches the tracked branch and refuses dirty or divergent checkouts. If newer
+code exists it stops, backs up, fast-forwards, installs and builds, then starts and
+checks health (a stopped instance is also started). An unchanged version takes no
+backup and does not restart. Failed install/build restores the old code, dependencies
+and builds; failed startup also restores the pre-update database. A previously running
+instance is restarted after rollback. If the new version reached startup, rollback
+starts the old version even when the instance was previously stopped; an earlier
+install/build failure leaves a previously stopped instance stopped. If rollback
+fails, keep the printed backup and any saved
+artifacts for recovery; do not retry or restore real data without Robert.
+
+Agents must never otherwise read, query, copy, export, screenshot or open in a browser
+this live instance or its folder. All verification uses synthetic verify-ledger data;
+never run the live script against real data during development. The existing `data/`
+restrictions remain unchanged. Only Robert/the conductor at his request does the
+first real start after merge. LAN access is HTTP, not internet-facing hosting.
+Run lifecycle tests explicitly with `node --test scripts/live.test.mjs`.
+
 ## Designs
 
-Approved clickable designs live in `design/<issue>-<name>/`. For their feature, they
-win on layout, content, wording, states, and behaviour. `DESIGN.md` summarizes the
-site-wide look; `.github/design-system.jsx` remains its authoritative source, with
-`.github/mobile-prototype.jsx` supplying mobile layout guidance. A feature design
-does not silently change that visual system.
+New designs go in `design/<issue>-<name>/`, using synthetic sample data only: this
+repository is public and Ledger holds Robert's real finances. Never use the live database
+as design data, in designs or screenshots.
 
-Use synthetic sample data only in designs and screenshots: this repository is public
-and Ledger holds Robert's real finances. Never use the live database as design data.
-This workflow supersedes the older new-mockup location instructions in the Copilot
-doc; existing `.github/mockups/` files remain reference material.
+An approved design wins on layout, content, wording, states, and behaviour for its
+feature. The site-wide look still comes from `DESIGN.md` and
+`packages/client/src/index.css`; a feature design does not silently change it.
 
 ## Reference material
 
 - `PRODUCT.md`: users, roles, household workflows, and financial/product constraints.
-- `DESIGN.md`: the existing light/dark tokens and component/mobile patterns, summarized
-  from the authoritative design system rather than replacing it.
-
-`.github/copilot-instructions.md` is a long-lived, actively maintained doc (written for
-Copilot, but the content applies here too) covering the full design system, mobile
-responsive rules, permission system, and a dated "Project Learnings" log of real bugs and
-decisions. Read it before design or permissions work, and add to the Learnings Log when
-you hit a similarly hard-won lesson.
+- `DESIGN.md`: the light/dark tokens and component/mobile patterns.
+- `LESSONS.md`: rules learned from past bugs. Read it before permissions or design work,
+  and add hard-won lessons to its log.

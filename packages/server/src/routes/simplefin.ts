@@ -3,18 +3,16 @@ import { db, sqlite } from '../db/index.js';
 import {
   simplefinConnections,
   simplefinLinks,
-  simplefinHoldings,
-  transactions,
   accounts,
-  categories,
 } from '../db/schema.js';
 import { eq, or, isNull } from 'drizzle-orm';
 import { claimAccessUrl, fetchAccounts } from '../services/simplefin.js';
-import { convertToLedgerSign } from '../services/signConversion.js';
-import { detectDuplicates } from '../services/duplicateDetector.js';
-import { detectTransfers } from '../services/transferDetector.js';
-import type { AccountClassification, SyncTransaction, SyncBalanceUpdate, SyncHoldingsUpdate } from '@ledger/shared/src/types.js';
-import { requirePermission } from '../middleware/permissions.js';
+import { runSyncPipeline, commitSync, withSyncLock, type CommitPayload } from '../services/simplefinSync.js';
+import { requirePermission, requireAnyPermission } from '../middleware/permissions.js';
+import { getRetrySnapshot } from '../services/scheduler.js';
+import { connectionSyncState, dailySyncInfo, setDailySyncEnabled } from '../services/dailySync.js';
+
+import { deleteLinksCascade, linkIdsForConnection } from '../services/simplefinLinks.js';
 
 const router = Router();
 
@@ -67,6 +65,7 @@ router.post('/connections', requirePermission('simplefin.manage'), async (req: R
         isShared: shared,
         linkedAccountCount: 0,
         lastSyncedAt: null,
+        syncState: connectionSyncState(sqlite, { id: Number(result.lastInsertRowid), sync_status: null, sync_error_kind: null, sync_message: null, sync_attempt_at: null }, null),
       },
     });
   } catch (err) {
@@ -88,6 +87,10 @@ router.get('/connections', (req: Request, res: Response) => {
         sc.label,
         sc.created_at,
         sc.updated_at,
+        sc.sync_status,
+        sc.sync_error_kind,
+        sc.sync_message,
+        sc.sync_attempt_at,
         COUNT(a.id) as linked_account_count,
         MAX(sl.last_synced_at) as last_synced_at
       FROM simplefin_connections sc
@@ -102,16 +105,22 @@ router.get('/connections', (req: Request, res: Response) => {
       label: string;
       created_at: string;
       updated_at: string;
+      sync_status: string | null;
+      sync_error_kind: string | null;
+      sync_message: string | null;
+      sync_attempt_at: string | null;
       linked_account_count: number;
       last_synced_at: string | null;
     }[];
 
+    const retry = getRetrySnapshot();
     const data = rows.map((r) => ({
       id: r.id,
       label: r.label,
       isShared: r.user_id === null,
       linkedAccountCount: r.linked_account_count,
       lastSyncedAt: r.last_synced_at,
+      syncState: connectionSyncState(sqlite, r, retry),
     }));
 
     res.json({ data });
@@ -138,6 +147,8 @@ router.put('/connections/:id', requirePermission('simplefin.manage'), async (req
     }
 
     const { label, accessUrl, setupToken } = req.body;
+    if (label !== undefined && (typeof label !== 'string' || !label.trim())) { res.status(400).json({ error: 'label cannot be empty' }); return; }
+    if (accessUrl !== undefined && typeof accessUrl === 'string' && !accessUrl.trim() && !setupToken) { res.status(400).json({ error: 'accessUrl cannot be empty' }); return; }
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if (label !== undefined) updates.label = label;
@@ -177,24 +188,11 @@ router.delete('/connections/:id', requirePermission('simplefin.manage'), (req: R
       return;
     }
 
-    // Delete holdings for links under this connection
-    const links = db.select({ id: simplefinLinks.id })
-      .from(simplefinLinks)
-      .where(eq(simplefinLinks.simplefin_connection_id, id))
-      .all();
-    const linkIds = links.map((l) => l.id);
-
-    if (linkIds.length > 0) {
-      for (const linkId of linkIds) {
-        db.delete(simplefinHoldings).where(eq(simplefinHoldings.simplefin_link_id, linkId)).run();
-      }
-    }
-
-    // Delete links
-    db.delete(simplefinLinks).where(eq(simplefinLinks.simplefin_connection_id, id)).run();
-
-    // Delete connection
-    db.delete(simplefinConnections).where(eq(simplefinConnections.id, id)).run();
+    // Links (with their holdings + history) and the connection go together.
+    sqlite.transaction(() => {
+      deleteLinksCascade(sqlite, linkIdsForConnection(sqlite, id));
+      db.delete(simplefinConnections).where(eq(simplefinConnections.id, id)).run();
+    })();
 
     res.json({ data: { message: 'Connection removed' } });
   } catch (err) {
@@ -203,8 +201,9 @@ router.delete('/connections/:id', requirePermission('simplefin.manage'), (req: R
   }
 });
 
-// GET /api/simplefin/connections/:id/accounts
-router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
+// POST /api/simplefin/connections/:id/accounts — lists the connection's accounts.
+// POST, not GET, because it also removes links to inactive accounts.
+router.post('/connections/:id/accounts', async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const userId = req.user!.userId;
@@ -231,11 +230,12 @@ router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
     const linkMap = new Map(existingLinks.map((l) => [l.simplefin_account_id, l]));
 
     // Clean up any orphaned links (pointing to inactive accounts)
-    sqlite.prepare(`
-      DELETE FROM simplefin_links
-      WHERE simplefin_connection_id = ?
-        AND account_id IN (SELECT id FROM accounts WHERE is_active = 0)
-    `).run(id);
+    const orphans = (sqlite.prepare(`
+      SELECT sl.id FROM simplefin_links sl
+      WHERE sl.simplefin_connection_id = ?
+        AND sl.account_id IN (SELECT id FROM accounts WHERE is_active = 0)
+    `).all(id) as { id: number }[]).map((r) => r.id);
+    deleteLinksCascade(sqlite, orphans);
 
     const data = response.accounts.map((acct) => {
       const link = linkMap.get(acct.id);
@@ -249,13 +249,14 @@ router.get('/connections/:id/accounts', async (req: Request, res: Response) => {
           id: link.id,
           accountId: link.account_id,
           lastSyncedAt: link.last_synced_at,
+          autoImport: link.auto_import,
         } : null,
       };
     });
 
     res.json({ data });
   } catch (err: unknown) {
-    console.error('GET /simplefin/connections/:id/accounts error:', err);
+    console.error('POST /simplefin/connections/:id/accounts error:', err);
     res.status(500).json({ error: (err instanceof Error ? err.message : 'Failed to fetch SimpleFIN accounts') });
   }
 });
@@ -276,7 +277,12 @@ router.get('/linked-accounts', (req: Request, res: Response) => {
         sl.simplefin_account_name,
         sl.simplefin_org_name,
         sl.last_synced_at,
-        a.name as ledger_account_name
+        sl.last_sync_status,
+        sl.last_sync_error,
+        sl.last_sync_attempt_at,
+        sl.auto_import,
+        a.name as ledger_account_name,
+        a.classification
       FROM simplefin_connections sc
       JOIN simplefin_links sl ON sl.simplefin_connection_id = sc.id
       JOIN accounts a ON sl.account_id = a.id
@@ -291,7 +297,12 @@ router.get('/linked-accounts', (req: Request, res: Response) => {
       simplefin_account_name: string;
       simplefin_org_name: string | null;
       last_synced_at: string | null;
+      last_sync_status: string | null;
+      last_sync_error: string | null;
+      last_sync_attempt_at: string | null;
+      auto_import: number;
       ledger_account_name: string;
+      classification: string;
     }[];
 
     // Group by connection
@@ -328,6 +339,17 @@ router.post('/links', requirePermission('simplefin.manage'), (req: Request, res:
       res.status(400).json({ error: 'simplefinConnectionId, simplefinAccountId, accountId, and simplefinAccountName are required' });
       return;
     }
+    const conn = db.select().from(simplefinConnections).where(eq(simplefinConnections.id, Number(simplefinConnectionId))).get();
+    if (!conn) { res.status(404).json({ error: 'Connection not found' }); return; }
+    if (conn.user_id !== null && conn.user_id !== req.user!.userId) { res.status(403).json({ error: 'Not authorized to use this connection' }); return; }
+    if (!sqlite.prepare('SELECT 1 FROM accounts WHERE id = ? AND is_active = 1').get(accountId)) { res.status(400).json({ error: 'accountId does not exist' }); return; }
+    const taken = sqlite.prepare('SELECT id, account_id FROM simplefin_links WHERE simplefin_connection_id = ? AND simplefin_account_id = ?').get(Number(simplefinConnectionId), String(simplefinAccountId)) as { id: number; account_id: number } | undefined;
+    if (taken) { res.status(409).json({ error: 'That SimpleFIN account is already linked to a Ledger account' }); return; }
+
+    // Investment accounts default auto-import off — the sync pipeline never
+    // imports their transactions anyway; liquid/liability default on.
+    const target = sqlite.prepare('SELECT classification FROM accounts WHERE id = ?').get(accountId) as { classification: string } | undefined;
+    const autoImport = target?.classification === 'investment' ? 0 : 1;
 
     const result = db.insert(simplefinLinks).values({
       simplefin_connection_id: simplefinConnectionId,
@@ -335,7 +357,29 @@ router.post('/links', requirePermission('simplefin.manage'), (req: Request, res:
       account_id: accountId,
       simplefin_account_name: simplefinAccountName,
       simplefin_org_name: simplefinOrgName || null,
+      auto_import: autoImport,
     }).run();
+
+    // Give the linked account an institution identity from the SimpleFIN org
+    // (name, and domain if the client passed it). Never override an existing pick.
+    if (simplefinOrgName) {
+      const acct = sqlite.prepare('SELECT institution_id FROM accounts WHERE id = ?').get(accountId) as { institution_id: number | null } | undefined;
+      if (acct && acct.institution_id == null) {
+        const orgName = String(simplefinOrgName).trim();
+        const orgDomain = req.body.simplefinOrgDomain
+          ? String(req.body.simplefinOrgDomain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '')
+          : null;
+        let inst = sqlite.prepare('SELECT id FROM financial_institutions WHERE LOWER(name) = LOWER(?)').get(orgName) as { id: number } | undefined;
+        if (!inst && orgDomain) {
+          inst = sqlite.prepare('SELECT id FROM financial_institutions WHERE LOWER(domain) = LOWER(?)').get(orgDomain) as { id: number } | undefined;
+        }
+        if (!inst && orgName) {
+          sqlite.prepare('INSERT OR IGNORE INTO financial_institutions (name, domain, is_system) VALUES (?, ?, 0)').run(orgName, orgDomain);
+          inst = sqlite.prepare('SELECT id FROM financial_institutions WHERE LOWER(name) = LOWER(?)').get(orgName) as { id: number } | undefined;
+        }
+        if (inst) sqlite.prepare('UPDATE accounts SET institution_id = ? WHERE id = ?').run(inst.id, accountId);
+      }
+    }
 
     res.status(201).json({
       data: {
@@ -344,11 +388,40 @@ router.post('/links', requirePermission('simplefin.manage'), (req: Request, res:
         simplefinAccountId,
         accountId,
         simplefinAccountName,
+        autoImport,
       },
     });
   } catch (err) {
     console.error('POST /simplefin/links error:', err);
     res.status(500).json({ error: 'Failed to create link' });
+  }
+});
+
+// PATCH /api/simplefin/links/:id — toggle daily transaction auto-import
+router.patch('/links/:id', requirePermission('simplefin.manage'), (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { autoImport } = req.body as { autoImport?: unknown };
+
+    if (typeof autoImport !== 'boolean') {
+      res.status(400).json({ error: 'autoImport (boolean) is required' });
+      return;
+    }
+
+    const link = db.select().from(simplefinLinks).where(eq(simplefinLinks.id, id)).get();
+    if (!link) {
+      res.status(404).json({ error: 'Link not found' });
+      return;
+    }
+    const owner = db.select().from(simplefinConnections).where(eq(simplefinConnections.id, link.simplefin_connection_id)).get();
+    if (owner && owner.user_id !== null && owner.user_id !== req.user!.userId) { res.status(403).json({ error: 'Not authorized to change this link' }); return; }
+
+    db.update(simplefinLinks).set({ auto_import: autoImport ? 1 : 0 }).where(eq(simplefinLinks.id, id)).run();
+
+    res.json({ data: { id, autoImport: autoImport ? 1 : 0 } });
+  } catch (err) {
+    console.error('PATCH /simplefin/links/:id error:', err);
+    res.status(500).json({ error: 'Failed to update link' });
   }
 });
 
@@ -362,16 +435,49 @@ router.delete('/links/:id', requirePermission('simplefin.manage'), (req: Request
       res.status(404).json({ error: 'Link not found' });
       return;
     }
+    const owner = db.select().from(simplefinConnections).where(eq(simplefinConnections.id, link.simplefin_connection_id)).get();
+    if (owner && owner.user_id !== null && owner.user_id !== req.user!.userId) { res.status(403).json({ error: 'Not authorized to remove this link' }); return; }
 
-    // Delete associated holdings
-    db.delete(simplefinHoldings).where(eq(simplefinHoldings.simplefin_link_id, id)).run();
-    // Delete the link
-    db.delete(simplefinLinks).where(eq(simplefinLinks.id, id)).run();
+    deleteLinksCascade(sqlite, [id]);
 
     res.json({ data: { message: 'Link removed' } });
   } catch (err) {
     console.error('DELETE /simplefin/links/:id error:', err);
     res.status(500).json({ error: 'Failed to delete link' });
+  }
+});
+
+// === Daily sync ===
+
+function dailySyncFor(userId: number) {
+  const ids = (sqlite.prepare('SELECT id FROM simplefin_connections WHERE user_id IS NULL OR user_id = ?')
+    .all(userId) as { id: number }[]).map((r) => r.id);
+  return dailySyncInfo(sqlite, ids, getRetrySnapshot());
+}
+
+// GET /api/simplefin/daily-sync — anyone who can see Bank sync
+router.get('/daily-sync', requireAnyPermission('simplefin.manage', 'import.bank_sync'), (req: Request, res: Response) => {
+  try {
+    res.json({ data: dailySyncFor(req.user!.userId) });
+  } catch (err) {
+    console.error('GET /simplefin/daily-sync error:', err);
+    res.status(500).json({ error: 'Failed to load daily sync' });
+  }
+});
+
+// PUT /api/simplefin/daily-sync — { enabled: boolean }; the scheduler reads it on its next tick
+router.put('/daily-sync', requirePermission('simplefin.manage'), (req: Request, res: Response) => {
+  try {
+    const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled (boolean) is required' });
+      return;
+    }
+    setDailySyncEnabled(sqlite, enabled);
+    res.json({ data: dailySyncFor(req.user!.userId) });
+  } catch (err) {
+    console.error('PUT /simplefin/daily-sync error:', err);
+    res.status(500).json({ error: 'Failed to save daily sync' });
   }
 });
 
@@ -392,197 +498,23 @@ router.post('/sync', requirePermission('import.bank_sync'), async (req: Request,
       return;
     }
 
-    const userId = req.user!.userId;
-    const startTs = Math.floor(new Date(startDate).getTime() / 1000);
-    const endTs = Math.floor(new Date(endDate).getTime() / 1000);
+    // Shared pipeline (also used by the daily scheduler). The lock serializes
+    // the fetch phase with any in-flight scheduled run — we wait, not 409.
+    const result = await withSyncLock(() =>
+      runSyncPipeline({ userId: req.user!.userId, connectionIds, accountIds, startDate, endDate }),
+    );
 
-    // Get accessible connections
-    let connections;
-    if (connectionIds && connectionIds.length > 0) {
-      connections = sqlite.prepare(`
-        SELECT * FROM simplefin_connections
-        WHERE id IN (${connectionIds.map(() => '?').join(',')})
-        AND (user_id IS NULL OR user_id = ?)
-      `).all(...connectionIds, userId) as (typeof simplefinConnections.$inferSelect)[];
-    } else {
-      connections = sqlite.prepare(`
-        SELECT * FROM simplefin_connections
-        WHERE user_id IS NULL OR user_id = ?
-      `).all(userId) as (typeof simplefinConnections.$inferSelect)[];
-    }
-
-    if (connections.length === 0) {
+    if (result.connectionCount === 0) {
       res.status(400).json({ error: 'No accessible connections found' });
       return;
     }
 
-    // Get all linked accounts for these connections
-    const connIds = connections.map((c) => c.id);
-    let allLinks = sqlite.prepare(`
-      SELECT sl.*, a.name as ledger_account_name, a.classification, a.type as account_type
-      FROM simplefin_links sl
-      JOIN accounts a ON sl.account_id = a.id
-      WHERE sl.simplefin_connection_id IN (${connIds.map(() => '?').join(',')})
-    `).all(...connIds) as (typeof simplefinLinks.$inferSelect & {
-      ledger_account_name: string;
-      classification: AccountClassification;
-      account_type: string;
-    })[];
-
-    // Filter by accountIds if specified
-    if (accountIds && accountIds.length > 0) {
-      allLinks = allLinks.filter((l) => accountIds.includes(l.account_id));
-    }
-
-    if (allLinks.length === 0) {
-      res.json({ data: { transactions: [], balanceUpdates: [], holdingsUpdates: [] } });
-      return;
-    }
-
-    // Build link lookup by SimpleFIN account ID
-    const linkMap = new Map(allLinks.map((l) => [l.simplefin_account_id, l]));
-
-    // Fetch from each connection
-    const allSyncTransactions: SyncTransaction[] = [];
-    const allBalanceUpdates: SyncBalanceUpdate[] = [];
-    const allHoldingsUpdates: SyncHoldingsUpdate[] = [];
-
-    for (const conn of connections) {
-      let response;
-      try {
-        response = await fetchAccounts(conn.access_url, startTs, endTs);
-      } catch (err: unknown) {
-        console.error(`Failed to fetch from connection ${conn.id}:`, err instanceof Error ? err.message : err);
-        continue;
-      }
-
-      for (const sfAccount of response.accounts) {
-        const link = linkMap.get(sfAccount.id);
-        if (!link) continue; // Not linked, skip
-
-        const classification = link.classification as AccountClassification;
-
-        // Process transactions
-        if (sfAccount.transactions.length > 0) {
-          // Filter out already-imported transactions by SimpleFIN ID
-          const sfTxnIds = sfAccount.transactions.map((t) => t.id);
-          const existingIds = new Set<string>();
-          // Check in batches to avoid SQLite parameter limits
-          for (let i = 0; i < sfTxnIds.length; i += 100) {
-            const batch = sfTxnIds.slice(i, i + 100);
-            const rows = sqlite.prepare(`
-              SELECT simplefin_transaction_id FROM transactions
-              WHERE simplefin_transaction_id IN (${batch.map(() => '?').join(',')})
-            `).all(...batch) as { simplefin_transaction_id: string }[];
-            for (const r of rows) existingIds.add(r.simplefin_transaction_id);
-          }
-
-          const newTxns = sfAccount.transactions.filter((t) => !existingIds.has(t.id));
-
-          if (newTxns.length > 0) {
-            // Convert amounts and build categorization items
-            const catItems = newTxns.map((t) => ({
-              description: t.payee || t.description,
-              payee: t.payee || undefined,
-              amount: convertToLedgerSign(parseFloat(t.amount), classification),
-            }));
-
-            // Auto-categorize
-            const catResponse = autoCategorize(catItems);
-
-            // Detect duplicates
-            const dupItems = newTxns.map((t) => ({
-              date: unixToDate(t.transacted_at),
-              amount: convertToLedgerSign(parseFloat(t.amount), classification),
-              description: t.payee || t.description,
-              accountId: link.account_id,
-            }));
-            const dupResults = detectDuplicates(dupItems);
-
-            // Detect transfers
-            const transferResults = detectTransfers(
-              newTxns.map((t) => ({
-                payee: t.payee || '',
-                description: t.description,
-                amount: convertToLedgerSign(parseFloat(t.amount), classification),
-              }))
-            );
-
-            for (let i = 0; i < newTxns.length; i++) {
-              const t = newTxns[i];
-              const cat = catResponse[i];
-              const dup = dupResults[i];
-              const isTransfer = transferResults[i];
-
-              allSyncTransactions.push({
-                simplefinId: t.id,
-                accountId: link.account_id,
-                accountName: link.ledger_account_name,
-                date: unixToDate(t.transacted_at),
-                description: t.payee || t.description,
-                rawDescription: t.description,
-                amount: convertToLedgerSign(parseFloat(t.amount), classification),
-                suggestedCategoryId: cat.suggestedCategoryId,
-                suggestedGroupName: cat.suggestedGroupName,
-                suggestedSubName: cat.suggestedSubName,
-                confidence: cat.confidence,
-                duplicateStatus: dup.status,
-                duplicateMatchId: dup.matchId,
-                duplicateMatchDescription: dup.matchDescription,
-                duplicateMatchDate: dup.matchDate,
-                duplicateMatchAmount: dup.matchAmount,
-                duplicateMatchAccountName: dup.matchAccountName,
-                isLikelyTransfer: isTransfer,
-              });
-            }
-          }
-        }
-
-        // Balance updates
-        const sfBalance = parseFloat(sfAccount.balance);
-        const balanceDate = unixToDate(sfAccount['balance-date']);
-
-        // Get latest balance snapshot for this account
-        const latestSnapshot = sqlite.prepare(`
-          SELECT balance FROM balance_snapshots
-          WHERE account_id = ?
-          ORDER BY date DESC, id DESC
-          LIMIT 1
-        `).get(link.account_id) as { balance: number } | undefined;
-
-        allBalanceUpdates.push({
-          accountId: link.account_id,
-          accountName: link.ledger_account_name,
-          currentBalance: sfBalance,
-          previousBalance: latestSnapshot?.balance ?? null,
-          balanceDate,
-        });
-
-        // Holdings updates
-        if (sfAccount.holdings.length > 0) {
-          allHoldingsUpdates.push({
-            accountId: link.account_id,
-            accountName: link.ledger_account_name,
-            holdings: sfAccount.holdings.map((h) => ({
-              symbol: h.symbol,
-              description: h.description,
-              shares: parseFloat(h.shares),
-              costBasis: parseFloat(h.cost_basis),
-              marketValue: parseFloat(h.market_value),
-            })),
-          });
-        }
-      }
-    }
-
-    // Sort transactions by date descending
-    allSyncTransactions.sort((a, b) => b.date.localeCompare(a.date));
-
     res.json({
       data: {
-        transactions: allSyncTransactions,
-        balanceUpdates: allBalanceUpdates,
-        holdingsUpdates: allHoldingsUpdates,
+        transactions: result.transactions,
+        balanceUpdates: result.balanceUpdates,
+        holdingsUpdates: result.holdingsUpdates,
+        failures: result.failures,
       },
     });
   } catch (err) {
@@ -594,135 +526,8 @@ router.post('/sync', requirePermission('import.bank_sync'), async (req: Request,
 // POST /api/simplefin/commit
 router.post('/commit', requirePermission('import.bank_sync'), (req: Request, res: Response) => {
   try {
-    const { transactions: txns, balanceUpdates, holdingsUpdates } = req.body as {
-      transactions: {
-        simplefinId: string;
-        accountId: number;
-        date: string;
-        description: string;
-        rawDescription: string;
-        amount: number;
-        categoryId?: number;
-        splits?: { categoryId: number; amount: number }[];
-      }[];
-      balanceUpdates: {
-        accountId: number;
-        balance: number;
-        date: string;
-      }[];
-      holdingsUpdates: {
-        accountId: number;
-        holdings: {
-          symbol: string;
-          description: string;
-          shares: number;
-          costBasis: number;
-          marketValue: number;
-        }[];
-      }[];
-    };
-
-    let txnCount = 0;
-    let balanceCount = 0;
-    let holdingsCount = 0;
-    const now = new Date().toISOString();
-
-    const commitTxn = sqlite.transaction(() => {
-      // Insert transactions
-      if (txns && txns.length > 0) {
-        const insertTxn = sqlite.prepare(`
-          INSERT INTO transactions (account_id, date, description, note, category_id, amount, simplefin_transaction_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-        const insertSplit = sqlite.prepare(`
-          INSERT INTO transaction_splits (transaction_id, category_id, amount)
-          VALUES (?, ?, ?)
-        `);
-
-        for (const t of txns) {
-          const hasSplits = t.splits && t.splits.length >= 2;
-          // Store payee as description, raw bank description as note
-          const result = insertTxn.run(
-            t.accountId,
-            t.date,
-            t.description,
-            t.rawDescription !== t.description ? t.rawDescription : null,
-            hasSplits ? null : (t.categoryId ?? null),
-            t.amount,
-            t.simplefinId
-          );
-          if (hasSplits) {
-            const txnId = Number(result.lastInsertRowid);
-            for (const s of t.splits!) {
-              insertSplit.run(txnId, s.categoryId, s.amount);
-            }
-          }
-          txnCount++;
-        }
-      }
-
-      // Create balance snapshots
-      if (balanceUpdates && balanceUpdates.length > 0) {
-        const insertBalance = sqlite.prepare(`
-          INSERT INTO balance_snapshots (account_id, date, balance, note)
-          VALUES (?, ?, ?, ?)
-        `);
-
-        for (const b of balanceUpdates) {
-          insertBalance.run(b.accountId, b.date, b.balance, 'SimpleFIN bank sync');
-          balanceCount++;
-        }
-      }
-
-      // Upsert holdings
-      if (holdingsUpdates && holdingsUpdates.length > 0) {
-        for (const hu of holdingsUpdates) {
-          // Find the link for this account
-          const link = sqlite.prepare(`
-            SELECT id FROM simplefin_links WHERE account_id = ? LIMIT 1
-          `).get(hu.accountId) as { id: number } | undefined;
-
-          if (!link) continue;
-
-          // Delete existing holdings for this link
-          sqlite.prepare('DELETE FROM simplefin_holdings WHERE simplefin_link_id = ?').run(link.id);
-
-          // Insert new holdings
-          const insertHolding = sqlite.prepare(`
-            INSERT INTO simplefin_holdings (simplefin_link_id, symbol, description, shares, cost_basis, market_value, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `);
-
-          for (const h of hu.holdings) {
-            insertHolding.run(link.id, h.symbol, h.description, h.shares, h.costBasis, h.marketValue, now);
-            holdingsCount++;
-          }
-        }
-      }
-
-      // Update last_synced_at on links
-      const accountIds = new Set<number>();
-      if (txns) txns.forEach((t) => accountIds.add(t.accountId));
-      if (balanceUpdates) balanceUpdates.forEach((b) => accountIds.add(b.accountId));
-      if (holdingsUpdates) holdingsUpdates.forEach((h) => accountIds.add(h.accountId));
-
-      if (accountIds.size > 0) {
-        const updateSync = sqlite.prepare('UPDATE simplefin_links SET last_synced_at = ? WHERE account_id = ?');
-        for (const accountId of accountIds) {
-          updateSync.run(now, accountId);
-        }
-      }
-    });
-
-    commitTxn();
-
-    res.json({
-      data: {
-        transactionsImported: txnCount,
-        balancesUpdated: balanceCount,
-        holdingsUpdated: holdingsCount,
-      },
-    });
+    const result = commitSync(req.body as CommitPayload);
+    res.json({ data: result });
   } catch (err) {
     console.error('POST /simplefin/commit error:', err);
     res.status(500).json({ error: 'Failed to commit sync data' });
@@ -804,10 +609,11 @@ router.get('/balances', requirePermission('balances.update'), async (req: Reques
   }
 });
 
-// GET /api/simplefin/holdings — holdings grouped by account for Net Worth
-router.get('/holdings', (req: Request, res: Response) => {
+// GET /api/simplefin/holdings — holdings grouped by account for Net Worth.
+// Household-visible: every account's holdings, personal connections included
+// (only connection details stay with their owner).
+router.get('/holdings', (_req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
     const rows = sqlite.prepare(`
       SELECT
         sl.account_id,
@@ -815,11 +621,9 @@ router.get('/holdings', (req: Request, res: Response) => {
         sh.symbol, sh.description, sh.shares, sh.cost_basis, sh.market_value, sh.updated_at
       FROM simplefin_holdings sh
       JOIN simplefin_links sl ON sh.simplefin_link_id = sl.id
-      JOIN simplefin_connections sc ON sl.simplefin_connection_id = sc.id
       JOIN accounts a ON sl.account_id = a.id
-      WHERE sc.user_id IS NULL OR sc.user_id = ?
       ORDER BY a.name, sh.symbol
-    `).all(userId) as {
+    `).all() as {
       account_id: number;
       account_name: string;
       symbol: string;
@@ -861,107 +665,5 @@ router.get('/holdings', (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch holdings' });
   }
 });
-
-// === Helpers ===
-
-function unixToDate(unix: number): string {
-  return new Date(unix * 1000).toISOString().slice(0, 10);
-}
-
-/**
- * Inline auto-categorization (reuses the same logic as the import/categorize endpoint).
- */
-function autoCategorize(items: { description: string; payee?: string; amount: number }[]): {
-  suggestedCategoryId: number | null;
-  suggestedGroupName: string | null;
-  suggestedSubName: string | null;
-  confidence: number;
-}[] {
-  // Build history map
-  const history = db.select({
-    description: transactions.description,
-    category_id: transactions.category_id,
-    group_name: categories.group_name,
-    sub_name: categories.sub_name,
-  }).from(transactions)
-    .innerJoin(categories, eq(transactions.category_id, categories.id))
-    .all();
-
-  const descCatMap = new Map<string, { categoryId: number; groupName: string; subName: string; count: number }>();
-  for (const h of history) {
-    const key = h.description.toLowerCase().trim();
-    const existing = descCatMap.get(key);
-    if (!existing || existing.count < 1) {
-      descCatMap.set(key, {
-        categoryId: h.category_id!,
-        groupName: h.group_name,
-        subName: h.sub_name,
-        count: (existing?.count || 0) + 1,
-      });
-    }
-  }
-
-  const RULES: { pattern: RegExp; groupName: string; subName: string }[] = [
-    { pattern: /shell|chevron|exxon|\bmobil\b|bp |sunoco|gas|fuel|wawa.*gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
-    { pattern: /costco gas/i, groupName: 'Auto/Transportation', subName: 'Fuel' },
-    { pattern: /costco|giant|groceries|grocery|aldi|trader joe|whole foods|safeway|kroger|publix|wegmans|food lion|jimbo/i, groupName: 'Daily Living', subName: 'Groceries' },
-    { pattern: /amazon|amzn/i, groupName: 'Daily Living', subName: 'Online Shopping' },
-    { pattern: /walmart|target|dollar/i, groupName: 'Daily Living', subName: 'General Merchandise' },
-    { pattern: /netflix|hulu|disney|spotify|apple.*music|hbo|paramount|peacock/i, groupName: 'Dues/Subscriptions', subName: 'Streaming Services' },
-    { pattern: /restaurant|mcdonald|wendy|burger|chick-fil|chipotle|panera|starbucks|dunkin|coffee|pizza|taco bell|diner|jersey mike|in-n-out|del taco|subway|on the border|chili|peet/i, groupName: 'Daily Living', subName: 'Dining/Eating Out' },
-    { pattern: /uber eats|doordash|grubhub|postmates/i, groupName: 'Daily Living', subName: 'Dining/Eating Out' },
-    { pattern: /uber|lyft|taxi|cab/i, groupName: 'Auto/Transportation', subName: 'Ride Share' },
-    { pattern: /geico|progressive|allstate|state farm|insurance/i, groupName: 'Insurance', subName: 'Auto Insurance' },
-    { pattern: /at&t|verizon|t-mobile|sprint|comcast|xfinity|internet|wifi/i, groupName: 'Utilities', subName: 'Cellphone' },
-    { pattern: /electric|power|energy|ppl|duke energy|sd gas|sdge/i, groupName: 'Utilities', subName: 'Electric' },
-    { pattern: /water.*sewer|water bill|sewer/i, groupName: 'Utilities', subName: 'Water/Sewer' },
-    { pattern: /home depot|lowes|hardware/i, groupName: 'Household', subName: 'Improvements' },
-    { pattern: /cvs|walgreens|pharmacy|rx|doctor|dr\.|medical|hospital|urgent care/i, groupName: 'Health', subName: 'Medical' },
-    { pattern: /gym|fitness|planet fitness|equinox|yoga/i, groupName: 'Health', subName: 'Gym/Fitness' },
-    { pattern: /payroll|direct deposit|salary|wages/i, groupName: 'Income', subName: 'Take Home Pay' },
-    { pattern: /interest.*payment|interest.*earned|interest paid|interest$/i, groupName: 'Income', subName: 'Interest Income' },
-    { pattern: /cloudflare|github|namecheap|elevenlabs|steam/i, groupName: 'Dues/Subscriptions', subName: 'Online Services' },
-    { pattern: /southwest|american airlines|united airlines|delta|frontier/i, groupName: 'Discretionary', subName: 'Travel' },
-  ];
-
-  const allCats = db.select().from(categories).all();
-  const catLookup = new Map(allCats.map((c) => [`${c.group_name}:${c.sub_name}`, c.id]));
-
-  return items.map((item) => {
-    const primaryText = item.payee || item.description;
-    const primaryLower = primaryText.toLowerCase().trim();
-    const descLower = item.description.toLowerCase().trim();
-
-    // 1. Exact match from history
-    const exactPayee = descCatMap.get(primaryLower);
-    if (exactPayee) {
-      return { suggestedCategoryId: exactPayee.categoryId, suggestedGroupName: exactPayee.groupName, suggestedSubName: exactPayee.subName, confidence: 1.0 };
-    }
-    if (item.payee) {
-      const exactDesc = descCatMap.get(descLower);
-      if (exactDesc) {
-        return { suggestedCategoryId: exactDesc.categoryId, suggestedGroupName: exactDesc.groupName, suggestedSubName: exactDesc.subName, confidence: 0.9 };
-      }
-    }
-
-    // 2. Partial match
-    for (const [key, val] of descCatMap.entries()) {
-      if (primaryLower.includes(key) || key.includes(primaryLower) ||
-          (item.payee && (descLower.includes(key) || key.includes(descLower)))) {
-        return { suggestedCategoryId: val.categoryId, suggestedGroupName: val.groupName, suggestedSubName: val.subName, confidence: 0.7 };
-      }
-    }
-
-    // 3. Rule-based
-    for (const rule of RULES) {
-      if (rule.pattern.test(primaryText) || (item.payee && rule.pattern.test(item.description))) {
-        const catId = catLookup.get(`${rule.groupName}:${rule.subName}`);
-        return { suggestedCategoryId: catId || null, suggestedGroupName: rule.groupName, suggestedSubName: rule.subName, confidence: 0.7 };
-      }
-    }
-
-    return { suggestedCategoryId: null, suggestedGroupName: null, suggestedSubName: null, confidence: 0.0 };
-  });
-}
 
 export default router;

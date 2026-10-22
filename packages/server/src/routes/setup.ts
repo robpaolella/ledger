@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { db } from '../db/index.js';
+import { db, sqlite } from '../db/index.js';
 import { users, appConfig } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { sanitize } from '../utils/sanitize.js';
@@ -65,18 +65,26 @@ router.post('/create-admin', setupLimiter, async (req: Request, res: Response): 
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const result = db.insert(users).values({
-    username,
-    password_hash: passwordHash,
-    display_name: displayName.trim(),
-    role: 'owner',
-    is_active: 1,
-  }).run();
-
-  const userId = Number(result.lastInsertRowid);
-
-  // Mark setup as complete
-  db.insert(appConfig).values({ key: 'setup_complete', value: 'true' }).run();
+  // Two first-run submissions can race past the check above while the hash is
+  // computed; only one may become the owner.
+  let userId: number;
+  try {
+    userId = sqlite.transaction(() => {
+      if (isSetupComplete()) throw new Error('SETUP_DONE');
+      const result = db.insert(users).values({
+        username,
+        password_hash: passwordHash,
+        display_name: displayName.trim(),
+        role: 'owner',
+        is_active: 1,
+      }).run();
+      db.insert(appConfig).values({ key: 'setup_complete', value: 'true' }).run();
+      return Number(result.lastInsertRowid);
+    })();
+  } catch (err) {
+    if (err instanceof Error && err.message === 'SETUP_DONE') { res.status(403).json({ error: 'Setup has already been completed' }); return; }
+    throw err;
+  }
 
   const secret = getJwtSecret();
   const token = jwt.sign(

@@ -5,12 +5,17 @@ export interface DepreciationParams {
   purchaseDate: string;
   depreciationMethod: 'straight_line' | 'declining_balance';
   decliningRate: number | null;
+  /** Value the asset as of this date instead of today — used for historical net-worth points. */
+  asOf?: string | Date;
 }
 
 export function calculateCurrentValue(params: DepreciationParams): number {
-  const { cost, salvageValue, purchaseDate, depreciationMethod, decliningRate } = params;
-  const now = new Date();
+  const { cost, salvageValue, purchaseDate, depreciationMethod, decliningRate, asOf } = params;
+  const now = asOf ? new Date(asOf) : new Date();
   const purchased = new Date(purchaseDate);
+  // Not yet owned as of the valuation date → contributes nothing (keeps /summary
+  // and /history consistent for future-dated assets).
+  if (now.getTime() < purchased.getTime()) return 0;
   const yearsOwned = (now.getTime() - purchased.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
   if (depreciationMethod === 'declining_balance' && decliningRate != null) {

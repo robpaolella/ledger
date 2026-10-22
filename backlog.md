@@ -1,5 +1,96 @@
 - No automated test suite runs in CI (only typecheck/lint/build) — consider wiring the existing Puppeteer e2e script into CI or adding unit tests.
 - Login accessibility (observed during #49's local design-check): associate visible labels with inputs, raise placeholder contrast (measured 3.4:1), and meet the 44px phone-target rule (inputs 42px, submit 40px); these predate the verification work.
 - `scripts/deploy.sh` has unconfigured placeholder server values — either configure it for the real host or remove it if releases only happen via tagged Docker images.
+- Live launcher (#68 review): cover a new server that opens its port then immediately crashes, and use the all-threads exit check in startup-error cleanup even after ownership metadata vanishes (speculative, nonblocking).
+- Live launcher (#68 review): make a busy-port update refusal say the update was refused rather than “Ledger was not started”; refusal already leaves code/data unchanged.
 - AGENTS.md's Deploy section dropped some real operational detail that was in the old CLAUDE.md (dev DB path, db:reset/backup/restore scripts, release secrets needed, JWT_SECRET auto-generation) — fold back in if it turns out to matter in practice.
 - `npm run db:backup` copies only `ledger.db`, missing changes still in `ledger.db-wal`; switch `scripts/db-backup.sh` to SQLite's backup API (and point it at `data/` when running with live data).
+- First-run onboarding for brand-new installs
+- CSV files with separate debit and credit columns
+- Refuse CSV imports into inactive accounts (is_active = 0).
+- verify-ledger feature map: phone directions still say "Budget tab" and "More →"; phones now use the app bar and nav drawer (`budgets-reports.md`, `transactions-import.md`, `settings-permissions.md`, `design-states.md`).
+- README Configuration table omits settings it relies on: `TIINGO_TOKEN`, `DAILY_SYNC_HOUR`/`DAILY_SYNC_MINUTE`, `DISABLE_DAILY_SYNC`, `AMAZON_DATA_DIR`, `LOGODEV_TOKEN`.
+- theme-color follows the phone's light/dark setting, not Ledger's chosen theme; fixing it needs ThemeContext.
+- Date filter button label drops the year, so an old range (e.g. Jan 15 2005 – Mar 1 2005) reads like this year's.
+- Settings row buttons (Delete, Undo, `btnRow`) are 34–40px on phones; the Settings design (decision 5) asks for 44px. Fix once in `btnRow`/`ConfirmDeleteButton` for all Settings panels.
+- Daily sync card: LAST SYNC counts every connection in the household, not just the ones the viewer can see (server `readLastRun`, #151); a member can infer how many personal connections exist.
+- Daily sync times mix server and browser clocks (RUNS vs NEXT SYNC/"Trying again at"); show one clock, same for the gave-up line in `banksync/status.ts`.
+- Client has no test runner; `dayTime`, `lastSyncText`, `nextSyncText` in `DailySyncCard.tsx` are untested.
+- Categories: two same-named categories with different stored emoji still collide, because stored emoji are looked up by name alone.
+- CSV review on phones can't rename a merchant or show match confidence (desktop only); needs a row detail sheet, so ask Robert first (#206).
+- Bank Sync review (`SyncReview.tsx`) still uses the wide table on phones; give it the same card rows as CSV review (#206).
+- Dashboard net worth values physical assets at the current moment (`dashboard.ts` calls `calculateCurrentValue` without `asOf`), while Accounts uses today's date, so the two differ by a dollar or two; pass the same `asOf`.
+- Account detail page header Filters link is icon-only on phones with no accessible name (found in #215, out of scope).
+- `migrate-savings-retire.ts` deletes budget, template, recurring and alert rows for savings categories, against "Data stays untouched" in PRODUCT.md; a v1.0.2 upgrade can't reach it, but needs its own risk:high issue (found in #111 review).
+- Account detail shows "View all in Transactions" on an account with no transactions, which opens an empty list; consider hiding it there (raised in the #231 design critique).
+- Reports Category breakdown on a 390px phone cuts off each row's amount (only the % shows); found during the #106 design.
+- Search-empty text in Settings (Merchants, Rules, SimpleFIN accounts, institutions) and the Bank Sync account picker still uses its own wording; move to "Nothing matches “{search}”" (left out of #101, found there).
+- Two-step setup recognises a wrong code by the server message starting "Invalid verification code" (`isWrongCodeError`); have the server return a stable error code and match on that (found in #227).
+- Recurring phone calendar: the "Today" button only changes the month, so it does not re-select today after another day is tapped (found in #258, not in the approved design).
+- Keyboard focus rings never show on `ListRow` and the desktop transaction rows: `outline-none` cancels `focus-visible:outline-2` under Tailwind 4 (add `focus-visible:outline-solid`); #261 fixed it only for the phone Transactions rows (found in #261).
+- On phones the merchant picker's list is cramped inside a short bottom sheet (Bulk edit, about two rows show above the footer); consider letting the sheet grow while it's open (found in #261).
+- Desktop Transactions: pressing Escape while the bulk Edit transactions panel is open leaves bulk mode but keeps the panel open with 0 selected; Escape should close the panel first (found in #261).
+- Bulk edit/delete failures say only "Bulk operation failed"; say what failed and what to do, e.g. "Couldn't delete 3 transactions. Check your connection and try again." (found in #261's critique).
+- The shared `Calendar` month arrows and month/year selects are 40px, under the 44px phone tap minimum, wherever it opens on phones (Add/Edit transaction, transaction detail, bulk Edit sheet); found in #261 review.
+- Liabilities group change figure on Accounts still shows red, and other places that print a liability balance (Dashboard, reports) weren't checked for the amount-owed display (found in #274).
+- Reports' own Sort menu (four choices) and Review's small Date menu are still pop-ups on phones; give them bottom sheets like Transactions Sort and the shared Filters/Date pickers (found in #288; they were not in the approved design).
+- Phone Budget names that are one long word (e.g. "Entertainment" in a group header) break mid-word at 390px under the two-line wrap from #314; prefer wrapping only at spaces and "/" (found in #309; also Part B L1 of the #112 final audit).
+- Final audit low (part A): Phone search fields on Transactions and Account detail show a square focus outline inside the rounded field (#112).
+- Final audit low (part A): Desktop Transactions search field has no accessible name (placeholder only) (#112).
+- Final audit low (part A): An empty search says it twice ("Nothing matches “zzqqxx”" and "No transactions" / "0 transactions" under it) (#112).
+- Final audit low (part A): Phone Add transaction: the Account select text is cut ("Jane's Checking (…") at 390 (#112).
+- Final audit low (part A): Add transaction opens with Account set to the first account in the list (Jane's Checking for John), not an account of the signed-in person (#112).
+- Final audit low (part A): Add / Edit asset: "Acquired" uses the browser's own date input while every other date field uses the app's calendar; "Annual rate" slider is 17px tall on phones (#112).
+- Final audit low (part A): Transaction detail on phones: "Copy statement" is 32px (not on #340's list) (#112).
+- Final audit low (part A): Category detail for a category with no data, or only refunds, draws the y-axis as "$1 $1 $0 $0" (#112).
+- Final audit low (part A): Category detail for a category that doesn't exist says "Failed to load category" instead of "Category not found" (the not-found wording exists in code but is never reached) (#112).
+- Final audit low (part A): Phone liability chart (Jane's Visa): x-axis labels touch ("Sep 12Sep 18") (#112).
+- Final audit low (part A): Category detail on desktop truncates the account name ("John's Mastercard (…") with room to spare (#112).
+- Final audit low (part A): Add account and Update balance windows return focus to the page, not the button that opened them, after Escape (desktop) (#112).
+- Final audit low (part A): On desktop, toasts cover the top-right header buttons (Filters, Refresh all, Add account) until they time out (#112).
+- Final audit low (part A): Add account fires four failing `/api/simplefin/connections/N/accounts` calls (500) on the sample's demo connections each time it opens; nothing shows on screen (#112).
+- Final audit low (part B): Budget phone: a month with no budget (for example January 2026) is 20 rows of dashes under a green "Left to budget —" band, with no hint to plan something; the way forward is "Show N unbudgeted" (#112).
+- Final audit low (part B): Budget with a View-only member: the planned-amount boxes are disabled but look the same as editable ones, so tapping does nothing and nothing says why (#112).
+- Final audit low (part B): Investments: the last x-axis label of the chart is clipped ("Oct ·") at both widths (#112).
+- Final audit low (part B): Reviews phone: the row subtitle clips the note ("· C…", "Check thi…") (#112).
+- Final audit low (part B): Import Bank Sync phone: account names truncate beside the owner badge ("John's Masterc…") (#112).
+- Final audit low (part B): Recurring phone: the account name truncates ("John's Chec…") (#112).
+- Final audit low (part B): Reports phone drill-down: the sticky pill truncates the category ("Dail…") and covers the last visible row (#112).
+- Final audit low (part B): Reports empty range: Net $0 still reads "▲ saved" in green; with a custom range the phone toolbar wraps to two rows (#112).
+- Final audit low (part B): Reviews "No matches" reuses the green check icon from "all caught up" (#112).
+- Final audit low (part B): Every sheet and dialog opens with a focus ring on the close X (phone and desktop) (#112).
+- Final audit low (part B): Reviews phone search field shows a double focus ring (outline plus box) (#112).
+- Final audit low (part B): Import CSV review: the duplicate warning icon is explained only by a hover tooltip ("Likely Duplicate"), so phone users can't read it (#112).
+- Final audit low (part B): Recurring empty ("No recurring items yet.") doesn't point to the Add button (the + in the phone app bar) (#112).
+- Final audit low (part B): Investments failed load: "Performance data unavailable." and "Holdings data unavailable." have no Try again and don't say the problem is temporary. Rated low, not medium, by re-check C (the page does not look healthy when it fails, unlike the old Reviews "all caught up"; Reviews and Recurring got a retry card in #371) (#112).
+- Final audit low (part B): Import Bank Sync phone: row check boxes are 20×20 and the search field's inner input measures 81×20 (the surrounding row and field are 44px; the box itself is the small target) (#112).
+- Final audit low (part B): Sample data has no genuine "all caught up" Reviews state (26 uncategorized rows can't be bulk-approved); it can only be seen by failing the load (B6) (#112).
+- Final audit low (part B): Budget category detail desktop: the account label truncates ("John's Mastercard (…..") (#112).
+- Final audit low (part B): Budget Year: "planned in 2026" totals count carried-forward future months (11 months of 9 seeded), which is correct for the plan but unexplained (#112).
+- Final audit low (part B): Import: the page opens on the Bank Sync tab although CSV Import is listed first (#112).
+- Final audit low (part C): Merchants (phone): each row's Edit button is held at 60% opacity because it brightens on hover, and phones have no hover, so Edit always looks disabled (#112).
+- Final audit low (part C): Rules: rules that match by pattern read "Description matches the pattern ^Chewy\b", raw regular-expression text a household can't read. Only the sample data's rules do this (rules made in the app use a merchant or "contains") (#112).
+- Final audit low (part C): Profile: the owner and admin see "Used to sign in. Ask an admin to change it." under Username, but they are the admin; the line should differ for them (#112).
+- Final audit low (part C): Edit account and Edit category windows open with keyboard focus on the Close (×) button, drawing a focus ring on it, where Add account focuses the Name field (#112).
+- Final audit low (part C): The panel load error says "Couldn't load your settings" on Merchants, Rules, Users and Optional extras; it names settings for a list of merchants, rules or people (#112).
+- Final audit low (part C): Phone form fields use 14px text; iOS zooms the page when a field under 16px is focused (Add user, Add account, SimpleFIN, Security) (#112).
+- Final audit low (part C): Optional extras → AI categorizing: **Test connection** saves the address before testing and says nothing, so a failed address stays saved (#112).
+- Final audit low (part C): Delete user: the confirmation button says "Continue" for a permanent delete; it could name the action (#112).
+- Final audit low (re-check): Phone Account detail: the "Clear" button inside the "Nothing matches “…”" card is 40px tall, under the 44px rule; it was not on #353's list (re-check A) (#112).
+- Final audit low (re-check): Investments phone holdings cards (390): the right-hand "… of portfolio" line looks cut at the screen edge (re-check B, O2) (#112).
+- Final audit low (re-check): A sign-in that expires while using the app drops the person on the Sign in page with no message (#112).
+- Final audit low (re-check): `/budget/category` without a category titles the page "Ledger" instead of a page name (#112).
+- Final audit low (re-check): Inline "SimpleFIN" link inside the Connect SimpleFIN instructions is 18px tall (a link inside a sentence; not counted against the 44px rule) (#112).
+- Final audit low (re-check): Edit group window: Delete exists only for an empty group, so the Delete confirmation in a group window could not be exercised on the sample data (every group has categories) (#112).
+- Final audit low (re-check): Settings → Merchants (phone): the search field is 42px tall inside its 44px frame (the 1px border takes the other 2px), so a tap exactly on the border does not focus it (re-check D, #391) (#112).
+- The Edit transaction window's edit and delete path is unreachable: the Transactions page opens it only for "Add transaction" (editing happens in the detail panel), as #390's worker found (PR #396); decide later whether to remove the dead path (found in the #112 final audit).
+- Account detail's "Couldn't load this account" card (`AccountDetailPage`) could reuse the shared `LoadError` component from #360, as the other pages do (found in the #112 final audit).
+- Review on a brand-new app says "You're all caught up. Every transaction has been reviewed. Nice work." with no transactions yet, which is misleading (pre-release check, L1, #405).
+- With every figure at zero the charts draw odd axes: net worth runs from -$1.00 to $1.00 on Dashboard and Accounts, and Spending shows "$1 $1 $1 $0 $0" (pre-release check, L2, #405).
+- Accounts on an empty app has a blank area where the account list goes, with no "No accounts yet" line (pre-release check, L3, #405).
+- At sign-in an expired two-step code and a wrong one both read "Invalid verification code"; the setup window's "Try the newest one" hint would help here too (pre-release check, L4, #405).
+- Setup two-step window keeps the old digits after a failed attempt, so typing over them does nothing until Backspace; Settings → Security and the sign-in step say "Two-factor authentication" where the rest of the app says "two-step" (pre-release check, L5, #405).
+- Count payroll contributions (401(k), HSA) from the investment accounts' own activity in Contributions (from #414).
+- Add a "Contribution" Type to the Reports CSV (from #414).
+- Show a destination on the Transactions page for one-sided contributions (from #414).
+- Settings → Contributions rows are `role="button"` containing a nested Edit button, which a screen reader may not announce; use a single labelled control per row (reviewer's follow-up, PR #439).

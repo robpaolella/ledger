@@ -11,8 +11,6 @@ export default tseslint.config(
       '**/dist/',
       '**/node_modules/',
       'data/',
-      '.github/**/*.jsx',
-      '.github/mockups/',
     ],
   },
 

@@ -1,0 +1,50 @@
+{
+  "design_issue": 279,
+  "covers": [
+    110,
+    207,
+    227,
+    257,
+    258,
+    259,
+    260,
+    261,
+    271
+  ],
+  "revision": 3,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "budget-year",
+    "budget-year-member",
+    "budget-year-empty",
+    "timeline",
+    "timeline-drill",
+    "timeline-weekly",
+    "timeline-long",
+    "holdings",
+    "holdings-empty",
+    "calendar-today",
+    "calendar-busy",
+    "calendar-empty-day",
+    "bulk-select",
+    "bulk-selected",
+    "bulk-edit",
+    "bulk-delete",
+    "bulk-member",
+    "twofa-key",
+    "twofa-qr",
+    "twofa-error",
+    "twofa-required",
+    "import-upload",
+    "import-map",
+    "merchant-edit",
+    "loading",
+    "error"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "design_issue": 310,
+  "covers": [
+    307
+  ],
+  "revision": 1,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "start",
+    "choosing",
+    "selected",
+    "scrolled",
+    "no-match",
+    "keyboard",
+    "reports"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}
