@@ -1,14 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { sqlite } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
+import { blendedPct, portfolioReturns, selectedHoldings, symbolPrices } from '../services/investmentReturns.js';
 
 const router = Router();
 
 /**
  * Investments read endpoints:
- *  - /performance: cumulative-% return series — portfolio (from investment-
- *    account balance_snapshots, contributions caveat accepted) vs the core
- *    benchmarks (Tiingo adjusted closes in benchmark_prices).
+ *  - /performance: cumulative-% return series — portfolio (today's holdings
+ *    priced back through the range, so contributions and withdrawals never
+ *    count; services/investmentReturns.ts) vs the core benchmarks (Tiingo
+ *    adjusted closes in benchmark_prices).
  *  - /holdings-blended: ONE row per symbol summed across accounts, grouped by
  *    asset class (symbol_meta), with range/today % from benchmark_prices.
  *  - /movers: day-over-day per-symbol change from holdings_history snapshots,
@@ -58,14 +60,6 @@ function priceSeries(symbol: string, startInclusive: string, end: string): { dat
   `).all(symbol, startInclusive, end) as { date: string; close: number }[];
 }
 
-/** Latest price at-or-before a date (baseline lookups). */
-function priceAt(symbol: string, date: string): number | null {
-  const row = sqlite.prepare(
-    'SELECT adj_close AS close FROM benchmark_prices WHERE symbol = ? AND date <= ? ORDER BY date DESC LIMIT 1',
-  ).get(symbol, date) as { close: number } | undefined;
-  return row?.close ?? null;
-}
-
 // GET /api/investments/performance?range=3M[&accountIds=1,2]
 router.get('/performance', (req: Request, res: Response) => {
   try {
@@ -112,8 +106,8 @@ router.get('/performance', (req: Request, res: Response) => {
       return { id: b.id, name: b.name, symbol: b.symbol, series, rangePct: series[series.length - 1] ?? null, todayPct };
     });
 
-    // Portfolio series from investment-account balance snapshots, forward-
-    // filled per account along the axis.
+    // Portfolio: return figures from holding prices (the same calculation as
+    // the Holdings Total); current value from the latest balance snapshots.
     const acctFilter = accountIds ? `AND a.id IN (${accountIds.map(() => '?').join(',')})` : '';
     const acctRows = sqlite.prepare(
       `SELECT a.id FROM accounts a WHERE a.classification = 'investment' AND a.is_active = 1 ${acctFilter}`,
@@ -123,54 +117,22 @@ router.get('/performance', (req: Request, res: Response) => {
       series: number[]; rangePct: number | null; todayPct: number | null; currentValue: number;
     } | null = null;
 
-    if (acctRows.length > 0) {
+    const returns = acctRows.length > 0 ? portfolioReturns(selectedHoldings(accountIds), rangeStart, dates) : null;
+    if (returns) {
       const acctIds = acctRows.map((r) => r.id);
-      const snaps = sqlite.prepare(`
-        SELECT account_id, date, balance FROM balance_snapshots
-        WHERE account_id IN (${acctIds.map(() => '?').join(',')})
-        ORDER BY date, id
-      `).all(...acctIds) as { account_id: number; date: string; balance: number }[];
-
-      // Portfolio-only axis fallback while benchmarks backfill.
-      const axis = dates.length > 0
-        ? dates
-        : [...new Set(snaps.filter((s) => s.date >= axisStart && s.date <= today).map((s) => s.date))].sort();
-
-      if (axis.length >= 2 && snaps.length > 0) {
-        const perAcct = new Map<number, { date: string; balance: number }[]>();
-        for (const s of snaps) {
-          const list = perAcct.get(s.account_id) ?? [];
-          list.push({ date: s.date, balance: s.balance });
-          perAcct.set(s.account_id, list);
-        }
-        const cursors = new Map<number, number>();
-        const values: number[] = axis.map((d) => {
-          let total = 0;
-          for (const [acct, list] of perAcct) {
-            let i = cursors.get(acct) ?? 0;
-            while (i < list.length && list[i].date <= d) i++;
-            cursors.set(acct, i);
-            if (i > 0) total += list[i - 1].balance;
-          }
-          return total;
-        });
-        const firstIdx = values.findIndex((v) => v !== 0);
-        if (firstIdx >= 0 && values.length - firstIdx >= 2) {
-          const trimmed = values.slice(firstIdx);
-          const base = trimmed[0];
-          const series = trimmed.map((v) => round2(pct(v, base)));
-          // Pad the leading zero region so the series aligns with `dates`.
-          const padded = [...Array(firstIdx).fill(0) as number[], ...series];
-          const lastV = trimmed[trimmed.length - 1];
-          const prevV = trimmed[trimmed.length - 2];
-          portfolio = {
-            series: dates.length > 0 ? padded : series,
-            rangePct: series[series.length - 1] ?? null,
-            todayPct: prevV !== 0 ? round2(pct(lastV, prevV)) : null,
-            currentValue: round2(lastV),
-          };
-        }
-      }
+      const current = sqlite.prepare(`
+        SELECT COALESCE(SUM((
+          SELECT bs.balance FROM balance_snapshots bs
+          WHERE bs.account_id = a.id ORDER BY bs.date DESC, bs.id DESC LIMIT 1
+        )), 0) AS total
+        FROM accounts a WHERE a.id IN (${acctIds.map(() => '?').join(',')})
+      `).get(...acctIds) as { total: number };
+      portfolio = {
+        series: returns.series.map(round2),
+        rangePct: returns.rangePct == null ? null : round2(returns.rangePct),
+        todayPct: returns.todayPct == null ? null : round2(returns.todayPct),
+        currentValue: round2(current.total),
+      };
     }
 
     res.json({ data: { range, dates, portfolio, benchmarks, backfilling } });
@@ -188,33 +150,13 @@ router.get('/holdings-blended', (req: Request, res: Response) => {
     const today = new Date().toISOString().slice(0, 10);
     const rangeStart = rangeStartDate(range, today);
 
-    // Investments are household-visible: every person sees every account's
-    // holdings, whichever connection (shared or personal) syncs it.
-    const acctFilter = accountIds ? `WHERE sl.account_id IN (${accountIds.map(() => '?').join(',')})` : '';
-    const rows = sqlite.prepare(`
-      SELECT UPPER(h.symbol) AS symbol,
-             MAX(h.description) AS name,
-             SUM(h.shares) AS shares,
-             SUM(h.market_value) AS value,
-             MAX(sm.asset_class) AS asset_class
-      FROM simplefin_holdings h
-      JOIN simplefin_links sl ON h.simplefin_link_id = sl.id
-      LEFT JOIN symbol_meta sm ON sm.symbol = UPPER(h.symbol)
-      ${acctFilter}
-      GROUP BY UPPER(h.symbol)
-    `).all(...(accountIds ?? [])) as {
-      symbol: string; name: string; shares: number; value: number; asset_class: string | null;
-    }[];
+    const rows = selectedHoldings(accountIds);
 
     const totalValue = rows.reduce((s, r) => s + r.value, 0);
 
+    const prices = new Map(rows.map((r) => [r.symbol, symbolPrices(r.symbol, rangeStart)]));
     const holdings = rows.map((r) => {
-      const startPrice = priceAt(r.symbol, rangeStart);
-      const latest = sqlite.prepare(
-        'SELECT adj_close AS close FROM benchmark_prices WHERE symbol = ? ORDER BY date DESC LIMIT 2',
-      ).all(r.symbol) as { close: number }[];
-      const latestPrice = latest[0]?.close ?? null;
-      const prevPrice = latest[1]?.close ?? null;
+      const { start: startPrice, latest: latestPrice, prev: prevPrice } = prices.get(r.symbol)!;
       return {
         symbol: r.symbol,
         name: r.name,
@@ -246,13 +188,10 @@ router.get('/holdings-blended', (req: Request, res: Response) => {
       })
       .sort((a, b) => b.value - a.value);
 
-    // Total chip = true blended return over the range: back out each symbol's
-    // implied start value from its end value + return, then compare aggregates.
-    // (End-value weighting would overstate — winners weigh more after growing.)
-    const weighted = holdings.filter((h) => h.rangePct != null && h.rangePct > -100);
-    const endValue = weighted.reduce((s, h) => s + h.value, 0);
-    const startValue = weighted.reduce((s, h) => s + h.value / (1 + h.rangePct! / 100), 0);
-    const totalRangePct = startValue > 0 ? round2(((endValue / startValue) - 1) * 100) : null;
+    // Total chip = blended return over the range, the same calculation as the
+    // Market card's portfolio return.
+    const blended = blendedPct(rows.map((r) => ({ value: r.value, from: prices.get(r.symbol)!.start, to: prices.get(r.symbol)!.latest })));
+    const totalRangePct = blended == null ? null : round2(blended);
 
     res.json({
       data: {
