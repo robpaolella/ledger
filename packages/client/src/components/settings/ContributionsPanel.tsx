@@ -77,8 +77,9 @@ export default function ContributionsPanel({ categories, groups, accounts, onCha
                 <div className="text-sm text-content-3 mt-1 max-w-[460px] mx-auto leading-snug">Put money into a 529, a retirement account or a brokerage account? Track it here to see how much went in over any period on Reports. Contributions are moves between your own accounts, so they never count as income or spending.</div>
               </div>
             ) : setups.map((s) => (
-              <div key={s.id} onClick={() => setEditing(s)}
-                className="group/row flex items-center gap-3 md:gap-4 px-4 md:px-6 min-h-[64px] py-2.5 border-t border-line cursor-pointer hover:bg-surface-2 active:bg-surface-2 transition-colors">
+              <div key={s.id} role="button" tabIndex={0} onClick={() => setEditing(s)}
+                onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setEditing(s); } }}
+                className="group/row flex items-center gap-3 md:gap-4 px-4 md:px-6 min-h-[64px] py-2.5 border-t border-line cursor-pointer hover:bg-surface-2 active:bg-surface-2 focus-visible:bg-surface-2 outline-none transition-colors">
                 <span aria-hidden="true" className="w-[34px] h-[34px] rounded-full bg-surface-2 flex items-center justify-center text-[17px] shrink-0">{s.category.emoji || getCategoryEmoji(s.category.name, s.category.groupName)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="text-[15px] font-bold text-content">{s.category.name}</div>
