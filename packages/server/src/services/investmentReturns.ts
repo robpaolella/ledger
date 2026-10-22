@@ -35,7 +35,7 @@ export interface SymbolPrices {
   /** Latest price at or before the range start. */
   start: number | null;
   latest: number | null;
-  /** The price before `latest`, for the Today figure. */
+  /** The price before `latest`, for the Today figure, whatever the range. */
   prev: number | null;
   /** Prices from the start price's date onward, oldest first. */
   history: { date: string; close: number }[];
@@ -48,10 +48,13 @@ export function symbolPrices(symbol: string, rangeStart: string): SymbolPrices {
   const history = sqlite.prepare(
     'SELECT date, adj_close AS close FROM benchmark_prices WHERE symbol = ? AND date >= ? ORDER BY date',
   ).all(symbol, startRow?.date ?? rangeStart) as { date: string; close: number }[];
+  const lastTwo = sqlite.prepare(
+    'SELECT adj_close AS close FROM benchmark_prices WHERE symbol = ? ORDER BY date DESC LIMIT 2',
+  ).all(symbol) as { close: number }[];
   return {
     start: startRow?.close ?? null,
-    latest: history[history.length - 1]?.close ?? null,
-    prev: history[history.length - 2]?.close ?? null,
+    latest: lastTwo[0]?.close ?? null,
+    prev: lastTwo[1]?.close ?? null,
     history,
   };
 }
@@ -91,20 +94,20 @@ export function portfolioReturns(
   if (rangePct == null && todayPct == null) return null;
 
   // Each holding's value on day d is its current value scaled by price(d) /
-  // latest price, so the last point equals rangePct. Days before the range
-  // start use the start price.
+  // latest price. The first point uses the start price and the last the latest
+  // price, so the line runs from 0 to rangePct even when the benchmark axis
+  // starts after the range start or lags the holdings' prices.
   // history[0] is the start price, so a forward-filled cursor always has one.
   const inRange = priced.filter((h) => h.start != null && h.latest != null && h.start > 0 && h.latest > 0);
   const cursors = inRange.map(() => 0);
   let series: number[] = [];
   if (rangePct != null && axis.length > 0) {
-    const values = axis.map((d) => {
-      const on = d < rangeStart ? rangeStart : d;
-      return inRange.reduce((sum, h, i) => {
-        while (cursors[i] + 1 < h.history.length && h.history[cursors[i] + 1].date <= on) cursors[i]++;
-        return sum + h.value * (h.history[cursors[i]].close / h.latest!);
-      }, 0);
-    });
+    const last = axis.length - 1;
+    const values = axis.map((d, j) => inRange.reduce((sum, h, i) => {
+      while (j > 0 && cursors[i] + 1 < h.history.length && h.history[cursors[i] + 1].date <= d) cursors[i]++;
+      const close = j === last && j > 0 ? h.latest! : h.history[cursors[i]].close;
+      return sum + h.value * (close / h.latest!);
+    }, 0));
     series = values.map((v) => ((v / values[0]) - 1) * 100);
   }
   return { series, rangePct, todayPct };

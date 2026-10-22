@@ -213,6 +213,39 @@ describe('investment returns ignore money moved in or out', () => {
     expect(total).toBe(portfolio!.rangePct);
   });
 
+  it('the chart still runs from 0% to the Market return when the S&P history starts late or lags', async () => {
+    // No S&P price at or before the range start, and none for the last two days.
+    setPrices('VTI', 200, 0.10);
+    setPrices('BND', 75, 0.02);
+    // A jump the day after the range start, before the chart's first date.
+    db.exec("INSERT OR REPLACE INTO benchmark_prices (symbol, date, adj_close) VALUES ('VTI', '2026-07-23', 220), ('BND', '2026-07-23', 80)");
+    const insert = db.prepare('INSERT INTO benchmark_prices (symbol, date, adj_close) VALUES (?, ?, 500)');
+    for (const d of DAYS) if (d >= '2026-07-25' && d <= '2026-10-20') insert.run('SPY', d);
+    const { perf, portfolio, total } = await both('&accountIds=2');
+    expect(perf.dates[0]).toBe('2026-07-25');
+    expect(perf.dates[perf.dates.length - 1]).toBe('2026-10-20');
+    expect(portfolio!.series[0]).toBe(0);
+    expect(portfolio!.series[portfolio!.series.length - 1]).toBe(portfolio!.rangePct);
+    expect(portfolio!.rangePct).toBe(total);
+    expect(portfolio!.rangePct).toBeCloseTo(expected([[1100, 0.10], [1530, 0.02]]), 2);
+  });
+
+  it('Today uses the last two prices even when the earlier one is before the range (YTD on 1 January)', async () => {
+    vi.setSystemTime(new Date('2027-01-01T12:00:00Z'));
+    db.exec(`
+      INSERT INTO benchmark_prices (symbol, date, adj_close) VALUES
+        ('VTI', '2026-12-30', 100), ('VTI', '2026-12-31', 110),
+        ('SPY', '2026-12-30', 500), ('SPY', '2026-12-31', 500);
+    `);
+    for (const range of ['YTD', '1M']) {
+      const perf = await get<Perf>(`/performance?range=${range}&accountIds=1`);
+      expect(perf.portfolio!.todayPct).toBe(10);
+      const rows = await get<{ groups: { holdings: { symbol: string; todayPct: number | null }[] }[] }>(
+        `/holdings-blended?range=${range}&accountIds=1`);
+      expect(rows.groups[0].holdings[0].todayPct).toBe(10);
+    }
+  });
+
   it('an account on someone\'s personal connection gives the same figure to owner, admin and member', async () => {
     setPrices('VTI', 200, 0.10);
     setPrices('BND', 75, 0.02);
