@@ -15,7 +15,7 @@ const DESCRIPTION = 'Track money you move into accounts like a 529, a retirement
 
 const EXTERNAL = 'An account not in Ledger';
 
-function PaysInto({ setup }: { setup: ContributionSetup }) {
+export function PaysInto({ setup }: { setup: ContributionSetup }) {
   const parts = [
     ...setup.accounts.map((a) => <span key={a.id}><b className="font-semibold text-content-2">{a.name}</b>{!a.isActive && ' (Inactive)'}</span>),
     ...(setup.external ? [<b key="ext" className="font-semibold text-content-2">{EXTERNAL}</b>] : []),
