@@ -94,9 +94,9 @@ describe('upgrading a v1.0.2 database', () => {
       }
       expect(problems).toEqual([]);
 
-      // Counts are read from the fixture. Only additions are allowed; the sole one expected is
-      // the transfer category the migrations create.
-      const extra: Record<string, number> = { categories: 1 };
+      // Counts are read from the fixture. Only additions are allowed: the transfer category the
+      // migrations create, and the app_config marker that the one-time category-order backfill ran.
+      const extra: Record<string, number> = { categories: 1, app_config: 1 };
       for (const [table, { rows }] of Object.entries(before)) {
         expect(after[table].rows.length, `${table} row count`).toBe(rows.length + (extra[table] ?? 0));
       }
@@ -109,6 +109,26 @@ describe('upgrading a v1.0.2 database', () => {
       });
       expect(after.users.rows.map((u) => [u.username, u.role]).sort()).toEqual(
         before.users.rows.map((u) => [u.username, u.role]).sort());
+    } finally { db.close(); }
+  });
+
+  it('sorts categories alphabetically once, then keeps an order the household saves', () => {
+    const db = openCopy();
+    const subs = () => (db.prepare("SELECT id, sub_name FROM categories WHERE type = 'expense' AND group_name = 'Utilities' ORDER BY sort_order, id")
+      .all() as { id: number; sub_name: string }[]);
+    try {
+      expect(db.prepare("SELECT 1 FROM app_config WHERE key = 'categories.sort_order_set'").get()).toBeUndefined();
+      runMigrations(db);
+      const names = subs().map((r) => r.sub_name);
+      expect(names.length).toBeGreaterThan(1);
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+
+      const saved = subs().reverse();
+      const setOrder = db.prepare('UPDATE categories SET sort_order = ? WHERE id = ?');
+      saved.forEach((r, i) => setOrder.run(i, r.id));
+      runMigrations(db);
+      runMigrations(db);
+      expect(subs().map((r) => r.sub_name)).toEqual(saved.map((r) => r.sub_name));
     } finally { db.close(); }
   });
 
