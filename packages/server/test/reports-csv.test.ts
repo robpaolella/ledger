@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReportsCsv, csvType, type CsvTxn } from '../../client/src/lib/reportsCsv';
+import { buildReportsCsv, csvType, contributionDrillTxn, type CsvTxn } from '../../client/src/lib/reportsCsv';
 
 const acct = { name: "John's Savings", lastFour: '2046' };
 const txn = (over: Partial<CsvTxn>): CsvTxn => ({
@@ -37,5 +37,35 @@ describe('reports CSV export', () => {
     ]).split('\n');
     expect(lines[1]).toContain('"Smith, ""Jo"" & Sons"');
     expect(lines[2]).toContain('"Plain, note"');
+  });
+});
+
+describe('contribution drill-in rows in the CSV', () => {
+  const c = { categoryId: 7, groupName: 'Savings', name: '529 College Fund' };
+  const row = (over: object) => ({
+    transactionId: 1, splitId: null, date: '2026-10-05', merchant: 'Mossquill College Savings', description: 'Deposit',
+    accountName: 'Joint Checking', destinationAccountName: 'Emma’s 529 Plan', amount: 500, direction: 'putIn' as const, ...over,
+  });
+
+  it('writes from → to in the Account column (flipped for money taken out), Transfer as the Type, and the stored sign', () => {
+    const lines = buildReportsCsv([
+      contributionDrillTxn(row({}), c),
+      contributionDrillTxn(row({ transactionId: 2, date: '2026-08-14', accountName: 'Joint Checking', destinationAccountName: 'Emma’s 529 Plan', direction: 'takenOut' }), c),
+    ]).split('\n');
+    expect(lines[0]).toBe('Date,Merchant,Category,Account,Amount,Type');
+    expect(lines[1]).toBe('2026-10-05,"Mossquill College Savings","529 College Fund","Joint Checking → Emma’s 529 Plan",500.00,Transfer');
+    expect(lines[2]).toBe('2026-08-14,"Mossquill College Savings","529 College Fund","Emma’s 529 Plan → Joint Checking",-500.00,Transfer');
+  });
+
+  it('names an account that is not in Ledger, and keeps split rows of one transaction apart', () => {
+    const a = contributionDrillTxn(row({ splitId: 10, destinationAccountName: null }), c);
+    const b = contributionDrillTxn(row({ splitId: 11 }), c);
+    expect(a.route).toBe('Joint Checking → An account not in Ledger');
+    expect(contributionDrillTxn(row({ destinationAccountName: null, direction: 'takenOut' }), c).route).toBe('An account not in Ledger → Joint Checking');
+    expect(a.rowKey).not.toBe(b.rowKey);
+  });
+
+  it('falls back to the description without a merchant', () => {
+    expect(buildReportsCsv([contributionDrillTxn(row({ merchant: null }), c)])).toContain('"Deposit"');
   });
 });

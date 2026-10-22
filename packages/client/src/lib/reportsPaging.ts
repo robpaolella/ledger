@@ -38,3 +38,11 @@ export const hasMoreTxns = (loaded: number, total: number) => loaded < total;
 export function pagingHint(loaded: number, total: number): string | null {
   return hasMoreTxns(loaded, total) ? `${loaded.toLocaleString()} of ${total.toLocaleString()} transactions` : null;
 }
+
+/** What the Transactions card shows: its rows, the empty note (naming what is drilled into), or the load error. */
+export function txnListState(failed: boolean, rowCount: number, drilled: 'contribution' | 'category' | null):
+  { kind: 'error' } | { kind: 'rows' } | { kind: 'empty'; text: string } {
+  if (failed) return { kind: 'error' };
+  if (rowCount > 0) return { kind: 'rows' };
+  return { kind: 'empty', text: `No transactions in this ${drilled ?? 'period'}.` };
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { formatMoney, type ReportContribution } from '@ledger/shared';
 import { getCategoryEmoji } from '../../lib/categoryMeta';
 import MonthSwitcher from '../MonthSwitcher';
@@ -25,6 +25,29 @@ const intoText = (c: ReportContribution) => [...c.accounts.map((a) => a.name), .
 
 type View = 'summary' | 'timeline';
 
+// Drilling in: the clicked row is tinted with a primary bar down its left edge.
+const SELECTED_STYLE = { background: 'color-mix(in srgb, var(--primary) 9%, transparent)', boxShadow: 'inset 3px 0 0 var(--primary)' } as const;
+
+interface Pick { selectedId: number | null; onSelect: (c: ReportContribution) => void }
+// Click or Enter/Space on the row itself drills in.
+const pickProps = (c: ReportContribution, { selectedId, onSelect }: Pick) => ({
+  role: 'button' as const,
+  tabIndex: 0,
+  'aria-pressed': selectedId === c.categoryId,
+  onClick: () => onSelect(c),
+  onKeyDown: (e: KeyboardEvent) => {
+    if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    onSelect(c);
+  },
+});
+const rowCls = 'cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+const rowStyle = (c: ReportContribution, pad: string, selectedId: number | null) => ({ padding: pad, ...(selectedId === c.categoryId ? SELECTED_STYLE : {}) });
+
+function Chevron() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>;
+}
+
 function NotInTotals() {
   return <span className="flex-none h-[22px] px-[9px] rounded-[6px] bg-surface border border-line text-content-3 text-[11px] font-semibold inline-flex items-center whitespace-nowrap">Not in totals</span>;
 }
@@ -49,7 +72,7 @@ function Total({ label, value, last, isMobile }: { label: string; value: number;
   );
 }
 
-function SummaryRows({ items, isMobile }: { items: ReportContribution[]; isMobile: boolean }) {
+function SummaryRows({ items, isMobile, pick }: { items: ReportContribution[]; isMobile: boolean; pick: Pick }) {
   if (isMobile) {
     const figure = (label: string, v: number) => (
       <span className="whitespace-nowrap"><span className="text-content-3">{label}</span> <span className="font-bold text-[15px] text-content-2">{fig(v)}</span></span>
@@ -57,13 +80,14 @@ function SummaryRows({ items, isMobile }: { items: ReportContribution[]; isMobil
     return (
       <>
         {items.map((c) => (
-          <div key={c.categoryId} className="flex items-center gap-3 border-b border-line" style={{ padding: '14px 16px' }}>
+          <div key={c.categoryId} {...pickProps(c, pick)} className={`flex items-center gap-3 border-b border-line ${rowCls}`} style={rowStyle(c, '14px 16px', pick.selectedId)}>
             <span className="shrink-0 text-base leading-none self-start mt-0.5">{getCategoryEmoji(c.name, c.groupName)}</span>
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-[15px] line-clamp-2 break-words">{c.name}</div>
               <div className="text-[12.5px] text-content-3 truncate mt-0.5">into {intoText(c)}</div>
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[13px] tabular-nums mt-1.5">{figure('Put in', c.totalPutIn)}{figure('Taken out', c.totalTakenOut)}</div>
             </div>
+            <Chevron />
           </div>
         ))}
       </>
@@ -73,21 +97,22 @@ function SummaryRows({ items, isMobile }: { items: ReportContribution[]; isMobil
     <>
       <div className="flex items-center gap-3 bg-surface-2 border-b border-line font-mono text-[11px] uppercase text-content-3" style={{ padding: '11px 26px', letterSpacing: '.06em' }}>
         <span className="flex-1">Category</span><span className="flex-1">Pays into</span>
-        <span className="shrink-0 w-[120px] text-right">Put in</span><span className="shrink-0 w-[120px] text-right">Taken out</span>
+        <span className="shrink-0 w-[120px] text-right">Put in</span><span className="shrink-0 w-[120px] text-right">Taken out</span><span className="shrink-0 w-4" />
       </div>
       {items.map((c) => (
-        <div key={c.categoryId} className="flex items-center gap-3 border-b border-line" style={{ padding: '15px 26px' }}>
+        <div key={c.categoryId} {...pickProps(c, pick)} className={`flex items-center gap-3 border-b border-line ${rowCls}`} style={rowStyle(c, '15px 26px', pick.selectedId)}>
           <span className="flex-1 min-w-0 flex items-center gap-3"><span className="shrink-0 text-base leading-none">{getCategoryEmoji(c.name, c.groupName)}</span><span className="font-semibold text-[15px] truncate" title={c.name}>{c.name}</span></span>
           <span className="flex-1 min-w-0 text-[13px] text-content-3 truncate" title={intoText(c)}>{intoText(c)}</span>
           <span className="shrink-0 w-[120px] text-right font-bold text-[15px] tabular-nums text-content-2">{fig(c.totalPutIn)}</span>
           <span className="shrink-0 w-[120px] text-right font-bold text-[15px] tabular-nums text-content-2">{fig(c.totalTakenOut)}</span>
+          <Chevron />
         </div>
       ))}
     </>
   );
 }
 
-function TimelineRows({ items, tl, isMobile }: { items: ReportContribution[]; tl: ContributionsTimeline; isMobile: boolean }) {
+function TimelineRows({ items, tl, isMobile, pick }: { items: ReportContribution[]; tl: ContributionsTimeline; isMobile: boolean; pick: Pick }) {
   const nameCol = isMobile ? 'flex-1 min-w-0' : 'w-[214px] shrink-0';
   const cellCls = isMobile ? 'w-[80px] shrink-0 text-right' : 'text-right';
   const cellStyle = isMobile ? undefined : { flex: '1 1 0', minWidth: tl.colMin };
@@ -124,7 +149,7 @@ function TimelineRows({ items, tl, isMobile }: { items: ReportContribution[]; tl
           </div>
           {items.map((c) => (
             <div key={c.categoryId}>
-              <div className="flex items-center gap-2.5 bg-surface-2 border-b border-line" style={{ padding: isMobile ? '12px 16px' : '12px 26px' }}>
+              <div {...pickProps(c, pick)} className={`flex items-center gap-2.5 bg-surface-2 border-b border-line ${rowCls}`} style={rowStyle(c, isMobile ? '12px 16px' : '12px 26px', pick.selectedId)}>
                 <span className="shrink-0 text-[15px] leading-none">{getCategoryEmoji(c.name, c.groupName)}</span>
                 {isMobile ? (
                   <span className="min-w-0 flex flex-col"><span className="line-clamp-2 break-words text-sm font-bold text-content">{c.name}</span><span className="truncate font-medium text-[12px] text-content-3">into {intoText(c)}</span></span>
@@ -142,11 +167,12 @@ function TimelineRows({ items, tl, isMobile }: { items: ReportContribution[]; tl
   );
 }
 
-export default function ContributionsCard({ contributions, isMobile, timeline }: { contributions: ReportContribution[]; isMobile: boolean; timeline: ContributionsTimeline }) {
+export default function ContributionsCard({ contributions, isMobile, timeline, selectedId, onSelect }: { contributions: ReportContribution[]; isMobile: boolean; timeline: ContributionsTimeline; selectedId: number | null; onSelect: (c: ReportContribution) => void }) {
   const [view, setView] = useState<View>('summary');
   if (contributions.length === 0) return null;
   const putIn = sum(contributions.map((c) => c.totalPutIn));
   const takenOut = sum(contributions.map((c) => c.totalTakenOut));
+  const pick = { selectedId, onSelect };
   return (
     <div className="mt-[22px] border border-line rounded-card bg-surface overflow-hidden shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 px-4 sm:px-[26px] pt-4 sm:pt-[18px] pb-4">
@@ -161,7 +187,7 @@ export default function ContributionsCard({ contributions, isMobile, timeline }:
         <Total label="Taken out" value={takenOut} last isMobile={isMobile} />
       </div>
       <div className="border-t border-line">
-        {view === 'summary' ? <SummaryRows items={contributions} isMobile={isMobile} /> : <TimelineRows items={contributions} tl={timeline} isMobile={isMobile} />}
+        {view === 'summary' ? <SummaryRows items={contributions} isMobile={isMobile} pick={pick} /> : <TimelineRows items={contributions} tl={timeline} isMobile={isMobile} pick={pick} />}
       </div>
     </div>
   );

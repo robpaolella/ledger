@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 import { accountShortName } from '../lib/accounts';
 import NoAccountsPointer from '../components/NoAccountsPointer';
-import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, type ReportsSort } from '../lib/reportsPaging';
-import { buildReportsCsv } from '../lib/reportsCsv';
+import { pageQuery, pagingHint, hasMoreTxns, fetchAllPages, txnListState, type ReportsSort } from '../lib/reportsPaging';
+import { buildReportsCsv, contributionDrillTxn } from '../lib/reportsCsv';
 import { scopeTxnsToCategory, type ScopeLeg, type CatScope } from '../lib/categoryScope';
-import { formatMoney, type UncategorizedBucketed, type ReportContribution } from '@ledger/shared';
+import { formatMoney, type UncategorizedBucketed, type ReportContribution, type ReportContributionTransaction } from '@ledger/shared';
 import ContributionsCard from '../components/reports/ContributionsCard';
 import { Money } from '../components/Money';
 import UncategorizedNotice from '../components/UncategorizedNotice';
@@ -19,6 +19,7 @@ import { ListRow } from '../components/ListRow';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { thinLabelIndices } from '../lib/chartLabels';
 import LoadError from '../components/LoadError';
+import Button from '../components/Button';
 import { loadState } from '../lib/loadState';
 import FilterPopover from '../components/FilterPopover';
 import DateRangePopover from '../components/DateRangePopover';
@@ -31,8 +32,10 @@ interface PeriodKpis { income: number; expenses: number; net: number; savingsRat
 interface PeriodData { range: { start: string; end: string; months: number }; buckets: Bucket[]; categories: PeriodCat[]; kpis: PeriodKpis; uncategorized: UncategorizedBucketed; contributions: ReportContribution[] }
 interface Txn {
   id: number; date: string; description: string | null; amount: number;
-  merchant: { id: number; name: string; logoUrl?: string | null } | null;
-  account: { id: number; name: string; lastFour: string | null; logoUrl?: string | null; color?: string | null } | null;
+  /** Contribution drill-in rows only: a unique key, and "from → to" in place of the account. */
+  rowKey?: string; route?: string;
+  merchant: { id?: number; name: string; logoUrl?: string | null } | null;
+  account: { id?: number; name: string; lastFour: string | null; logoUrl?: string | null; color?: string | null } | null;
   category: { id: number; groupName: string; subName: string; displayName: string; type: string } | null;
   splits?: ScopeLeg[] | null;
 }
@@ -157,6 +160,7 @@ export default function ReportsPage() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({}); // per-group inline expand (key = `${section}|${group}`)
   const [focusGroup, setFocusGroup] = useState<string | null>(null);
+  const [focusContribution, setFocusContribution] = useState<number | null>(null); // a Contributions row's category id
   const [isolate, setIsolate] = useState<string | null>(null);
   const [hoverLine, setHoverLine] = useState<string | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -186,6 +190,8 @@ export default function ReportsPage() {
   const [reloadKey, setReloadKey] = useState(0); // bumped by "Try again"
   const [txns, setTxns] = useState<Txn[]>([]);
   const [txnTotal, setTxnTotal] = useState(0);
+  const [txnFailed, setTxnFailed] = useState(false); // the list could not load (shown in the card, with "Try again")
+  const [txnReload, setTxnReload] = useState(0); // bumped by the card's "Try again"
   const [merchants, setMerchants] = useState<MerchantOpt[]>([]);
   const [accounts, setAccounts] = useState<AccountOpt[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false); // true once /accounts answered, even with none
@@ -233,6 +239,14 @@ export default function ReportsPage() {
 
   // Load transactions for the bottom card (range + applied filters + focus + sort), a page at a time.
   const fetchTxnPage = useCallback((loaded: number, size?: number) => {
+    if (focusContribution != null) {
+      const c = report?.contributions.find((x) => x.categoryId === focusContribution);
+      const q = reportFilterParams(filters);
+      q.set('start', range.start); q.set('end', range.end);
+      for (const [k, v] of Object.entries(pageQuery(txnSort, loaded, size))) q.set(k, v);
+      return apiFetch<{ data: ReportContributionTransaction[]; total: number }>(`/reports/contributions/${focusContribution}/transactions?${q.toString()}`)
+        .then((r) => ({ rows: r.data.map((row) => contributionDrillTxn(row, { categoryId: focusContribution, groupName: c?.groupName ?? '', name: c?.name ?? '' })) as Txn[], total: r.total ?? r.data.length }));
+    }
     const p = new URLSearchParams();
     p.set('startDate', range.start); p.set('endDate', range.end);
     for (const [k, v] of Object.entries(pageQuery(txnSort, loaded, size))) p.set(k, v);
@@ -256,16 +270,17 @@ export default function ReportsPage() {
     return apiFetch<{ data: Txn[]; total: number }>(`/transactions?${p.toString()}`)
       .then((r) => ({ rows: scopeTxnsToCategory(r.data, scope), total: r.total ?? r.data.length }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range.start, range.end, appliedKey, filters, focusGroup, txnSort]);
+  }, [range.start, range.end, appliedKey, filters, focusGroup, focusContribution, txnSort]);
 
   // First page: reloads whenever the range, filters, focus or sort change.
   useEffect(() => {
     const req = ++txnReq.current;
     setLoadingMore(false);
+    setTxnFailed(false);
     fetchTxnPage(0)
       .then((r) => { if (req === txnReq.current) { setTxns(r.rows); setTxnTotal(r.total); } })
-      .catch(() => { if (req === txnReq.current) { setTxns([]); setTxnTotal(0); } });
-  }, [fetchTxnPage]);
+      .catch(() => { if (req === txnReq.current) { setTxns([]); setTxnTotal(0); setTxnFailed(true); } });
+  }, [fetchTxnPage, txnReload]);
 
   const showMoreTxns = () => {
     if (loadingMore) return;
@@ -290,14 +305,21 @@ export default function ReportsPage() {
     return null;
   })();
 
+  // Focused Contributions row (drill target), if it is still in the report.
+  const contribObj = focusContribution != null ? report?.contributions.find((c) => c.categoryId === focusContribution) ?? null : null;
+
   const drillTo = useCallback((groupName: string) => {
-    setFocusGroup(groupName); setIsolate(null); setShowAll(false); setHoverIdx(null); setHoverLine(null);
+    setFocusContribution(null); setFocusGroup(groupName); setIsolate(null); setShowAll(false); setHoverIdx(null); setHoverLine(null);
   }, []);
-  const clearFocus = useCallback(() => { setFocusGroup(null); setIsolate(null); }, []);
+  const drillToContribution = useCallback((c: ReportContribution) => {
+    setFocusGroup(null); setIsolate(null); setFocusContribution(c.categoryId);
+  }, []);
+  const clearFocus = useCallback(() => { setFocusGroup(null); setFocusContribution(null); setIsolate(null); }, []);
 
   // If the focused group vanishes after a period/filter change, drop the focus so
   // the transactions card and the rest of the page stay in sync.
   useEffect(() => { if (focusGroup && report && !focusObj) clearFocus(); }, [focusGroup, report, focusObj, clearFocus]);
+  useEffect(() => { if (focusContribution != null && report && !contribObj) clearFocus(); }, [focusContribution, report, contribObj, clearFocus]);
 
   const applyFilters = () => { setFilters(draft); setFilterOpen(false); };
   const openFilters = () => { setDraft(filters); setFilterTab('Categories'); setFilterSearch(''); setFilterOpen(true); };
@@ -591,10 +613,11 @@ export default function ReportsPage() {
       const rows = byDay.get(key)!;
       const [yy, mm, dd] = key.split('-').map(Number);
       const total = rows.reduce((s, t) => s + t.amount, 0);
-      return { key, label: `${MFULL[mm - 1]} ${dd}, ${yy}`, total, transfer: type === 'transfer', rows };
+      return { key, label: `${MFULL[mm - 1]} ${dd}, ${yy}`, total, transfer: type === 'transfer' || focusContribution != null, rows };
     });
   })();
 
+  const listState = txnListState(txnFailed, dayGroups.length, contribObj ? 'contribution' : focusGroup ? 'category' : null);
   const sortLabelMap: Record<SortId, string> = { date_desc: 'Newest', date_asc: 'Oldest', amt_desc: 'Highest', amt_asc: 'Lowest' };
   const sortOptions: { id: SortId; label: string }[] = [
     { id: 'date_desc', label: 'Date · new to old' }, { id: 'date_asc', label: 'Date · old to new' },
@@ -602,7 +625,7 @@ export default function ReportsPage() {
   ];
 
   const catHint = focusObj ? `Sub-categories of ${focusObj.group.groupName}` : (catView === 'timeline' ? `Totals by ${nB > 0 && buckets[0].label.startsWith('Wk') ? 'week' : 'month'} · click a category to drill in` : 'Click a category to drill into sub-categories');
-  const txnHint = pagingHint(txns.length, txnTotal) ?? (focusGroup ? `Activity in ${focusGroup} · ${txnTotal} transaction${txnTotal === 1 ? '' : 's'}` : 'Recent activity across all categories');
+  const txnHint = txnFailed ? 'Couldn’t load this list' : pagingHint(txns.length, txnTotal) ?? (contribObj ? `Activity in ${contribObj.name} · ${txnTotal} transaction${txnTotal === 1 ? '' : 's'}` : focusGroup ? `Activity in ${focusGroup} · ${txnTotal} transaction${txnTotal === 1 ? '' : 's'}` : 'Recent activity across all categories');
 
   return (
     <div className="pb-16">
@@ -882,7 +905,7 @@ export default function ReportsPage() {
       </div>
 
       {/* CONTRIBUTIONS (not part of any total) */}
-      <ContributionsCard contributions={report?.contributions ?? []} isMobile={isMobile}
+      <ContributionsCard contributions={report?.contributions ?? []} isMobile={isMobile} selectedId={contribObj ? contribObj.categoryId : null} onSelect={drillToContribution}
         timeline={{ buckets, index: tlIdx, title: tlTitle, subtitle: `${tlIdx + 1} of ${nB} · ${tlRangeLabel}`, weekly: tlWeekly, colMin: trendColMin, onPrev: () => setTlPick(tlIdx - 1), onNext: () => setTlPick(tlIdx + 1) }} />
 
       {/* TRANSACTIONS */}
@@ -914,8 +937,13 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="border-t border-line">
-          {dayGroups.length === 0 ? (
-            <div className="text-center text-content-3 text-sm" style={{ padding: '36px' }}>No transactions in this {focusGroup ? 'category' : 'period'}.</div>
+          {listState.kind === 'error' ? (
+            <div role="alert" className="flex flex-col items-center gap-3 text-center text-content-3 text-sm" style={{ padding: '36px' }}>
+              <span>Couldn’t load these transactions. Check your connection, then try again.</span>
+              <Button variant="secondary" onClick={() => setTxnReload((n) => n + 1)}>Try again</Button>
+            </div>
+          ) : listState.kind === 'empty' ? (
+            <div className="text-center text-content-3 text-sm" style={{ padding: '36px' }}>{listState.text}</div>
           ) : dayGroups.map((g) => (
             <div key={g.key}>
               <div className="flex items-center justify-between bg-surface-2 border-b border-line" style={{ padding: '9px 26px' }}>
@@ -928,16 +956,16 @@ export default function ReportsPage() {
                 const amt = <Money amount={t.amount} transfer={t.category?.type === 'transfer'} />;
                 if (isMobile) {
                   return (
-                    <ListRow key={t.id} className="border-t-0 border-b"
+                    <ListRow key={t.rowKey ?? t.id} className="border-t-0 border-b"
                       avatar={{ name: vendor, src: t.merchant?.logoUrl, color: t.merchant?.logoUrl ? undefined : hue, size: 34 }}
                       title={vendor}
                       subtitle={<><span className="shrink-0 text-[13px] leading-none">{getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName)}</span><span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span></>}
                       amount={amt}
-                      meta={t.account ? accountShortName(t.account) : undefined} />
+                      meta={t.route ?? (t.account ? accountShortName(t.account) : undefined)} />
                   );
                 }
                 return (
-                  <div key={t.id} className="flex items-center gap-3.5 border-b border-line" style={{ padding: '0 26px', height: 44 }}>
+                  <div key={t.rowKey ?? t.id} className="flex items-center gap-3.5 border-b border-line" style={{ padding: '0 26px', height: 44 }}>
                     <VendorAvatar name={vendor} src={t.merchant?.logoUrl || undefined} color={t.merchant?.logoUrl ? undefined : hue} size={26} />
                     <div className="min-w-0 font-semibold text-[15px] truncate" style={{ flex: 1.4 }}>{vendor}</div>
                     <div className="flex-1 min-w-0 flex items-center gap-2.5 text-[13px] text-content-2">
@@ -945,8 +973,8 @@ export default function ReportsPage() {
                       <span className="truncate">{t.category?.subName ?? 'Uncategorized'}</span>
                     </div>
                     <div className="flex-1 min-w-0 text-[13px] text-content-3 hidden md:flex items-center gap-1.5">
-                      {t.account && <VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={16} />}
-                      <span className="truncate">{t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : '—'}</span>
+                      {t.account && !t.route && <VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={16} />}
+                      <span className="truncate">{t.route ?? (t.account ? `${t.account.name}${t.account.lastFour ? ` (…${t.account.lastFour})` : ''}` : '—')}</span>
                     </div>
                     <div className="min-w-[118px] shrink-0 text-right font-bold text-[15px]">{amt}</div>
                   </div>
@@ -965,6 +993,24 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+
+      {/* DRILL-DOWN STICKY PILL: a Contributions row */}
+      {contribObj && (
+        <div className="fixed left-1/2 bottom-7 z-[60] flex items-center gap-3 rounded-full bg-elevated" style={{ transform: 'translateX(-50%)', padding: '9px 10px 9px 18px', border: '2px solid var(--primary)', boxShadow: '0 10px 34px rgba(0,0,0,.5), 0 0 0 4px color-mix(in srgb, var(--primary) 22%, transparent)', maxWidth: 'calc(100vw - 48px)' }}>
+          <span className="w-2.5 h-2.5 shrink-0 rounded-[3px]" style={{ background: 'var(--text-3)' }} />
+          <span className="min-w-0 flex flex-col md:flex-row md:items-center md:gap-3">
+            <span className="flex items-center gap-1.5 md:gap-3 min-w-0">
+              <span className="text-[13px] text-content-3 font-semibold shrink-0">Contributions</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
+              <span className="text-sm font-extrabold truncate">{contribObj.name}</span>
+            </span>
+            <span className="text-[13px] text-content-2 tabular-nums whitespace-nowrap">{dollars(contribObj.totalPutIn)} put in · {dollars(contribObj.totalTakenOut)} taken out</span>
+          </span>
+          <button onClick={clearFocus} title="Clear drill-down" aria-label="Clear drill-down" className="tap-grow-sq shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full" style={{ border: '1px solid var(--negative)', color: 'var(--negative)', background: 'color-mix(in srgb, var(--negative) 12%, transparent)' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+      )}
 
       {/* DRILL-DOWN STICKY PILL */}
       {focusObj && (
