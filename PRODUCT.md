@@ -88,12 +88,12 @@ Member permissions come in three presets, with individual switches under "Custom
 - **Budget:** monthly category budget versus actual, including shared accounts. Negative actuals such as refunds remain visible. Over-budget emphasis belongs on actual spending and progress indicators, not the planned budget amount.
 - **Recurring:** bills and income that repeat, and whether each has come due.
 - **Accounts and net worth:** account balances, investment holdings, and depreciating assets. Both straight-line and declining-balance depreciation are supported; Dashboard and Net Worth use the same calculation rules.
-- **Reports:** annual income/expense review with expandable categories; phone users select a month for detail or view annual totals.
+- **Reports:** annual income/expense review with expandable categories; phone users select a month for detail or view annual totals. A separate Contributions card shows money put into and taken out of tracked accounts over the chosen range; it is outside every total.
 - **Investments:** holdings and their value over time.
 - **Daily bank sync:** see below.
 - **Auto-categorizing:** suggestions from the household's rules plus its transaction history.
 - **Notifications:** in-app notices, including bank-sync failures.
-- **Settings, users and permissions, two-step sign-in:** accounts (including joint ownership), grouped categories, user and permission management within the role hierarchy, connection management, and personal account and security settings.
+- **Settings, users and permissions, two-step sign-in:** accounts (including joint ownership), grouped categories, Contributions (which Transfers categories to track), user and permission management within the role hierarchy, connection management, and personal account and security settings.
 
 ### Daily bank sync
 
@@ -158,7 +158,7 @@ Data stays untouched; these are never rebuilt.
 - "Left to budget" is coloured by state: negative is bad, otherwise good. Its banner or card tint follows the same state, not only the number.
 - Income above plan shows as good.
 - Categories that only have refunds still show on Budget.
-- Transfers stay out of budgets, reports, and spending.
+- Transfers stay out of budgets, spending, and Reports' totals. Tracked contributions (transfers into accounts the household chose to watch, such as a 529) show separately in Reports, as money put in and taken out, and never count in any total.
 
 ### Uncategorized
 

@@ -90,3 +90,7 @@
 - Accounts on an empty app has a blank area where the account list goes, with no "No accounts yet" line (pre-release check, L3, #405).
 - At sign-in an expired two-step code and a wrong one both read "Invalid verification code"; the setup window's "Try the newest one" hint would help here too (pre-release check, L4, #405).
 - Setup two-step window keeps the old digits after a failed attempt, so typing over them does nothing until Backspace; Settings → Security and the sign-in step say "Two-factor authentication" where the rest of the app says "two-step" (pre-release check, L5, #405).
+- Count payroll contributions (401(k), HSA) from the investment accounts' own activity in Contributions (from #414).
+- Add a "Contribution" Type to the Reports CSV (from #414).
+- Show a destination on the Transactions page for one-sided contributions (from #414).
+- Settings → Contributions rows are `role="button"` containing a nested Edit button, which a screen reader may not announce; use a single labelled control per row (reviewer's follow-up, PR #439).

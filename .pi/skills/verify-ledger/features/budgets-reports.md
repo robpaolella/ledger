@@ -4,6 +4,7 @@
 
 - Monthly budget amounts, actuals, category expansion and shared accounts.
 - Recurring items when relevant to the change.
+- Contributions card on Reports (money put in / taken out of tracked accounts; never in any total).
 - Annual reports, monthly category detail and annual totals on phone.
 
 ## How to get to it (user POV)
@@ -25,6 +26,16 @@ More → Reports. Dashboard income/expense summaries are another comparison poin
 - Open Recurring and confirm exactly Paycheck — John ($1,750 semi-monthly), Paycheck — Jane
   ($1,500 semi-monthly), and Rent ($1,400 monthly). Their amounts match the generated
   transactions and Rent's budget floor.
+- Contributions: first track a Transfers category in Settings → Contributions (see the
+  Settings notes). On Reports the Contributions card shows each tracked category with
+  "Put in" and "Taken out" figures and a "Not in totals" tag, in Summary and Timeline
+  (phone: one month at a time). Confirm KPI cards, breakdown bar, Net and Savings rate do
+  not change with it. Click a row to drill in: the pill reads "Contributions › name", and
+  the Transactions card lists from → to rows. Money taken out reads "tracked account →
+  paying account" (the client flips the server's accountName/destinationAccountName for
+  display). Filtering to one account shows only that account's contributions.
+- If the Transactions list on Reports fails to load it shows an error with "Try again",
+  not "No transactions"; check it with the network offline.
 
 ## Gotchas
 
