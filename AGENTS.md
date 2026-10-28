@@ -79,6 +79,41 @@ SSH — it pushes the current branch, backs up the remote DB, rebuilds, and heal
 placeholder `SERVER`/`APP_DIR` values and isn't configured for a real host. Don't assume it's
 wired to any actual server without checking with Robert first.
 
+## Needs Robert's own merge
+Agents may merge reviewed PRs into a `package/*` branch or a Building branch below,
+except these, which only Robert merges (docs/git-workflow.md, Merging). Robert also merges
+every PR into a Live branch.
+- Any change to `AGENTS.md` or `CLAUDE.md`. A `risk:high` PR is merged by an agent only
+  after the `risky-review` role has passed it; in a package, the walkthrough marks steps
+  Robert follows himself before he merges the package.
+- Changes that reach beyond their branch: real data (`data/`, Robert's live finances), live
+  hosting settings, logins and secrets, outside accounts. On a Building branch, deploying
+  this repo's own code from it is accepted.
+- Database schema changes and migrations (they run at startup on existing databases), and
+  CI, release and deploy scripts.
+- Merging `feature/platform-retheme` into `main`, and updating Robert's running copy.
+
+Each branch's stage, read from this file on `main`. Building: its work reaches no one yet,
+so agents merge into it. Live: people rely on it, so Robert merges into it. A branch not
+listed counts as Live (`main` is not listed, so it stays Live). One line per branch,
+`<branch>: Building` or `<branch>: Live`, with an exact name (no patterns, no `package/`
+branches); lines starting with `#` are skipped.
+```stages
+feature/platform-retheme: Building
+```
+
+The guardrail refuses an agent's merge of a PR that changes a file matching a line
+below, read from this file on `main`. Paths start at the repo root; `**` crosses
+folders, `*` and `?` stay within one folder; end a folder with `/**`.
+```paths
+.github/workflows/**
+Dockerfile
+docker-compose.yml
+scripts/**
+data/**
+packages/server/src/db/**
+```
+
 ## Watch out for
 - `data/` holds Robert's live financial data (`ledger.db` plus `ledger.db-wal`, which holds the
   most recent changes). Never write to, reset, migrate or delete it, and never point the dev
