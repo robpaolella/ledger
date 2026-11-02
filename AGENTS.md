@@ -80,30 +80,35 @@ placeholder `SERVER`/`APP_DIR` values and isn't configured for a real host. Don'
 wired to any actual server without checking with Robert first.
 
 ## Needs Robert's own merge
-Agents may merge reviewed PRs into a `package/*` branch or a Building branch below,
-except these, which only Robert merges (docs/git-workflow.md, Merging). Robert also merges
-every PR into a Live branch.
-- Any change to `AGENTS.md` or `CLAUDE.md`. A `risk:high` PR is merged by an agent only
-  after the `risky-review` role has passed it; in a package, the walkthrough marks steps
-  Robert follows himself before he merges the package.
-- Changes that reach beyond their branch: real data (`data/`, Robert's live finances), live
-  hosting settings, logins and secrets, outside accounts. On a Building branch, deploying
-  this repo's own code from it is accepted.
-- Database schema changes and migrations (they run at startup on existing databases), and
-  CI, release and deploy scripts.
-- Merging `feature/platform-retheme` into `main`, and updating Robert's running copy.
+Ledger is one of Robert's own repos (docs/git-workflow.md, Robert's own repos; #820), so
+agents merge every reviewed PR once the usual conditions hold, without his word: task PRs,
+packages, Live branches, `release` into `main` and `feature/platform-retheme` into `main`.
+A change to `AGENTS.md`, `CLAUDE.md` or a file on the `paths` list below merges once
+`risky-review` has passed the PR's current code. Only these still wait for Robert, saved as
+a question, never as a request to say "merge":
+- A change that could lose real financial data for good: a destructive migration,
+  deleting records, anything touching `data/`.
+- Secrets and logins.
+- Hosting and outside-account settings, including updating Robert's running copy of
+  Ledger and publishing a Docker release tag.
+- Anything Maestro's guardrails refuse.
 
-Each branch's stage, read from this file on `main`. Building: its work reaches no one yet,
-so agents merge into it. Live: people rely on it, so Robert merges into it. A branch not
-listed counts as Live (`main` is not listed, so it stays Live). One line per branch,
+`risky-review` also checks database schema changes and migrations (they run at startup on
+existing databases; they stay backward-compatible and never delete data without a backup
+step) and CI, release and deploy scripts.
+
+Each branch's stage, read from this file on `main`. Building: its work reaches no one yet.
+Live: people rely on it, so its PRs get extra care, but agents still merge them here. A
+branch not listed counts as Live (`main` is not listed, so it stays Live); the standing
+`release` branch counts as Building unless listed. One line per branch,
 `<branch>: Building` or `<branch>: Live`, with an exact name (no patterns, no `package/`
 branches); lines starting with `#` are skipped.
 ```stages
 feature/platform-retheme: Building
 ```
 
-The guardrail refuses an agent's merge of a PR that changes a file matching a line
-below, read from this file on `main`. Paths start at the repo root; `**` crosses
+A PR that changes a file matching a line below, read from this file on `main`, needs a
+passing `risky-review` before an agent merges it. Paths start at the repo root; `**` crosses
 folders, `*` and `?` stay within one folder; end a folder with `/**`.
 ```paths
 .github/workflows/**
