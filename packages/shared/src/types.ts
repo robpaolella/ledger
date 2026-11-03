@@ -2,7 +2,7 @@
 
 export type AccountType = 'checking' | 'savings' | 'credit' | 'investment' | 'retirement' | 'venmo' | 'cash';
 export type AccountClassification = 'liquid' | 'investment' | 'liability';
-export type CategoryType = 'income' | 'expense';
+export type CategoryType = 'income' | 'expense' | 'transfer';
 
 // === Database Row Interfaces ===
 
@@ -25,12 +25,36 @@ export interface AccountOwner {
   displayName: string;
 }
 
+export interface FinancialInstitution {
+  id: number;
+  name: string;
+  domain: string | null;
+  logo_url: string | null;
+  color: string | null;
+  is_system: number;
+  sort_order: number | null;
+  created_at: string;
+  account_count?: number;
+}
+
+// The institution reference attached to an enriched Account (subset of the row).
+export interface AccountInstitutionRef {
+  id: number;
+  name: string;
+  logo_url: string | null;
+  color: string | null;
+}
+
 export interface Account {
   id: number;
   name: string;
   last_four: string | null;
   type: AccountType;
   classification: AccountClassification;
+  institution: string | null; // legacy free-text (kept; institution_id is the source of truth)
+  institution_id: number | null;
+  institutionRef: AccountInstitutionRef | null; // enriched by GET /accounts
+  avatar_url: string | null; // per-account image override (else fall back to institution logo)
   owner: string; // legacy — first owner display_name for backward compat
   owners: AccountOwner[];
   isShared: boolean;
@@ -46,6 +70,82 @@ export interface Category {
   type: CategoryType;
   is_deductible: number;
   sort_order: number;
+  /** GET /categories: the category is tracked in Contributions. */
+  contribution_tracked?: boolean;
+}
+
+// === Contributions ===
+// A Transfers category tracked as a contribution, and the accounts it pays into.
+
+export interface ContributionSetupAccount {
+  id: number;
+  name: string;
+  type: AccountType;
+  /** Deactivated accounts stay in a setup and read as inactive. */
+  isActive: boolean;
+}
+
+export interface ContributionSetup {
+  id: number;
+  category: { id: number; groupId: number | null; groupName: string; name: string; emoji: string | null };
+  accounts: ContributionSetupAccount[];
+  /** "An account not in Ledger" is one of the destinations. */
+  external: boolean;
+}
+
+/** POST /contributions/setups: an existing Transfers category, or a new one in a Transfers group. */
+export type ContributionSetupCreate = ContributionDestinations & (
+  | { categoryId: number; newCategory?: undefined }
+  | { categoryId?: undefined; newCategory: { groupId: number; subName: string; emoji?: string | null } }
+);
+
+/** PUT /contributions/setups/:id, and part of create. At least one destination. */
+export interface ContributionDestinations {
+  accountIds: number[];
+  external: boolean;
+}
+
+/**
+ * GET /reports/period `contributions`: one entry per tracked category with
+ * counted activity. Put in (money out of the paying account) and taken out
+ * (money back in) are positive magnitudes, per bucket and in total, never netted.
+ */
+export interface ReportContribution {
+  categoryId: number;
+  groupName: string;
+  name: string;
+  putIn: number[];
+  takenOut: number[];
+  totalPutIn: number;
+  totalTakenOut: number;
+  /** The accounts it pays into (as the setup lists them) and whether "an account not in Ledger" is one too. */
+  accounts: ContributionSetupAccount[];
+  external: boolean;
+}
+
+/**
+ * One transaction (or split leg) counted in a contribution's figures, as
+ * GET /api/reports/contributions/:categoryId/transactions lists it.
+ * `amount` is the counted magnitude; `direction` says which figure it feeds.
+ */
+export interface ReportContributionTransaction {
+  transactionId: number;
+  splitId: number | null;
+  date: string;
+  merchant: string | null;
+  description: string;
+  accountId: number;
+  accountName: string;
+  destinationAccountId: number | null;
+  destinationAccountName: string | null;
+  amount: number;
+  direction: 'putIn' | 'takenOut';
+}
+
+export interface Merchant {
+  id: number;
+  name: string;
+  created_at: string;
 }
 
 export interface Transaction {
@@ -53,10 +153,38 @@ export interface Transaction {
   account_id: number;
   date: string;
   description: string;
+  /** Verbatim bank-provided statement text (null on legacy + manual rows). */
+  bank_description: string | null;
   note: string | null;
   category_id: number | null;
+  merchant_id: number | null;
   amount: number;
   simplefin_transaction_id: string | null;
+  categorize_confidence: number | null;
+  needs_review: number;
+  created_at: string;
+}
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  type: string;
+  severity: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  body: string | null;
+  action_label: string | null;
+  action_target: string | null;
+  dedupe_key: string | null;
+  is_read: number;
+  created_at: string;
+}
+
+export interface CategoryRule {
+  id: number;
+  match_type: 'merchant' | 'contains' | 'regex';
+  pattern: string;
+  category_id: number;
+  priority: number;
   created_at: string;
 }
 
@@ -65,6 +193,10 @@ export interface TransactionSplit {
   transaction_id: number;
   category_id: number;
   amount: number;
+  // Per-split (full-Monarch model): each leg can carry its own merchant + note.
+  // NULL merchant_id = inherit the parent transaction's merchant.
+  merchant_id: number | null;
+  note: string | null;
   created_at: string;
 }
 
@@ -169,6 +301,32 @@ export interface SimpleFINConnection {
   isShared: boolean;
   linkedAccountCount: number;
   lastSyncedAt: string | null;
+  syncState: ConnectionSyncState;
+}
+
+/** A connection's last fetch, written by the daily run and manual syncs. */
+export interface ConnectionSyncState {
+  status: 'working' | 'failed' | 'reconnect_needed' | null; // null = never fetched
+  kind: 'auth' | 'rate_limit' | 'other' | null;
+  message: string | null;        // Ledger's own sentence, never the raw error
+  lastAttemptAt: string | null;
+  nextRetryAt: string | null;    // null: working, reconnect needed, or daily sync off
+  triesToday: number;            // failed daily-run tries today
+  gaveUp: boolean;               // today's retries ran out; next try is tomorrow's run
+}
+
+export interface DailySyncInfo {
+  enabled: boolean;              // the saved switch
+  forcedOff: boolean;            // DISABLE_DAILY_SYNC=1 on the server overrides the switch
+  runTime: string;               // HH:MM, server time
+  lastRun: {
+    at: string;
+    transactionsImported: number;
+    // Only the connections the viewer can see; null for a run stored before per-connection results.
+    connections: number | null;
+    connectionsWithProblems: number | null;
+  } | null;
+  nextRun: { at: string; reason: 'scheduled' | 'retry' | 'gave_up' } | null; // null while off
 }
 
 export interface SimpleFINLink {
@@ -205,6 +363,7 @@ export interface SyncTransaction {
   suggestedCategoryId: number | null;
   suggestedGroupName: string | null;
   suggestedSubName: string | null;
+  suggestedSource?: string;
   confidence: number;
   duplicateStatus: DuplicateStatus;
   duplicateMatchId: number | null;
@@ -235,98 +394,106 @@ export interface SyncHoldingsUpdate {
   }[];
 }
 
-// === Budget Template Types ===
-
-export interface BudgetTemplate {
-  id: number;
-  category_id: number;
-  amount: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BudgetRecurring {
-  id: number;
-  label: string;
-  category_id: number;
-  amount: number | null;
-  months: number[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BudgetImportItem {
-  categoryId: number;
-  amount: number;
-  source: 'template' | 'recurring' | 'pay_cycle';
-  action: 'skip' | 'overwrite' | 'add';
-}
-
-export interface BudgetImportRequest {
-  month: string;
-  items: BudgetImportItem[];
-}
-
-// === Pay Cycle Types ===
-
+// Frequency kinds for the recurring engine (payCycleMath). Retained after the
+// pay-cycles feature was removed — the recurring engine still uses it.
 export type PayFrequency = 'weekly' | 'biweekly' | 'semi_monthly' | 'monthly';
 
-export interface PayCycle {
+// === Recurring Items (unified recurring income + expense + savings) ===
+
+export type RecurrenceKind =
+  | 'monthly' | 'semi_monthly' | 'biweekly' | 'weekly' | 'every_n_months' | 'custom_months';
+
+export interface RecurringItem {
   id: number;
+  type: 'income' | 'expense'; // savings shares the expense (outflow) sign convention
   label: string;
+  merchant_id: number | null;
   category_id: number;
+  account_id: number | null;
+  amount: number | null; // per-occurrence positive magnitude (null = unset)
+  freq_kind: RecurrenceKind;
+  day: number | null; // monthly/every-N/custom day-of-month (0 = last day)
+  days_json: string | null; // semi_monthly two days, e.g. '[1,15]'
+  interval: number | null; // every_n_months
+  anchor_date: string | null; // 'YYYY-MM-DD' phase ref (weekly/biweekly/every-N)
+  months_json: string | null; // custom_months 1-based, e.g. '[3,11]'
+  start_date: string | null;
+  status: 'active' | 'paused';
   user_id: number | null;
-  frequency: PayFrequency;
-  amount: number; // per-paycheck take-home, positive
-  anchor_date: string | null; // 'YYYY-MM-DD' phase reference (weekly/biweekly)
-  day_of_month_1: number | null; // semi_monthly first day (0 = last day of month)
-  day_of_month_2: number | null; // semi_monthly second day (0 = last day of month)
-  day_of_month: number | null; // monthly day (0 = last day of month)
-  effective_start: string | null; // inclusive lower bound
-  effective_end: string | null; // inclusive upper bound
-  is_active: number;
+  effective_start: string | null;
+  effective_end: string | null;
   created_at: string;
   updated_at: string;
 }
 
-// A pay cycle enriched with its target category + owner (GET /api/pay-cycles).
-export interface PayCycleWithMeta extends PayCycle {
-  group_name: string;
-  sub_name: string;
-  display_name: string;
-  type: CategoryType;
-  ownerName: string | null;
+// A recurring item enriched with category/merchant/account meta (GET /api/recurring).
+export interface RecurringItemWithMeta extends RecurringItem {
+  groupName: string;
+  subName: string;
+  displayName: string;
+  categoryType: CategoryType;
+  merchantName: string | null;
+  merchantLogoUrl: string | null;
+  accountName: string | null;
+  accountLastFour: string | null;
+  accountLogoUrl: string | null;
+  accountColor: string | null;
 }
 
-// Projection: one cycle's expected income for a given month.
-export interface PayCycleProjectionCycle {
-  id: number;
+// One dated occurrence of a recurring item within a month.
+export interface RecurringOccurrence {
+  itemId: number;
   label: string;
-  userId: number | null;
-  ownerName: string | null;
+  merchantName: string | null;
+  merchantLogoUrl: string | null;
+  date: string; // 'YYYY-MM-DD'
+  amount: number; // positive magnitude
+  type: 'income' | 'expense';
   categoryId: number;
-  subName: string;
   groupName: string;
-  frequency: PayFrequency;
-  perPaycheckAmount: number;
-  paydays: string[];
-  paydayCount: number;
-  projectedAmount: number; // perPaycheckAmount * paydayCount, positive
+  subName: string;
+  categoryType: CategoryType;
+  accountName: string | null;
+  accountLastFour: string | null;
+  accountLogoUrl: string | null;
+  accountColor: string | null;
+  frequency: RecurrenceKind;
+  status: 'paid' | 'due' | 'upcoming';
 }
 
-// Projection: per-category summed expected income for a given month.
-export interface PayCycleProjectionCategoryTotal {
-  categoryId: number;
-  subName: string;
-  groupName: string;
-  projectedAmount: number; // positive, summed across cycles
-  cycleIds: number[];
-  paydayCount: number; // total paydays across contributing cycles
-  hasExtraPaycheck: boolean; // any contributing cycle exceeds its yearly baseline this month
+export interface RecurringMonthFlow {
+  total: number;
+  paid: number; // occurrences on/before today
+  remaining: number;
 }
 
-export interface PayCycleProjection {
+export interface RecurringMonthView {
   month: string; // 'YYYY-MM'
-  cycles: PayCycleProjectionCycle[];
-  categoryTotals: PayCycleProjectionCategoryTotal[];
+  occurrences: RecurringOccurrence[];
+  income: RecurringMonthFlow;
+  expense: RecurringMonthFlow;
+  net: number;
+}
+
+// Per-category recurring total for a month, for the budget overlay.
+export interface RecurringBudgetFloor {
+  categoryId: number;
+  amount: number; // summed positive magnitude of active occurrences this month
+  itemCount: number;
+  items: { label: string; cadence: string }[]; // contributing items, for the breakdown
+}
+
+// Money with no category and no splits (and not a linked transfer) in a period.
+// "Uncategorized" is a display line only, never a real category. Side comes from
+// direction: money out counts under Expenses, money in under Income. Both amounts
+// are positive magnitudes; zeros when nothing is uncategorized.
+export interface UncategorizedTotals {
+  count: number;
+  moneyOut: number;
+  moneyIn: number;
+}
+
+// Reports: the same figures per bucket, for the Trends line and the Timeline row.
+export interface UncategorizedBucketed extends UncategorizedTotals {
+  buckets: UncategorizedTotals[];
 }

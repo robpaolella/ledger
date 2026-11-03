@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { tapTwoStep } from '../lib/twoStepConfirm';
 
 interface ConfirmDeleteButtonProps {
   onConfirm: () => void | Promise<void>;
@@ -6,16 +7,39 @@ interface ConfirmDeleteButtonProps {
   label?: string;
   confirmLabel?: string;
   timeout?: number;
+  /** 'pill' = compact footer button (default). 'block' = full-width, for panels. */
+  variant?: 'pill' | 'block';
+  disabled?: boolean;
+  /** Extra classes for the pill's buttons (for example a taller phone tap target). */
+  className?: string;
+  /** Pill only: false drops the extra Cancel beside the button, for a footer that already has one. */
+  showCancel?: boolean;
+  /** Tells a footer when the confirmation starts and ends (cancelled, timed out or confirmed). */
+  onConfirmingChange?: (confirming: boolean) => void;
 }
 
+/** Two-click destructive action: outlined `--negative` at rest, solid while
+ *  confirming (auto-resets). Design system destructive button chrome. */
 export default function ConfirmDeleteButton({
   onConfirm,
   onFirstClick,
   label = 'Delete',
-  confirmLabel = 'Confirm Delete?',
+  confirmLabel = 'Confirm delete?',
   timeout = 3000,
+  variant = 'pill',
+  disabled = false,
+  className = '',
+  showCancel = true,
+  onConfirmingChange,
 }: ConfirmDeleteButtonProps) {
   const [confirming, setConfirming] = useState(false);
+
+  // The cleanup also reports "not confirming" when the button unmounts, so a footer that
+  // hid its buttons never stays hidden after the window closes mid-confirmation.
+  useEffect(() => {
+    onConfirmingChange?.(confirming);
+    return () => onConfirmingChange?.(false);
+  }, [confirming, onConfirmingChange]);
 
   useEffect(() => {
     if (!confirming) return;
@@ -24,26 +48,42 @@ export default function ConfirmDeleteButton({
   }, [confirming, timeout]);
 
   const handleClick = useCallback(() => {
-    if (!confirming) { setConfirming(true); onFirstClick?.(); return; }
+    const tap = tapTwoStep(confirming);
+    setConfirming(tap.armed);
+    if (!tap.run) { onFirstClick?.(); return; }
     onConfirm();
-    setConfirming(false);
   }, [confirming, onConfirm, onFirstClick]);
 
+  const style = confirming
+    ? { border: '1px solid var(--negative)', background: 'var(--negative)', color: 'var(--on-primary)' }
+    : { border: '1px solid color-mix(in srgb, var(--negative) 40%, var(--line))', color: 'var(--negative)', background: 'transparent' };
+
+  if (variant === 'block') {
+    return (
+      <div className="flex flex-col gap-1.5 w-full">
+        <button type="button" onClick={handleClick} disabled={disabled}
+          className="w-full h-11 rounded-[11px] font-bold text-sm cursor-pointer transition-colors disabled:opacity-50" style={style}>
+          {confirming ? confirmLabel : label}
+        </button>
+        {confirming && (
+          <button type="button" onClick={() => setConfirming(false)}
+            className="h-8 max-md:h-11 w-full rounded-[10px] bg-transparent border-none cursor-pointer text-[12.5px] font-semibold text-content-2 hover:bg-surface-2">
+            Cancel
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={handleClick}
-        className={`px-4 py-2 text-[12px] font-semibold rounded-lg border-none cursor-pointer ${
-          confirming ? 'bg-[var(--btn-destructive-bg)] text-[var(--btn-destructive-text)] btn-destructive' : 'bg-[var(--btn-destructive-light-bg)] text-[var(--btn-destructive-light-text)] btn-destructive-light'
-        }`}
-      >
+    <div className="flex items-center gap-1.5">
+      <button type="button" onClick={handleClick} disabled={disabled}
+        className={`h-10 max-md:h-11 px-4 rounded-[11px] font-bold text-sm cursor-pointer transition-colors whitespace-nowrap disabled:opacity-50 ${className}`} style={style}>
         {confirming ? confirmLabel : label}
       </button>
-      {confirming && (
-        <button
-          onClick={() => setConfirming(false)}
-          className="text-[12px] text-[var(--text-secondary)] bg-transparent border-none cursor-pointer underline"
-        >
+      {confirming && showCancel && (
+        <button type="button" onClick={() => setConfirming(false)}
+          className={`h-10 max-md:h-11 px-3 rounded-[10px] bg-transparent border-none cursor-pointer text-sm font-semibold text-content-2 hover:bg-surface-2 ${className}`}>
           Cancel
         </button>
       )}

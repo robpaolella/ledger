@@ -8,8 +8,9 @@
 
 ## How to get to it (user POV)
 
-Settings (`/settings`) has Accounts and Categories cards on desktop and drill-through
-buttons on phone. Net Worth (`/net-worth`) is in the sidebar or phone More menu.
+Settings (`/settings`) has Accounts and Categories sections on desktop and drill-through
+buttons on phone. Accounts (`/accounts`) shows net worth; `/net-worth` redirects there.
+Use the sidebar or phone header menu. Investments has its own `/investments` page.
 Dashboard net-worth/liquid-assets cards are additional entry points.
 
 ## Driving it with chrome-devtools-axi
@@ -19,8 +20,10 @@ Dashboard net-worth/liquid-assets cards are additional entry points.
   reload and reopen. Confirm its availability in the Transaction account selector.
 - Categories: Add Category, supply a group and subcategory, save, and find it in the
   transaction category picker and Budget. Verify ordering if changing drag/drop.
-- Net Worth: inspect accounts and assets; expand investment holdings. Use Update
-  Balances with a synthetic value, save and reload; compare Dashboard net worth.
+- Accounts: inspect balances and physical assets; open an account for its details.
+  Investments: inspect holdings if present (the current seed has investment accounts,
+  but no holdings). Save a synthetic balance through the available account controls,
+  reload, and compare Dashboard net worth.
 - Add Asset, fill the visible purchase/date/cost fields and depreciation method,
   save and reopen. Test straight-line and declining balance separately when touched.
 - As member, account/category/asset creation must be disabled while Update Balances

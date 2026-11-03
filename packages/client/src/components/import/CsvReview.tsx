@@ -1,0 +1,142 @@
+/** CSV Import · Step 3 — Review & Categorize (docs/Import Flow §CSV IMPORT step 3). */
+import type { Dispatch, SetStateAction } from 'react';
+import { ImpCheckbox, VendorCell, CategoryCell, ConfidenceLabel, AmountText, DuplicateIcon, UnreadableAmount, type ImpCategory } from './cells';
+import type { ImpCsvRow } from './types';
+import { ListRow } from '../ListRow';
+import { Money } from '../Money';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { csvImportCounts, needCategoryText } from '../../lib/csvImportable';
+
+export default function CsvReview({
+  rows, setRows, selected, setSelected, categories, vendorOptions, merchantLogos, onBack, onImport, importing,
+}: {
+  rows: ImpCsvRow[];
+  setRows: Dispatch<SetStateAction<ImpCsvRow[]>>;
+  selected: Set<number>;
+  setSelected: Dispatch<SetStateAction<Set<number>>>;
+  categories: ImpCategory[];
+  vendorOptions: string[];
+  merchantLogos: Map<string, string>;
+  onBack: () => void;
+  onImport: () => void;
+  importing: boolean;
+}) {
+  const isMobile = useIsMobile();
+  const selectedCount = selected.size;
+  const { importable, duplicates: dupCount, needCategory, unreadable: unreadableCount } = csvImportCounts(rows, selected);
+  const needsCategory = (i: number) => selected.has(i) && rows[i].categoryId == null && rows[i].amount != null;
+  // Rows with an unreadable amount can never be selected.
+  const selectable = rows.flatMap((r, i) => (r.amount != null ? [i] : []));
+  const allOn = selectable.length > 0 && selected.size === selectable.length;
+  const someOn = selected.size > 0 && !allOn;
+
+  const toggle = (i: number) => setSelected((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else if (rows[i]?.amount != null) n.add(i); return n; });
+  const toggleAll = () => setSelected(() => (allOn ? new Set<number>() : new Set(selectable)));
+  const setCategory = (i: number, catId: number) => {
+    setRows((prev) => prev.map((r, j) => j === i ? { ...r, categoryId: catId, confidence: 1, source: null } : r));
+    // Categorizing arms the row for import — except don't re-arm auto-skipped
+    // duplicates, and never arm a row whose amount is unreadable.
+    if (rows[i]?.duplicateStatus !== 'exact' && rows[i]?.amount != null) setSelected((prev) => new Set(prev).add(i));
+  };
+  const setVendor = (i: number, name: string) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, description: name } : r));
+  const logoFor = (name: string) => merchantLogos.get(name.trim().toLowerCase());
+
+  return (
+    <div>
+      <div className="flex items-center gap-3.5 mb-4 flex-wrap">
+        <div onClick={onBack} className="inline-flex items-center gap-[7px] text-[13px] font-semibold text-primary cursor-pointer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>Back
+        </div>
+        <span className="h-[26px] px-[11px] rounded-full inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold"
+          style={{ background: 'color-mix(in srgb, var(--c-amber) 15%, transparent)', color: 'var(--c-amber)', border: '1px solid color-mix(in srgb, var(--c-amber) 35%, transparent)' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21l2.3-7.4-6-4.6h7.6z" /></svg>
+          Auto-categorized
+        </span>
+        <span className="text-[13px] text-content-3">Click any category to change it.</span>
+      </div>
+
+      <div className="border border-line rounded-[16px] bg-surface overflow-visible shadow-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+          <div className="font-bold text-base text-content">New transactions <span className="text-content-3 font-semibold">· {selectedCount} of {rows.length} selected</span></div>
+        </div>
+
+        {isMobile ? (
+          <div className="flex items-center gap-1 pl-1 pr-4 border-b border-line">
+            <span className="w-11 h-11 flex-none inline-flex items-center justify-center cursor-pointer" onClick={toggleAll}>
+              <ImpCheckbox checked={allOn} indeterminate={someOn} onClick={(e) => { e.stopPropagation(); toggleAll(); }} title="Select all" />
+            </span>
+            <span className="font-mono text-[10.5px] tracking-[0.06em] uppercase text-content-3">Select all</span>
+          </div>
+        ) : (
+        <div className="flex items-center gap-4 px-5 py-2.5 border-b border-line font-mono text-[10.5px] tracking-[0.06em] uppercase text-content-3">
+          <ImpCheckbox checked={allOn} indeterminate={someOn} onClick={toggleAll} title="Select all" />
+          <span className="w-[74px] flex-none">Date</span>
+          <span className="flex-1 min-w-0">Description</span>
+          <span className="w-[300px] flex-none">Category</span>
+          <span className="w-[110px] flex-none text-right">Amount</span>
+        </div>
+        )}
+
+        {rows.map((r, i) => {
+          const on = selected.has(i);
+          if (isMobile) {
+            const unreadable = r.amount == null;
+            return (
+              <ListRow
+                key={i}
+                className={on ? '' : '!bg-[color-mix(in_srgb,var(--bg)_40%,transparent)]'}
+                leading={
+                  <span className={`w-11 h-11 -ml-3 flex-none inline-flex items-center justify-center ${unreadable ? 'cursor-not-allowed' : 'cursor-pointer'}`} onClick={() => toggle(i)}>
+                    <ImpCheckbox checked={on} disabled={unreadable} title={unreadable ? 'Amount unreadable. Fix it in the file and import again.' : undefined} onClick={(e) => { e.stopPropagation(); toggle(i); }} />
+                  </span>
+                }
+                title={r.description}
+                titleExtra={r.duplicateStatus !== 'none' ? <DuplicateIcon status={r.duplicateStatus} /> : undefined}
+                subtitle={<div className="flex flex-col items-start">
+                  <CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />
+                  {needsCategory(i) && <span className="text-xs" style={{ color: 'var(--warning)' }}>Choose a category to import this row</span>}
+                </div>}
+                amount={unreadable ? <UnreadableAmount className="" /> : <Money amount={r.amount!} showZero />}
+                meta={r.date}
+              />
+            );
+          }
+          return (
+            <div key={i} className="flex items-center gap-4 px-5 py-3.5 border-b border-line" style={{ background: on ? 'transparent' : 'color-mix(in srgb, var(--bg) 40%, transparent)' }}>
+              <ImpCheckbox checked={on} disabled={r.amount == null} title={r.amount == null ? 'Amount unreadable. Fix it in the file and import again.' : undefined} onClick={() => toggle(i)} />
+              <span className="w-[74px] flex-none font-mono text-xs text-content-3">{r.date}</span>
+              <VendorCell
+                value={r.description}
+                options={vendorOptions}
+                onSelect={(v) => setVendor(i, v)}
+                logoSrc={logoFor(r.description)}
+                dupIcon={r.duplicateStatus !== 'none' ? <DuplicateIcon status={r.duplicateStatus} /> : undefined}
+              />
+              <div className="w-[300px] flex-none">
+                <div className="flex items-center gap-2">
+                  <CategoryCell categoryId={r.categoryId} categories={categories} grouped onSelect={(c) => setCategory(i, c)} />
+                  <ConfidenceLabel confidence={r.confidence} variant="csv" />
+                </div>
+                {needsCategory(i) && <div className="mt-1 text-xs" style={{ color: 'var(--warning)' }}>Choose a category to import this row</div>}
+              </div>
+              {r.amount == null ? <UnreadableAmount /> : <AmountText amount={r.amount} />}
+            </div>
+          );
+        })}
+        {rows.length === 0 && <div className="px-5 py-10 text-center text-content-3 text-sm">No transactions to review.</div>}
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 mt-5 px-5 py-4 border border-line rounded-[16px] bg-surface shadow-sm sticky bottom-4">
+        <div className="text-[13.5px] text-content-2"><strong className="text-content">{importable} {importable === 1 ? 'transaction' : 'transactions'}</strong> will be imported{dupCount > 0 ? ` (${dupCount} flagged as duplicates)` : ''}.{needCategory > 0 ? ` ${needCategoryText(needCategory)}` : ''}{unreadableCount > 0 ? ` ${unreadableCount} ${unreadableCount === 1 ? 'row' : 'rows'} skipped: amount unreadable.` : ''}</div>
+        <div className="flex gap-2.5 [&>button:last-child]:flex-1 md:[&>button:last-child]:flex-none">
+          <button onClick={onBack} className="h-12 px-5 border border-line-strong rounded-[11px] bg-surface-2 text-content font-sans font-semibold text-sm cursor-pointer">Back</button>
+          <button onClick={onImport} disabled={importable === 0 || importing}
+            className={`h-12 px-[26px] border-none rounded-[11px] ${importable === 0 ? 'text-content-3' : 'text-on-primary'} font-sans font-bold text-sm shadow-sm`}
+            style={{ background: importable === 0 ? 'var(--surface-2)' : 'var(--primary)', cursor: importable === 0 ? 'not-allowed' : 'pointer', opacity: importable === 0 ? 0.6 : importing ? 0.7 : 1 }}>
+            {importing ? 'Importing…' : importable === 0 ? 'Nothing selected' : `Import ${importable} ${importable === 1 ? 'transaction' : 'transactions'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

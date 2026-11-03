@@ -1,8 +1,23 @@
 import Database from 'better-sqlite3';
+import { getConfig, setConfig } from '../services/appConfig.js';
+
+// app_config marker: categories have their order, so the alphabetical backfill never runs again.
+const MARKER = 'categories.sort_order_set';
+
+/**
+ * Records that categories already have a deliberate order. The fresh-database seed calls
+ * this after inserting its default categories in their intended order (e.g. "Other …" last).
+ */
+export function markCategorySortOrderSet(sqlite: Database.Database): void {
+  setConfig(sqlite, MARKER, 'true');
+}
 
 export function migrateCategorySortOrder(sqlite: Database.Database): void {
-  // sort_order column already exists in schema — ensure all rows have meaningful values
-  // Assign sequential sort_order within each (type, group_name) group, ordered alphabetically by sub_name
+  // Runs once per database: assign sequential sort_order within each (type, group_name) group,
+  // ordered alphabetically by sub_name, then set the marker. Later boots keep the order the
+  // household saved (Settings → Categories) instead of re-sorting it.
+  if (getConfig(sqlite, MARKER)) return;
+
   const groups = sqlite.prepare(
     `SELECT DISTINCT type, group_name FROM categories ORDER BY type, group_name`
   ).all() as { type: string; group_name: string }[];
@@ -19,6 +34,7 @@ export function migrateCategorySortOrder(sqlite: Database.Database): void {
         update.run(i, subs[i].id);
       }
     }
+    markCategorySortOrderSet(sqlite);
   });
   runAll();
 }

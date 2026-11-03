@@ -1,4 +1,16 @@
+import { networkErrorMessage } from './networkError';
+
 const BASE_URL = '/api';
+
+/** Thrown for every non-2xx response so callers can branch on `status`. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
@@ -23,30 +35,39 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
     }
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      ...fetchOptions,
+      headers,
+    });
+  } catch (err) {
+    const message = networkErrorMessage(err);
+    if (message === null) throw err; // a deliberate abort stays an abort
+    throw new ApiError(message, 0);
+  }
 
   if (response.status === 401 && !skipAuth) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
-    throw new Error('Authentication required');
+    throw new ApiError('Authentication required', 401);
   }
 
   if (response.status === 403) {
     const data = await response.json();
     const msg = data.message || data.error || 'You do not have permission to perform this action';
     window.dispatchEvent(new CustomEvent('permission-denied', { detail: msg }));
-    throw new Error(msg);
+    throw new ApiError(msg, 403);
   }
 
-  const data = await response.json();
+  let data: { error?: string } & Record<string, unknown>;
+  try { data = await response.json(); }
+  catch { throw new ApiError(`Request failed with status ${response.status}`, response.status); }
 
   if (!response.ok) {
-    throw new Error(data.error || `Request failed with status ${response.status}`);
+    throw new ApiError(data.error || `Request failed with status ${response.status}`, response.status);
   }
 
-  return data;
+  return data as T;
 }

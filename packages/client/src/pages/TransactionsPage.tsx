@@ -1,20 +1,39 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { apiFetch } from '../lib/api';
-import { fmt, fmtTransaction } from '../lib/formatters';
-import { getCategoryColor } from '../lib/categoryColors';
+import { useSearchParams, Link } from 'react-router-dom';
+import { apiFetch, ApiError } from '../lib/api';
+import { todayYmd } from '../lib/formatters';
+import { formatMoney } from '@ledger/shared';
+import { Money } from '../components/Money';
+import { getCategoryColorHex, getCategoryEmoji, useCategoryEmojis } from '../lib/categoryMeta';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import NoAccountsPointer from '../components/NoAccountsPointer';
+import Button from '../components/Button';
 import ConfirmDeleteButton from '../components/ConfirmDeleteButton';
 import CurrencyInput from '../components/CurrencyInput';
+import Calendar from '../components/Calendar';
+import Popover from '../components/Popover';
 import PermissionGate from '../components/PermissionGate';
-import SortableHeader from '../components/SortableHeader';
-import { AccountBadge, CategoryBadge, OwnerBadge, SharedBadge, SplitBadge, ReimbursementBadge } from '../components/badges';
+import { NeedsReviewBadge, NEEDS_REVIEW_HINT } from '../components/badges';
+import { accountShortName } from '../lib/accounts';
+import { SegmentedControl, VendorAvatar } from '../components/primitives';
 import InlineNotification from '../components/InlineNotification';
 import ResponsiveModal from '../components/ResponsiveModal';
+import BottomSheet from '../components/BottomSheet';
+import LoadError from '../components/LoadError';
+import PageHeader from '../components/PageHeader';
+import { ListRow, CategoryTag, GroupHeader } from '../components/ListRow';
 import SplitEditor from '../components/SplitEditor';
 import type { SplitRow } from '../components/SplitEditor';
+import FilterPopover from '../components/FilterPopover';
+import { filtersFromParams, hasUrlFilters, isActiveSort, sortButtonLabel, SORT_OPTIONS, type FilterDraft } from '../components/filterModel';
+import DateRangePopover from '../components/DateRangePopover';
+import NoticeStrip, { NoticeChevron } from '../components/NoticeStrip';
+import ManualImportModal from '../components/ManualImportModal';
+import MerchantPicker from '../components/MerchantPicker';
+import { chevronIcon, btnPrimary, btnSecondary } from '../components/settings/ui';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { filtersButtonLabel, phoneToolbarMode, reviewStripText, showClearAll, showReviewStrip } from '../lib/toolbar';
 
 interface DuplicateMatch {
   id: number;
@@ -33,6 +52,8 @@ interface TransactionAccount {
   owner: string;
   owners?: { id: number; displayName: string }[];
   isShared?: boolean;
+  logoUrl?: string | null;
+  color?: string | null;
 }
 
 interface TransactionCategory {
@@ -51,23 +72,108 @@ interface TransactionSplit {
   displayName: string;
   type: string;
   amount: number;
+  // Per-split (full-Monarch model): the leg's OWN merchant (null = inherit
+  // parent) and its own note.
+  merchant: TransactionMerchant | null;
+  note: string | null;
+}
+
+interface TransactionMerchant {
+  id: number;
+  name: string;
+  logoUrl?: string | null;
 }
 
 interface Transaction {
   id: number;
   date: string;
-  description: string;
+  description: string; // payee-preferred statement text
+  bankDescription?: string | null; // raw bank statement text (SimpleFIN/CSV rows)
   note: string | null;
   amount: number;
+  merchant: TransactionMerchant | null;
   account: TransactionAccount;
   category: TransactionCategory | null;
   splits: TransactionSplit[] | null;
+  needsReview?: boolean;
+  confidence?: number | null;
+  review?: {
+    status: string;
+    reason: string;
+    note: string | null;
+    assignee: { id: number; displayName: string } | null;
+  } | null;
+  // Present when this row is the OUT leg of a linked transfer: the in leg is
+  // hidden from the list and its account is shown here as the destination.
+  transfer?: {
+    linkId: number;
+    confidence: number | null;
+    linkedBy: string; // auto | manual
+    toTransactionId: number;
+    toAccount: { id: number; name: string; lastFour: string | null };
+    toDate: string;
+  } | null;
+}
+
+interface HouseholdUser { id: number; displayName: string }
+
+interface Merchant {
+  id: number;
+  name: string;
+  logo_url?: string | null;
+  suppress_rule_suggest?: number;
+  txn_count?: number;
+}
+
+/** "1 transaction" / "2 transactions". */
+function txnCount(n: number): string {
+  return `${n.toLocaleString()} ${n === 1 ? 'transaction' : 'transactions'}`;
+}
+
+/** Stretches a 40px toolbar button's tap area to 44px without changing how it looks. */
+const HIT_44 = 'relative after:absolute after:inset-x-0 after:-inset-y-0.5';
+
+const PANEL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Puts focus back in the list: the row with this id, else (when a row was the
+ * opener but is gone, e.g. deleted) the first row, else the page heading.
+ */
+function focusList(rowId: string | null) {
+  const row = rowId !== null
+    ? (document.querySelector<HTMLElement>(`[data-row-id="${rowId}"]`) ?? document.querySelector<HTMLElement>('[data-row-id]'))
+    : null;
+  const target = row ?? document.querySelector<HTMLElement>('h1.page-title') ?? document.getElementById('mobile-bar-title');
+  if (!target) return;
+  if (!row) target.tabIndex = -1;
+  target.focus();
+}
+
+/** Display label for a transaction's vendor: merchant name, or raw statement as fallback. */
+function vendorLabel(t: { merchant?: TransactionMerchant | null; description: string }): string {
+  return t.merchant?.name ?? t.description;
+}
+
+/** Vendor label for a split leg: its own merchant, else the parent's, else raw statement. */
+function splitVendorLabel(t: Transaction, split: TransactionSplit): string {
+  return split.merchant?.name ?? t.merchant?.name ?? t.description;
+}
+
+/**
+ * Merchant name to SEED an editable split field: own merchant, else the parent's,
+ * else empty. Unlike splitVendorLabel it never falls back to the raw statement, so
+ * re-saving an inheriting leg (parent merchant null) sends '' → stays inherited
+ * rather than creating a merchant named after the statement text.
+ */
+function legMerchantSeed(t: Transaction, split: TransactionSplit): string {
+  return split.merchant?.name ?? t.merchant?.name ?? '';
 }
 
 interface Account {
   id: number;
   name: string;
   last_four: string | null;
+  classification?: string | null; // groups the Accounts filter tab
   owner: string;
   owners?: { id: number; displayName: string }[];
   isShared?: boolean;
@@ -79,11 +185,13 @@ interface Category {
   sub_name: string;
   display_name: string;
   type: string;
+  exclude_from_budget?: number;
 }
 
 // Field wrapper with validation error display
 function Field({
   label,
+  required,
   error,
   children,
 }: {
@@ -94,9 +202,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">{label}</label>
+      <label className="block text-[13px] font-bold text-content mb-[7px]">{label}{required && <span className="text-content-3 font-medium"> *</span>}</label>
       {children}
-      {error && <span className="text-[10px] text-[#ef4444] mt-0.5 block">Required</span>}
+      {error && <span className="text-[12px] font-medium text-negative mt-1.5 block">Required</span>}
     </div>
   );
 }
@@ -104,7 +212,9 @@ function Field({
 function TransactionForm({
   transaction,
   accounts,
+  accountsLoaded,
   categories,
+  merchants,
   onSave,
   onDelete,
   onClose,
@@ -112,14 +222,17 @@ function TransactionForm({
 }: {
   transaction?: Transaction;
   accounts: Account[];
+  accountsLoaded: boolean;
   categories: Category[];
+  merchants: Merchant[];
   onSave: (data: Record<string, unknown>) => void;
   onDelete?: () => void;
   onClose: () => void;
   duplicateMatch?: DuplicateMatch | null;
 }) {
-  const [date, setDate] = useState(transaction?.date ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(transaction?.date ?? todayYmd());
   const [accountId, setAccountId] = useState<number>(transaction?.account.id ?? (accounts[0]?.id ?? 0));
+  const [merchant, setMerchant] = useState(transaction ? vendorLabel(transaction) : '');
   const [description, setDescription] = useState(transaction?.description ?? '');
   const [note, setNote] = useState(transaction?.note ?? '');
   const [categoryId, setCategoryId] = useState<number>(transaction?.category?.id ?? 0);
@@ -146,26 +259,45 @@ function TransactionForm({
     }
     return stored.toString();
   });
-  const [txType, setTxType] = useState<'expense' | 'income'>(() => {
-    if (transaction?.category?.type === 'income') return 'income';
-    if (transaction?.splits?.[0]?.type === 'income') return 'income';
-    return 'expense';
-  });
   const [showErrors, setShowErrors] = useState(false);
   const [dupeExpanded, setDupeExpanded] = useState(false);
   const [splitNotification, setSplitNotification] = useState<string | null>(null);
 
   // Refs for focusing first invalid field
-  const dateRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLButtonElement>(null);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const accountRef = useRef<HTMLSelectElement>(null);
   const descRef = useRef<HTMLInputElement>(null);
   const categoryRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  // Filter categories by current toggle type
+  // Income and expense are both selectable; sign is derived from the chosen
+  // category's type (no manual Type toggle). Transfers are auto-labeled by sync,
+  // not hand-picked, so they're excluded from the manual picker.
   const filteredCategories = useMemo(() => {
-    return categories.filter((c) => c.type === txType);
-  }, [categories, txType]);
+    return categories.filter((c) => c.type !== 'transfer');
+  }, [categories]);
+
+  // Base direction for split mode (which has no single category) + the
+  // SplitEditor's reimbursement affordance: derive from the selected category,
+  // else the first split's category, else expense.
+  const derivedType: 'expense' | 'income' = (() => {
+    const sel = categories.find((c) => c.id === categoryId);
+    if (sel) return sel.type === 'income' ? 'income' : 'expense';
+    const firstSplitCat = splits?.[0] ? categories.find((c) => c.id === splits[0].categoryId) : undefined;
+    return firstSplitCat?.type === 'income' ? 'income' : 'expense';
+  })();
+
+  // Split legs inherit the parent's single sign, so only offer categories in the
+  // SAME direction (income → income; expense → expense).
+  // Offering a cross-type category would persist a leg whose stored sign
+  // contradicts its category (e.g. an income leg stored positive). The opposite
+  // direction is reached only through SplitEditor's dedicated reimbursement row.
+  const splitLegCategories = useMemo(
+    () => filteredCategories.filter((c) => (derivedType === 'income' ? c.type === 'income' : c.type !== 'income')),
+    [filteredCategories, derivedType],
+  );
 
   // Group filtered categories for the dropdown
   const groupedCategories = useMemo(() => {
@@ -198,23 +330,7 @@ function TransactionForm({
     return map;
   }, [accounts]);
 
-  // When category changes, auto-sync type toggle
-  const handleCategoryChange = (id: number) => {
-    setCategoryId(id);
-    const cat = categories.find((c) => c.id === id);
-    if (cat) {
-      setTxType(cat.type === 'income' ? 'income' : 'expense');
-    }
-  };
-
-  // When toggle changes, clear category if it doesn't match
-  const handleTypeChange = (newType: 'expense' | 'income') => {
-    setTxType(newType);
-    const current = categories.find((c) => c.id === categoryId);
-    if (current && current.type !== newType) {
-      setCategoryId(0);
-    }
-  };
+  const handleCategoryChange = (id: number) => setCategoryId(id);
 
   // Validation
   const parsedAmount = parseFloat(amount);
@@ -227,7 +343,7 @@ function TransactionForm({
   const isValid = !!(
     date &&
     accountId > 0 &&
-    description.trim() &&
+    merchant.trim() &&
     hasCategoryOrSplits &&
     amount !== '' &&
     !isNaN(parsedAmount)
@@ -236,7 +352,7 @@ function TransactionForm({
   const getFirstInvalidRef = () => {
     if (!date) return dateRef;
     if (accountId <= 0) return accountRef;
-    if (!description.trim()) return descRef;
+    // Merchant is a picker (no focusable input) — its error renders inline.
     if (!splitMode && categoryId <= 0) return categoryRef;
     if (amount === '' || isNaN(parsedAmount)) return amountRef;
     return null;
@@ -250,14 +366,15 @@ function TransactionForm({
       return;
     }
 
-    // Sign logic: explicit negative takes priority and reverses the default
-    let finalAmount: number;
-    if (parsedAmount < 0) {
-      finalAmount = txType === 'income' ? Math.abs(parsedAmount) : parsedAmount;
-    } else {
-      finalAmount = txType === 'income' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
-    }
+    // Sign derives from the category type (income stored negative, expenses
+    // positive), preserving the user's entered sign so refunds/reversals
+    // survive. In split mode there's no single category → use derivedType.
+    const catType = splitMode ? derivedType : (categories.find((c) => c.id === categoryId)?.type ?? 'expense');
+    const finalAmount = catType === 'income' ? -parsedAmount : parsedAmount;
 
+    // Statement (raw description): use the edited value; if left blank, preserve the
+    // existing raw statement on edits, and fall back to the merchant name for new entries.
+    const finalDescription = description.trim() || transaction?.description || merchant.trim();
     if (splitMode && splits) {
       // Splits are stored with absolute amounts in editor; apply sign from finalAmount
       const sign = finalAmount < 0 ? -1 : 1;
@@ -265,9 +382,9 @@ function TransactionForm({
         categoryId: s.categoryId,
         amount: +(s.amount * sign).toFixed(2),
       }));
-      onSave({ accountId, date, description, note: note || null, splits: finalSplits, amount: finalAmount });
+      onSave({ accountId, date, description: finalDescription, merchant: merchant.trim(), note: note || null, splits: finalSplits, amount: finalAmount });
     } else {
-      onSave({ accountId, date, description, note: note || null, categoryId, amount: finalAmount });
+      onSave({ accountId, date, description: finalDescription, merchant: merchant.trim(), note: note || null, categoryId, amount: finalAmount });
     }
   };
 
@@ -300,29 +417,56 @@ function TransactionForm({
 
   const errDate = showErrors && !date;
   const errAccount = showErrors && accountId <= 0;
-  const errDesc = showErrors && !description.trim();
+  const errMerchant = showErrors && !merchant.trim();
   const errCategory = showErrors && !splitMode && categoryId <= 0;
   const errAmount = showErrors && (amount === '' || isNaN(parsedAmount));
 
   const inputCls = (hasError: boolean) =>
-    `w-full px-3 py-2 border rounded-lg text-[13px] outline-none text-[var(--text-body)] ${
-      hasError ? 'border-[#ef4444] bg-[var(--bg-inline-error)]' : 'border-[var(--table-border)] bg-[var(--bg-input)]'
+    `w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border text-content text-sm outline-none placeholder:text-content-3 ${
+      hasError ? 'border-negative' : 'border-line-strong'
     }`;
+  const selectCls = (hasError: boolean) => `${inputCls(hasError)} pr-10 appearance-none cursor-pointer`;
 
   return (
-    <ResponsiveModal isOpen={true} onClose={onClose} maxWidth="32rem">
-      <h3 className="text-[15px] font-bold text-[var(--text-primary)] mb-4">
-        {transaction ? 'Edit Transaction' : 'Add Transaction'}
-      </h3>
-      <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
+    <ResponsiveModal
+      isOpen={true}
+      onClose={onClose}
+      title={transaction ? 'Edit transaction' : 'Add transaction'}
+      maxWidth="32rem"
+      footer={(
+        <div className="flex items-center gap-2.5">
+          {transaction && onDelete && <ConfirmDeleteButton onConfirmingChange={setConfirmingDelete} onConfirm={onDelete} />}
+          {!confirmingDelete && <div className="ml-auto flex items-center gap-2.5">
+            <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
+            <button type="button" onClick={handleSaveClick} aria-disabled={!isValid}
+              className={`${btnPrimary} ${!isValid ? 'opacity-50' : ''} ${duplicateMatch && isValid ? 'bg-warning hover:bg-warning' : ''}`}>
+              {duplicateMatch ? 'Save anyway' : transaction ? 'Save changes' : 'Add transaction'}
+            </button>
+          </div>}
+        </div>
+      )}
+    >
+      <div className="flex flex-col gap-5">
+        {!transaction && <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="add" />}
+        <div className="grid grid-cols-2 gap-4">
           <Field label="Date" required error={errDate}>
-            <input ref={dateRef} type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className={`${inputCls(!!errDate)} font-mono`} />
+            <div className="relative">
+              <button ref={dateRef} type="button" onClick={() => setDateOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={dateOpen}
+                className={`${inputCls(!!errDate)} flex items-center justify-between text-left cursor-pointer`}>
+                <span className={`truncate ${date ? 'text-content' : 'text-content-3'}`}>{date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose date…'}</span>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+              </button>
+              {dateOpen && (
+                <Popover onClose={() => setDateOpen(false)} label="Choose date" className="absolute top-12 left-0 z-50 w-[320px] max-w-[calc(100vw-48px)] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                  <Calendar value={date} onChange={(d) => { setDate(d); setDateOpen(false); }} />
+                </Popover>
+              )}
+            </div>
           </Field>
           <Field label="Account" required error={errAccount}>
+            <div className="relative">
             <select ref={accountRef} value={accountId} onChange={(e) => setAccountId(parseInt(e.target.value, 10))}
-              className={inputCls(!!errAccount)}>
+              className={selectCls(!!errAccount)}>
               <option value={0} disabled>Select account</option>
               {[...accountsByOwner.entries()].map(([owner, accts]) => (
                 <optgroup key={owner} label={owner}>
@@ -334,35 +478,31 @@ function TransactionForm({
                 </optgroup>
               ))}
             </select>
-          </Field>
-        </div>
-        <Field label="Description" required error={errDesc}>
-          <input ref={descRef} value={description} onChange={(e) => setDescription(e.target.value)}
-            className={inputCls(!!errDesc)} />
-        </Field>
-        <Field label="Note (optional)">
-          <input value={note} onChange={(e) => setNote(e.target.value)}
-            className={inputCls(false)} />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Type">
-            <div className="flex gap-2">
-              {(['expense', 'income'] as const).map((t) => (
-                <button key={t} onClick={() => handleTypeChange(t)}
-                  disabled={splitMode}
-                  className={`flex-1 py-2 text-[12px] font-semibold rounded-lg border-none cursor-pointer capitalize ${
-                    txType === t ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] btn-primary' : 'bg-[var(--btn-secondary-bg)] text-[var(--text-secondary)] btn-secondary'
-                  } ${splitMode ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {t}
-                </button>
-              ))}
+            {chevronIcon}
             </div>
           </Field>
+        </div>
+        <Field label="Merchant" required error={errMerchant}>
+          <MerchantPicker value={merchant} merchants={merchants} onSelect={setMerchant}
+            placeholder="Who was paid?" triggerClassName={inputCls(!!errMerchant)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Statement">
+            <input ref={descRef} value={description} onChange={(e) => setDescription(e.target.value)}
+              placeholder="Raw bank text (optional)" className={inputCls(false)} />
+          </Field>
+          <Field label="Note">
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional"
+              className={inputCls(false)} />
+          </Field>
+        </div>
+        <div>
           {!splitMode ? (
             <div>
               <Field label="Category" required error={errCategory}>
+                <div className="relative">
                 <select ref={categoryRef} value={categoryId} onChange={(e) => handleCategoryChange(parseInt(e.target.value, 10))}
-                  className={inputCls(!!errCategory)}>
+                  className={selectCls(!!errCategory)}>
                   <option value={0} disabled>Select category</option>
                   {groupedCategories.map((g) => (
                     <optgroup key={g.group} label={g.group}>
@@ -372,32 +512,28 @@ function TransactionForm({
                     </optgroup>
                   ))}
                 </select>
+                {chevronIcon}
+                </div>
               </Field>
-              <button onClick={handleEnterSplitMode}
-                className="text-[11px] text-[var(--color-accent)] bg-transparent border-none cursor-pointer mt-1 p-0 hover:underline">
+              <button type="button" onClick={handleEnterSplitMode}
+                className="tap-area text-[13px] font-semibold text-primary mt-2 max-md:mt-4">
                 Split across categories
               </button>
             </div>
           ) : (
             <div>
-              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.04em] mb-1">
-                Category <span className="text-[var(--color-accent)] normal-case font-normal">(split mode)</span>
+              <div className="text-[13px] font-bold text-content mb-[7px]">
+                Category <span className="text-primary font-semibold">· split</span>
               </div>
               {splits && splits.length >= 2 ? (
-                <div className="text-[12px] text-[var(--color-positive)] font-medium">
-                  ✓ {splits.length} categories assigned
-                  <button onClick={handleCancelSplit}
-                    className="ml-2 text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">
-                    Remove split
-                  </button>
+                <div className="text-[13px] text-positive font-semibold">
+                  {splits.length} categories assigned
+                  <button type="button" onClick={handleCancelSplit} className="tap-area ml-2.5 text-[13px] font-semibold text-content-3 hover:text-content">Remove split</button>
                 </div>
               ) : (
-                <div className="text-[12px] text-[var(--text-muted)]">
-                  Configure splits below
-                  <button onClick={handleCancelSplit}
-                    className="ml-2 text-[11px] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:underline">
-                    Cancel
-                  </button>
+                <div className="text-[13px] text-content-3">
+                  Configure the split below
+                  <button type="button" onClick={handleCancelSplit} className="ml-2.5 text-[13px] font-semibold text-content-3 hover:text-content">Cancel</button>
                 </div>
               )}
             </div>
@@ -412,9 +548,9 @@ function TransactionForm({
           <SplitEditor
             totalAmount={parseFloat(amount) || 0}
             initialSplits={splits ?? undefined}
-            categories={filteredCategories}
+            categories={splitLegCategories}
             allCategories={categories}
-            txType={txType}
+            txType={derivedType}
             onApply={handleSplitApply}
             onCancel={handleCancelSplit}
             onChange={(current) => setSplits(current.map(s => ({ categoryId: s.categoryId, amount: Math.abs(s.amount), isReimbursement: s.isReimbursement })))}
@@ -432,18 +568,18 @@ function TransactionForm({
 
       {/* Duplicate Warning */}
       {duplicateMatch && (
-        <div className="mt-4 rounded-lg border border-[var(--bg-inline-warning-border)] bg-[var(--bg-inline-warning)] p-3">
+        <div className="mt-5 rounded-[12px] border p-3.5" style={{ background: 'color-mix(in srgb, var(--warning) 12%, var(--surface))', borderColor: 'color-mix(in srgb, var(--warning) 35%, transparent)' }}>
           <div className="flex items-start gap-2">
-            <svg className="w-4 h-4 text-[var(--color-warning)] mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <div className="flex-1">
               <div className="flex items-center justify-between">
-                <p className="text-[12px] font-semibold text-[var(--text-inline-warning)] m-0">
-                  Possible duplicate detected — click Save again to confirm
+                <p className="text-[13px] font-semibold text-warning m-0">
+                  Possible duplicate — save again to confirm
                 </p>
                 <button onClick={() => setDupeExpanded(!dupeExpanded)}
-                  className="bg-transparent border-none cursor-pointer p-0.5 text-[var(--text-inline-warning)]">
+                  className="bg-transparent border-none cursor-pointer p-0.5 text-warning">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                     style={{ transform: dupeExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
                     <polyline points="9 18 15 12 9 6" />
@@ -452,19 +588,19 @@ function TransactionForm({
               </div>
               {dupeExpanded && (
                 <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12px]">
-                  <span className="text-[var(--text-inline-warning)]">Date</span>
-                  <span className="font-mono text-[var(--text-inline-warning)]">{duplicateMatch.date}</span>
-                  <span className="text-[var(--text-inline-warning)]">Description</span>
-                  <span className="text-[var(--text-inline-warning)]">{duplicateMatch.description}</span>
-                  <span className="text-[var(--text-inline-warning)]">Amount</span>
-                  <span className="font-mono font-semibold text-[var(--text-inline-warning)]">{fmt(Math.abs(duplicateMatch.amount))}</span>
+                  <span className="text-warning">Date</span>
+                  <span className="font-mono text-warning">{duplicateMatch.date}</span>
+                  <span className="text-warning">Description</span>
+                  <span className="text-warning">{duplicateMatch.description}</span>
+                  <span className="text-warning">Amount</span>
+                  <span className="font-mono font-semibold text-warning">{formatMoney(duplicateMatch.amount).text}</span>
                   {duplicateMatch.accountName && <>
-                    <span className="text-[var(--text-inline-warning)]">Account</span>
-                    <span className="text-[var(--text-inline-warning)]">{duplicateMatch.accountName}</span>
+                    <span className="text-warning">Account</span>
+                    <span className="text-warning">{duplicateMatch.accountName}</span>
                   </>}
                   {duplicateMatch.category && <>
-                    <span className="text-[var(--text-inline-warning)]">Category</span>
-                    <span className="text-[var(--text-inline-warning)]">{duplicateMatch.category}</span>
+                    <span className="text-warning">Category</span>
+                    <span className="text-warning">{duplicateMatch.category}</span>
                   </>}
                 </div>
               )}
@@ -473,27 +609,6 @@ function TransactionForm({
         </div>
       )}
 
-      <div className="flex gap-2 mt-5 justify-end">
-        {transaction && onDelete && (
-          <div className="mr-auto">
-            <ConfirmDeleteButton onConfirm={onDelete} />
-          </div>
-        )}
-        <button onClick={onClose}
-          className="px-4 py-2 text-[12px] font-semibold rounded-lg bg-[var(--btn-secondary-bg)] text-[var(--text-secondary)] border-none cursor-pointer btn-secondary">
-          Cancel
-        </button>
-        <button onClick={handleSaveClick}
-          className={`px-4 py-2 text-[12px] font-semibold rounded-lg border-none ${
-            isValid
-              ? duplicateMatch
-                ? 'bg-[var(--color-warning)] text-white cursor-pointer'
-                : 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] cursor-pointer btn-primary'
-              : 'bg-[var(--text-muted)] text-white cursor-not-allowed'
-          }`}>
-          {duplicateMatch ? 'Save Anyway' : 'Save'}
-        </button>
-      </div>
     </ResponsiveModal>
   );
 }
@@ -502,11 +617,15 @@ export default function TransactionsPage() {
   const { addToast } = useToast();
   const { hasPermission } = useAuth();
   const isMobile = useIsMobile();
+  useCategoryEmojis(); // re-render when stored category emojis load/change
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
+  // loading until the first answer; error keeps the toolbar and shows a Try again card (see `listFailed`)
+  const [listStatus, setListStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false); // true once /accounts answered, even with none
   const [categories, setCategories] = useState<Category[]>([]);
-  const allGroupNames = useMemo(() => [...new Set(categories.map(c => c.group_name))], [categories]);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
   const categoryGroups = useMemo(() => {
     const groups: { group: string; subs: { id: number; sub: string }[] }[] = [];
     const seen = new Set<string>();
@@ -520,57 +639,93 @@ export default function TransactionsPage() {
   }, [categories]);
   const [pendingSave, setPendingSave] = useState<Record<string, unknown> | null>(null);
   const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(null);
+  // After a user recategorizes a merchant's transaction, offer to learn a durable rule.
+  const [ruleSuggest, setRuleSuggest] = useState<{ merchantId: number; merchantName: string; categoryId: number; categoryName: string } | null>(null);
+  const [reviewCount, setReviewCount] = useState(0); // # transactions flagged needs_review
+  const [detailReviewNote, setDetailReviewNote] = useState('');
+  const [householdUsers, setHouseholdUsers] = useState<HouseholdUser[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
-  const [filterAccount, setFilterAccount] = useState('All');
+  // The list fetches on the debounced value so typing doesn't fire a request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+  const [filterAccount, setFilterAccount] = useState<string[]>([]);
   const [filterType, setFilterType] = useState('All');
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const [filterMerchant, setFilterMerchant] = useState<string[]>([]); // merchant ids as strings
+  const [amountOp, setAmountOp] = useState('');   // '' | 'gt' | 'lt' | 'eq' | 'bt'
+  const [amountValue, setAmountValue] = useState('');
+  const [amountMin, setAmountMin] = useState('');
+  const [amountMax, setAmountMax] = useState('');
+  const [filterNeedsReview, setFilterNeedsReview] = useState(false);
 
-  const toggleCategoryFilter = (value: string) => {
-    setFilterCategory(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-  };
-
-  const categoryFilterLabel = useMemo(() => {
-    if (filterCategory.length === 0) return 'All Categories';
-    if (filterCategory.length === 1) {
-      const v = filterCategory[0];
-      if (v.startsWith('group:')) return v.slice(6);
-      const cat = categories.find(c => c.id === parseInt(v.slice(4), 10));
-      return cat?.sub_name ?? v;
-    }
-    return `${filterCategory.length} categories`;
-  }, [filterCategory, categories]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
-        setShowCategoryDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
   const [datePreset, setDatePreset] = useState('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  const [page, setPage] = useState(1);
+  const PAGE = 50; // infinite-scroll increment
+  const [limit, setLimit] = useState(PAGE); // rows currently loaded; grows on scroll
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [pageSize, setPageSize] = useState(() => {
-    const stored = localStorage.getItem('ledger-page-size');
-    return stored ? parseInt(stored, 10) : 50;
-  });
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sortTouched, setSortTouched] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState('Categories');
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterDraft, setFilterDraft] = useState<FilterDraft>({ account: [], type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
+  const [editCell, setEditCell] = useState<{ id: number; field: 'vendor' | 'category' } | null>(null);
+  // Row whose Review badge has its quick-action popover open.
+  const [reviewPopId, setReviewPopId] = useState<number | null>(null);
+  // The page header sticks at the top of the scroll container; the card toolbar
+  // ("N transactions" + Edit multiple) stacks directly under it, so it needs the
+  // header's live height rather than a hardcoded offset — the header wraps on
+  // narrow viewports and changes height.
+  const pageHeaderRef = useRef<HTMLDivElement>(null);
+  const toolbarSentinelRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  const [toolbarStuck, setToolbarStuck] = useState(false);
+  const [cellSearch, setCellSearch] = useState('');
+  const [detail, setDetail] = useState<Transaction | null>(null);
+  const [detailNote, setDetailNote] = useState('');
+  // Click-to-edit header amount: the buffer is seeded only when editing starts,
+  // so concurrent commits can't clobber live typing.
+  const [detailAmount, setDetailAmount] = useState('');
+  const [amountEditing, setAmountEditing] = useState(false);
+  // Set by Escape so the blur that follows skips the commit.
+  const amountCancelled = useRef(false);
+  const [detailCalOpen, setDetailCalOpen] = useState(false);
+  // When a split leg is open in the detail panel, this is its split id (the
+  // panel still holds the parent `detail`); null = viewing the parent itself.
+  const [detailSplitId, setDetailSplitId] = useState<number | null>(null);
+  // Mirror of detailSplitId that's always current, so an in-flight refreshDetail
+  // re-seeds the leg that's open NOW (not the one open when the PATCH fired).
+  const detailSplitIdRef = useRef<number | null>(null);
+  // Detail panel as a dialog: the panel node, the list row that opened it (so focus
+  // can return there), and a flag to refocus the list once a deleted row has gone.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnRowId = useRef<string | null>(null);
+  const listFocusPending = useRef(false);
+  // True while the split-child note field has focus, so a concurrent PATCH's
+  // refresh doesn't clobber an in-progress edit.
+  const splitFieldFocused = useRef<'note' | null>(null);
+  const [detailSplitNote, setDetailSplitNote] = useState('');
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitMode, setSplitMode] = useState<'$' | '%'>('$');
+  const [splitOrigExpanded, setSplitOrigExpanded] = useState(false);
+  const [splitDraft, setSplitDraft] = useState<{ id?: number; categoryId: number | ''; amount: string; merchant: string; note?: string; pctRaw?: string }[]>([]);
 
   const getDateRange = useCallback((): { startDate?: string; endDate?: string } => {
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth();
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const fmt = (d: Date) => todayYmd(d);
     const monthStart = (yr: number, mo: number) => `${yr}-${String(mo + 1).padStart(2, '0')}-01`;
     const monthEnd = (yr: number, mo: number) => fmt(new Date(yr, mo + 1, 0));
     const q = Math.floor(m / 3);
@@ -598,14 +753,60 @@ export default function TransactionsPage() {
   // Modal
   const [editing, setEditing] = useState<Transaction | null | 'new'>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Set when ids came from the URL; the effect below drops any that don't exist once the lists load.
+  const pruneUrlIds = useRef(false);
 
-  // Open add form from FAB (via URL param or custom event)
+  // Open add form from FAB (via URL param or custom event), deep-link a merchant
+  // filter (/transactions?merchantId=12) or account filter (?accountId=5), or open
+  // a transaction's detail panel from the Reviews page (/transactions?review=34).
   useEffect(() => {
     if (searchParams.get('add') === '1') {
       setEditing('new');
       setSearchParams({}, { replace: true });
+      return;
     }
+    const mid = searchParams.get('merchantId');
+    if (mid) {
+      setFilterMerchant([mid]);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    const rev = searchParams.get('review');
+    if (rev) {
+      const id = parseInt(rev, 10);
+      setSearchParams({}, { replace: true });
+      apiFetch<{ data: Transaction }>(`/transactions/${id}`).then((r) => openDetail(r.data)).catch(() => {});
+      return;
+    }
+    // Account detail's "View all" (and Import's date range) arrive with an account, a date range,
+    // a search and filters together. Bad values are dropped; unknown ids are pruned once the lists load.
+    const aid = searchParams.get('accountId');
+    const url = filtersFromParams(searchParams);
+    const hasAccount = !!aid && /^\d+$/.test(aid);
+    if (!hasAccount && !hasUrlFilters(url)) return;
+    if (hasAccount) setFilterAccount([aid]);
+    if (url.date) { setDatePreset(url.date.preset); setCustomStart(url.date.start); setCustomEnd(url.date.end); }
+    if (url.search) { setSearch(url.search); setSearchOpen(true); }
+    const f = url.filter;
+    setFilterType(f.type); setFilterCategory(f.category); setFilterMerchant(f.merchant);
+    setAmountOp(f.op); setAmountValue(f.val); setAmountMin(f.min); setAmountMax(f.max);
+    setFilterNeedsReview(!!f.needsReview);
+    pruneUrlIds.current = true;
+    setSearchParams({}, { replace: true });
+    // openDetail is intentionally omitted (stable enough; guarded one-shot via param clear)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!pruneUrlIds.current || (!accounts.length && !categories.length)) return;
+    pruneUrlIds.current = false;
+    const subIds = new Set(categories.map((c) => `sub:${c.id}`));
+    const merchantIds = new Set(merchants.map((m) => String(m.id)));
+    const accountIds = new Set(accounts.map((a) => String(a.id)));
+    setFilterCategory((v) => v.filter((c) => subIds.has(c)));
+    setFilterMerchant((v) => v.filter((m) => merchantIds.has(m)));
+    setFilterAccount((v) => v.filter((a) => accountIds.has(a)));
+  }, [accounts, categories, merchants]);
 
   useEffect(() => {
     const handler = () => setEditing('new');
@@ -616,23 +817,36 @@ export default function TransactionsPage() {
   // Bulk edit mode
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [_bulkAction, setBulkAction] = useState<string | null>(null);
+  // Anchor for shift-click range selection: the last row clicked WITHOUT shift,
+  // or the far end of the last range. Ranges extend from here, so an earlier
+  // selection made before a gap is never swallowed by the range.
+  const selectionAnchor = useRef<number | null>(null);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkMerchant, setBulkMerchant] = useState('');
   const [bulkDate, setBulkDate] = useState('');
-  const [bulkAccountId, setBulkAccountId] = useState<number | ''>('');
+  const [bulkCalOpen, setBulkCalOpen] = useState(false);
   const [bulkCategoryId, setBulkCategoryId] = useState<number | ''>('');
-  const [bulkFind, setBulkFind] = useState('');
-  const [bulkReplace, setBulkReplace] = useState('');
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false);
+  // Phones confirm a bulk delete in a sheet instead of desktop's 3-second button.
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Monotonic request counter: a slow response for an older filter set must not
+  // overwrite the list rendered for the current one.
+  const loadSeq = useRef(0);
   const loadTransactions = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    setListStatus((s) => (s === 'error' ? 'loading' : s));
     const params = new URLSearchParams();
     const { startDate, endDate } = getDateRange();
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
-    params.set('limit', pageSize.toString());
-    params.set('offset', ((page - 1) * pageSize).toString());
-    if (search) params.set('search', search);
-    if (filterAccount !== 'All') params.set('accountId', filterAccount);
+    // Infinite scroll: always fetch from the top up to the current `limit`, so
+    // growing `limit` extends the list and edits/deletes preserve the window.
+    params.set('limit', limit.toString());
+    params.set('offset', '0');
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (filterAccount.length) params.set('accountIds', filterAccount.join(','));
     if (filterType !== 'All') params.set('type', filterType.toLowerCase());
     if (filterCategory.length > 0) {
       const groupNames = filterCategory.filter(v => v.startsWith('group:')).map(v => v.slice(6));
@@ -640,36 +854,458 @@ export default function TransactionsPage() {
       if (groupNames.length) params.set('groupNames', groupNames.join(','));
       if (catIds.length) params.set('categoryIds', catIds.join(','));
     }
+    if (filterMerchant.length > 0) params.set('merchantIds', filterMerchant.join(','));
+    if (amountOp) {
+      params.set('amountOp', amountOp);
+      if (amountOp === 'bt') { if (amountMin) params.set('amountMin', amountMin); if (amountMax) params.set('amountMax', amountMax); }
+      else if (amountValue) params.set('amountValue', amountValue);
+    }
+    if (filterNeedsReview) params.set('needsReview', '1');
     params.set('sortBy', sortBy);
     params.set('sortOrder', sortOrder);
 
-    const res = await apiFetch<{ data: Transaction[]; total: number }>(`/transactions?${params.toString()}`);
-    setTransactions(res.data);
-    setTotal(res.total);
-  }, [getDateRange, search, filterAccount, filterType, filterCategory, page, pageSize, sortBy, sortOrder]);
+    try {
+      const res = await apiFetch<{ data: Transaction[]; total: number }>(`/transactions?${params.toString()}`);
+      if (seq !== loadSeq.current) return;
+      setTransactions(res.data);
+      setTotal(res.total);
+      setListStatus('ready');
+    } catch {
+      if (seq !== loadSeq.current) return;
+      // One message, the Try again card: rows left over from another filter set would pass as current.
+      setListStatus('error');
+    }
+  }, [getDateRange, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview, limit, sortBy, sortOrder]);
 
-  const loadMeta = useCallback(async () => {
-    const [acctRes, catRes] = await Promise.all([
-      apiFetch<{ data: Account[] }>('/accounts'),
-      apiFetch<{ data: Category[] }>('/categories'),
-    ]);
-    setAccounts(acctRes.data);
-    setCategories(catRes.data);
+  useEffect(() => {
+    const el = pageHeaderRef.current;
+    if (!el) return;
+    const measure = () => setHeaderH(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobile]);
+
+  // Stuck-state for the toolbar's separator: a 1px sentinel above it leaves the
+  // viewport (inset by the header) exactly when the toolbar pins. IntersectionObserver
+  // rather than a scroll listener because the page scrolls in an ancestor container,
+  // not the window.
+  useEffect(() => {
+    const el = toolbarSentinelRef.current;
+    if (!el || headerH === 0) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setToolbarStuck(!entry.isIntersecting),
+      { threshold: 0, rootMargin: `-${Math.round(headerH)}px 0px 0px 0px` },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [headerH, isMobile]);
+
+  const loadMerchants = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ data: Merchant[] }>('/merchants');
+      setMerchants(res.data);
+    } catch { /* non-critical — picker keeps the last list */ }
   }, []);
 
-  const handleSort = (key: string) => {
-    if (key === sortBy) {
-      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(key);
-      setSortOrder('asc');
+  const loadReviewCount = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ data: Transaction[]; total: number }>('/transactions?needsReview=1&limit=1');
+      setReviewCount(res.total);
+    } catch { /* non-critical */ }
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      // GET /users `data` is the basic dropdown list: { id, username, display_name }.
+      const res = await apiFetch<{ data: { id: number; display_name: string }[] }>('/users');
+      setHouseholdUsers(res.data.map((u) => ({ id: u.id, displayName: u.display_name })));
+    } catch { /* non-critical — assignee picker just shows nobody */ }
+  }, []);
+
+  const metaSeq = useRef(0);
+  const loadMeta = useCallback(async () => {
+    const seq = ++metaSeq.current;
+    try {
+      const [, catRes, merchRes] = await Promise.all([
+        // Accounts answer on their own, so a failed categories or merchants load can't hide the no-accounts pointer.
+        apiFetch<{ data: Account[] }>('/accounts').then((r) => { setAccounts(r.data); setAccountsLoaded(true); return r; }),
+        apiFetch<{ data: Category[] }>('/categories'),
+        apiFetch<{ data: Merchant[] }>('/merchants'),
+      ]);
+      setCategories(catRes.data);
+      setMerchants(merchRes.data);
+    } catch (e) {
+      // Only the latest call speaks, so a remount's repeat request can't toast twice.
+      if (seq === metaSeq.current) addToast(e instanceof Error ? e.message : 'Failed to load accounts and categories', 'error');
     }
-    setPage(1);
+  }, [addToast]);
+
+  const applySort = (by: string, order: 'asc' | 'desc') => {
+    setSortBy(by); setSortOrder(order); setSortTouched(true); setSortOpen(false); setLimit(PAGE);
+  };
+
+  // Date / Filters overlays — edits are staged in a draft, committed on Apply.
+  const openFilterPopover = () => { setFilterDraft({ account: [...filterAccount], type: filterType, category: [...filterCategory], merchant: [...filterMerchant], op: amountOp, val: amountValue, min: amountMin, max: amountMax, needsReview: filterNeedsReview }); setFilterTab('Categories'); setFilterSearch(''); setSortOpen(false); setFilterOpen(true); };
+  const applyFilters = () => {
+    setFilterAccount(filterDraft.account); setFilterType(filterDraft.type); setFilterCategory(filterDraft.category); setFilterMerchant(filterDraft.merchant);
+    setAmountOp(filterDraft.op); setAmountValue(filterDraft.val); setAmountMin(filterDraft.min); setAmountMax(filterDraft.max);
+    setFilterNeedsReview(!!filterDraft.needsReview);
+    setFilterOpen(false);
+  };
+  const clearDate = () => { setDatePreset('all'); setCustomStart(''); setCustomEnd(''); };
+  const clearFilters = () => {
+    setFilterDraft({ account: [], type: 'All', category: [], merchant: [], op: '', val: '', min: '', max: '', needsReview: false });
+    setFilterAccount([]); setFilterType('All'); setFilterCategory([]); setFilterMerchant([]);
+    setAmountOp(''); setAmountValue(''); setAmountMin(''); setAmountMax(''); setFilterNeedsReview(false);
+  };
+  // Clear every active filter (search + date + filters) without opening a popover.
+  const clearAll = () => { setSearch(''); setSearchOpen(false); clearDate(); clearFilters(); };
+
+  // Persist "always categorize {merchant} as {category}" + back-apply to existing rows.
+  const applyMerchantRule = async () => {
+    if (!ruleSuggest) return;
+    const { merchantId, categoryId } = ruleSuggest;
+    setRuleSuggest(null);
+    try {
+      const res = await apiFetch<{ data: { affected: number } }>('/category-rules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchType: 'merchant', pattern: String(merchantId), categoryId, applyToExisting: true }),
+      });
+      const n = res.data.affected;
+      addToast(`Rule saved — ${n} matching transaction${n === 1 ? '' : 's'} updated`, 'success');
+      await loadTransactions();
+    } catch {
+      addToast('Failed to save rule', 'error');
+    }
+  };
+
+  // "Never for this merchant" — mute the prompt rather than answering it. Undone
+  // from Settings ▸ Merchants, so it is never a one-way door.
+  const muteMerchantRule = async () => {
+    if (!ruleSuggest) return;
+    const { merchantId, merchantName } = ruleSuggest;
+    setRuleSuggest(null);
+    try {
+      await apiFetch(`/merchants/${merchantId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppressRuleSuggest: true }),
+      });
+      await loadMerchants();
+      addToast(`Won't ask about ${merchantName} again — change it in Settings ▸ Merchants`, 'success');
+    } catch {
+      addToast('Failed to update merchant', 'error');
+    }
+  };
+
+  // Inline/panel edit — rebuilds the txn body (preserving splits) and PUTs.
+  const updateTxnField = async (t: Transaction, changes: { description?: string; merchant?: string; categoryId?: number; date?: string; note?: string | null; amount?: number }) => {
+    const isSplit = !!(t.splits && t.splits.length > 0);
+    let newAmount = t.amount;
+    const body: Record<string, unknown> = {
+      accountId: t.account.id,
+      date: changes.date ?? t.date,
+      description: changes.description ?? t.description,
+      note: changes.note !== undefined ? changes.note : t.note,
+    };
+    if (changes.merchant !== undefined) body.merchant = changes.merchant;
+    if (isSplit) {
+      // Amount + splits are driven by the split modal; other fields still edit.
+      // Carry each leg's id + merchant + note so an upsert-by-id save preserves
+      // per-leg data (and stable ids) when a parent field is edited.
+      body.splits = t.splits!.map((s) => ({ id: s.id, categoryId: s.categoryId, amount: s.amount, merchant: s.merchant?.name, note: s.note }));
+      body.amount = t.amount;
+    } else {
+      const categoryId = changes.categoryId ?? t.category?.id ?? null;
+      const catType = categories.find((c) => c.id === categoryId)?.type ?? t.category?.type ?? 'expense';
+      if (changes.amount !== undefined) {
+        // Entered (display) amount → stored sign from category, preserving the
+        // user's entered sign so refunds/reversals survive.
+        newAmount = catType === 'income' ? -changes.amount : changes.amount;
+      }
+      // A category-only change is a relabel, not a re-sign: the stored sign
+      // already encodes money direction (positive = out, negative = in)
+      // independent of category, so the amount is left untouched. This keeps
+      // refunds/reversals/withdrawals intact when recategorized.
+      body.categoryId = categoryId;
+      body.amount = newAmount;
+    }
+    try {
+      await apiFetch(`/transactions/${t.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      setEditCell(null); setCellSearch('');
+      if (changes.merchant !== undefined) loadMerchants(); // pick up any newly-created merchant
+      // Merge the committed change into the open panel LOCALLY (no refetch) so an
+      // in-progress edit the user may have started in another field isn't
+      // clobbered by a whole-panel reseed.
+      if (detail && detail.id === t.id) {
+        const newCat = (!isSplit && changes.categoryId != null)
+          ? categories.find((c) => c.id === changes.categoryId)
+          : undefined;
+        setDetail((prev) => {
+          if (!prev || prev.id !== t.id) return prev;
+          // The server resolves an open review when the category actually changes
+          // (or on any split save) — mirror that here so the panel's Review section
+          // doesn't stay stale after categorizing a flagged transaction.
+          const reviewResolved = isSplit || (changes.categoryId != null && changes.categoryId !== prev.category?.id);
+          return {
+            ...prev,
+            amount: isSplit ? prev.amount : newAmount,
+            date: changes.date ?? prev.date,
+            note: changes.note !== undefined ? changes.note : prev.note,
+            description: changes.description ?? prev.description,
+            merchant: changes.merchant !== undefined
+              ? (changes.merchant.trim() ? { id: prev.merchant?.id ?? -1, name: changes.merchant.trim() } : null)
+              : prev.merchant,
+            category: (!isSplit && changes.categoryId != null)
+              ? (newCat ? { id: newCat.id, groupName: newCat.group_name, subName: newCat.sub_name, displayName: newCat.display_name, type: newCat.type } : null)
+              : prev.category,
+            needsReview: reviewResolved ? false : prev.needsReview,
+            review: reviewResolved ? null : prev.review,
+          };
+        });
+      }
+      await loadTransactions();
+      // Offer to learn a durable merchant→category rule when the category changed —
+      // unless the user has muted suggestions for this merchant.
+      if (!isSplit && changes.categoryId != null && changes.categoryId !== t.category?.id && t.merchant && t.merchant.id > 0) {
+        const muted = merchants.find((m) => m.id === t.merchant!.id)?.suppress_rule_suggest === 1;
+        const cat = categories.find((c) => c.id === changes.categoryId);
+        if (cat && !muted) setRuleSuggest({ merchantId: t.merchant.id, merchantName: t.merchant.name, categoryId: cat.id, categoryName: cat.sub_name });
+      }
+    } catch {
+      addToast('Failed to update transaction', 'error');
+    }
+  };
+
+  // Display form of a stored amount for editing (income is stored negative).
+  const displayAmount = (t: Transaction) => {
+    const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
+    return String(catType === 'income' ? -t.amount : t.amount);
+  };
+  const seedDetail = (t: Transaction) => { setDetail(t); setDetailNote(t.note ?? ''); setDetailReviewNote(t.review?.note ?? ''); };
+  const refreshDetail = async (id: number) => {
+    try {
+      const res = await apiFetch<{ data: Transaction }>(`/transactions/${id}`);
+      seedDetail(res.data);
+      // Re-seed the leg that's open NOW (via the ref), and skip the note field if
+      // the user is editing it so an in-flight refresh can't clobber live typing.
+      const activeId = detailSplitIdRef.current;
+      const active = activeId != null ? (res.data.splits ?? []).find((s) => s.id === activeId) : undefined;
+      if (active) {
+        if (splitFieldFocused.current !== 'note') setDetailSplitNote(active.note ?? '');
+      } else if (activeId != null) {
+        setDetailSplitId(null); // leg gone (unsplit/merged) → fall back to parent view
+        detailSplitIdRef.current = null;
+      }
+    } catch { /* leave panel as-is */ }
+  };
+  const openDetail = (t: Transaction, split?: TransactionSplit) => {
+    if (detail) panelRef.current?.focus(); // switching to a split leg: the clicked button is about to unmount
+    else returnRowId.current = document.activeElement?.closest('[data-row-id]')?.getAttribute('data-row-id') ?? null;
+    setDetailSplitId(split?.id ?? null);
+    detailSplitIdRef.current = split?.id ?? null;
+    setAmountEditing(false);
+    setDetailCalOpen(false);
+    seedDetail(t);
+    if (split) setDetailSplitNote(split.note ?? '');
+    // List rows carry no review data — fetch the full record so the panel shows it.
+    void refreshDetail(t.id);
+  };
+
+  // Review-task actions from the detail panel; keep badge/pill/queue in sync after each.
+  const afterReviewChange = async (id: number) => { await refreshDetail(id); loadTransactions(); loadReviewCount(); window.dispatchEvent(new CustomEvent('reviews-changed')); };
+  const flagForReview = async () => {
+    if (!detail) return;
+    try { await apiFetch('/reviews/flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: detail.id }) }); afterReviewChange(detail.id); }
+    catch { addToast('Failed to mark to review', 'error'); }
+  };
+  /** Resolve a review by id — used by the detail panel and by the row badge popover. */
+  const markReviewedById = async (id: number) => {
+    try {
+      await apiFetch('/reviews/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: id }) });
+      // Refresh the open panel only when it's this transaction; the list, the
+      // header count and the sidebar badge always resync.
+      if (detail?.id === id) await refreshDetail(id);
+      loadTransactions();
+      loadReviewCount();
+      window.dispatchEvent(new CustomEvent('reviews-changed'));
+    } catch (err) {
+      // A 400 carries the server's plain-English reason (e.g. choose a category first).
+      addToast(err instanceof ApiError && err.status === 400 ? err.message : 'Failed to mark reviewed', 'error');
+    }
+  };
+  const markReviewed = async () => {
+    if (!detail) return;
+    await markReviewedById(detail.id);
+  };
+  // Split a linked transfer back into its two rows. The pair is remembered as
+  // rejected server-side, so the detector won't immediately re-pair them.
+  const unlinkTransfer = async (id: number) => {
+    try {
+      await apiFetch(`/transactions/${id}/transfer-link`, { method: 'DELETE' });
+      addToast('Transfer unlinked — the two transactions are separate again', 'success');
+      if (detail?.id === id) await refreshDetail(id);
+      panelRef.current?.focus(); // the Unlink button is gone; keep focus inside the panel
+      loadTransactions();
+    } catch { addToast('Failed to unlink transfer', 'error'); }
+  };
+  const patchReview = async (body: Record<string, unknown>) => {
+    if (!detail) return;
+    try { await apiFetch(`/reviews/${detail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); afterReviewChange(detail.id); }
+    catch { addToast('Failed to update review', 'error'); }
+  };
+  const closeDetail = () => { setDetail(null); setDetailSplitId(null); detailSplitIdRef.current = null; setAmountEditing(false); setDetailCalOpen(false); };
+
+  const deleteFromDetail = async () => {
+    if (!detail) return;
+    try {
+      await apiFetch(`/transactions/${detail.id}`, { method: 'DELETE' });
+      closeDetail();
+      addToast('Transaction deleted');
+      listFocusPending.current = true;
+      await loadTransactions();
+    } catch { addToast('Failed to delete transaction', 'error'); }
+  };
+
+  const openSplit = () => {
+    if (!detail) return;
+    const parentMerch = detail.merchant?.name ?? '';
+    const rows = (detail.splits && detail.splits.length > 0)
+      ? detail.splits.map((s) => ({ id: s.id, categoryId: s.categoryId as number | '', amount: Math.abs(s.amount).toFixed(2), merchant: splitVendorLabel(detail, s), note: s.note ?? '' }))
+      // New split: start every row at $0 (nothing pre-filled) and default each
+      // leg's merchant to the parent's (Monarch-style), which the user can change.
+      : [
+          { categoryId: (detail.category?.id ?? '') as number | '', amount: '', merchant: parentMerch, note: '' },
+          { categoryId: '' as number | '', amount: '', merchant: parentMerch, note: '' },
+        ];
+    setSplitMode('$');
+    setSplitOrigExpanded(false);
+    setSplitDraft(rows);
+    setSplitOpen(true);
+  };
+
+  const saveSplit = async () => {
+    if (!detail) return;
+    const sign = detail.amount < 0 ? -1 : 1;
+    const rows = splitDraft.filter((r) => r.categoryId !== '' && parseFloat(r.amount) > 0);
+    // Omit `merchant` so the parent merchant is untouched; the server uses it as
+    // the baseline for the NULL-inherit rule on each leg.
+    const body = {
+      accountId: detail.account.id,
+      date: detail.date,
+      description: detail.description,
+      note: detail.note,
+      amount: detail.amount,
+      splits: rows.map((r) => ({ id: r.id, categoryId: r.categoryId, amount: +(Math.abs(parseFloat(r.amount)) * sign).toFixed(2), merchant: r.merchant, note: r.note })),
+    };
+    try {
+      await apiFetch(`/transactions/${detail.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      setSplitOpen(false);
+      addToast('Split saved');
+      await refreshDetail(detail.id); // keep the panel open, showing the new split
+      await loadTransactions();
+    } catch { addToast('Failed to save split', 'error'); }
+  };
+
+  // Convert a split transaction back to a single category (the only editor is the
+  // detail panel now, so this is the un-split path). The parent amount is kept
+  // as-is; the category becomes the first assigned split's category, which the
+  // user can then re-pick from the (now single) category select.
+  const unsplitBusyRef = useRef(false); // blocks a second request from a rapid double tap
+
+  const removeSplitFromDetail = async () => {
+    if (!detail || !detail.splits?.length || unsplitBusyRef.current) return;
+    unsplitBusyRef.current = true;
+    const catId = detail.splits.find((s) => s.categoryId)?.categoryId ?? detail.splits[0].categoryId;
+    try {
+      await apiFetch(`/transactions/${detail.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: detail.account.id, date: detail.date, description: detail.description, note: detail.note, amount: detail.amount, categoryId: catId }),
+      });
+      setSplitOpen(false);
+      setDetailSplitId(null); detailSplitIdRef.current = null; // back to the single-category parent view
+      addToast('Split removed');
+      await refreshDetail(detail.id);
+      await loadTransactions();
+    } catch { addToast('Failed to remove split', 'error'); }
+    finally { unsplitBusyRef.current = false; }
+  };
+
+  // Edit ONE split leg's category / merchant / note from the split-child detail
+  // panel (amount is managed only in the modal). PATCHes just that leg.
+  const patchSplitField = async (changes: { categoryId?: number; merchant?: string; note?: string | null }) => {
+    if (!detail || detailSplitId == null) return;
+    try {
+      await apiFetch(`/transactions/${detail.id}/splits/${detailSplitId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes),
+      });
+      await refreshDetail(detail.id);
+      await loadTransactions();
+    } catch { addToast('Failed to update split', 'error'); }
   };
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
-  useEffect(() => { setPage(1); }, [datePreset, customStart, customEnd, search, filterAccount, filterType, filterCategory]);
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+  useEffect(() => { setLimit(PAGE); }, [datePreset, customStart, customEnd, debouncedSearch, filterAccount, filterType, filterCategory, filterMerchant, amountOp, amountValue, amountMin, amountMax, filterNeedsReview]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
+  useEffect(() => { loadReviewCount(); }, [loadReviewCount, transactions]);
+  useEffect(() => { detailSplitIdRef.current = detailSplitId; }, [detailSplitId]);
+
+  // Infinite scroll: when the sentinel nears the viewport, load one more batch.
+  // Re-arms after each fetch (transactions.length changes); stops when all loaded.
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el || transactions.length >= total) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) { io.disconnect(); setLimit((l) => l + PAGE); }
+    }, { rootMargin: '600px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [transactions.length, total]);
+
+  // Detail panel as a dialog: focus moves in on open and back to the opener on close.
+  const panelOpen = detail !== null;
+  useEffect(() => {
+    if (!panelOpen) return;
+    panelRef.current?.focus();
+    return () => focusList(returnRowId.current);
+  }, [panelOpen]);
+
+  // A deleted row's focus target is gone once the reload lands; park focus on the list.
+  useEffect(() => {
+    if (!listFocusPending.current) return;
+    listFocusPending.current = false;
+    focusList('');
+  }, [transactions]);
+
+  useEffect(() => {
+    // Modals stacked above the panel own the keyboard while they are open.
+    const aboveModal = splitOpen || bulkEditOpen || editing !== null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editCell) { setEditCell(null); setCellSearch(''); }
+        else if (panelOpen) { if (!aboveModal) closeDetail(); }
+        else if (bulkDeleteOpen || (isMobile && bulkEditOpen)) { /* the sheet closes itself */ }
+        else if (bulkMode) { setBulkMode(false); setSelectedIds(new Set()); }
+        return;
+      }
+      // Keep Tab / Shift+Tab inside the open panel.
+      if (e.key !== 'Tab' || !panelOpen || aboveModal) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const items = [...panel.querySelectorAll<HTMLElement>(PANEL_FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+      if (items.length === 0) { e.preventDefault(); panel.focus(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!panel.contains(active) || active === panel) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+      else if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [editCell, bulkMode, panelOpen, splitOpen, bulkEditOpen, bulkDeleteOpen, isMobile, editing]);
 
   const handleSave = async (data: Record<string, unknown>) => {
     try {
@@ -699,6 +1335,7 @@ export default function TransactionsPage() {
       }
       setEditing(null);
       addToast('Transaction saved');
+      loadMerchants(); // a new merchant may have been created
       loadTransactions();
     } catch {
       addToast('Failed to save transaction', 'error');
@@ -743,503 +1380,1287 @@ export default function TransactionsPage() {
   const exitBulkMode = () => {
     setBulkMode(false);
     setSelectedIds(new Set());
-    setBulkAction(null);
+    selectionAnchor.current = null;
+    setBulkEditOpen(false);
     setBulkConfirmDelete(false);
+    setBulkDeleteOpen(false);
   };
+  const openBulkEdit = () => { if (selectedIds.size > 0) setBulkEditOpen(true); };
 
-  const applyBulkAction = async (action: string) => {
+  // A search or filter change can hide selected rows. Keep the selection to rows on
+  // screen, so Edit and Delete never touch transactions the person can't see.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const shown = new Set(transactions.map((t) => t.id));
+      const next = new Set([...prev].filter((id) => shown.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [transactions]);
+
+  // Net of the selected rows, in the list's sign convention (positive = money
+  // out). Only loaded transactions count — a stale id from a since-changed filter
+  // contributes nothing rather than a wrong figure.
+  const selectedTotal = transactions.reduce((sum, t) => (selectedIds.has(t.id) ? sum + t.amount : sum), 0);
+
+  // Apply all set fields (merchant / category / date) in a single bulk update.
+  const applyBulkEdit = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
+    const updates: Record<string, unknown> = {};
+    if (bulkMerchant.trim()) updates.merchant = bulkMerchant.trim();
+    if (bulkCategoryId) updates.categoryId = bulkCategoryId;
+    if (bulkDate) updates.date = bulkDate;
+    if (Object.keys(updates).length === 0) return;
     try {
-      if (action === 'date' && bulkDate) {
-        await apiFetch('/transactions/bulk-update', { method: 'POST', body: JSON.stringify({ ids, updates: { date: bulkDate } }) });
-      } else if (action === 'account' && bulkAccountId) {
-        await apiFetch('/transactions/bulk-update', { method: 'POST', body: JSON.stringify({ ids, updates: { accountId: bulkAccountId } }) });
-      } else if (action === 'category' && bulkCategoryId) {
-        await apiFetch('/transactions/bulk-update', { method: 'POST', body: JSON.stringify({ ids, updates: { categoryId: bulkCategoryId } }) });
-      } else if (action === 'findReplace' && bulkFind) {
-        await apiFetch('/transactions/bulk-update', { method: 'POST', body: JSON.stringify({ ids, updates: { description: { find: bulkFind, replace: bulkReplace } } }) });
-      } else if (action === 'delete') {
-        if (!bulkConfirmDelete) { setBulkConfirmDelete(true); setTimeout(() => setBulkConfirmDelete(false), 3000); return; }
-        await apiFetch('/transactions/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
-      } else { return; }
-      setBulkAction(null);
-      setBulkConfirmDelete(false);
-      const msg = action === 'delete' ? `Deleted ${ids.length} transactions` : `Updated ${ids.length} transactions`;
-      addToast(msg);
-      setSelectedIds(new Set());
+      await apiFetch('/transactions/bulk-update', { method: 'POST', body: JSON.stringify({ ids, updates }) });
+      addToast(`Updated ${txnCount(ids.length)}`);
+      setBulkMerchant(''); setBulkCategoryId(''); setBulkDate(''); setBulkCalOpen(false);
+      setBulkEditOpen(false);
+      if (isMobile) exitBulkMode(); // phones return to the list once the edit lands
+      if (updates.merchant) loadMerchants(); // a new merchant may have been created
       loadTransactions();
     } catch (_err) {
       addToast('Bulk operation failed', 'error');
     }
   };
 
-  // Group categories for bulk dropdown
-  const expenseCats = categories.filter((c) => c.type === 'expense');
-  const incomeCats = categories.filter((c) => c.type === 'income');
-  const catGroupsForBulk = new Map<string, Category[]>();
-  for (const c of [...expenseCats, ...incomeCats]) {
-    if (!catGroupsForBulk.has(c.group_name)) catGroupsForBulk.set(c.group_name, []);
-    catGroupsForBulk.get(c.group_name)!.push(c);
+  const deleteSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    // Phones already confirmed in the Delete sheet.
+    if (!isMobile && !bulkConfirmDelete) { setBulkConfirmDelete(true); setTimeout(() => setBulkConfirmDelete(false), 3000); return; }
+    setBulkDeleting(true);
+    try {
+      await apiFetch('/transactions/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+      setBulkConfirmDelete(false); setBulkDeleteOpen(false);
+      addToast(`Deleted ${txnCount(ids.length)}`);
+      setSelectedIds(new Set()); setBulkMode(false); setBulkEditOpen(false);
+      loadTransactions();
+    } catch (_err) {
+      addToast('Bulk operation failed', 'error');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+  const selectedMoney = formatMoney(selectedTotal, { showZero: true });
+
+  const hasMore = transactions.length < total;
+  const listFailed = listStatus === 'error';
+  const listLoading = listStatus === 'loading' && transactions.length === 0;
+  const listSettled = listStatus === 'ready';
+  const emptyText = debouncedSearch ? `Nothing matches “${debouncedSearch}”` : 'No transactions found for this period';
+  const listError = (
+    <LoadError title="Couldn’t load your transactions" message="Check your connection, then try again." onRetry={loadTransactions} />
+  );
+  const listSkeleton = (
+    <div aria-busy="true" aria-label="Loading transactions">
+      {[150, 110, 170, 90, 140, 120].map((w, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 px-4 md:px-6 py-3.5 border-t border-line first:border-t-0">
+          <div className="bg-surface-2 rounded-lg h-4" style={{ width: w }} />
+          <div className="bg-surface-2 rounded-lg h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+
+  const canEdit = hasPermission('transactions.edit');
+  // Rounded-square checkbox indicator (never a circle — circles read as radios).
+  const formatDateHeader = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  // Merchant name suggestions for the inline vendor picker — the real merchant list.
+  const vendorOptions = merchants.map((m) => m.name).sort((a, b) => a.localeCompare(b));
+  const sortLabel = sortButtonLabel(sortTouched, sortBy, sortOrder);
+  const DATE_PRESETS: { value: string; label: string }[] = [
+    { value: 'all', label: 'All time' }, { value: 'this-month', label: 'This month' }, { value: 'last-month', label: 'Last month' },
+    { value: 'this-quarter', label: 'This quarter' }, { value: 'last-quarter', label: 'Last quarter' },
+    { value: 'this-year', label: 'This year' }, { value: 'last-year', label: 'Last year' }, { value: 'ytd', label: 'Year to date' },
+    { value: 'custom', label: 'Custom range…' },
+  ];
+  const shortDate = (s: string) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  const dateLabel = datePreset === 'all' ? 'Date'
+    : datePreset === 'custom'
+      ? (customStart && customEnd ? `${shortDate(customStart)} – ${shortDate(customEnd)}` : customStart ? `From ${shortDate(customStart)}` : customEnd ? `Until ${shortDate(customEnd)}` : 'Custom')
+      : (DATE_PRESETS.find((p) => p.value === datePreset)?.label ?? 'Date');
+  const filterCount = filterAccount.length + (filterType !== 'All' ? 1 : 0) + filterCategory.length + filterMerchant.length + (amountOp ? 1 : 0) + (filterNeedsReview ? 1 : 0);
+  const anyActive = search !== '' || datePreset !== 'all' || filterCount > 0;
+  const groupedAll = Array.from(
+    categories.reduce((m, c) => { if (!m.has(c.group_name)) m.set(c.group_name, []); m.get(c.group_name)!.push(c); return m; }, new Map<string, Category[]>()).entries()
+  );
+  // The detail split modal applies one sign to every leg, so its category picker
+  // must offer only same-direction categories (income → income;
+  // expense → expense) — otherwise a leg is stored with a sign
+  // that contradicts its category. Direction comes from the transaction's
+  // category type (not its money-sign, so refunds/reversals stay in-family).
+  const detailBaseType: 'income' | 'expense' =
+    ((detail?.category?.type ?? detail?.splits?.[0]?.type) === 'income') ? 'income' : 'expense';
+  // Always keep any category already assigned to a split leg selectable — a
+  // reimbursement/expense leg on an income split (created via the Add form's
+  // reimbursement row) or legacy mixed data would otherwise render as a blank,
+  // un-reselectable dropdown and could be silently converted on save.
+  const draftCatIds = new Set(splitDraft.map((r) => r.categoryId).filter((v): v is number => v !== ''));
+  const splitModalGroups = groupedAll
+    .map(([group, subs]) => [
+      group,
+      subs.filter((c) => c.type !== 'transfer' && ((detailBaseType === 'income' ? c.type === 'income' : c.type !== 'income') || draftCatIds.has(c.id))),
+    ] as [string, Category[]])
+    .filter(([, subs]) => subs.length > 0);
+  const splitAlloc = splitDraft.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const splitRemainingVal = detail ? Math.abs(detail.amount) - splitAlloc : 0;
+  const splitValid = splitDraft.filter((r) => r.categoryId !== '' && parseFloat(r.amount) > 0).length >= 2 && Math.abs(splitRemainingVal) < 0.01;
+  // A split transaction renders as one row PER split (each with its own category
+  // + amount + a split marker); non-split txns render as a single row.
+  type DisplayRow = { t: Transaction; split?: TransactionSplit };
+  // Transactions in "hidden from budget" categories are shown for visibility but
+  // must not count toward the daily total (only the Transactions list displays
+  // them at all). For split txns, count only the non-hidden legs.
+  const excludedCatIds = new Set(categories.filter((c) => c.exclude_from_budget).map((c) => c.id));
+  const dayNet = (t: Transaction): number => {
+    if (t.splits && t.splits.length > 0) {
+      return t.splits.reduce((s, sp) => s + (excludedCatIds.has(sp.categoryId) ? 0 : sp.amount), 0);
+    }
+    return t.category && excludedCatIds.has(t.category.id) ? 0 : t.amount;
+  };
+  const dateGroups: { date: string; rows: DisplayRow[]; net: number }[] = [];
+  for (const t of transactions) {
+    const rows: DisplayRow[] = (t.splits && t.splits.length > 0) ? t.splits.map((s) => ({ t, split: s })) : [{ t }];
+    const last = dateGroups[dateGroups.length - 1];
+    if (last && last.date === t.date) { last.rows.push(...rows); last.net += dayNet(t); }
+    else dateGroups.push({ date: t.date, rows, net: dayNet(t) });
+  }
+  const displayRows = dateGroups.flatMap((g) => g.rows); // flat, split-expanded (mobile)
+  // Visual order, one entry per transaction: a split parent renders one row per
+  // leg but is a single selectable item, so ranges must not count it twice.
+  const orderedTxnIds: number[] = [];
+  {
+    const seen = new Set<number>();
+    for (const r of displayRows) if (!seen.has(r.t.id)) { seen.add(r.t.id); orderedTxnIds.push(r.t.id); }
   }
 
-  const hasActiveFilters = search !== '' || filterAccount !== 'All' || filterType !== 'All' || filterCategory.length > 0 || datePreset !== 'all';
-
-  const resetFilters = () => {
-    setSearch('');
-    setFilterAccount('All');
-    setFilterType('All');
-    setFilterCategory([]);
-    setDatePreset('all');
-    setCustomStart('');
-    setCustomEnd('');
+  /**
+   * Row click in bulk mode. Shift extends from the anchor to the clicked row and
+   * ADDS that span — anything selected before the anchor stays put, so selecting
+   * 1–2, then 7, then shift-clicking 10 gives 1, 2, 7, 8, 9, 10.
+   * Falls back to a plain toggle when there is no anchor, or when the anchor has
+   * scrolled out of the current result set (filter or date change).
+   */
+  const selectRow = (id: number, shiftKey: boolean) => {
+    const anchor = selectionAnchor.current;
+    const from = anchor == null ? -1 : orderedTxnIds.indexOf(anchor);
+    const to = orderedTxnIds.indexOf(id);
+    if (!shiftKey || from < 0 || to < 0 || from === to) {
+      toggleSelect(id);
+      selectionAnchor.current = id;
+      return;
+    }
+    const [lo, hi] = from < to ? [from, to] : [to, from];
+    const span = orderedTxnIds.slice(lo, hi + 1);
+    setSelectedIds((prev) => new Set([...prev, ...span]));
+    // The far end becomes the new anchor so a further shift-click keeps extending.
+    selectionAnchor.current = id;
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const showFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showTo = Math.min(page * pageSize, total);
+  // Fork glyph: one trunk in from the left splitting into two arrowed branches
+  // (visually distinct from the toolbar Sort icon's opposed vertical arrows).
+  const splitIcon = (size = 12) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12h6c2.4 0 3.6-1.1 5-2.5L18 6" />
+      <path d="M3 12h6c2.4 0 3.6 1.1 5 2.5L18 18" />
+      <path d="M14 6h4v4" />
+      <path d="M14 18h4v-4" />
+    </svg>
+  );
+
+  // A row opens the panel (or toggles its checkbox in multi-edit mode) on click, or on
+  // Enter / Space when the row itself has focus; keys pressed inside a cell's own
+  // controls (search box, badge button) are left alone.
+  const activateRow = (e: { shiftKey: boolean }, t: Transaction, split?: TransactionSplit) => {
+    if (bulkMode) selectRow(t.id, e.shiftKey); else if (canEdit) openDetail(t, split);
+  };
+  const onRowKeyDown = (e: React.KeyboardEvent, t: Transaction, split?: TransactionSplit) => {
+    if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault(); // Space must not scroll the page
+    activateRow(e, t, split);
+  };
+
+  const renderRow = (t: Transaction, split?: TransactionSplit) => {
+    const rowActive = bulkMode || canEdit; // rows that do nothing are not focusable
+    const checked = selectedIds.has(t.id);
+    // Split sub-row: parent merchant + this split's own category + amount + marker.
+    if (split) {
+      const scolor = getCategoryColorHex(split.groupName);
+      const sinitial = (splitVendorLabel(t, split)?.trim()?.[0] ?? '?').toUpperCase();
+      return (
+        <div key={`${t.id}-split-${split.id}`}
+          data-row-id={`${t.id}-split-${split.id}`} role={rowActive ? 'button' : undefined} tabIndex={rowActive ? 0 : undefined}
+          onClick={(e) => activateRow(e, t, split)} onKeyDown={(e) => onRowKeyDown(e, t, split)}
+          className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${bulkMode ? 'select-none' : ''}`}
+          style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined, boxShadow: 'inset 3px 0 0 color-mix(in srgb, var(--primary) 30%, transparent)' }}>
+          {bulkMode && (
+            <span className="w-5 h-5 shrink-0 rounded-[6px] flex items-center justify-center border-[1.5px]" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
+              {checked && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}
+            </span>
+          )}
+          <div className="flex-[1.4] min-w-0 flex items-center gap-2.5 pl-1">
+            {(split.merchant ?? t.merchant)?.logoUrl
+              ? <img src={((split.merchant ?? t.merchant)?.logoUrl) as string} alt="" className="w-[26px] h-[26px] shrink-0 rounded-full object-cover" />
+              : <span className="w-[26px] h-[26px] shrink-0 rounded-full flex items-center justify-center font-bold text-xs" style={{ background: `color-mix(in srgb, ${scolor} 16%, transparent)`, color: scolor }}>{sinitial}</span>}
+            <span className="font-semibold text-[15px] truncate">{splitVendorLabel(t, split)}</span>
+            <span className="shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(11)}</span>
+          </div>
+          <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-2 px-2">
+            <span className="text-[15px] leading-none">{getCategoryEmoji(split.subName, split.groupName)}</span>
+            <span className="truncate">{split.subName}</span>
+          </div>
+          <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-3"><VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={18} /><span className="truncate">{accountLabel(t.account)}</span></div>
+          <Money amount={split.amount} transfer={split.type === 'transfer'} className="w-[128px] shrink-0 text-right font-bold text-[15px]" />
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+      );
+    }
+    const isTransfer = (t.category?.type ?? t.splits?.[0]?.type) === 'transfer';
+    const isSplit = !!(t.splits && t.splits.length > 0);
+    const emoji = isSplit ? '🔀' : getCategoryEmoji(t.category?.subName ?? t.category?.groupName, t.category?.groupName);
+    const color = getCategoryColorHex(t.category?.groupName);
+    const initial = (vendorLabel(t)?.trim()?.[0] ?? '?').toUpperCase();
+    const vendorEditing = editCell?.id === t.id && editCell.field === 'vendor';
+    const categoryEditing = editCell?.id === t.id && editCell.field === 'category';
+    const vendorMatches = vendorOptions.filter((v) => v.toLowerCase().includes(cellSearch.toLowerCase())).slice(0, 40);
+    const catMatches = categories.filter((c) => `${c.sub_name} ${c.group_name}`.toLowerCase().includes(cellSearch.toLowerCase())).slice(0, 60);
+    return (
+      <div key={t.id}
+        data-row-id={String(t.id)} role={rowActive ? 'button' : undefined} tabIndex={rowActive ? 0 : undefined}
+        onClick={(e) => activateRow(e, t)} onKeyDown={(e) => onRowKeyDown(e, t)}
+        className={`flex items-center gap-3.5 px-6 border-b border-line cursor-pointer hover:bg-surface-2/40 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${bulkMode ? 'select-none' : ''}`}
+        style={{ height: 44, background: checked ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : undefined }}>
+        {bulkMode && (
+          <span className="w-5 h-5 shrink-0 rounded-[6px] flex items-center justify-center border-[1.5px]" style={{ borderColor: checked ? 'var(--primary)' : 'var(--line-strong)', background: checked ? 'var(--primary)' : 'transparent' }}>
+            {checked && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}
+          </span>
+        )}
+        {/* vendor cell (avatar + name), inline edit — outline encompasses the logo */}
+        <div className="relative flex-[1.4] min-w-0" onClick={(e) => { if (!bulkMode && canEdit) { e.stopPropagation(); setReviewPopId(null); setEditCell({ id: t.id, field: 'vendor' }); setCellSearch(''); } }}>
+          <div className={`group flex items-center gap-2.5 h-9 pl-1 pr-2 rounded-[8px] border transition-colors ${vendorEditing ? 'border-primary' : 'border-transparent hover:border-line-strong'}`}>
+            {t.merchant?.logoUrl
+              ? <img src={t.merchant.logoUrl} alt="" className="w-[26px] h-[26px] shrink-0 rounded-full object-cover" />
+              : <span className="w-[26px] h-[26px] shrink-0 rounded-full flex items-center justify-center font-bold text-xs" style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}>{initial}</span>}
+            <span className="font-semibold text-[15px] truncate flex-1">{vendorLabel(t)}</span>
+            {canEdit && !bulkMode && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className={`shrink-0 transition-opacity ${vendorEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}><path d="m6 9 6 6 6-6"/></svg>}
+          </div>
+          {vendorEditing && (
+            <div onClick={(e) => e.stopPropagation()} className="absolute top-9 left-0 z-[60] w-64 bg-elevated border border-line-strong rounded-[12px] shadow-md overflow-hidden">
+              <div className="p-2 border-b border-line"><input autoFocus value={cellSearch} onChange={(e) => setCellSearch(e.target.value)} placeholder="Search merchants…" className="w-full h-9 px-3 rounded-lg bg-surface-2 border border-line text-content text-sm outline-none" /></div>
+              <div className="max-h-60 overflow-y-auto p-1.5">
+                {cellSearch.trim() && !vendorMatches.some((v) => v.toLowerCase() === cellSearch.trim().toLowerCase()) && (
+                  <button onClick={() => updateTxnField(t, { merchant: cellSearch.trim() })} className="block w-full text-left px-3 py-2 rounded-lg text-sm text-primary font-medium hover:bg-surface-2">Create “{cellSearch.trim()}”</button>
+                )}
+                {vendorMatches.map((v) => (
+                  <button key={v} onClick={() => updateTxnField(t, { merchant: v })} className="block w-full text-left px-3 py-2 rounded-lg text-sm text-content hover:bg-surface-2 truncate">{v}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* category cell (inline edit; disabled for splits) */}
+        <div className="relative flex-1 min-w-0" onClick={(e) => { if (!bulkMode && !isSplit && canEdit) { e.stopPropagation(); setReviewPopId(null); setEditCell({ id: t.id, field: 'category' }); setCellSearch(''); } }}>
+          <div className={`group flex items-center gap-2 h-9 px-2 rounded-[8px] border transition-colors text-[13px] text-content-2 ${categoryEditing ? 'border-primary' : isSplit ? 'border-transparent' : 'border-transparent hover:border-line-strong'}`}>
+            <span className="text-[15px] leading-none">{emoji}</span>
+            <span className="truncate flex-1">{isSplit ? `Split (${t.splits!.length})` : (t.category?.subName ?? 'Uncategorized')}</span>
+            {t.needsReview && !isSplit && (
+              canEdit && !bulkMode
+                ? <NeedsReviewBadge onClick={() => { setEditCell(null); setReviewPopId((id) => (id === t.id ? null : t.id)); }} />
+                : <NeedsReviewBadge />
+            )}
+            {canEdit && !bulkMode && !isSplit && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className={`shrink-0 transition-opacity ${categoryEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}><path d="m6 9 6 6 6-6"/></svg>}
+          </div>
+          {reviewPopId === t.id && (
+            <div onClick={(e) => e.stopPropagation()} className="absolute top-9 right-0 z-[60] w-[248px] bg-elevated border border-line-strong rounded-[12px] shadow-md p-3">
+              <div className="text-[13px] font-bold text-content">To review</div>
+              <p className="text-[12px] text-content-3 leading-snug mt-1 mb-2.5">{NEEDS_REVIEW_HINT}</p>
+              <button onClick={() => { setReviewPopId(null); void markReviewedById(t.id); }}
+                className="w-full h-9 rounded-[10px] bg-primary text-on-primary font-bold text-[13px] border-none cursor-pointer">
+                Mark reviewed
+              </button>
+              <button onClick={() => { setReviewPopId(null); openDetail(t); }}
+                className="w-full h-8 mt-1.5 rounded-[10px] bg-transparent text-content-2 font-semibold text-[12px] border-none cursor-pointer hover:bg-surface-2">
+                Open details
+              </button>
+            </div>
+          )}
+          {categoryEditing && (
+            <div onClick={(e) => e.stopPropagation()} className="absolute top-9 left-0 z-[60] w-64 bg-elevated border border-line-strong rounded-[12px] shadow-md overflow-hidden">
+              <div className="p-2 border-b border-line"><input autoFocus value={cellSearch} onChange={(e) => setCellSearch(e.target.value)} placeholder="Search categories…" className="w-full h-9 px-3 rounded-lg bg-surface-2 border border-line text-content text-sm outline-none" /></div>
+              <div className="max-h-60 overflow-y-auto p-1.5">
+                {catMatches.map((c) => (
+                  <button key={c.id} onClick={() => updateTxnField(t, { categoryId: c.id })} className="flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-lg text-sm text-content hover:bg-surface-2">
+                    <span className="text-[15px] leading-none">{getCategoryEmoji(c.sub_name, c.group_name)}</span>
+                    <span className="truncate">{c.sub_name}</span>
+                    <span className="ml-auto text-xs text-content-3 truncate">{c.group_name}</span>
+                  </button>
+                ))}
+                {catMatches.length === 0 && <div className="px-3 py-2 text-sm text-content-3">{cellSearch.trim() ? <span className="block truncate">Nothing matches “{cellSearch.trim()}”</span> : 'No matches'}</div>}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* account — a linked transfer reads as one movement: from → to */}
+        <div className="flex-1 min-w-0 flex items-center gap-2 text-[13px] text-content-3">
+          <VendorAvatar name={t.account.name} src={t.account.logoUrl || undefined} color={t.account.color || 'var(--c-blue)'} size={18} />
+          {t.transfer ? (
+            <span className="truncate flex items-center gap-1.5" title={`${accountLabel(t.account)} → ${accountLabel(t.transfer.toAccount)}`}>
+              <span className="truncate">{accountLabel(t.account)}</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              <span className="truncate">{accountLabel(t.transfer.toAccount)}</span>
+            </span>
+          ) : (
+            <span className="truncate flex items-center gap-1.5">
+              {/* An unpaired transfer leg still has to say which way the money went —
+                  the amount column renders transfers as a bare magnitude. */}
+              {t.category?.type === 'transfer' && (
+                <span title={t.amount > 0 ? 'Money out' : 'Money in'} className="shrink-0 leading-none" style={{ color: 'var(--text-3)' }}>
+                  {t.amount > 0
+                    ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M9 7h8v8" /></svg>
+                    : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M17 7L7 17M15 17H7V9" /></svg>}
+                </span>
+              )}
+              <span className="truncate">{accountLabel(t.account)}</span>
+            </span>
+          )}
+        </div>
+        {/* amount */}
+        <Money amount={t.amount} transfer={isTransfer} className="w-[128px] shrink-0 text-right font-bold text-[15px]" />
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+    );
+  };
+
+  // Header controls, composed differently for desktop (one row) and phones
+  // (search field + filter icon, then date/sort chips; import/add in the app bar).
+  const filterPopoverEl = filterOpen && (
+              <FilterPopover
+                draft={filterDraft} setDraft={setFilterDraft}
+                categoryGroups={categoryGroups} accounts={accounts} merchants={merchants} categories={categories}
+                search={filterSearch} setSearch={setFilterSearch} tab={filterTab} setTab={setFilterTab}
+                onClear={clearFilters} onCancel={() => setFilterOpen(false)} onApply={applyFilters}
+                showNeedsReview
+              />
+            );
+  const nudgeEl = (<>
+          {/* Needs-review nudge — jumps to the needs-review filter */}
+          {reviewCount > 0 && (
+            <Link
+              to="/reviews"
+              className="flex items-center gap-1.5 h-10 px-3 rounded-[11px] font-semibold text-sm"
+              style={{ background: 'color-mix(in srgb, var(--warning) 16%, transparent)', color: 'var(--warning)' }}
+              title="Open the Review queue"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
+              {reviewCount} to review
+            </Link>
+          )}
+  </>);
+  const clearEl = (<>
+          {/* Clear all — shows whenever any filter/search/date is active */}
+          {anyActive && (
+            <button onClick={clearAll} className="h-10 px-2.5 text-primary hover:text-primary-hover font-semibold text-sm">
+              Clear
+            </button>
+          )}
+  </>);
+  const searchEl = (<>
+          {/* Search */}
+          {searchOpen ? (
+            // Width follows the window (not a fixed w-44) so the field gives way to the title and tabs on narrow desktops
+            <div className="flex items-center h-10 rounded-[11px] bg-surface border border-line-strong px-3 gap-2 w-[clamp(9rem,10vw,15rem)]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" autoCapitalize="off"
+                onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
+                className="flex-1 min-w-0 bg-transparent outline-none text-sm text-content" />
+              <button onClick={() => { setSearch(''); setSearchOpen(false); }} aria-label="Close search" className="shrink-0 text-content-3 hover:text-content"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" iconOnly aria-label="Search" onClick={() => setSearchOpen(true)} title="Search" active={!!search}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            </Button>
+          )}
+  </>);
+  const dateRangeEl = (<>
+          {/* Date range overlay (shared DateRangePopover) */}
+          <DateRangePopover
+            presets={DATE_PRESETS.filter((p) => p.value !== 'custom')}
+            value={{ preset: datePreset, start: customStart, end: customEnd }}
+            label={dateLabel}
+            active={datePreset !== 'all'}
+            iconOnly={isMobile}
+            clearValue={{ preset: 'all', start: '', end: '' }}
+            onOpen={() => { setSortOpen(false); setFilterOpen(false); setSearchOpen(false); }}
+            onApply={(v) => { setDatePreset(v.preset); setCustomStart(v.start); setCustomEnd(v.end); }}
+          />
+  </>);
+  const filtersEl = (<>
+          {/* Filters overlay (design system) */}
+          <div className="relative">
+            <Button variant="outline" size="sm" onClick={openFilterPopover} active={filterOpen || filterCount > 0}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+              Filters
+              {filterCount > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center">{filterCount}</span>}
+            </Button>
+            {filterPopoverEl}
+          </div>
+  </>);
+  const sortEl = (<>
+          {/* Sort */}
+          <div className="relative">
+            <Button variant="outline" size="sm" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); }} active={sortTouched}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
+              {isMobile ? 'Sort' : sortLabel}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+            </Button>
+            {sortOpen && isMobile && (
+              <BottomSheet isOpen onClose={() => setSortOpen(false)} title="Sort">
+                {/* The sheet always ticks the sort in force, including the untouched default. */}
+                {SORT_OPTIONS.map((o) => {
+                  const active = isActiveSort(o, true, sortBy, sortOrder);
+                  return (
+                    <button key={o.label} onClick={() => applySort(o.by, o.order)} aria-pressed={active} className={`flex items-center gap-3 w-[calc(100%+16px)] -mx-2 h-11 px-4 rounded-[10px] text-[15px] text-left ${active ? 'bg-surface-2 font-semibold text-content' : 'font-medium text-content-2'}`}>
+                      <span className="w-4 flex justify-center">{active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}</span>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </BottomSheet>
+            )}
+            {sortOpen && !isMobile && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
+                <div className="absolute top-12 right-0 z-50 w-60 bg-elevated border border-line-strong rounded-[12px] shadow-md p-1.5">
+                  {SORT_OPTIONS.map((o) => {
+                    const active = isActiveSort(o, sortTouched, sortBy, sortOrder);
+                    return (
+                      <button key={o.label} onClick={() => applySort(o.by, o.order)} className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-content hover:bg-surface-2">
+                        <span className="w-4 flex justify-center">{active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}</span>
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+  </>);
+  const importEl = (<>
+          {/* Manual Import — on-demand SimpleFIN pull for a date range */}
+          <PermissionGate permission="import.bank_sync">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} title="Pull transactions from your bank for a date range" aria-label="Manual import">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <span className="hidden md:inline">Manual Import</span>
+            </Button>
+          </PermissionGate>
+  </>);
+  const addEl = (<>
+          {/* Add (phones: app-bar action) */}
+          <PermissionGate permission="transactions.create" fallback="disabled">
+            <Button size="sm" onClick={() => setEditing('new')} aria-label="Add transaction">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span className="hidden md:inline">Add</span>
+            </Button>
+          </PermissionGate>
+  </>);
+  // Phones: search field with Filters inside (44px tap area), shown expanded or while selecting.
+  const phoneSearchField = (closable: boolean) => (
+    <div className="relative flex items-center flex-1 min-w-0 h-11 rounded-[12px] bg-surface border border-line-strong pl-3 gap-2">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="shrink-0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input autoFocus={closable} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" autoCapitalize="off"
+        className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-content placeholder:text-content-3" />
+      {search && (
+        <button onClick={() => setSearch('')} aria-label="Clear search" className="w-11 h-11 -my-px shrink-0 flex items-center justify-center text-content-3">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      )}
+      <button onClick={openFilterPopover} aria-label="Filters" className={`relative w-11 h-11 -my-px shrink-0 flex items-center justify-center ${filterOpen || filterCount ? 'text-primary' : 'text-content-2'}`}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        {filterCount > 0 && <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{filterCount}</span>}
+      </button>
+      {filterPopoverEl}
+    </div>
+  );
+  const toolbarMode = phoneToolbarMode(bulkMode, searchOpen);
+  // Last line of the pinned toolbar (above its divider), so it stays in view while scrolling.
+  const clearAllLine = showClearAll(anyActive, bulkMode) && (
+    <div className="flex justify-end -mt-0.5">
+      <button onClick={clearAll} className="tap-area text-primary hover:text-primary-hover font-semibold text-sm">Clear all</button>
+    </div>
+  );
+  const phoneToolbar = (
+    <div className="w-full flex flex-col gap-2">
+      {toolbarMode === 'select' && (<>
+        {phoneSearchField(false)}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[15px] font-bold text-content">Select transactions</span>
+          <Button variant="outline" size="sm" onClick={exitBulkMode} className={HIT_44}>Cancel</Button>
+        </div>
+      </>)}
+      {toolbarMode === 'search' && (<>
+        <div className="flex items-center gap-2">
+          {phoneSearchField(true)}
+          <Button variant="ghost" size="sm" iconOnly aria-label="Close search" onClick={() => { setSearch(''); setSearchOpen(false); }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </Button>
+        </div>
+        {clearAllLine}
+      </>)}
+      {toolbarMode === 'row' && (<>
+        <div className="flex items-center flex-nowrap gap-2">
+          <Button variant="outline" size="sm" iconOnly aria-label="Search transactions" title="Search" onClick={() => { setSortOpen(false); setSearchOpen(true); }} active={!!search}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </Button>
+          <div className="relative shrink-0">
+            <Button variant="outline" size="sm" iconOnly aria-label={filtersButtonLabel(filterCount)} title="Filters" onClick={openFilterPopover} active={filterOpen || filterCount > 0}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={filterCount > 0 ? 'var(--primary)' : 'var(--text-2)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+            </Button>
+            {filterCount > 0 && <span aria-hidden className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center pointer-events-none">{filterCount}</span>}
+            {filterPopoverEl}
+          </div>
+          <div className="shrink-0">{dateRangeEl}</div>
+          <div className="shrink-0 [&_button]:max-md:px-3 [&_button>svg:first-child]:hidden">{sortEl}</div>
+          <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)} className="max-md:px-3 shrink-0">Select</Button>
+          </PermissionGate>
+        </div>
+        {clearAllLine}
+      </>)}
+    </div>
+  );
+  // Under the pinned toolbar and touching its divider; scrolls away with the page.
+  const reviewStrip = isMobile && showReviewStrip(reviewCount, bulkMode) && (() => {
+    const t = reviewStripText(reviewCount);
+    return (
+      <NoticeStrip to="/reviews" label={t.label} className="items-center min-h-[44px] mb-4">
+        <span className="flex-1 min-w-0 truncate"><b>{t.lead}</b>{t.rest}</span>
+        <span className="inline-flex items-center gap-1 font-bold whitespace-nowrap">Review <NoticeChevron /></span>
+      </NoticeStrip>
+    );
+  })();
+  // Selection tick on phone rows: replaces the avatar in Select mode.
+  const tick = (state: boolean | 'mixed') => (
+    <span className="w-9 shrink-0 flex justify-center" aria-hidden>
+      <span className="w-6 h-6 rounded-[7px] flex items-center justify-center border-[1.5px]"
+        style={state ? { borderColor: 'var(--primary)', background: 'var(--primary)', color: 'var(--on-primary)' } : { borderColor: 'var(--line-strong)', background: 'var(--surface)' }}>
+        {state === 'mixed'
+          ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14"/></svg>
+          : state && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>}
+      </span>
+    </span>
+  );
+  // Merchant / Category / Date, shared by the desktop side panel and the phone sheet.
+  const bulkEditFields = (<>
+    {/* Merchant */}
+    <div>
+      <div className="text-[13px] font-semibold text-content-2 mb-2">Merchant</div>
+      <MerchantPicker value={bulkMerchant} merchants={merchants} onSelect={setBulkMerchant} allowClear
+        placeholder="Choose a merchant…"
+        triggerClassName="w-full h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
+    </div>
+    {/* Category */}
+    <div>
+      <div className="text-[13px] font-semibold text-content-2 mb-2">Category</div>
+      <div className="relative">
+        <select value={bulkCategoryId} onChange={(e) => setBulkCategoryId(e.target.value ? parseInt(e.target.value) : '')} className="w-full h-11 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none appearance-none cursor-pointer">
+          <option value="">Choose category…</option>
+          {groupedAll.map(([group, subs]) => <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>)}
+        </select>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-3.5 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+    {/* Date */}
+    <div>
+      <div className="text-[13px] font-semibold text-content-2 mb-2">Date</div>
+      <div className="relative">
+        <button type="button" onClick={() => setBulkCalOpen((o) => !o)} className="w-full flex items-center justify-between h-11 px-3.5 rounded-[11px] bg-surface-2 border border-line text-sm"
+          style={{ borderColor: bulkCalOpen ? 'var(--primary)' : 'var(--line)' }}>
+          <span className={bulkDate ? 'text-content tabular-nums' : 'text-content-3'}>{bulkDate ? new Date(bulkDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Choose date…'}</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        </button>
+        {bulkCalOpen && (
+          // Phones: in the sheet's flow, so its scrolling body never clips the calendar.
+          <div className={`${isMobile ? 'mt-2' : 'absolute top-12 left-0 z-[60] w-[320px] shadow-md'} bg-elevated border border-line-strong rounded-[14px] p-3`}>
+            <Calendar value={bulkDate} onChange={(d) => { setBulkDate(d); setBulkCalOpen(false); }} />
+          </div>
+        )}
+      </div>
+    </div>
+  </>);
+  const allSelected = transactions.length > 0 && transactions.every((t) => selectedIds.has(t.id));
+  const bulkCount = selectedIds.size;
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="page-title text-[22px] font-bold text-[var(--text-primary)] m-0">Transactions</h1>
-          <p className="page-subtitle text-[var(--text-secondary)] text-[13px] mt-1">{total} transactions</p>
-        </div>
-        <div className="flex gap-2 desktop-only">
-          {bulkMode ? (
-            <button onClick={exitBulkMode}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[13px] font-semibold border-none cursor-pointer btn-secondary">
-              Exit Bulk Edit
-            </button>
-          ) : (
-            <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
-              <button onClick={() => setBulkMode(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[13px] font-semibold border-none cursor-pointer btn-secondary">
-                Bulk Edit
-              </button>
-            </PermissionGate>
-          )}
-          <PermissionGate permission="transactions.create" fallback="disabled">
-            <button onClick={() => setEditing('new')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[13px] font-semibold border-none cursor-pointer btn-secondary">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Transaction
-            </button>
-          </PermissionGate>
-        </div>
-      </div>
-
-      {/* Filter Bar */}
-      <div className={`bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] mb-5 px-4 py-3 ${isMobile ? 'flex flex-col gap-3' : 'flex gap-3 items-center'}`}>
-        <div className={`relative ${isMobile ? 'w-full' : 'flex-1'}`}>
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </span>
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search transactions..." autoCapitalize="off"
-            className="w-full py-2 pl-[34px] pr-2 border border-[var(--table-border)] rounded-lg text-[13px] outline-none bg-[var(--bg-input)] text-[var(--text-secondary)]" />
-        </div>
-        {isMobile ? (
-          <>
-            <div className="flex gap-2 items-center">
-              <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)}
-                className="flex-1 px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-                <option value="all">All Time</option>
-                <option value="this-month">This Month</option>
-                <option value="last-month">Last Month</option>
-                <option value="this-quarter">This Quarter</option>
-                <option value="last-quarter">Last Quarter</option>
-                <option value="this-year">This Year</option>
-                <option value="last-year">Last Year</option>
-                <option value="ytd">Year to Date</option>
-                <option value="custom">Custom Range...</option>
-              </select>
-              <button onClick={() => setShowMobileFilters(!showMobileFilters)}
-                className={`px-3 py-2 border rounded-lg text-[13px] font-medium cursor-pointer ${
-                  showMobileFilters || filterAccount !== 'All' || filterType !== 'All' || filterCategory.length > 0
-                    ? 'border-[#3b82f6] text-[#3b82f6] bg-[var(--bg-input)]'
-                    : 'border-[var(--table-border)] text-[var(--text-secondary)] bg-[var(--bg-input)]'
-                }`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-              </button>
-              {hasActiveFilters && (
-                <button onClick={resetFilters}
-                  className="px-2 py-2 text-[12px] text-[var(--text-secondary)] bg-transparent border-none cursor-pointer btn-ghost">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              )}
-            </div>
-            {datePreset === 'custom' && (
-              <div className="flex items-center gap-2">
-                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-                  className="flex-1 px-2 py-2 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] font-mono text-[var(--text-secondary)]" />
-                <span className="text-[var(--text-muted)] text-[11px]">to</span>
-                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
-                  className="flex-1 px-2 py-2 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] font-mono text-[var(--text-secondary)]" />
-              </div>
-            )}
-            {showMobileFilters && (
-              <div className="flex flex-col gap-2">
-                <select value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)}
-                  className="w-full px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-                  <option value="All">All Accounts</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id.toString()}>{accountLabel(a)}</option>
-                  ))}
-                </select>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-                  <option value="All">All Types</option>
-                  <option value="Income">Income</option>
-                  <option value="Expense">Expense</option>
-                </select>
-                <div className="relative" ref={isMobile ? categoryDropdownRef : undefined}>
-                  <button type="button" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                    className="w-full flex items-center justify-between px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)] cursor-pointer">
-                    <span className="truncate">{categoryFilterLabel}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`ml-2 flex-shrink-0 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
-                  </button>
-                  {showCategoryDropdown && (
-                    <div className="absolute z-50 mt-1 left-0 right-0 bg-[var(--bg-card)] border border-[var(--table-border)] rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                      {categoryGroups.map((g) => (
-                        <div key={g.group}>
-                          <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)] cursor-pointer hover:bg-[var(--bg-hover)]">
-                            <input type="checkbox" checked={filterCategory.includes(`group:${g.group}`)} onChange={() => toggleCategoryFilter(`group:${g.group}`)}
-                              className="accent-[var(--color-accent)]" />
-                            {g.group}
-                          </label>
-                          {g.subs.map((s) => (
-                            <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 pl-7 text-[13px] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-hover)]">
-                              <input type="checkbox" checked={filterCategory.includes(`sub:${s.id}`)} onChange={() => toggleCategoryFilter(`sub:${s.id}`)}
-                                className="accent-[var(--color-accent)]" />
-                              {s.sub}
-                            </label>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <select value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)}
-              className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-              <option value="All">All Accounts</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id.toString()}>{accountLabel(a)}</option>
-              ))}
-            </select>
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-              className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-              <option value="All">All</option>
-              <option value="Income">Income</option>
-              <option value="Expense">Expense</option>
-            </select>
-            <div className="relative" ref={!isMobile ? categoryDropdownRef : undefined}>
-              <button type="button" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                className="flex items-center justify-between px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)] cursor-pointer min-w-[160px]">
-                <span className="truncate">{categoryFilterLabel}</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`ml-2 flex-shrink-0 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              {showCategoryDropdown && (
-                <div className="absolute z-50 mt-1 left-0 bg-[var(--bg-card)] border border-[var(--table-border)] rounded-lg shadow-lg max-h-72 overflow-y-auto min-w-[220px]">
-                  {categoryGroups.map((g) => (
-                    <div key={g.group}>
-                      <label className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)] cursor-pointer hover:bg-[var(--bg-hover)]">
-                        <input type="checkbox" checked={filterCategory.includes(`group:${g.group}`)} onChange={() => toggleCategoryFilter(`group:${g.group}`)}
-                          className="accent-[var(--color-accent)]" />
-                        {g.group}
-                      </label>
-                      {g.subs.map((s) => (
-                        <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 pl-7 text-[13px] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-hover)]">
-                          <input type="checkbox" checked={filterCategory.includes(`sub:${s.id}`)} onChange={() => toggleCategoryFilter(`sub:${s.id}`)}
-                            className="accent-[var(--color-accent)]" />
-                          {s.sub}
-                        </label>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)}
-              className="px-3 py-2 border border-[var(--table-border)] rounded-lg text-[13px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-              <option value="all">All Time</option>
-              <option value="this-month">This Month</option>
-              <option value="last-month">Last Month</option>
-              <option value="this-quarter">This Quarter</option>
-              <option value="last-quarter">Last Quarter</option>
-              <option value="this-year">This Year</option>
-              <option value="last-year">Last Year</option>
-              <option value="ytd">Year to Date</option>
-              <option value="custom">Custom Range...</option>
-            </select>
-            {datePreset === 'custom' && (
-              <div className="flex items-center gap-2">
-                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-                  className="px-2 py-2 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] font-mono text-[var(--text-secondary)]" />
-                <span className="text-[var(--text-muted)] text-[11px]">to</span>
-                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
-                  className="px-2 py-2 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] font-mono text-[var(--text-secondary)]" />
-              </div>
-            )}
-            {hasActiveFilters && (
-              <button onClick={resetFilters}
-                className="text-[12px] text-[var(--text-secondary)] bg-transparent border-none cursor-pointer btn-ghost whitespace-nowrap flex items-center gap-1">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                Reset Filters
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Bulk Actions Toolbar */}
-      {bulkMode && !isMobile && (
-        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] px-4 py-3 mb-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-[13px] font-semibold text-[var(--text-primary)]">{selectedIds.size} selected</span>
-            <div className="h-4 w-px bg-[var(--table-border)]" />
-            {/* Set Date */}
-            <div className="flex items-center gap-1">
-              <input type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)}
-                className="px-2 py-1.5 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] font-mono text-[var(--text-secondary)]" />
-              <button onClick={() => applyBulkAction('date')} disabled={!bulkDate || selectedIds.size === 0}
-                className="px-2.5 py-1.5 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[11px] font-semibold border-none cursor-pointer disabled:opacity-40 btn-secondary">Set Date</button>
-            </div>
-            {/* Set Account */}
-            <div className="flex items-center gap-1">
-              <select value={bulkAccountId} onChange={(e) => setBulkAccountId(e.target.value ? parseInt(e.target.value) : '')}
-                className="px-2 py-1.5 border border-[var(--table-border)] rounded-lg text-[12px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-                <option value="">Account...</option>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{accountLabel(a)}</option>)}
-              </select>
-              <button onClick={() => applyBulkAction('account')} disabled={!bulkAccountId || selectedIds.size === 0}
-                className="px-2.5 py-1.5 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[11px] font-semibold border-none cursor-pointer disabled:opacity-40 btn-secondary">Set</button>
-            </div>
-            {/* Set Category */}
-            <div className="flex items-center gap-1">
-              <select value={bulkCategoryId} onChange={(e) => setBulkCategoryId(e.target.value ? parseInt(e.target.value) : '')}
-                className="px-2 py-1.5 border border-[var(--table-border)] rounded-lg text-[12px] bg-[var(--bg-input)] outline-none max-w-[180px] text-[var(--text-secondary)]">
-                <option value="">Category...</option>
-                {Array.from(catGroupsForBulk.entries()).map(([group, subs]) => (
-                  <optgroup key={group} label={group}>
-                    {subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-              <button onClick={() => applyBulkAction('category')} disabled={!bulkCategoryId || selectedIds.size === 0}
-                className="px-2.5 py-1.5 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[11px] font-semibold border-none cursor-pointer disabled:opacity-40 btn-secondary">Set</button>
-            </div>
-            {/* Find & Replace */}
-            <div className="flex items-center gap-1">
-              <input value={bulkFind} onChange={(e) => setBulkFind(e.target.value)} placeholder="Find..."
-                className="px-2 py-1.5 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] w-[100px] text-[var(--text-secondary)]" />
-              <input value={bulkReplace} onChange={(e) => setBulkReplace(e.target.value)} placeholder="Replace..."
-                className="px-2 py-1.5 border border-[var(--table-border)] rounded-lg text-[12px] outline-none bg-[var(--bg-input)] w-[100px] text-[var(--text-secondary)]" />
-              <button onClick={() => applyBulkAction('findReplace')} disabled={!bulkFind || selectedIds.size === 0}
-                className="px-2.5 py-1.5 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded-lg text-[11px] font-semibold border-none cursor-pointer disabled:opacity-40 btn-secondary">Replace</button>
-            </div>
-            <div className="h-4 w-px bg-[var(--table-border)]" />
-            {/* Delete */}
-            <button onClick={() => applyBulkAction('delete')} disabled={selectedIds.size === 0}
-              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border-none cursor-pointer disabled:opacity-40 ${
-                bulkConfirmDelete ? 'bg-[var(--btn-destructive-bg)] text-[var(--btn-destructive-text)] btn-destructive' : 'bg-[var(--btn-destructive-light-bg)] text-[var(--btn-destructive-light-text)] btn-destructive-light'
-              }`}>
-              {bulkConfirmDelete ? 'Confirm Delete?' : 'Delete Selected'}
-            </button>
-            {bulkConfirmDelete && (
-              <button onClick={() => setBulkConfirmDelete(false)}
-                className="text-[11px] text-[var(--text-secondary)] bg-transparent border-none cursor-pointer underline btn-ghost">Cancel</button>
-            )}
+      {/* Learn-a-rule prompt after recategorizing a merchant */}
+      {ruleSuggest && (
+        <div className={isMobile
+          ? 'fixed inset-x-3 bottom-3 z-[100] flex flex-col gap-3 rounded-[12px] bg-elevated p-4 shadow-md'
+          : 'fixed left-1/2 bottom-7 z-[100] flex items-center gap-3 rounded-full bg-elevated px-4 py-2.5 shadow-md'}
+          style={{ ...(isMobile ? { paddingBottom: 'max(16px, env(safe-area-inset-bottom))' } : { transform: 'translateX(-50%)', maxWidth: 'calc(100vw - 48px)' }), border: '2px solid var(--primary)' }}>
+          <span className="text-sm text-content">Always categorize <span className="font-bold">{ruleSuggest.merchantName}</span> as <span className="font-bold">{ruleSuggest.categoryName}</span>?</span>
+          <div className="flex items-center gap-2 md:gap-3">
+            <button onClick={applyMerchantRule} className="h-11 flex-1 md:flex-none md:h-9 px-4 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm shrink-0">Always</button>
+            <button onClick={() => setRuleSuggest(null)} className="h-11 flex-1 md:flex-none md:h-9 px-3 rounded-[10px] text-content-2 font-semibold text-sm hover:bg-surface-2 shrink-0">Not now</button>
+            <button onClick={muteMerchantRule} title={`Stop asking about ${ruleSuggest.merchantName}`}
+              className="h-11 flex-1 md:flex-none md:h-9 px-3 rounded-[10px] text-content-3 font-semibold text-sm hover:bg-surface-2 shrink-0">Never</button>
           </div>
         </div>
       )}
-      {isMobile ? (
-        /* Mobile: Standalone cards */
-        <div className="flex flex-col gap-1.5">
-          {transactions.map((t) => {
-            const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
-            const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
-            const isSplit = t.splits && t.splits.length > 0;
-            const hasReimbursement = isSplit && t.splits!.some(s => s.type !== t.splits![0].type);
-            return (
-              <div key={t.id}
-                onClick={() => { if (hasPermission('transactions.edit')) setEditing(t); }}
-                className={`bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)] px-3.5 py-2.5 flex justify-between items-center ${hasPermission('transactions.edit') ? 'cursor-pointer active:bg-[var(--bg-hover)]' : ''}`}>
-                <div className="flex-1 min-w-0 mr-3">
-                  <div className="text-[13px] font-medium text-[var(--text-primary)] truncate">{t.description}</div>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <span className="font-mono text-[10px] text-[var(--text-muted)]">{t.date}</span>
-                    <span className="text-[var(--text-muted)]">·</span>
-                    {isSplit ? (
-                      <>
-                        <SplitBadge
-                          colors={t.splits!.map(s => getCategoryColor(s.groupName, allGroupNames))}
-                          count={t.splits!.length}
-                          compact
-                        />
-                        {hasReimbursement && <ReimbursementBadge />}
-                      </>
-                    ) : t.category ? (
-                      <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
-                    ) : null}
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className={`text-[14px] font-mono font-semibold ${amtClass}`}>{amtText}</div>
-                  <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{accountLabel(t.account)}</div>
-                </div>
-              </div>
-            );
-          })}
-          {transactions.length === 0 && (
-            <p className="text-center py-8 text-[var(--text-muted)] text-[13px]">No transactions found for this period</p>
+      {/* Header + consolidated top-right controls */}
+      <PageHeader headerRef={pageHeaderRef} title="Transactions"
+        left={!isMobile && (
+          <div className="flex items-center gap-5 text-[15px] font-semibold">
+            <span className="text-primary border-b-2 border-primary pb-0.5">All</span>
+            <Link to="/recurring" className="text-content-3 hover:text-content pb-0.5">Recurring</Link>
+          </div>
+        )}
+        mobileTitle={bulkMode ? 'Select' : undefined}
+        mobileActions={bulkMode ? undefined : <>{importEl}{addEl}</>}
+        right={isMobile ? phoneToolbar : <>{nudgeEl}{clearEl}{searchEl}{dateRangeEl}{filtersEl}{importEl}{addEl}</>} />
+      {reviewStrip}
+
+      {listFailed ? listError : isMobile ? (
+        /* Phones: the same day groups as the desktop list, on two-line rows */
+        <>
+        <div className="bg-surface rounded-card border border-line shadow-sm overflow-hidden">
+          {bulkMode && transactions.length > 0 && (
+            <button type="button" role="checkbox" aria-checked={allSelected ? true : bulkCount > 0 ? 'mixed' : false} onClick={toggleSelectAll}
+              className="w-full flex items-center gap-3 px-4 min-h-[52px] text-left outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+              {tick(allSelected ? true : bulkCount > 0 ? 'mixed' : false)}
+              <span className="text-[15px] font-semibold text-content">Select all</span>
+              <span className="ml-auto font-mono text-[13px] text-content-3">{transactions.length.toLocaleString()} shown</span>
+            </button>
           )}
-        </div>
-      ) : (
-      <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--bg-card-border)] shadow-[var(--bg-card-shadow)]">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr>
-                {bulkMode && (
-                  <th className="w-8 px-2 py-2 border-b-2 border-[var(--table-border)]">
-                    <input type="checkbox" checked={selectedIds.size === transactions.length && transactions.length > 0}
-                      onChange={toggleSelectAll} className="cursor-pointer" />
-                  </th>
-                )}
-                <SortableHeader label="Date" sortKey="date" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <SortableHeader label="Description" sortKey="description" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <SortableHeader label="Account" sortKey="account" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <SortableHeader label="Category" sortKey="category" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <SortableHeader label="Sub-Category" sortKey="subcategory" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} />
-                <SortableHeader label="Amount" sortKey="amount" activeSortKey={sortBy} sortDir={sortOrder} onSort={handleSort} align="right" />
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => {
-                const catType = t.category?.type ?? t.splits?.[0]?.type ?? 'expense';
-                const { text: amtText, className: amtClass } = fmtTransaction(t.amount, catType);
-                const isSplit = t.splits && t.splits.length > 0;
-                const hasReimbursement = isSplit && t.splits!.some(s => s.type !== t.splits![0].type);
-                return (
-                  <tr key={t.id}
-                    onClick={() => { if (!bulkMode && hasPermission('transactions.edit')) { setEditing(t); } }}
-                    className={`border-b border-[var(--table-row-border)] transition-colors ${!bulkMode && hasPermission('transactions.edit') ? 'cursor-pointer hover:bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-                    {bulkMode && (
-                      <td className="w-8 px-2 py-2">
-                        <input type="checkbox" checked={selectedIds.has(t.id)}
-                          onChange={() => toggleSelect(t.id)} className="cursor-pointer" />
-                      </td>
-                    )}
-                    <td className="px-2.5 py-2 font-mono text-[12px] text-[var(--text-body)]">{t.date}</td>
-                    <td className="px-2.5 py-2 text-[var(--text-primary)] font-medium">{t.description}</td>
-                    <td className="px-2.5 py-2">
-                      <span className="inline-flex items-center gap-1.5 flex-wrap">
-                        <AccountBadge name={accountLabel(t.account)} />
-                        {t.account.isShared ? (
-                          <SharedBadge />
-                        ) : t.account.owners?.length === 1 ? (
-                          <OwnerBadge user={t.account.owners[0]} />
-                        ) : null}
-                      </span>
-                    </td>
-                    <td className="px-2.5 py-2">
-                      {isSplit ? (
-                        <div className="flex flex-col gap-0.5">
-                          {[...new Map(t.splits!.map(s => [s.groupName, s])).values()].map((s, gi) => (
-                            <div key={gi} className="flex items-center gap-1.5">
-                              <span style={{
-                                width: 7, height: 7, borderRadius: '50%',
-                                background: getCategoryColor(s.groupName, allGroupNames),
-                                display: 'inline-block', flexShrink: 0,
-                              }} />
-                              <span className="text-[11px] text-[var(--text-secondary)]">{s.groupName}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          {t.category && (
-                            <span style={{
-                              width: 7, height: 7, borderRadius: '50%',
-                              background: getCategoryColor(t.category.groupName, allGroupNames),
-                              display: 'inline-block', flexShrink: 0,
-                            }} />
-                          )}
-                          <span className="text-[11px] text-[var(--text-secondary)]">{t.category?.groupName ?? '—'}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2.5 py-2">
-                      {isSplit ? (
-                        <span className="inline-flex items-center gap-1.5 flex-wrap">
-                          <SplitBadge
-                            colors={t.splits!.map(s => getCategoryColor(s.groupName, allGroupNames))}
-                            count={t.splits!.length}
-                          />
-                          {hasReimbursement && <ReimbursementBadge />}
+          {dateGroups.map((g) => (
+            <div key={g.date}>
+              <GroupHeader label={formatDateHeader(g.date)} right={<Money amount={g.net} />} className="first:border-t-0" />
+              {g.rows.map(({ t, split }) => {
+                const isTransfer = (split ? split.type : (t.category?.type ?? t.splits?.[0]?.type)) === 'transfer';
+                const label = split ? splitVendorLabel(t, split) : vendorLabel(t);
+                const catName = split ? split.subName : t.category?.subName;
+                const catGroup = split ? split.groupName : t.category?.groupName;
+                const checked = selectedIds.has(t.id);
+                const key = split ? `${t.id}-split-${split.id}` : t.id;
+                const row = (
+                  <ListRow key={bulkMode ? undefined : key}
+                    rowId={split ? `${t.id}-split-${split.id}` : String(t.id)}
+                    onClick={!bulkMode && hasPermission('transactions.edit') ? () => openDetail(t, split) : undefined}
+                    // ListRow's outline-none hides its focus ring under Tailwind 4; outline-solid brings it back.
+                    className="focus-visible:outline-solid"
+                    leading={bulkMode ? tick(checked) : undefined}
+                    avatar={{ name: label, src: t.merchant?.logoUrl, color: catGroup ? getCategoryColorHex(catGroup) : 'var(--c-blue)' }}
+                    title={label}
+                    titleExtra={<>
+                      {split && <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-md" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)', color: 'var(--primary)' }} title="Part of a split transaction">{splitIcon(11)}</span>}
+                      {t.needsReview && !split && (
+                        <span role="img" aria-label="Needs review" title={NEEDS_REVIEW_HINT} className="shrink-0 inline-flex" style={{ color: 'var(--warning)' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
                         </span>
-                      ) : t.category ? (
-                        <CategoryBadge name={t.category.subName} color={getCategoryColor(t.category.groupName, allGroupNames)} />
-                      ) : (
-                        <span className="text-[11px] text-[var(--text-muted)]">—</span>
                       )}
-                    </td>
-                    <td className={`px-2.5 py-2 text-right font-mono font-semibold ${amtClass}`}>
-                      {amtText}
-                    </td>
-                  </tr>
+                    </>}
+                    subtitle={catName ? <CategoryTag color={catGroup ? getCategoryColorHex(catGroup) : undefined}>{catName}</CategoryTag> : <span className="text-content-3">Uncategorized</span>}
+                    amount={<Money amount={split ? split.amount : t.amount} transfer={isTransfer} />}
+                    meta={accountShortName(t.account)}
+                  />
+                );
+                if (!bulkMode) return row;
+                // Select mode: the whole row is one checkbox, so screen readers hear its state.
+                return (
+                  <div key={key} role="checkbox" aria-checked={checked} tabIndex={0}
+                    onClick={() => toggleSelect(t.id)}
+                    onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSelect(t.id); } }}
+                    className={`border-t border-line first:border-t-0 cursor-pointer outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${checked ? 'bg-primary/8' : ''}`}>
+                    {row}
+                  </div>
                 );
               })}
-              {transactions.length === 0 && (
-                <tr>
-                  <td colSpan={bulkMode ? 7 : 6} className="text-center py-8 text-[var(--text-muted)] text-[13px]">
-                    No transactions found for this period
-                  </td>
-                </tr>
+            </div>
+          ))}
+          {listLoading && listSkeleton}
+          {listSettled && transactions.length === 0 && (
+            <>
+              <p className="text-center pt-10 pb-2 text-content-3 text-sm m-0 truncate px-4">{emptyText}</p>
+              <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="empty" className="text-center pb-10 px-4" />
+            </>
+          )}
+        </div>
+        {bulkMode && (
+          <>
+            {/* Keeps the last rows clear of the pinned selection bar */}
+            <div className="h-24" aria-hidden />
+            <div className="fixed inset-x-0 bottom-0 z-[45] bg-surface border-t border-line shadow-md px-4 pt-3" style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="flex-1 min-w-0" aria-live="polite">
+                  <div className="text-[15px] font-bold text-content">{bulkCount} selected</div>
+                  <div className="text-[13px] text-content-3 tabular-nums">
+                    {bulkCount > 0
+                      ? <span className={selectedMoney.tone === 'positive' ? 'text-positive' : undefined}>{selectedMoney.text}</span>
+                      : 'Tick the ones to change'}
+                  </div>
+                </div>
+                <Button size="sm" onClick={openBulkEdit} disabled={bulkCount === 0} className={HIT_44}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  Edit
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setBulkDeleteOpen(true)} disabled={bulkCount === 0} className={HIT_44}>Delete</Button>
+              </div>
+            </div>
+          </>
+        )}
+        </>
+      ) : (
+      <div className="bg-surface rounded-card border border-line shadow-sm">
+        {/* 1px sentinel: drives the sticky toolbar's separator (see the observer above) */}
+        <div ref={toolbarSentinelRef} aria-hidden className="h-px -mb-px" />
+        {/* card toolbar — pinned under the page header so "Edit multiple" and the
+            selection controls stay reachable however far the list is scrolled */}
+        <div
+          className={`sticky z-10 bg-surface rounded-t-card ${toolbarStuck ? 'border-b border-line' : ''}`}
+          style={{ top: headerH }}
+        >
+        {!bulkMode ? (
+          <div className="flex items-center justify-between gap-4 px-6 py-4">
+            <span className="text-[15px] font-bold tabular-nums">{listSettled || transactions.length > 0 ? txnCount(total) : ''}</span>
+            <div className="flex items-center gap-2.5">
+              <PermissionGate permission="transactions.bulk_edit" fallback="hidden">
+                <button onClick={() => setBulkMode(true)} className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-surface-2 border border-line text-content font-semibold text-sm hover:bg-surface">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>
+                  Edit multiple
+                </button>
+              </PermissionGate>
+              {sortEl}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <button onClick={toggleSelectAll} className="w-[26px] h-[26px] rounded-[7px] flex items-center justify-center border-[1.5px]" style={{ borderColor: selectedIds.size ? 'var(--primary)' : 'var(--line-strong)', background: selectedIds.size ? 'var(--primary)' : 'transparent' }}>
+                {selectedIds.size > 0 && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14"/></svg>}
+              </button>
+              <span className="text-base font-bold">{selectedIds.size} selected</span>
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-content-3">·</span>
+                  {/* Same rule as the day totals: money in reads as +$X. */}
+                  <Money amount={selectedTotal} className="font-mono text-[15px] font-bold" />
+                </>
               )}
-            </tbody>
-          </table>
+              <span className="text-[13px] text-content-3">(ESC)</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <button onClick={exitBulkMode} className="h-10 px-4 rounded-[11px] bg-surface-2 border border-line-strong text-content font-semibold text-sm">Cancel</button>
+              <button onClick={openBulkEdit} disabled={selectedIds.size === 0}
+                className="flex items-center gap-2 h-10 px-4 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                Edit {selectedIds.size}
+              </button>
+              <button onClick={deleteSelected} disabled={selectedIds.size === 0}
+                className="h-10 px-4 rounded-[11px] font-bold text-sm disabled:opacity-50"
+                style={bulkConfirmDelete
+                  ? { background: 'var(--negative)', color: 'var(--on-primary)' }
+                  : { color: 'var(--negative)', background: 'color-mix(in srgb, var(--negative) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--negative) 40%, transparent)' }}>
+                {bulkConfirmDelete ? 'Confirm delete?' : 'Delete selected'}
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
+        {/* date-grouped rows */}
+        {dateGroups.map((g) => (
+          <div key={g.date}>
+            <div className="flex items-center justify-between px-6 py-2.5 bg-surface-2 border-t border-b border-line">
+              <span className="text-[13px] font-semibold text-content-2">{formatDateHeader(g.date)}</span>
+              <Money amount={g.net} className="font-mono text-xs" />
+            </div>
+            {g.rows.map((r) => renderRow(r.t, r.split))}
+          </div>
+        ))}
+        {listLoading && listSkeleton}
+        {listSettled && transactions.length === 0 && (
+          <>
+            <div className="text-center pt-10 pb-2 text-content-3 text-sm truncate px-4">{emptyText}</div>
+            <NoAccountsPointer loaded={accountsLoaded} count={accounts.length} place="empty" className="text-center pb-10 px-4" />
+          </>
+        )}
       </div>
       )}
+      {(editCell || reviewPopId != null) && <div className="fixed inset-0 z-[55]" onClick={() => { setEditCell(null); setCellSearch(''); setReviewPopId(null); }} />}
 
-      {/* Pagination */}
-      <div className={`mt-3 text-[13px] text-[var(--text-secondary)] ${isMobile ? 'flex flex-col items-center gap-2 pb-16' : 'flex justify-between items-center'}`}>
-        {!isMobile && (
-          <span className="font-mono text-[12px]">
-            {total > 0 ? `${showFrom}–${showTo} of ${total}` : 'No transactions'}
-          </span>
-        )}
-        <div className={`flex items-center ${isMobile ? 'justify-center' : 'gap-3'}`}>
-          {!isMobile && (
-            <div className="flex items-center gap-1.5">
-              <select value={pageSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setPageSize(v); localStorage.setItem('ledger-page-size', v.toString()); setPage(1); }}
-                className="px-2 py-1 border border-[var(--table-border)] rounded text-[12px] bg-[var(--bg-input)] outline-none text-[var(--text-secondary)]">
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={250}>250</option>
-              </select>
-              <span className="text-[12px] text-[var(--text-muted)]">per page</span>
+      {/* ===== Bulk-edit sidebar (multi-select) ===== */}
+      {bulkEditOpen && !isMobile && (
+        <>
+          <div onClick={() => setBulkEditOpen(false)} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
+          <div className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-line">
+              <div>
+                <div className="text-lg font-extrabold tracking-tight">Edit transactions</div>
+                <div className="text-[13px] text-content-3">{selectedIds.size} selected</div>
+              </div>
+              <button onClick={() => setBulkEditOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
-          )}
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
-              className="px-2.5 py-1 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded text-[12px] font-medium border-none cursor-pointer disabled:opacity-40 disabled:cursor-default btn-secondary">
-              ← Prev
-            </button>
-            <span className="font-mono text-[12px] text-[var(--text-muted)]">{page} / {totalPages}</span>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-              className="px-2.5 py-1 bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-text)] rounded text-[12px] font-medium border-none cursor-pointer disabled:opacity-40 disabled:cursor-default btn-secondary">
-              Next →
-            </button>
+            <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+              <p className="text-[13px] text-content-3 -mt-2">Set any of the fields below. Changes apply to {selectedIds.size === 1 ? 'the selected transaction' : `all ${selectedIds.size} selected transactions`}.</p>
+              {bulkEditFields}
+            </div>
+            <div className="flex items-center gap-2.5 px-6 py-4 border-t border-line">
+              <button onClick={() => setBulkEditOpen(false)} className="flex-1 h-11 rounded-[11px] bg-surface-2 border border-line-strong text-content font-semibold text-sm">Cancel</button>
+              <button onClick={applyBulkEdit} disabled={!(bulkMerchant.trim() || bulkCategoryId || bulkDate)} className="flex-1 h-11 rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Apply changes</button>
+            </div>
           </div>
-        </div>
+        </>
+      )}
+
+      {/* ===== Phones: bulk edit and delete as bottom sheets ===== */}
+      {isMobile && (
+        <ResponsiveModal isOpen={bulkEditOpen} onClose={() => setBulkEditOpen(false)} title={`Edit ${txnCount(bulkCount)}`}
+          footer={(
+            <div className="flex items-center gap-2.5">
+              <Button variant="secondary" onClick={() => setBulkEditOpen(false)} className={`flex-1 ${HIT_44}`}>Cancel</Button>
+              <Button onClick={applyBulkEdit} disabled={!(bulkMerchant.trim() || bulkCategoryId || bulkDate)} className={`flex-1 ${HIT_44}`}>Apply changes</Button>
+            </div>
+          )}>
+          <div className="flex flex-col gap-5">
+            <p className="text-[13px] text-content-3 m-0">Set any of the fields below. Changes apply to {bulkCount === 1 ? 'the selected transaction' : `all ${bulkCount} selected transactions`}.</p>
+            {bulkEditFields}
+          </div>
+        </ResponsiveModal>
+      )}
+      <ResponsiveModal isOpen={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title={`Delete ${txnCount(bulkCount)}?`}
+        footer={(
+          <div className="flex items-center gap-2.5">
+            <Button variant="secondary" onClick={() => setBulkDeleteOpen(false)} className={`flex-1 ${HIT_44}`}>Cancel</Button>
+            <Button onClick={deleteSelected} loading={bulkDeleting} className={`flex-1 ${HIT_44}`} style={{ background: 'var(--negative)' }}>{bulkDeleting ? 'Deleting…' : 'Delete'}</Button>
+          </div>
+        )}>
+        <p className="text-sm text-content-2 m-0 leading-relaxed">
+          {bulkCount === 1 ? 'The selected transaction' : `The ${bulkCount} selected transactions`} (<span className={`tabular-nums ${selectedMoney.tone === 'positive' ? 'text-positive' : ''}`}>{selectedMoney.text}</span>) will be removed from Ledger. You can’t undo this.
+        </p>
+      </ResponsiveModal>
+
+      {/* ===== Detail: bottom sheet on phones, side panel on desktop ===== */}
+      {detail && (() => {
+        // Header: who was paid, with "Category · Account" beneath. A split leg shows
+        // its own merchant and category; a split parent reads "Split".
+        const leg = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
+        const name = leg ? splitVendorLabel(detail, leg) : vendorLabel(detail);
+        const logo = leg ? (leg.merchant ?? detail.merchant)?.logoUrl : detail.merchant?.logoUrl;
+        const group = leg ? leg.groupName : detail.category?.groupName;
+        const category = leg ? leg.subName : (detail.splits && detail.splits.length > 0 ? 'Split' : (detail.category?.subName ?? 'Uncategorized'));
+        const avatar = <VendorAvatar name={name} src={logo || undefined} color={group ? getCategoryColorHex(group) : undefined} size={40} />;
+        const body = (
+          <>
+              {(() => {
+                const isTransfer = (detail.category?.type ?? detail.splits?.[0]?.type) === 'transfer';
+                const isSplit = !!(detail.splits && detail.splits.length > 0);
+                const fieldCls = 'w-full h-12 px-3.5 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none';
+                const labelCls = 'text-[13px] font-semibold text-content-2 mb-2';
+                // Click-to-edit header amount: seeded on click, committed on blur/Enter,
+                // Escape cancels (amountCancelled skips the commit on the ensuing blur).
+                const commitAmount = () => {
+                  setAmountEditing(false);
+                  if (amountCancelled.current) { amountCancelled.current = false; return; }
+                  if (isSplit) return;
+                  const entered = parseFloat(detailAmount);
+                  if (isNaN(entered) || entered === parseFloat(displayAmount(detail))) return;
+                  updateTxnField(detail, { amount: entered });
+                };
+                const statementText = detail.bankDescription ?? detail.description;
+                const copyStatement = () => {
+                  navigator.clipboard.writeText(statementText ?? '')
+                    .then(() => addToast('Statement copied'))
+                    .catch(() => addToast('Copy failed', 'error'));
+                };
+                const copyGlyph = (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                );
+
+                // ===== Split-CHILD view: one leg opened as its own transaction =====
+                const activeSplit = detailSplitId != null ? (detail.splits?.find((s) => s.id === detailSplitId) ?? null) : null;
+                if (activeSplit) {
+                  const childDir: 'income' | 'expense' = activeSplit.type === 'income' ? 'income' : 'expense';
+                  // Same-direction categories only (+ always keep the current one), so a
+                  // PATCH can't leave the leg's sign contradicting its category.
+                  const childGroups = groupedAll
+                    .map(([g, subs]) => [g, subs.filter((c) => c.type !== 'transfer' && ((childDir === 'income' ? c.type === 'income' : c.type !== 'income') || c.id === activeSplit.categoryId))] as [string, Category[]])
+                    .filter(([, subs]) => subs.length > 0);
+                  const mSeed = legMerchantSeed(detail, activeSplit);
+                  const commitSplitNote = () => { splitFieldFocused.current = null; if ((activeSplit.note ?? '') !== detailSplitNote) patchSplitField({ note: detailSplitNote }); };
+                  const roCls = `${fieldCls} mb-6 flex items-center text-content-2`;
+                  const dateLabel = new Date(detail.date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                  return (
+                    <>
+                      <div className="flex items-start justify-between gap-4 mb-6">
+                        <div className="min-w-0">
+                          <Money amount={activeSplit.amount} transfer={activeSplit.type === 'transfer'} className="block text-[28px] font-extrabold tracking-tight leading-none" />
+                        </div>
+                      </div>
+
+                      {/* This-is-a-split callout */}
+                      <div className="mb-6 rounded-[12px] border p-4 flex items-start gap-3" style={{ borderColor: 'color-mix(in srgb, var(--primary) 30%, var(--line))', background: 'color-mix(in srgb, var(--primary) 8%, transparent)' }}>
+                        <span className="shrink-0 mt-0.5" style={{ color: 'var(--primary)' }}>{splitIcon(16)}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] text-content-2 leading-snug">
+                            This is a split of <Money amount={detail.amount} transfer={isTransfer} className="font-bold" /> from <span className="font-bold text-content">{vendorLabel(detail)}</span> on {dateLabel}.
+                          </div>
+                          <button onClick={openSplit} className="mt-2.5 h-9 max-md:h-11 px-3.5 rounded-[9px] bg-primary text-on-primary font-bold text-[13px] shadow-sm">Open splits</button>
+                        </div>
+                      </div>
+
+                      <div className={labelCls}>Statement <span className="font-normal text-content-3">(from original)</span></div>
+                      <div className="mb-6 flex items-start gap-2">
+                        <span className="flex-1 text-[13px] text-content-2 leading-snug break-words">{statementText || '—'}</span>
+                        <button onClick={copyStatement} title="Copy statement"
+                          className="tap-area w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
+                          {copyGlyph}
+                        </button>
+                      </div>
+
+                      <div className={labelCls}>Merchant</div>
+                      <div className="mb-6">
+                        <MerchantPicker value={mSeed} merchants={merchants} allowClear
+                          onSelect={(name) => { if (name !== mSeed) patchSplitField({ merchant: name }); }}
+                          triggerClassName={`${fieldCls} font-semibold`} />
+                      </div>
+
+                      <div className={labelCls}>Category</div>
+                      <div className="relative mb-6">
+                        <select value={activeSplit.categoryId} onChange={(e) => e.target.value && patchSplitField({ categoryId: parseInt(e.target.value) })}
+                          className="w-full h-12 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none appearance-none cursor-pointer">
+                          {childGroups.map(([group, subs]) => (
+                            <optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name, c.group_name)} {c.sub_name}</option>)}</optgroup>
+                          ))}
+                        </select>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-4 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
+                      </div>
+
+                      <div className={labelCls}>Date <span className="font-normal text-content-3">(from original)</span></div>
+                      <div className={`${roCls} tabular-nums`}>{dateLabel}</div>
+
+                      <div className={labelCls}>Notes</div>
+                      <textarea value={detailSplitNote} onChange={(e) => setDetailSplitNote(e.target.value)} onFocus={() => { splitFieldFocused.current = 'note'; }} onBlur={commitSplitNote}
+                        placeholder="Add notes to this split…"
+                        className="w-full min-h-[76px] resize-y p-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-2" />
+                    </>
+                  );
+                }
+
+                return (
+                  <>
+                    <div className="flex items-start justify-between gap-4 mb-6">
+                      <div className="min-w-0">
+                        {!isSplit && canEdit && amountEditing ? (
+                          <CurrencyInput allowNegative autoFocus value={detailAmount} onChange={setDetailAmount} onBlur={commitAmount}
+                            onKeyDown={(e) => {
+                              // The input unmounts on blur, so hand focus to the panel rather than lose it.
+                              if (e.key === 'Enter') { e.currentTarget.blur(); panelRef.current?.focus(); }
+                              else if (e.key === 'Escape') { e.stopPropagation(); amountCancelled.current = true; e.currentTarget.blur(); panelRef.current?.focus(); }
+                            }}
+                            className="w-44 h-11 px-3 rounded-[11px] bg-surface-2 border border-primary text-content text-[22px] font-extrabold tabular-nums text-right outline-none" />
+                        ) : (
+                          <div
+                            className={`text-[28px] font-extrabold tracking-tight leading-none ${!isSplit && canEdit ? 'cursor-pointer hover:opacity-80' : ''}`}
+                            title={!isSplit && canEdit ? 'Click to edit amount' : undefined}
+                            onClick={() => { if (!isSplit && canEdit) { setDetailAmount(displayAmount(detail)); amountCancelled.current = false; setAmountEditing(true); } }}>
+                            <Money amount={detail.amount} transfer={isTransfer} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={labelCls}>Statement</div>
+                    <div className="mb-6 flex items-start gap-2">
+                      <span className="flex-1 text-[13px] text-content-2 leading-snug break-words">{statementText || '—'}</span>
+                      <button onClick={copyStatement} title="Copy statement"
+                        className="tap-area w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] text-content-3 hover:bg-surface-2 hover:text-content">
+                        {copyGlyph}
+                      </button>
+                    </div>
+
+                    <div className={labelCls}>Merchant</div>
+                    <div className="mb-6">
+                      <MerchantPicker value={vendorLabel(detail)} merchants={merchants}
+                        onSelect={(name) => { if (name && name !== vendorLabel(detail)) updateTxnField(detail, { merchant: name }); }}
+                        triggerClassName={`${fieldCls} font-semibold`} />
+                    </div>
+
+                    <div className="flex items-center justify-between mb-2 max-md:mb-4">
+                      <span className="text-[13px] font-semibold text-content-2">Category</span>
+                      {!isSplit && <button onClick={openSplit} className="tap-area text-[13px] font-semibold text-primary inline-flex items-center gap-1.5">{splitIcon(13)}Split</button>}
+                    </div>
+                    {isSplit ? (
+                      <div className="mb-6 rounded-[12px] border p-4" style={{ borderColor: 'color-mix(in srgb, var(--primary) 30%, var(--line))', background: 'color-mix(in srgb, var(--primary) 8%, transparent)' }}>
+                        <div className="flex items-center gap-2 mb-3" style={{ color: 'var(--primary)' }}>
+                          {splitIcon(15)}
+                          <span className="text-[13px] font-bold">Split across {detail.splits!.length} categories</span>
+                        </div>
+                        <div className="flex flex-col gap-1 mb-3.5">
+                          {detail.splits!.map((s) => {
+                            return (
+                              <button key={s.id} onClick={() => openDetail(detail, s)}
+                                className="flex items-center gap-2 text-sm text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-surface-2">
+                                <span className="text-[15px] leading-none">{getCategoryEmoji(s.subName, s.groupName)}</span>
+                                <span className="flex-1 truncate text-content">{splitVendorLabel(detail, s)} · {s.subName}</span>
+                                <Money amount={s.amount} transfer={s.type === 'transfer'} className="font-semibold" />
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-content-3 shrink-0"><path d="m9 6 6 6-6 6"/></svg>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button onClick={openSplit} className="w-full h-10 max-md:h-11 rounded-[10px] bg-primary text-on-primary font-bold text-sm shadow-sm">Open splits</button>
+                      </div>
+                    ) : (
+                      <div className="relative mb-6">
+                        <select value={detail.category?.id ?? ''} onChange={(e) => e.target.value && updateTxnField(detail, { categoryId: parseInt(e.target.value) })}
+                          className="w-full h-12 pl-3.5 pr-9 rounded-[11px] bg-surface-2 border border-line text-content text-[15px] outline-none appearance-none cursor-pointer">
+                          <option value="">🏷️ Uncategorized</option>
+                          {groupedAll.map(([group, subs]) => (
+                            <optgroup key={group} label={group}>
+                              {subs.map((c) => <option key={c.id} value={c.id}>{getCategoryEmoji(c.sub_name, c.group_name)} {c.sub_name}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-3 top-4 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
+                      </div>
+                    )}
+
+                    <div className={labelCls}>Date</div>
+                    <div className="relative mb-6">
+                      <button type="button" onClick={() => setDetailCalOpen((o) => !o)}
+                        className={`${fieldCls} flex items-center justify-between cursor-pointer`}
+                        style={{ borderColor: detailCalOpen ? 'var(--primary)' : undefined }}>
+                        <span className="tabular-nums">{new Date(detail.date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+                      </button>
+                      {detailCalOpen && (
+                        <Popover onClose={() => setDetailCalOpen(false)} label="Choose date" className="absolute top-[52px] left-0 z-[75] w-[320px] bg-elevated border border-line-strong rounded-[14px] shadow-md p-3">
+                          <Calendar value={detail.date} onChange={(d) => { updateTxnField(detail, { date: d }); setDetailCalOpen(false); }} />
+                        </Popover>
+                      )}
+                    </div>
+
+                    {detail.transfer && (
+                      <div className="mb-8">
+                        <div className={labelCls}>Transfer</div>
+                        <div className="rounded-[11px] border border-line p-3 bg-surface-2">
+                          <div className="flex items-center gap-2 text-[13px] text-content mb-1.5">
+                            <span className="truncate font-semibold">{accountLabel(detail.account)}</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                            <span className="truncate font-semibold">{accountLabel(detail.transfer.toAccount)}</span>
+                          </div>
+                          <p className="text-[12px] text-content-3 m-0">
+                            Shown as one transaction. The receiving row posted {detail.transfer.toDate}
+                            {detail.transfer.linkedBy === 'auto' ? ' · matched automatically' : ' · linked by hand'}.
+                          </p>
+                          {canEdit && (
+                            <button onClick={() => unlinkTransfer(detail.id)}
+                              className="mt-2.5 h-8 px-3 rounded-[9px] border border-line-strong bg-surface text-content-2 font-semibold text-[12.5px] cursor-pointer hover:text-content">
+                              Unlink — show as two transactions
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className={labelCls}>Notes</div>
+                    <textarea value={detailNote} onChange={(e) => setDetailNote(e.target.value)}
+                      onBlur={() => { if ((detail.note ?? '') !== detailNote) updateTxnField(detail, { note: detailNote }); }}
+                      placeholder="Add notes to this transaction…"
+                      className="w-full min-h-[76px] resize-y p-3 rounded-[11px] bg-surface-2 border border-line text-content text-sm outline-none mb-8" />
+
+                    {/* Review task */}
+                    {canEdit && (
+                      <div className="mb-8">
+                        <div className={labelCls}>Review</div>
+                        {detail.needsReview ? (
+                          <div className="rounded-[11px] border p-3" style={{ borderColor: 'color-mix(in srgb, var(--warning) 45%, var(--line))', background: 'color-mix(in srgb, var(--warning) 8%, transparent)' }}>
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                              <span className="text-[13px] font-semibold" style={{ color: 'var(--warning)' }}>
+                                {detail.review?.reason === 'auto_uncategorized' ? 'Uncategorized on import'
+                                  : detail.review?.reason === 'auto_low_confidence' ? 'Low-confidence auto-category'
+                                  : 'Marked to review'}
+                              </span>
+                              <button onClick={markReviewed} className="h-8 max-md:h-11 px-3 rounded-lg bg-primary text-on-primary font-bold text-[13px] shrink-0">Mark reviewed</button>
+                            </div>
+                            <div className="text-[12px] font-semibold text-content-3 mb-1">Assign to</div>
+                            <select value={detail.review?.assignee?.id ?? ''} onChange={(e) => patchReview({ assigneeId: e.target.value ? parseInt(e.target.value, 10) : null })}
+                              className="w-full h-10 max-md:h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none mb-3">
+                              <option value="">Unassigned</option>
+                              {householdUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                            </select>
+                            <div className="text-[12px] font-semibold text-content-3 mb-1">Review note</div>
+                            <textarea value={detailReviewNote} onChange={(e) => setDetailReviewNote(e.target.value)}
+                              onBlur={() => { if ((detail.review?.note ?? '') !== detailReviewNote) patchReview({ note: detailReviewNote }); }}
+                              placeholder="Why does this need review? What should happen?"
+                              className="w-full min-h-[60px] resize-y p-3 rounded-[10px] bg-surface-2 border border-line text-content text-sm outline-none" />
+                          </div>
+                        ) : (
+                          <button onClick={flagForReview} className="w-full h-11 rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm hover:bg-surface">
+                            Mark to review
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {hasPermission('transactions.delete') && (
+                      <ConfirmDeleteButton variant="block" onConfirm={deleteFromDetail}
+                        label="Delete transaction" confirmLabel="Delete permanently?" />
+                    )}
+                  </>
+                );
+              })()}
+          </>
+        );
+        if (isMobile) {
+          return (
+            <BottomSheet isOpen onClose={closeDetail} title={name} description={`${category} · ${accountLabel(detail.account)}`} icon={avatar} truncateDescription>
+              {/* The rule prompt sits over the bottom edge: extra room lets the actions scroll clear of it. */}
+              <div className={ruleSuggest ? 'pb-40' : ''}>{body}</div>
+            </BottomSheet>
+          );
+        }
+        return (
+          <>
+            <div onClick={closeDetail} className="fixed inset-0 z-[70]" style={{ background: 'var(--bg-modal)' }} />
+            <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="txn-panel-title" tabIndex={-1}
+              className="fixed top-0 right-0 bottom-0 z-[71] w-[440px] max-w-full bg-surface border-l border-line-strong shadow-md flex flex-col outline-none">
+              <div className="flex items-center gap-3 pl-5 pr-3 py-3 border-b border-line">
+                <span aria-hidden="true" className="shrink-0 flex">{avatar}</span>
+                <div className="flex-1 min-w-0">
+                  <h2 id="txn-panel-title" className="m-0 text-[16px] font-extrabold tracking-tight leading-tight truncate">{name}</h2>
+                  <div className="text-[13px] text-content-3 truncate mt-0.5">{category} · {accountLabel(detail.account)}</div>
+                </div>
+                <button onClick={closeDetail} aria-label="Close" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-[9px] text-content-2 hover:bg-surface-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-6">{body}</div>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ===== Split modal ===== */}
+      {splitOpen && detail && (() => {
+        const absTotal = Math.abs(detail.amount);
+        const balanced = Math.abs(splitRemainingVal) < 0.01;
+        const isExistingSplit = !!(detail.splits && detail.splits.length > 0);
+        const oColor = getCategoryColorHex(detail.category?.groupName);
+        const oInitial = (vendorLabel(detail)?.trim()?.[0] ?? '?').toUpperCase();
+        const pctOf = (amt: string) => {
+          const a = parseFloat(amt);
+          if (!a || !absTotal) return '';
+          const p = (a / absTotal) * 100;
+          return Number.isInteger(Math.round(p * 10) / 10) ? String(Math.round(p)) : p.toFixed(1);
+        };
+        const setRow = (i: number, patch: Partial<{ categoryId: number | ''; amount: string; merchant: string; pctRaw: string }>) =>
+          setSplitDraft((d) => d.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+        const footer = (
+          <div className="flex items-center justify-between gap-3">
+            {isExistingSplit && canEdit ? (
+              <ConfirmDeleteButton label="Unsplit" confirmLabel="Confirm unsplit?" showCancel={false}
+                onConfirm={removeSplitFromDetail} className="h-11! md:h-[42px]! px-4!" />
+            ) : <span className="hidden md:block" />}
+            <div className="flex flex-1 md:flex-none items-center gap-2.5">
+              <button onClick={() => setSplitOpen(false)} className="flex-1 md:flex-none h-11 md:h-[42px] px-[18px] rounded-[11px] border border-line-strong bg-surface-2 text-content font-semibold text-sm">Cancel</button>
+              <button onClick={saveSplit} disabled={!splitValid} className="flex-1 md:flex-none h-11 md:h-[42px] px-[22px] rounded-[11px] bg-primary text-on-primary font-bold text-sm shadow-sm disabled:opacity-50">Save</button>
+            </div>
+          </div>
+        );
+        return (
+          <ResponsiveModal isOpen onClose={() => setSplitOpen(false)} title="Split transaction"
+            description="Splitting creates individual transactions you can categorize and manage separately."
+            maxWidth="38.75rem" footer={footer}>
+              {/* ORIGINAL — expandable card */}
+              <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-content-3 mb-2">Original</div>
+              <div className="rounded-[12px] border border-line bg-surface-2 mb-5">
+                <button onClick={() => setSplitOrigExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3.5 py-3 text-left">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round" className="shrink-0 transition-transform" style={{ transform: splitOrigExpanded ? 'rotate(90deg)' : 'none' }}><path d="m9 6 6 6-6 6"/></svg>
+                  <span className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]" style={{ background: `color-mix(in srgb, ${oColor} 16%, transparent)`, color: oColor }}>{oInitial}</span>
+                  <span className="font-semibold text-[15px] truncate flex-1">{vendorLabel(detail)}</span>
+                  <span className="flex items-center gap-1.5 text-[13px] text-content-2 shrink-0">
+                    {detail.category && <><span className="text-[15px] leading-none">{getCategoryEmoji(detail.category.subName ?? detail.category.groupName, detail.category.groupName)}</span><span className="truncate max-w-[120px]">{detail.category.subName}</span></>}
+                  </span>
+                  <Money amount={detail.amount} transfer={detail.category?.type === 'transfer'} className="font-bold text-[15px] shrink-0 ml-2" />
+                </button>
+                {splitOrigExpanded && (
+                  <div className="px-3.5 pb-3.5 pt-1 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line">
+                    <div><div className="text-[11px] font-semibold text-content-3 mb-0.5">Original statement</div><div className="text-[13px] text-content-2 break-words">{detail.description || '—'}</div></div>
+                    <div><div className="text-[11px] font-semibold text-content-3 mb-0.5">Notes</div><div className="text-[13px] text-content-2 break-words">{detail.note || 'No notes'}</div></div>
+                  </div>
+                )}
+              </div>
+
+              {/* SPLITS header + $/% toggle */}
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-content-3">Splits</span>
+                <SegmentedControl
+                  options={[{ label: 'By Amount', value: '$' }, { label: 'By Percent', value: '%' }]}
+                  value={splitMode}
+                  onChange={(v) => { setSplitMode(v as '$' | '%'); setSplitDraft((d) => d.map((x) => ({ ...x, pctRaw: undefined }))); }}
+                />
+              </div>
+
+              <datalist id="split-merchant-list">{merchants.map((m) => <option key={m.id} value={m.name} />)}</datalist>
+              {splitDraft.map((r, i) => (
+                <div key={r.id ?? `new-${i}`} className={`grid ${splitDraft.length > 2 ? 'grid-cols-[minmax(0,1fr)_104px_44px]' : 'grid-cols-[minmax(0,1fr)_104px]'} gap-2 mb-4 md:flex md:items-center md:mb-2.5`}>
+                  {/* Merchant: own line on phones, category and amount below */}
+                  <input value={r.merchant} onChange={(e) => setRow(i, { merchant: e.target.value })}
+                    list="split-merchant-list" placeholder="Merchant"
+                    className="col-span-full w-full md:w-[150px] shrink-0 h-11 px-3 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-medium outline-none" />
+                  {/* Category */}
+                  <div className="relative flex-1 min-w-0">
+                    <select value={r.categoryId} onChange={(e) => setRow(i, { categoryId: e.target.value ? parseInt(e.target.value) : '' })}
+                      className="w-full h-11 pl-3 pr-8 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-medium outline-none appearance-none cursor-pointer">
+                      <option value="">Category…</option>
+                      {splitModalGroups.map(([group, subs]) => (<optgroup key={group} label={group}>{subs.map((c) => <option key={c.id} value={c.id}>{c.sub_name}</option>)}</optgroup>))}
+                    </select>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" className="absolute right-2.5 top-3 pointer-events-none"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                  {/* Amount ($ or %) */}
+                  <div className="relative w-full md:w-[104px] shrink-0">
+                    {splitMode === '$' ? (
+                      <>
+                        <CurrencyInput value={r.amount} onChange={(v) => setRow(i, { amount: v, pctRaw: undefined })}
+                          className="w-full h-11 px-2.5 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-semibold text-right tabular-nums outline-none" />
+                      </>
+                    ) : (
+                      <>
+                        {/* Keep the raw keystrokes (pctRaw) so a decimal point / leading zero
+                            isn't swallowed by re-deriving the value from the rounded amount. */}
+                        <input value={r.pctRaw ?? pctOf(r.amount)} onChange={(e) => { const raw = e.target.value.replace(/[^0-9.]/g, ''); const p = parseFloat(raw) || 0; setRow(i, { pctRaw: raw, amount: (absTotal * p / 100).toFixed(2) }); }} inputMode="decimal" placeholder="0"
+                          className="w-full h-11 pl-3 pr-6 rounded-[10px] bg-surface-2 border border-line text-content text-[14px] font-semibold text-right tabular-nums outline-none" />
+                        <span className="absolute right-2.5 top-3 text-[14px] text-content-3 font-semibold pointer-events-none">%</span>
+                      </>
+                    )}
+                  </div>
+                  {splitDraft.length > 2 ? (
+                    <button onClick={() => setSplitDraft((d) => d.filter((_, j) => j !== i))} aria-label="Remove split" className="w-11 h-11 md:w-9 md:h-9 shrink-0 flex items-center justify-center rounded-[10px] text-content-3 hover:bg-surface-2 hover:text-negative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+                  ) : <span className="hidden md:block md:w-9 shrink-0" />}
+                </div>
+              ))}
+              {/* Add-a-split pill + LEFT TO SPLIT indicator */}
+              <div className="flex items-center justify-between mt-2">
+                <button onClick={() => setSplitDraft((d) => [...d, { categoryId: '', amount: '', merchant: detail.merchant?.name ?? '' }])} className="inline-flex items-center gap-2 h-11 md:h-10 px-3.5 rounded-[11px] border border-dashed border-line-strong text-primary text-sm font-bold">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>Add a split
+                </button>
+                <div className="flex items-center gap-2">
+                  {balanced && <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--positive)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg></span>}
+                  <div className="text-right leading-tight">
+                    {/* A remainder, not money in or out: plain magnitude; colour shows balanced or not. */}
+                    <div className="text-[17px] font-extrabold tabular-nums" style={{ color: balanced ? 'var(--positive)' : 'var(--negative)' }}>{formatMoney(Math.abs(splitRemainingVal), { kind: 'balance', showZero: true }).text}</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-content-3">{splitRemainingVal < -0.005 ? 'Over by' : 'Left to split'}</div>
+                  </div>
+                </div>
+              </div>
+          </ResponsiveModal>
+        );
+      })()}
+
+      {/* Infinite scroll: sentinel loads the next batch as it nears the viewport */}
+      <div ref={loadMoreRef} />
+      <div className={`mt-3 mb-16 text-center font-mono text-[12px] text-content-3`}>
+        {!listFailed && total > 0 && (hasMore ? `Showing ${transactions.length} of ${total} — scroll for more` : (total === 1 ? txnCount(total) : `All ${txnCount(total)}`))}
       </div>
 
       {/* Modal */}
@@ -1247,11 +2668,20 @@ export default function TransactionsPage() {
         <TransactionForm
           transaction={editing === 'new' ? undefined : editing}
           accounts={accounts}
+          accountsLoaded={accountsLoaded}
           categories={categories}
+          merchants={merchants}
           onSave={handleSave}
           onDelete={editing !== 'new' && hasPermission('transactions.delete') ? handleDelete : undefined}
           onClose={() => { setEditing(null); setPendingSave(null); setDuplicateMatch(null); }}
           duplicateMatch={duplicateMatch}
+        />
+      )}
+
+      {importOpen && (
+        <ManualImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={() => { loadTransactions(); loadReviewCount(); loadMerchants(); }}
         />
       )}
     </div>

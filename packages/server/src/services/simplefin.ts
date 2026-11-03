@@ -47,6 +47,19 @@ export interface SimpleFINResponse {
 
 const MAX_DAYS_PER_REQUEST = 60;
 
+/** Shown to the visitor when the bank's server can't be reached at all. */
+export const BANK_UNREACHABLE_MESSAGE = "Couldn't reach your bank. Try again in a moment.";
+
+/** fetch() that turns a network failure ("fetch failed") into plain wording. */
+async function fetchBank(url: string, init?: RequestInit): Promise<Response> {
+  new URL(url); // a malformed address keeps its own error; only a failed request is "unreachable"
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new Error(BANK_UNREACHABLE_MESSAGE);
+  }
+}
+
 /**
  * Claim a SimpleFIN Access URL from a setup token.
  * One-time operation — the setup token is invalidated after use.
@@ -54,7 +67,7 @@ const MAX_DAYS_PER_REQUEST = 60;
 export async function claimAccessUrl(setupToken: string): Promise<string> {
   const claimUrl = Buffer.from(setupToken.trim(), 'base64').toString('utf-8');
 
-  const response = await fetch(claimUrl, { method: 'POST' });
+  const response = await fetchBank(claimUrl, { method: 'POST' });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Failed to claim SimpleFIN access URL: ${response.status} ${text}`);
@@ -105,7 +118,7 @@ async function fetchAccountsSingle(
     url.password = '';
   }
 
-  const response = await fetch(url.toString(), { headers });
+  const response = await fetchBank(url.toString(), { headers });
 
   if (response.status === 403) {
     throw new Error('SimpleFIN authentication failed. You may need to reauthenticate.');

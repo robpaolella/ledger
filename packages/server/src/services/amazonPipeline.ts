@@ -1,0 +1,54 @@
+import type Database from 'better-sqlite3';
+import { getConfig, setConfig } from './appConfig.js';
+import { ingestAmazonFiles, type IngestResult } from './amazonIngest.js';
+import { matchAmazonCharges, type MatchResult } from './amazonMatch.js';
+import { writeAmazonItemNotes, type NotesResult } from './amazonNotes.js';
+import { enrichMatchedTransactions, type EnrichResult } from './amazonEnrich.js';
+
+/**
+ * The nightly Amazon pipeline: ingest sidecar JSON → match charges to ledger
+ * transactions → write the purchased items into each matched transaction's note.
+ * (Enrichment — LLM item categorization + auto-splits — chains on last, and is
+ * the only stage that needs a model.) Gated on app_config amazon.enabled; never
+ * throws.
+ */
+export interface AmazonPipelineResult {
+  enabled: boolean;
+  ingest?: IngestResult;
+  match?: MatchResult;
+  notes?: NotesResult;
+  enrich?: EnrichResult;
+}
+
+export function amazonEnabled(sqlite: Database.Database): boolean {
+  return getConfig(sqlite, 'amazon.enabled') === '1';
+}
+
+export async function runAmazonPipeline(sqlite: Database.Database): Promise<AmazonPipelineResult> {
+  if (!amazonEnabled(sqlite)) return { enabled: false };
+  const result: AmazonPipelineResult = { enabled: true };
+  try {
+    result.ingest = ingestAmazonFiles(sqlite);
+    result.match = matchAmazonCharges(sqlite);
+    result.notes = writeAmazonItemNotes(sqlite);
+    result.enrich = await enrichMatchedTransactions(sqlite);
+    const now = new Date().toISOString();
+    setConfig(sqlite, 'amazon.last_ingest_at', now);
+    // A night with no new matches keeps the last one that matched something.
+    if (result.match.matched > 0) {
+      setConfig(sqlite, 'amazon.last_match_at', now);
+      setConfig(sqlite, 'amazon.last_match_count', String(result.match.matched));
+    }
+    if (result.ingest.files > 0 || (result.match?.matched ?? 0) > 0 || (result.notes?.written ?? 0) > 0 || (result.enrich?.enriched ?? 0) > 0) {
+      console.log(
+        `[amazon] ingested ${result.ingest.files} file(s) (${result.ingest.orders} orders, ${result.ingest.charges} charges), ` +
+        `matched ${result.match.matched} txn(s) (${result.match.ambiguous} ambiguous), ` +
+        `noted ${result.notes.written}, ` +
+        `enriched ${result.enrich.enriched} (${result.enrich.split} split)`,
+      );
+    }
+  } catch (err) {
+    console.error('[amazon] pipeline failed:', err instanceof Error ? err.message : err);
+  }
+  return result;
+}

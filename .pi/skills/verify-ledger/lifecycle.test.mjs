@@ -10,9 +10,23 @@ async function until(check) {
   for (let i = 0; i < 120; i++) { if (check()) return; await sleep(250); }
   throw new Error('Timed out waiting for owned run');
 }
-function start() {
+function start(hydration) {
   const evidence = mkdtempSync('/tmp/ledger-lifecycle-');
-  const child = spawn(process.execPath, [helper, '_serve', evidence], { env: { PATH: process.env.PATH }, stdio: 'ignore' });
+  const args = [];
+  if (hydration) {
+    writeFileSync(`${evidence}/key`, 'pk_synthetic-lifecycle-key');
+    writeFileSync(`${evidence}/hydrate.cjs`, hydration);
+    // Test-only preload substitutes the network script, not launcher behaviour.
+    writeFileSync(`${evidence}/preload.cjs`, `
+      const cp = require('node:child_process');
+      const original = cp.spawnSync;
+      cp.spawnSync = (exe, args, opts) => original(exe,
+        args[0]?.endsWith('/hydrate-institution-logos.js') ? [${JSON.stringify(`${evidence}/hydrate.cjs`)}] : args, opts);
+      require('node:module').syncBuiltinESMExports();
+    `);
+    args.push('--require', `${evidence}/preload.cjs`);
+  }
+  const child = spawn(process.execPath, [...args, helper, '_serve', evidence], { env: { PATH: process.env.PATH, LEDGER_LOGODEV_TOKEN_FILE: `${evidence}/${hydration ? 'key' : 'missing-key'}` }, stdio: 'ignore' });
   return { evidence, process: child };
 }
 async function state(run) {
@@ -37,6 +51,8 @@ test('two owned instances, authenticated Doctor, tamper-safe cleanup, signal cle
     const bDoctor = await call(b, 'doctor');
     assert.equal(aDoctor.status, 'PASS');
     assert.equal(bDoctor.status, 'PASS');
+    assert.deepEqual(aDoctor.logos, { status: 'not configured', loaded: 0 });
+    assert.equal(readFileSync(`/proc/${a.childPid}/environ`, 'utf8').includes('LOGODEV_TOKEN='), false);
     for (const [run, doctor] of [[a, aDoctor], [b, bDoctor]]) {
       assert.equal((await fetch(`${run.url}/api/health`)).status, 200);
       if (doctor.lanUrl) {
@@ -73,10 +89,40 @@ test('two owned instances, authenticated Doctor, tamper-safe cleanup, signal cle
   }
 });
 
+test('configured and failed hydration both launch PASS without leaking the key', { timeout: 90_000 }, async () => {
+  for (const fails of [false, true]) {
+    const run = start(`
+      const assert = require('node:assert/strict');
+      assert.equal(process.env.LOGODEV_TOKEN, 'pk_synthetic-lifecycle-key');
+      console.log(process.env.LOGODEV_TOKEN); console.error(process.env.LOGODEV_TOKEN);
+      ${fails ? 'process.exit(1);' : `require('node:fs').mkdirSync('uploads'); require('node:fs').writeFileSync('uploads/vendor-999.webp', 'synthetic');`}
+    `);
+    try {
+      const s = await state(run);
+      const result = await call(s, 'doctor');
+      assert.equal(result.status, 'PASS');
+      assert.deepEqual(result.logos, { status: fails ? 'failed' : 'complete', loaded: fails ? 0 : 1 });
+      assert.equal(readFileSync(`/proc/${s.childPid}/environ`, 'utf8').includes('LOGODEV_TOKEN='), false);
+      assert.equal(JSON.stringify(result).includes('pk_synthetic-lifecycle-key'), false);
+      for (const file of ['server.log', 'run.json']) {
+        assert.equal(readFileSync(`${run.evidence}/${file}`, 'utf8').includes('pk_synthetic-lifecycle-key'), false);
+      }
+      await call(s, 'cleanup');
+      await until(() => run.process.exitCode !== null);
+      assert.equal(existsSync(s.scratch), false);
+      assert.equal(readFileSync(`${run.evidence}/cleaned.json`, 'utf8').includes('pk_synthetic-lifecycle-key'), false);
+    } finally {
+      if (run.process.exitCode === null) run.process.kill('SIGTERM');
+      await until(() => run.process.exitCode !== null || run.process.signalCode !== null);
+      rmSync(run.evidence, { recursive: true });
+    }
+  }
+});
+
 test('public launch, doctor, cleanup and repeat cleanup commands', { timeout: 180_000 }, async () => {
   const evidence = mkdtempSync('/tmp/ledger-cli-test-');
   const cli = (action) => promisify(execFile)(process.execPath, [helper, action, evidence], {
-    env: { PATH: process.env.PATH, HOME: evidence }, timeout: 120_000, maxBuffer: 2_000_000,
+    env: { PATH: process.env.PATH, HOME: evidence, LEDGER_LOGODEV_TOKEN_FILE: `${evidence}/missing-key` }, timeout: 150_000, maxBuffer: 2_000_000,
   });
   let s;
   try {
@@ -96,4 +142,73 @@ test('public launch, doctor, cleanup and repeat cleanup commands', { timeout: 18
     if (s && existsSync(s.scratch)) await cli('cleanup');
     rmSync(evidence, { recursive: true });
   }
+});
+
+test('cleanup is refused from another checkout, unowned state, and allowed by owner or override', { timeout: 90_000 }, async () => {
+  const run = start();
+  const elsewhere = mkdtempSync('/tmp/ledger-notgit-');
+  const cleanup = (cwd, ...flags) => promisify(execFile)(process.execPath, [helper, 'cleanup', run.evidence, ...flags], { cwd, env: { PATH: process.env.PATH } }).then((r) => ({ ok: true, ...r }), (e) => ({ ok: false, stderr: e.stderr }));
+  try {
+    const s = await state(run);
+    assert.ok(s.owner);
+    const health = async () => (await fetch(`${s.url}/api/health`)).status;
+    // A folder that is not a git checkout is refused.
+    let result = await cleanup(elsewhere);
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /Cleanup refused.*not in a git checkout/);
+    // A different checkout is refused and the owner is named.
+    writeFileSync(`${run.evidence}/run.json`, JSON.stringify({ ...s, owner: '/git/some-other-checkout' }));
+    result = await cleanup(process.cwd());
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /started from \/git\/some-other-checkout/);
+    // No recorded owner is refused too.
+    const { owner, ...unowned } = s;
+    writeFileSync(`${run.evidence}/run.json`, JSON.stringify(unowned));
+    result = await cleanup(process.cwd());
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /no recorded owner/);
+    assert.equal(await health(), 200);
+    assert.equal(existsSync(`${run.evidence}/cleaned.json`), false);
+    // The override stops it from elsewhere.
+    result = await cleanup(elsewhere, '--override-owner');
+    assert.equal(result.ok, true);
+    await until(() => run.process.exitCode !== null);
+    assert.equal(existsSync(s.scratch), false);
+    // Repeat passes from any folder.
+    result = await cleanup(elsewhere);
+    assert.match(result.stdout, /already cleaned/);
+  } finally {
+    if (run.process.exitCode === null) run.process.kill('SIGTERM');
+    await until(() => run.process.exitCode !== null || run.process.signalCode !== null);
+    rmSync(run.evidence, { recursive: true });
+    rmSync(elsewhere, { recursive: true });
+  }
+});
+
+test('cleanup from the owning checkout stops the instance', { timeout: 90_000 }, async () => {
+  const run = start();
+  try {
+    const s = await state(run);
+    const { stdout } = await promisify(execFile)(process.execPath, [helper, 'cleanup', run.evidence], { env: { PATH: process.env.PATH } });
+    assert.match(stdout, /"cleaned": true/);
+    await until(() => run.process.exitCode !== null);
+    assert.equal(existsSync(s.scratch), false);
+  } finally {
+    if (run.process.exitCode === null) run.process.kill('SIGTERM');
+    await until(() => run.process.exitCode !== null || run.process.signalCode !== null);
+    rmSync(run.evidence, { recursive: true });
+  }
+});
+
+test('launch from a folder that is not a git checkout fails and starts nothing', () => {
+  const dir = mkdtempSync('/tmp/ledger-notgit-');
+  const evidence = mkdtempSync('/tmp/ledger-notgit-evidence-');
+  return promisify(execFile)(process.execPath, [helper, 'launch', evidence], { cwd: dir, env: { PATH: process.env.PATH } }).then(
+    () => assert.fail('launch should fail'),
+    (e) => {
+      assert.match(e.stderr, /Launch refused.*git checkout/);
+      assert.equal(existsSync(`${evidence}/launch.lock`), false);
+      assert.equal(existsSync(`${evidence}/run.json`), false);
+    },
+  ).finally(() => { rmSync(dir, { recursive: true }); rmSync(evidence, { recursive: true }); });
 });

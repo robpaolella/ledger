@@ -1,0 +1,55 @@
+{
+  "design_issue": 295,
+  "covers": [
+    228,
+    229,
+    230,
+    286,
+    287,
+    288,
+    289,
+    290,
+    291,
+    292,
+    293,
+    294
+  ],
+  "revision": 2,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "tx-detail",
+    "tx-detail-member",
+    "tx-split",
+    "review-detail",
+    "review-detail-viewonly",
+    "recurring-detail",
+    "approve-all",
+    "tx-filters",
+    "filters-no-match",
+    "tx-date",
+    "tx-sort",
+    "transactions",
+    "transactions-scrolled",
+    "reviews",
+    "reviews-viewonly",
+    "budget-month",
+    "budget-category",
+    "dashboard",
+    "accounts",
+    "settings-categories",
+    "settings-bank",
+    "settings-merchants",
+    "recurring-list",
+    "investments",
+    "reports-trends",
+    "reports-list",
+    "reports-list-more",
+    "reports-list-empty"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

@@ -1,26 +1,15 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode (Tailwind 4 syntax). Keep the existing
+   system-aware toggle in App.tsx — it already adds/removes `.dark` on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* App shell height: 100dvh with 100vh fallback for older browsers.
    Tailwind generates h-screen after h-[100dvh], so 100vh wins in the cascade.
    This class ensures 100dvh always takes priority on supporting browsers. */
 .app-shell-height {
   height: 100vh;
   height: 100dvh;
-}
-
-.responsive-modal-panel {
-  position: relative;
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-  overflow: hidden;
-}
-
-.responsive-modal-content {
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
 }
 
 /* Hide number input spinners globally */
@@ -31,23 +20,6 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
-}
-
-@theme {
-  --font-sans: 'DM Sans', sans-serif;
-  --font-mono: 'DM Mono', monospace;
-
-  --color-sidebar: #0f172a;
-  --color-surface: #f4f6f9;
-  --color-card: #ffffff;
-  --color-border: #e8ecf1;
-  --color-text-primary: #0f172a;
-  --color-text-body: #475569;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  --color-positive: #10b981;
-  --color-negative: #ef4444;
-  --color-accent: #3b82f6;
 }
 
 @keyframes slideIn {
@@ -69,24 +41,11 @@ input[type="number"] {
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Button hover effects */
-.btn-primary { transition: all 150ms ease; }
-.btn-primary:hover { background: var(--btn-primary-hover) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-.btn-secondary { transition: all 150ms ease; }
-.btn-secondary:hover { background: var(--btn-secondary-hover) !important; }
-
-.btn-destructive { transition: all 150ms ease; }
-.btn-destructive:hover { background: var(--btn-destructive-hover) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-.btn-destructive-light { transition: all 150ms ease; }
-.btn-destructive-light:hover { background: var(--btn-destructive-light-hover) !important; }
-
-.btn-success { transition: all 150ms ease; }
-.btn-success:hover { background: var(--btn-success-hover) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-.btn-ghost { transition: none; }
-.btn-ghost:hover { text-decoration: underline; }
+/* Thin custom scrollbars for Import popovers/preview */
+.imp-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.imp-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 20px; }
+.imp-scroll::-webkit-scrollbar-track { background: transparent; }
+.imp-scroll { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 
 /* Clickable badge hover */
 .badge-clickable { transition: filter 150ms ease; cursor: pointer; }
@@ -98,8 +57,8 @@ input[type="number"] {
 
 /* Input focus rings */
 input:focus, select:focus, textarea:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
   outline: none;
 }
 input.no-focus-ring:focus {
@@ -108,8 +67,8 @@ input.no-focus-ring:focus {
 }
 input.error:focus, select.error:focus, textarea.error:focus,
 input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[aria-invalid="true"]:focus {
-  border-color: var(--color-negative);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  border-color: var(--negative);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--negative) 20%, transparent);
 }
 
 /* Dark mode date input calendar icon */
@@ -117,243 +76,252 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
   filter: invert(0.35) sepia(0.1) saturate(1) hue-rotate(180deg);
 }
 
+/* =====================================================================
+   Retheme v2 — Wave 0 token layer
+   ---------------------------------------------------------------------
+   1. NEW semantic tokens are declared on :root (light) and .dark (dark).
+   2. An ALIAS LAYER keeps the OLD token names still in use working by
+      repointing each at the nearest new token (via var(), so it resolves
+      per-mode). Migrate components off the old names per-area, then retire
+      each alias once nothing references it.
+   3. --bg-modal is kept LITERAL (not aliased): the one scrim for every modal,
+      sheet and panel.
+   4. Raw hex lives ONLY in these :root / .dark blocks. Never hard-code a color
+      elsewhere — always use a token.
+   ===================================================================== */
 :root {
+  /* ---- NEW semantic tokens (light) ---- */
+  --bg:          #f6f7f9;   /* app background            */
+  --surface:     #ffffff;   /* cards, sidebar (Wave 2)   */
+  --surface-2:   #eef0f4;   /* insets, tracks, hover     */
+  --elevated:    #ffffff;   /* popovers, menus, modals   */
+  --line:        #e5e8ee;   /* default border            */
+  --line-strong: #d3d8e0;   /* input / emphasised border */
+
+  --text:   #161a20;        /* primary text              */
+  --text-2: #586172;        /* secondary / labels        */
+  --text-3: #5f6b7a;        /* muted / placeholder       */
+
+  --primary:       #2563eb;
+  --primary-hover: #1d4ed8;
+  --on-primary:    #ffffff;
+  --ring:          #2563eb;
+
+  --positive: #059669;      /* income, under budget      */
+  --negative: #dc2626;      /* over budget, amount owed  */
+  --warning:  #a84e08;      /* near limit                */
+
+  /* Categorical — shared chroma, rotating hue (light) */
+  --c-teal:    #0d9488;
+  --c-green:   #16a34a;
+  --c-blue:    #2563eb;
+  --c-indigo:  #4f46e5;
+  --c-violet:  #7c3aed;
+  --c-fuchsia: #c026d3;
+  --c-rose:    #e11d48;
+  --c-orange:  #ea580c;
+  --c-amber:   #d97706;
+
+  /* Household owner tags */
+  --owner-1:      #2563eb;
+  --owner-2:      #db2777;
+  --owner-3:      #0d9488;
+  --owner-4:      #7c3aed;
+  --owner-5:      #ea580c;
+  --owner-6:      #16a34a;
+  --owner-shared: #64748b;
+
+  /* Radius scale */
+  --radius-sm:   8px;
+  --radius-control: 11px;   /* buttons and inputs */
+  --radius-md:   12px;
+  --radius-card: 16px;
+  --radius-lg:   20px;
+  --radius-full: 999px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
+  --shadow-md: 0 10px 30px rgba(16,24,40,.09);
+
+  /* ===================================================================
+     ALIAS LAYER — OLD token names → new tokens (defined once; var() aliases
+     resolve per-mode automatically, so only literal-valued ones repeat in .dark)
+     =================================================================== */
+
   /* Backgrounds */
-  --bg-main: #f4f6f9;
-  --bg-card: #ffffff;
-  --bg-card-border: #e8ecf1;
-  --bg-card-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  --bg-sidebar: #0f172a;
-  --bg-hover: #f8fafc;
-  --bg-zebra: rgba(0,0,0,0.02);
-  --bg-input: #f8fafc;
-  --bg-input-border: #e2e8f0;
-  --bg-modal: rgba(0,0,0,0.5);
-  --bg-needs-attention: rgb(255,251,235);
-  --bg-inline-success: #f0fdf4;
-  --bg-inline-success-border: #bbf7d0;
-  --bg-inline-error: #fef2f2;
-  --bg-inline-error-border: #fecaca;
-  --bg-inline-warning: #fffbeb;
-  --bg-inline-warning-border: #fde68a;
-  --bg-inline-info: #eff6ff;
-  --bg-inline-info-border: #bfdbfe;
+  --bg-hover:       var(--surface-2);
 
   /* Text */
-  --text-primary: #0f172a;
-  --text-body: #475569;
-  --text-secondary: #64748b;
-  --text-muted: #94a3b8;
-  --text-very-muted: #cbd5e1;
-  --text-inline-success: #166534;
-  --text-inline-error: #991b1b;
-  --text-inline-warning: #92400e;
-  --text-inline-info: #1e40af;
+  --text-primary:    var(--text);
+  --text-body:       var(--text-2);
+  --text-secondary:  var(--text-2);
+  --text-muted:      var(--text-3);
 
-  /* Semantic colors (same both modes) */
-  --color-positive: #10b981;
-  --color-negative: #ef4444;
-  --color-accent: #3b82f6;
-  --color-warning: #f59e0b;
-  --color-orange: #f97316;
+  /* Semantic colors (old names) */
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning:  var(--warning);
 
   /* Buttons */
-  --btn-primary-bg: #0f172a;
-  --btn-primary-text: #ffffff;
-  --btn-primary-hover: #1e293b;
-  --btn-secondary-bg: #ebeff3;
-  --btn-secondary-text: #334155;
-  --btn-secondary-hover: #dfe3e8;
-  --btn-destructive-bg: #ef4444;
-  --btn-destructive-text: #ffffff;
-  --btn-destructive-hover: #dc2626;
-  --btn-destructive-light-bg: #fef2f2;
-  --btn-destructive-light-text: #ef4444;
-  --btn-destructive-light-hover: #fee2e2;
-  --btn-success-hover: #059669;
-  --btn-ghost-text: #64748b;
+  --btn-ghost-text: var(--text-2);
 
-  /* Cards (hover) */
-  --card-hover-border: #cbd5e1;
-  --card-hover-shadow: 0 2px 6px rgba(0,0,0,0.08);
-
-  /* Badges */
-  --badge-account-bg: #f1f5f9;
-  --badge-account-text: #475569;
-  --badge-category-bg: #eff6ff;
-  --badge-category-text: #3b82f6;
-  --badge-owner-1-bg: #dbeafe;
-  --badge-owner-1-text: #2563eb;
-  --badge-owner-2-bg: #fce7f3;
-  --badge-owner-2-text: #db2777;
-  --badge-shared-bg: #f1f5f9;
-  --badge-shared-text: #64748b;
-  --badge-liquid-bg: #d1fae5;
-  --badge-liquid-text: #059669;
-  --badge-investment-bg: #ede9fe;
-  --badge-investment-text: #7c3aed;
-  --badge-liability-bg: #fef2f2;
-  --badge-liability-text: #dc2626;
-  --badge-duplicate-exact-bg: #fef2f2;
-  --badge-duplicate-exact-text: #dc2626;
-  --badge-duplicate-possible-bg: #fffbeb;
-  --badge-duplicate-possible-text: #b45309;
-  --badge-transfer-bg: #fff7ed;
-  --badge-transfer-text: #c2410c;
-  --badge-connected-bg: #d1fae5;
-  --badge-connected-text: #059669;
-  --badge-admin-bg: #d1fae5;
-  --badge-admin-text: #059669;
-  --badge-member-bg: #dbeafe;
-  --badge-member-text: #2563eb;
-  --badge-owner-bg: #fffbeb;
-  --badge-owner-text: #b45309;
-
-  /* Table */
-  --table-border: #e2e8f0;
-  --table-row-border: #f1f5f9;
-
-  /* Toggle / Filter */
-  --toggle-container-bg: #f1f5f9;
-  --toggle-active-bg: #ffffff;
-  --toggle-active-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  --toggle-active-text: #0f172a;
-  --toggle-inactive-text: #64748b;
-
-  /* Progress bar */
-  --progress-track: #f1f5f9;
-
-  /* Nav (app-specific) */
-  --nav-active-bg: rgba(59,130,246,0.15);
-  --nav-active-text: #93c5fd;
-  --nav-inactive-text: #94a3b8;
-  --sidebar-text: #f1f5f9;
-
-  /* Net worth hero (app-specific) */
-  --hero-gradient-from: #0f172a;
-  --hero-gradient-to: #1e293b;
+  /* ---- Kept LITERAL (repeated in .dark) ---- */
+  --bg-modal:   rgba(6,8,12,0.55);   /* the ONE modal / sheet / panel scrim */
 }
 
 .dark {
-  /* Backgrounds */
-  --bg-main: #0b0f1a;
-  --bg-card: #141926;
-  --bg-card-border: #1e293b;
-  --bg-card-shadow: 0 1px 2px rgba(0,0,0,0.2);
-  --bg-sidebar: #060a13;
-  --bg-hover: #1a2234;
-  --bg-zebra: rgba(255,255,255,0.03);
-  --bg-input: #0f1629;
-  --bg-input-border: #1e293b;
-  --bg-modal: rgba(0,0,0,0.7);
-  --bg-needs-attention: rgba(250,255,194,0.15);
-  --bg-inline-success: #052e16;
-  --bg-inline-success-border: #166534;
-  --bg-inline-error: #3b1111;
-  --bg-inline-error-border: #7f1d1d;
-  --bg-inline-warning: #3b2506;
-  --bg-inline-warning-border: #78350f;
-  --bg-inline-info: #1e3a5f;
-  --bg-inline-info-border: rgb(87,121,232);
+  /* ---- NEW semantic tokens (dark) ---- */
+  --bg:          #101318;
+  --surface:     #191d24;
+  --surface-2:   #20252e;
+  --elevated:    #252b35;
+  --line:        #2b313c;
+  --line-strong: #39414e;
 
-  /* Text */
-  --text-primary: #f1f5f9;
-  --text-body: #94a3b8;
-  --text-secondary: #64748b;
-  --text-muted: #475569;
-  --text-very-muted: #334155;
-  --text-inline-success: #86efac;
-  --text-inline-error: #fca5a5;
-  --text-inline-warning: #fcd34d;
-  --text-inline-info: #93c5fd;
+  --text:   #f2f4f7;
+  --text-2: #a3abb8;
+  --text-3: #939caa;
 
-  /* Buttons */
-  --btn-primary-bg: #e2e8f0;
-  --btn-primary-text: #0f172a;
-  --btn-primary-hover: #cbd5e1;
-  --btn-secondary-bg: #1a2234;
-  --btn-secondary-text: #94a3b8;
-  --btn-secondary-hover: #243044;
-  --btn-destructive-bg: #ef4444;
-  --btn-destructive-text: #ffffff;
-  --btn-destructive-hover: #dc2626;
-  --btn-destructive-light-bg: #3b1111;
-  --btn-destructive-light-text: #fca5a5;
-  --btn-destructive-light-hover: #4a1515;
-  --btn-success-hover: #059669;
-  --btn-ghost-text: #64748b;
+  --primary:       #3d7bf4;
+  --primary-hover: #5b92ff;
+  --on-primary:    #0b1220;
+  --ring:          #3d7bf4;
 
-  /* Cards (hover) */
-  --card-hover-border: #334155;
-  --card-hover-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  --positive: #34d399;
+  --negative: #f87171;
+  --warning:  #fbbf24;
 
-  /* Badges */
-  --badge-account-bg: #1a2234;
-  --badge-account-text: #94a3b8;
-  --badge-category-bg: #1e3a5f;
-  --badge-category-text: #60a5fa;
-  --badge-owner-1-bg: #1e3a5f;
-  --badge-owner-1-text: #60a5fa;
-  --badge-owner-2-bg: #4a1942;
-  --badge-owner-2-text: #f472b6;
-  --badge-shared-bg: #1a2234;
-  --badge-shared-text: #64748b;
-  --badge-liquid-bg: #052e16;
-  --badge-liquid-text: #34d399;
-  --badge-investment-bg: #2e1065;
-  --badge-investment-text: #a78bfa;
-  --badge-liability-bg: #3b1111;
-  --badge-liability-text: #fca5a5;
-  --badge-duplicate-exact-bg: #3b1111;
-  --badge-duplicate-exact-text: #fca5a5;
-  --badge-duplicate-possible-bg: #3b2506;
-  --badge-duplicate-possible-text: #fcd34d;
-  --badge-transfer-bg: #3b1a06;
-  --badge-transfer-text: #fb923c;
-  --badge-connected-bg: #052e16;
-  --badge-connected-text: #34d399;
-  --badge-admin-bg: #052e16;
-  --badge-admin-text: #34d399;
-  --badge-member-bg: #1e3a5f;
-  --badge-member-text: #60a5fa;
-  --badge-owner-bg: #78350f;
-  --badge-owner-text: #fbbf24;
+  --c-teal:    #2dd4bf;
+  --c-green:   #4ade80;
+  --c-blue:    #60a5fa;
+  --c-indigo:  #818cf8;
+  --c-violet:  #a78bfa;
+  --c-fuchsia: #e879f9;
+  --c-rose:    #fb7185;
+  --c-orange:  #fb923c;
+  --c-amber:   #fbbf24;
 
-  /* Table */
-  --table-border: #1e293b;
-  --table-row-border: #141926;
+  --owner-1:      #60a5fa;
+  --owner-2:      #f472b6;
+  --owner-3:      #2dd4bf;
+  --owner-4:      #a78bfa;
+  --owner-5:      #fb923c;
+  --owner-6:      #4ade80;
+  --owner-shared: #94a3b8;
 
-  /* Toggle / Filter */
-  --toggle-container-bg: #1a2234;
-  --toggle-active-bg: #0f172a;
-  --toggle-active-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  --toggle-active-text: #f1f5f9;
-  --toggle-inactive-text: #64748b;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-md: 0 6px 22px rgba(0,0,0,.4);
 
-  /* Progress bar */
-  --progress-track: #1a2234;
-
-  /* Nav (app-specific) */
-  --nav-active-bg: rgba(59,130,246,0.25);
-  --nav-active-text: #93c5fd;
-  --nav-inactive-text: #94a3b8;
-  --sidebar-text: #f1f5f9;
-
-  /* Net worth hero (app-specific) */
-  --hero-gradient-from: #060a13;
-  --hero-gradient-to: #0f172a;
+  /* ---- Literal-valued old token (dark override only; var() aliases above
+          inherit and resolve against the dark tokens automatically) ---- */
+  --bg-modal:   rgba(0,0,0,0.7);
 }
+
+/* ---------------------------------------------------------------------
+   Map tokens into Tailwind's utility space (@theme inline reads the vars).
+   Retains --color-card (bg-card ×319), the only bare @theme utility still
+   consumed by existing components.
+   ------------------------------------------------------------------- */
+@theme inline {
+  --color-bg:            var(--bg);
+  --color-surface:       var(--surface);
+  --color-surface-2:     var(--surface-2);
+  --color-elevated:      var(--elevated);
+  --color-line:          var(--line);
+  --color-line-strong:   var(--line-strong);
+
+  --color-primary:       var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary:    var(--on-primary);
+
+  --color-positive:      var(--positive);
+  --color-negative:      var(--negative);
+  --color-warning:       var(--warning);
+
+  --color-c-teal:    var(--c-teal);
+  --color-c-green:   var(--c-green);
+  --color-c-blue:    var(--c-blue);
+  --color-c-indigo:  var(--c-indigo);
+  --color-c-violet:  var(--c-violet);
+  --color-c-fuchsia: var(--c-fuchsia);
+  --color-c-rose:    var(--c-rose);
+  --color-c-orange:  var(--c-orange);
+  --color-c-amber:   var(--c-amber);
+
+  /* Named text utilities (bg-* names read oddly for text) */
+  --color-content:   var(--text);
+  --color-content-2: var(--text-2);
+  --color-content-3: var(--text-3);
+  --color-btn-ghost: var(--btn-ghost-text);
+  --color-ring:      var(--ring);
+
+  /* Retained legacy utilities still used by components */
+  --color-card:    var(--surface);
+
+  /* Radius → rounded-* */
+  --radius-sm:   var(--radius-sm);
+  --radius-control: var(--radius-control);
+  --radius-md:   var(--radius-md);
+  --radius-card: var(--radius-card);
+  --radius-lg:   var(--radius-lg);
+
+  /* Shadow → shadow-* */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+
+  /* Type families → font-sans / font-mono */
+  --font-sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Type scale → text-* font-size utilities. Names avoid the colour aliases
+   (--text-body, --text-primary, --text-secondary, --text-muted, --text-2, --text-3). */
+@theme static {
+  --text-caption: 11px;
+  --text-small:   12px;
+  --text-label:   13px;
+  --text-copy:    14px;
+  --text-large:   15px;
+  --text-heading: 17px;
+  --text-title:   22px;
+  --text-display: 30px;
+}
+
+@layer base {
+  html { font-family: var(--font-sans); }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* All currency / figures use tabular numerals so columns align. */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Tailwind v4 Preflight no longer sets cursor:pointer on buttons. Restore it
+     for enabled clickable elements. Explicit `cursor-*` utilities still win
+     (utilities layer > base), so `disabled:cursor-default` etc. are unaffected. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Signed-out pages: 16px field text so iPhones don't zoom on focus. Scoped here
+   because inputCls is shared with Settings. The six-box code input (inputmode
+   numeric, 20px) is left alone. Unlayered, so it beats the text-sm utility. */
+.auth-shell input:not([inputmode]) { font-size: 16px; }
 
 /* ── Responsive Utilities ── */
 @media (max-width: 767px) {
   .desktop-only { display: none !important; }
   .mobile-main-content {
-    padding: 16px 16px 120px !important;
+    padding: 16px 16px 40px !important;
   }
-  .tab-bar-icon svg {
-    width: 22px;
-    height: 22px;
-  }
+  @keyframes drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
+  .drawer-in { animation: drawer-in 220ms cubic-bezier(.2,.8,.2,1); }
 
   /* Page title sizing */
   .page-title { font-size: 17px !important; }
@@ -361,8 +329,19 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 
   /* Touch targets */
   .touch-row { min-height: 44px; }
+  /* Boxed controls (chips, toolbar buttons) that Button/SegmentedControl don't cover:
+     44px tall, and 44px wide too when icon-only (tap-grow-sq). */
+  .tap-grow { min-height: 44px; }
+  .tap-grow-sq { min-height: 44px; min-width: 44px; }
+  /* Invisible 44px tap area for text links, switches and drag handles. The look is
+     unchanged; the element's own click covers the area. Keep neighbours 44px apart
+     (rows, gap) so two areas never overlap. */
+  .tap-area { position: relative; }
+  .tap-area::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: 44px; transform: translate(-50%, -50%); }
 
   /* Hide scrollbars on mobile */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .mobile-main-content::-webkit-scrollbar { display: none; }
   .mobile-main-content { -ms-overflow-style: none; scrollbar-width: none; }
 
@@ -381,4 +360,20 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 }
 .sidebar-card:hover {
   background: rgba(255,255,255,0.12);
+}
+
+/* Uncategorized: the striped grey that marks money with no category yet. */
+.uncategorized-hatch {
+  background:
+    repeating-linear-gradient(135deg, var(--text-3) 0 2px, transparent 2px 5px),
+    color-mix(in srgb, var(--text-3) 14%, var(--surface));
+}
+.saved-bar {
+  background: color-mix(in srgb, var(--positive) 18%, var(--surface));
+  box-shadow: inset 0 0 0 2px var(--positive);
+}
+.uncategorized-hatch-bar {
+  background:
+    repeating-linear-gradient(135deg, var(--text-3) 0 3px, transparent 3px 7px),
+    color-mix(in srgb, var(--text-3) 30%, var(--surface));
 }

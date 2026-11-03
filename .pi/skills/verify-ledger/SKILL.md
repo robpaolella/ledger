@@ -47,7 +47,34 @@ says port 0; **use Doctor's URL**, not that log line.
 Each launch has separate data, build snapshots, ports, control token and logs.
 Use separate worktrees for workers building concurrently, and a fresh evidence
 folder for every launch. Do not reinstall dependencies while a run is active.
-Production excludes `/mockup`, `/qa` and `/api/dev`; they are not verification routes.
+
+## Optional bank and merchant logos
+
+Launch reads `LEDGER_LOGODEV_TOKEN_FILE`, defaulting to
+`~/ledger-live/logodev-token/token.txt` in the launching user's home (not scratch HOME).
+The file can contain the publishable key alone or `PUBLISHABLE_KEY=pk_...`; surrounding
+whitespace is ignored. Multiple non-empty lines are rejected, so another credential
+cannot accidentally be sent with the key. Never paste a real key into a command,
+evidence, or a PR.
+An explicit missing-file override disables logo downloads for offline verification.
+Missing, empty, unreadable or non-regular files leave the usual letter badges.
+
+After seeding, the existing logo hydration script gets the key **only in its own
+environment**. Its output is discarded, not copied to either log. Downloads go into
+scratch uploads, and cleanup removes them. The app server never receives the key.
+Hydration has a 60-second total cap; failure or timeout does not fail launch.
+Doctor's `logos` field reports `not configured`, `key rejected`, `complete`, `failed`
+or `timed out`, and `loaded` counts cached institution/vendor image files, not
+account/merchant rows.
+`complete` means the script exited successfully, not that every logo was found.
+The existing downloader hides HTTP errors, so an invalid key can report `complete`
+with zero loaded; Doctor cannot distinguish HTTP 401 from other download failures.
+
+Check `/accounts` and Settings → Merchants (`/settings?panel=merchants`) at
+390×844 and 1440×900: national brands can have images; invented merchants retain
+letter badges. Reload to confirm the locally cached images still render. Never
+attach `run.json` or the token file. Scan evidence for the key without printing
+matching lines; only report the match count.
 
 ## Doctor
 
@@ -95,13 +122,14 @@ re-snapshot; restart only your named browser session if it remains stuck.
 Use **Settings → Sign Out** on phone to switch roles, or the sidebar sign-out icon
 on desktop; alternatively stop this browser session and use a fresh named session
 for the next role. Do not inject tokens into local storage. Avoid rapid repeated
-logins; after HTTP 429 wait one minute. Sample data is dated **January–March 2026**:
-Transactions defaults to All Time, but Budget/Reports need the matching month/year.
-The current-month dashboard may legitimately be empty.
+logins; after HTTP 429 wait one minute. Fixtures cover nine source months but **shift so the launch month is current, with
+its preceding eight months also populated**. The launch month stops at today; use
+Transactions → All Time to read its current count. Budget/Reports should use the
+launch month and its year. Record the launch date when comparing counts and balances.
 
-Main routes: `/transactions`, `/import`, `/budget`, `/reports`, `/net-worth`,
-`/settings`. On desktop use the sidebar; on phone use Home, Transactions, Budget,
-and **More** for the other pages. See [features/README.md](features/README.md) for
+Main routes: `/accounts`, `/transactions`, `/import`, `/budget`, `/reports`,
+`/reviews`, `/investments`, `/settings`. `/net-worth` redirects to Accounts.
+On desktop use the sidebar; on phone open the header menu for navigation. See [features/README.md](features/README.md) for
 entry points, states and proof recipes. These are household permissions, not data
 privacy boundaries: a member can still see household transactions.
 
@@ -112,7 +140,7 @@ endpoints. Record the action AND result, then reload/reopen to prove persistence
 For example, Settings → Preferences → change Display Name → Save Profile → reload
 Preferences; capture the saved name. For imports check the resulting transactions,
 not just a success toast. Use only synthetic files and never connect SimpleFIN to
-an outside account; the seed deliberately has no connections.
+an outside account; the seed's connections are synthetic `demo://` ones that cannot reach the network.
 
 Capture the relevant states for each affected role at BOTH widths:
 
@@ -151,6 +179,16 @@ npx -y chrome-devtools-axi stop
 node .pi/skills/verify-ledger/run.mjs cleanup "$EVIDENCE"
 ```
 
+Clean only the evidence folders your own session launched; never loop over
+`/tmp/ledger-evidence-*`. Launch records the checkout it was started from (the git
+top-level) in `run.json`. Cleanup from a different checkout, or of a preview with no
+recorded owner, is refused with a message naming the owner, and stops nothing. Only when
+you are certain the preview is safe to stop (for example the conductor, after the owner's
+folder is gone), add the per-call flag `--override-owner`:
+`node .pi/skills/verify-ledger/run.mjs cleanup "$EVIDENCE" --override-owner`.
+Launch fails outside a git checkout. Repeating cleanup of an already-cleaned folder
+passes from anywhere.
+
 Stop only your named browser session. Cleanup authenticates to the supervisor,
 terminates and waits for its exact child (escalating after five seconds), removes
 its entire in-memory scratch directory, and stops the supervisor. It never reads
@@ -166,7 +204,10 @@ delete from an edited state file. A machine crash/SIGKILL is not graceful cleanu
 ## Helpers and maintenance
 
 `run.mjs` is the executable entry point; `listen.mjs` is loaded by it, not run alone.
-Tests include pure pre-I/O refusals plus two real seeded instances, wrong-token
+`logos.mjs` isolates optional logo hydration. Its tests use synthetic keys and
+stub downloads; lifecycle tests explicitly disable real network hydration unless
+using their test-only subprocess fixture. Tests include pure pre-I/O refusals plus
+two real seeded instances, wrong-token
 refusal, Doctor, tampered-state safety, graceful/signal cleanup and evidence retention:
 
 ```bash

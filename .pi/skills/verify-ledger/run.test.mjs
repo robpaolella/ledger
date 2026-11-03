@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { refuseDatabase, selectLanIPv4 } from './run.mjs';
+import { hydrateLogos } from './logos.mjs';
 
 const helper = fileURLToPath(new URL('./run.mjs', import.meta.url));
 for (const database of [
@@ -48,6 +49,13 @@ test('no database override is accepted via extra arguments', () => {
   assert.doesNotThrow(() => refuseDatabase({}));
   assert.throws(() => refuseDatabase({}, ['--database', '/tmp/foo']), /Refused/);
 });
+test('only cleanup accepts exactly the owner override flag', () => {
+  assert.doesNotThrow(() => refuseDatabase({}, ['--override-owner'], 'cleanup'));
+  for (const [extra, action] of [[['--override-owner'], 'launch'], [['--override-owner'], 'doctor'], [['--override-owner', 'x'], 'cleanup'], [['--override-owner', '--override-owner'], 'cleanup'], [['--other'], 'cleanup']]) {
+    assert.throws(() => refuseDatabase({}, extra, action), /Refused/);
+  }
+  assert.throws(() => refuseDatabase({ DATABASE_PATH: '/x' }, ['--override-owner'], 'cleanup'), /Refused/);
+});
 test('a supplied existing file and symlink remain untouched', () => {
   const dir = mkdtempSync('/tmp/ledger-guard-test-');
   try {
@@ -56,6 +64,19 @@ test('a supplied existing file and symlink remain untouched', () => {
     symlinkSync(target, `${dir}/alias`);
     for (const path of [target, `${dir}/alias`]) assert.throws(() => refuseDatabase({ DATABASE_PATH: path }), /Refused/);
     assert.equal(readFileSync(target, 'utf8'), 'not a database');
+  } finally { rmSync(dir, { recursive: true }); }
+});
+test('Doctor maps the logo job rejection exit code without exposing the key', () => {
+  const dir = mkdtempSync('/tmp/ledger-logo-doctor-test-');
+  const key = 'pk_test_secret_do_not_print';
+  try {
+    const tokenFile = `${dir}/token.txt`;
+    const script = `${dir}/reject.mjs`;
+    writeFileSync(tokenFile, `${key}\n`);
+    writeFileSync(script, 'process.exit(2);\n');
+    const result = hydrateLogos(dir, { PATH: process.env.PATH }, { tokenFile, script });
+    assert.deepEqual(result, { status: 'key rejected', loaded: 0 });
+    assert.doesNotMatch(JSON.stringify(result), new RegExp(key));
   } finally { rmSync(dir, { recursive: true }); }
 });
 test('data folder as evidence is rejected before resolving it', () => {

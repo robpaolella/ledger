@@ -4,6 +4,7 @@ import { assets } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { calculateCurrentValue } from '../utils/depreciation.js';
 import { requirePermission } from '../middleware/permissions.js';
+import { isValidYmd, toFinite } from '../utils/validate.js';
 
 const router = Router();
 
@@ -54,14 +55,19 @@ router.get('/:id', (req: Request, res: Response) => {
 // POST /api/assets
 router.post('/', requirePermission('assets.create'), (req: Request, res: Response) => {
   try {
-    const { name, purchaseDate, cost, lifespanYears, salvageValue, depreciationMethod, decliningRate } = req.body;
+    const { name, purchaseDate, depreciationMethod } = req.body;
+    const cost = toFinite(req.body.cost), salvageValue = toFinite(req.body.salvageValue);
+    const lifespanYears = toFinite(req.body.lifespanYears), decliningRate = toFinite(req.body.decliningRate);
     if (!name || !purchaseDate || cost == null || salvageValue == null) {
       res.status(400).json({ error: 'name, purchaseDate, cost, and salvageValue are required' });
       return;
     }
+    if (!isValidYmd(purchaseDate)) { res.status(400).json({ error: 'purchaseDate must be YYYY-MM-DD' }); return; }
+    if (cost < 0 || salvageValue < 0) { res.status(400).json({ error: 'cost and salvageValue cannot be negative' }); return; }
     const method = depreciationMethod || 'straight_line';
-    if (method === 'straight_line' && lifespanYears == null) {
-      res.status(400).json({ error: 'lifespanYears is required for straight line depreciation' });
+    if (method !== 'straight_line' && method !== 'declining_balance') { res.status(400).json({ error: 'depreciationMethod must be straight_line or declining_balance' }); return; }
+    if (method === 'straight_line' && (lifespanYears == null || lifespanYears <= 0)) {
+      res.status(400).json({ error: 'lifespanYears must be greater than 0 for straight line depreciation' });
       return;
     }
     if (method === 'declining_balance' && (decliningRate == null || decliningRate <= 0 || decliningRate >= 100)) {
@@ -94,8 +100,19 @@ router.put('/:id', requirePermission('assets.edit'), (req: Request, res: Respons
       return;
     }
 
-    const { name, purchaseDate, cost, lifespanYears, salvageValue, depreciationMethod, decliningRate } = req.body;
+    const { name, purchaseDate, depreciationMethod } = req.body;
+    const cost = req.body.cost === undefined ? undefined : toFinite(req.body.cost);
+    const salvageValue = req.body.salvageValue === undefined ? undefined : toFinite(req.body.salvageValue);
+    const lifespanYears = req.body.lifespanYears === undefined ? undefined : toFinite(req.body.lifespanYears);
+    const decliningRate = req.body.decliningRate === undefined ? undefined : toFinite(req.body.decliningRate);
     const method = depreciationMethod ?? existing.depreciation_method;
+    if (purchaseDate !== undefined && !isValidYmd(purchaseDate)) { res.status(400).json({ error: 'purchaseDate must be YYYY-MM-DD' }); return; }
+    if (cost === null || salvageValue === null || lifespanYears === null || decliningRate === null) { res.status(400).json({ error: 'Numeric fields must be numbers' }); return; }
+    if (method !== 'straight_line' && method !== 'declining_balance') { res.status(400).json({ error: 'depreciationMethod must be straight_line or declining_balance' }); return; }
+    const finalLifespan = lifespanYears ?? existing.lifespan_years;
+    if (method === 'straight_line' && !(finalLifespan > 0)) { res.status(400).json({ error: 'lifespanYears must be greater than 0 for straight line depreciation' }); return; }
+    const finalRate = decliningRate ?? existing.declining_rate;
+    if (method === 'declining_balance' && (finalRate == null || finalRate <= 0 || finalRate >= 100)) { res.status(400).json({ error: 'decliningRate (1-99) is required for declining balance depreciation' }); return; }
     db.update(assets).set({
       name: name ?? existing.name,
       purchase_date: purchaseDate ?? existing.purchase_date,

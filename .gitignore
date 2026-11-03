@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/
+docs/
 .env
 *.db
 .DS_Store
@@ -8,3 +9,5 @@ data/
 backups/
 .jwt-secret
 simplefin-test.json
+__pycache__/
+!packages/server/src/db/data/

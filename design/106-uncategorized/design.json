@@ -1,0 +1,28 @@
+{
+  "design_issue": 238,
+  "covers": [
+    107,
+    234,
+    235
+  ],
+  "revision": 2,
+  "versions": {
+    "approved": "index.html"
+  },
+  "states": [
+    "budget",
+    "budget-large",
+    "budget-none",
+    "reports",
+    "reports-trends",
+    "reports-trends-large",
+    "reports-large",
+    "reports-none",
+    "dashboard",
+    "dashboard-none"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

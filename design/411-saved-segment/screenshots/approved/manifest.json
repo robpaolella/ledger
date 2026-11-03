@@ -1,0 +1,124 @@
+{
+  "images": [
+    {
+      "image": "approved-saved-light-390.png",
+      "version": "approved",
+      "state": "saved",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-saved-light-1440.png",
+      "version": "approved",
+      "state": "saved",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 944
+    },
+    {
+      "image": "approved-saved-dark-390.png",
+      "version": "approved",
+      "state": "saved",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-saved-dark-1440.png",
+      "version": "approved",
+      "state": "saved",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 944
+    },
+    {
+      "image": "approved-saved-small-light-390.png",
+      "version": "approved",
+      "state": "saved-small",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-saved-small-light-1440.png",
+      "version": "approved",
+      "state": "saved-small",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 944
+    },
+    {
+      "image": "approved-saved-small-dark-390.png",
+      "version": "approved",
+      "state": "saved-small",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-saved-small-dark-1440.png",
+      "version": "approved",
+      "state": "saved-small",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 944
+    },
+    {
+      "image": "approved-over-income-light-390.png",
+      "version": "approved",
+      "state": "over-income",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-over-income-light-1440.png",
+      "version": "approved",
+      "state": "over-income",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 944
+    },
+    {
+      "image": "approved-over-income-dark-390.png",
+      "version": "approved",
+      "state": "over-income",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "pixelWidth": 390,
+      "pixelHeight": 968
+    },
+    {
+      "image": "approved-over-income-dark-1440.png",
+      "version": "approved",
+      "state": "over-income",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "pixelWidth": 1440,
+      "pixelHeight": 944
+    }
+  ]
+}
